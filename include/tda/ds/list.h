@@ -174,7 +174,7 @@ size_t tda_list_len(const tda_List *self);
 
 /// the size of one elem, as named at construction
 /// @param self the list
-/// @return elem_size, which never moves
+/// @return elem_size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_list_elem_size(const tda_List *self);
@@ -371,10 +371,8 @@ tda_Status tda_list_splice_back(tda_List *self, tda_List *src);
 /// @param self one list
 /// @param other must have the same elem_size and the same allocator: the nodes change
 ///              list without moving, so every borrowed position stays valid
-/// @note two allocators are a broken precondition, not a runtime state — a node belongs to
-///       the allocator that made it. To exchange across two, build each side on the other's
-///       allocator with tda_list_copy_with and hand the results over with
-///       tda_list_move_assign
+/// @note two allocators are a broken precondition, not a runtime state: a node belongs to
+///       the one that made it. Across two: tda_list_copy_with, then tda_list_move_assign
 /// @bigo{1}
 TDA_API
 void tda_list_swap(tda_List *self, tda_List *other);

@@ -14,8 +14,8 @@ void setUp() {
 void tearDown() {
 }
 
-// a printer writes to a stream, so a case has to read one back. tmpfile is the portable
-// way, the same one test/core/test_print.c takes
+// a printer writes to a stream, so a case reads one back through tmpfile, as
+// test/core/test_print.c does
 static void assert_prints(const char *expected, tda_Span s) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);

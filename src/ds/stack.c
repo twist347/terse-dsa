@@ -10,10 +10,8 @@
     (assert(s),         \
      assert((s)->vec))
 
-// A stack is a vec seen through a smaller keyhole: the elems live in the vec's buffer and
-// every operation here is one of the vec's, renamed to the end it acts on. Reusing it
-// keeps the growth policy, the allocator handling and the copy semantics in one place
-// instead of two — what this type contributes is the operations it does NOT forward.
+// A stack is a vec seen through a smaller keyhole: the growth, the allocator and the copy
+// semantics stay the vec's, and what this type adds is the operations it does NOT forward.
 struct tda_Stack {
     tda_Vec *vec;
 };

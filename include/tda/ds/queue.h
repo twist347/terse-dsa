@@ -203,7 +203,7 @@ size_t tda_queue_cap(const tda_Queue *self);
 
 /// the size of one elem, as named at construction
 /// @param self the queue
-/// @return elem_size, which never moves
+/// @return elem_size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_queue_elem_size(const tda_Queue *self);
@@ -298,10 +298,8 @@ tda_Status tda_queue_shrink_to_fit(tda_Queue *self);
 /// @param[in,out] other must have the same elem_size and the same allocator: the deques
 ///                      underneath change hands where they lie, so nothing is copied and
 ///                      nothing can fail. 'self' == 'other' is a no-op
-/// @note two allocators are a broken precondition, not a runtime state — a block belongs to
-///       the allocator that made it. To exchange across two, build each side on the other's
-///       allocator with tda_queue_copy_with and hand the results over with
-///       tda_queue_move_assign
+/// @note two allocators are a broken precondition, not a runtime state: a block belongs to
+///       the one that made it. Across two: tda_queue_copy_with, then tda_queue_move_assign
 /// @bigo{1}
 TDA_API
 void tda_queue_swap(tda_Queue *self, tda_Queue *other);

@@ -199,7 +199,7 @@ size_t tda_vec_cap(const tda_Vec *self);
 
 /// the size of one elem, as named at construction
 /// @param self the vec
-/// @return elem_size, which never moves
+/// @return elem_size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_vec_elem_size(const tda_Vec *self);
@@ -356,10 +356,8 @@ tda_Status tda_vec_resize(tda_Vec *self, size_t new_len);
 /// @param[in,out] other must have the same elem_size and the same allocator: the blocks
 ///                      change hands where they lie, capacity and all, so nothing is copied
 ///                      and nothing can fail. 'self' == 'other' is a no-op
-/// @note two allocators are a broken precondition, not a runtime state — a block belongs to
-///       the allocator that made it. To exchange across two, build each side on the other's
-///       allocator with tda_vec_copy_with and hand the results over with
-///       tda_vec_move_assign
+/// @note two allocators are a broken precondition, not a runtime state: a block belongs to
+///       the one that made it. Across two: tda_vec_copy_with, then tda_vec_move_assign
 /// @bigo{1}
 TDA_API
 void tda_vec_swap(tda_Vec *self, tda_Vec *other);

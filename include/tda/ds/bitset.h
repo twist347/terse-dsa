@@ -106,10 +106,8 @@ tda_Status tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other);
 /// @param[in,out] other must have the same allocator: the words change hands where they
 ///                      lie, so nothing is copied and nothing can fail. 'self' == 'other'
 ///                      is a no-op
-/// @note two allocators are a broken precondition, not a runtime state — the words belongs
-///       to the allocator that made it. To exchange across two, build each side on the
-///       other's allocator with tda_bitset_copy_with and hand the results over with
-///       tda_bitset_move_assign
+/// @note two allocators are a broken precondition, not a runtime state: the words belong to
+///       the one that made them. Across two: tda_bitset_copy_with, then tda_bitset_move_assign
 /// @bigo{1}
 TDA_API
 void tda_bitset_swap(tda_BitSet *self, tda_BitSet *other);

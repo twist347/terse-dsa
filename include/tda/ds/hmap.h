@@ -160,14 +160,14 @@ size_t tda_hmap_bucket_count(const tda_HMap *self);
 
 /// the size of one key, as named at construction
 /// @param self the map
-/// @return key_size, which never moves
+/// @return key_size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_hmap_key_size(const tda_HMap *self);
 
 /// the size of one value, as named at construction
 /// @param self the map
-/// @return val_size, which never moves
+/// @return val_size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_hmap_val_size(const tda_HMap *self);
@@ -326,9 +326,7 @@ void *tda_hmap_node_val_mut(const tda_HMap *self, tda_HMapNode *node);
 /// @param key the key to copy in
 /// @param val the value to copy in
 /// @param[out] out_is_new whether the key was absent; may be null when the caller does
-///                        not care, and written only on TDA_STATUS_OK. It reports an
-///                        observation rather than the operation's result, which is the
-///                        map itself
+///                        not care, and written only on TDA_STATUS_OK
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the node or the wider bucket array cannot be
 ///         allocated
@@ -363,9 +361,8 @@ void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node);
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the node or the wider bucket array cannot be
 ///         allocated
-/// @bigo{1} expected — one hash and one walk of the bucket either way, which a lookup
-///          followed by an insert cannot be: that pair hashes twice and walks twice
-///          whenever the key turns out to be absent
+/// @bigo{1} expected — one hash and one walk either way, where a lookup then an insert
+///          hashes and walks twice whenever the key turns out to be absent
 [[nodiscard]] TDA_API
 tda_Status tda_hmap_get_or_insert(
     tda_HMap *self,
@@ -404,14 +401,11 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self);
 
 /// exchanges the contents of the two, hashers and equalities included
 /// @param self one map
-/// @param other must have the same key_size and val_size and the same allocator: the
-///              nodes change map without moving, so every borrowed node stays valid — the
-///              same trade ds/list makes. Two maps built under different hashers stay
-///              valid maps afterwards, since each order travels with its entries
-/// @note two allocators are a broken precondition, not a runtime state — a node belongs to
-///       the allocator that made it. To exchange across two, build each side on the other's
-///       allocator with tda_hmap_copy_with and hand the results over with
-///       tda_hmap_move_assign
+/// @param other must have the same key_size and val_size and the same allocator: the nodes
+///              change map without moving, so every borrowed node stays valid, as in
+///              ds/list. Different hashers are fine — each order travels with its entries
+/// @note two allocators are a broken precondition, not a runtime state: a node belongs to
+///       the one that made it. Across two: tda_hmap_copy_with, then tda_hmap_move_assign
 /// @bigo{1}
 TDA_API
 void tda_hmap_swap(tda_HMap *self, tda_HMap *other);

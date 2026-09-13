@@ -10,10 +10,8 @@
     (assert(q),         \
      assert((q)->deque))
 
-// A queue is a deque seen through a smaller keyhole: the elems live in the deque's ring
-// and every operation here is one of the deque's, renamed to the end it acts on. Reusing
-// it keeps the growth policy, the allocator handling and the copy semantics in one place
-// instead of two — what this type contributes is the operations it does NOT forward.
+// A queue is a deque seen through a smaller keyhole: the growth, the allocator and the copy
+// semantics stay the deque's, and what this type adds is the operations it does NOT forward.
 struct tda_Queue {
     tda_Deque *deque;
 };

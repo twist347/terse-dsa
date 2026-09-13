@@ -1029,8 +1029,8 @@ static void test_into_deque_releases_the_header_alone() {
 
 /* ========== print ========== */
 
-// a printer writes to a stream, so a case has to read one back. tmpfile is the portable
-// way, the same one test/core/test_print.c takes
+// a printer writes to a stream, so a case reads one back through tmpfile, as
+// test/core/test_print.c does
 static void assert_prints(const char *expected, const tda_Queue *q) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
@@ -1072,8 +1072,8 @@ static void test_fprint_of_an_empty_queue() {
     tda_queue_drop(q);
 }
 
-// the stdout twin takes no stream, and C has no portable way to capture one and give it
-// back — so a case can only say that it runs and reaches the same printer
+// the stdout twin takes no stream and cannot be captured portably, so a case can only
+// say that it runs and reaches the same printer
 static void test_print_writes_to_stdout() {
     constexpr int32_t src[3] = {1, 2, 3};
     tda_Queue *q = make_queue(src, 3);

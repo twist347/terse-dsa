@@ -13,10 +13,8 @@
      assert((q)->vec),   \
      assert((q)->cmp))
 
-// A queue is a vec plus the order it is kept in: the elems live in the vec's buffer and
-// every mutation leaves algo/heap's invariant standing over that buffer. Reusing the vec
-// is what keeps the growth policy, the allocator handling and the copy semantics in one
-// place instead of two.
+// A queue is a vec plus the order it is kept in: every mutation leaves algo/heap's invariant
+// standing over the vec's buffer, while the growth and the allocator stay the vec's.
 struct tda_PQueue {
     tda_Vec *vec;
     tda_Cmp cmp;

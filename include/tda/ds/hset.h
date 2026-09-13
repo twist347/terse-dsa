@@ -149,7 +149,7 @@ size_t tda_hset_bucket_count(const tda_HSet *self);
 
 /// the size of one key, as named at construction
 /// @param self the set
-/// @return key_size, which never moves
+/// @return key_size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_hset_key_size(const tda_HSet *self);
@@ -317,10 +317,8 @@ tda_Status tda_hset_shrink_to_fit(tda_HSet *self);
 /// @param other must have the same key_size and the same allocator: the nodes change set
 ///              without moving, so every borrowed node stays valid — the same trade
 ///              ds/hmap and ds/list make
-/// @note two allocators are a broken precondition, not a runtime state — a node belongs to
-///       the allocator that made it. To exchange across two, build each side on the other's
-///       allocator with tda_hset_copy_with and hand the results over with
-///       tda_hset_move_assign
+/// @note two allocators are a broken precondition, not a runtime state: a node belongs to
+///       the one that made it. Across two: tda_hset_copy_with, then tda_hset_move_assign
 /// @bigo{1}
 TDA_API
 void tda_hset_swap(tda_HSet *self, tda_HSet *other);

@@ -10,13 +10,11 @@
     (assert(s),        \
      assert((s)->map))
 
-// A set is a map seen through a smaller keyhole: the keys live in the map's nodes and
-// every operation here is one of the map's, minus the value side. Reusing it keeps the
-// chaining, the growth policy and the allocator handling in one place instead of two —
-// what this type contributes is the operations it does NOT forward.
+// A set is a map seen through a smaller keyhole: the chaining, the growth and the allocator
+// stay the map's, and what this type adds is the operations it does NOT forward.
 //
-// The map is built through internal/hmap_impl.h with val_size 0, which is the whole point
-// of that door: nothing follows the key in a node, so nothing pads it either.
+// The map is built through internal/hmap_impl.h with val_size 0, which is the whole point of
+// that door: nothing follows the key in a node, so nothing pads it either.
 struct tda_HSet {
     tda_HMap *map;
 };

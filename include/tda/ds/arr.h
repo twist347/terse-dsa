@@ -175,7 +175,7 @@ size_t tda_arr_len(const tda_Arr *self);
 
 /// the size of one elem, as named at construction
 /// @param self the arr
-/// @return elem_size, which never moves
+/// @return elem_size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_arr_elem_size(const tda_Arr *self);
@@ -267,10 +267,8 @@ void *tda_arr_data_mut(tda_Arr *self);
 /// @param[in,out] other must have the same elem_size and the same allocator: the blocks
 ///                      change hands where they lie, so nothing is copied and nothing can
 ///                      fail. 'self' == 'other' is a no-op
-/// @note two allocators are a broken precondition, not a runtime state — a block belongs to
-///       the allocator that made it. To exchange across two, build each side on the other's
-///       allocator with tda_arr_copy_with and hand the results over with
-///       tda_arr_move_assign
+/// @note two allocators are a broken precondition, not a runtime state: a block belongs to
+///       the one that made it. Across two: tda_arr_copy_with, then tda_arr_move_assign
 /// @bigo{1}
 TDA_API
 void tda_arr_swap(tda_Arr *self, tda_Arr *other);

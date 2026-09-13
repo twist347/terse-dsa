@@ -108,11 +108,10 @@ void tda_pqueue_drop(tda_PQueue *self);
 /// hands the elems over to the vec that held them and releases the queue around it
 /// @param self consumed: its header goes back to the allocator, and the handle must not
 ///             be used again. Null is not allowed — there would be nothing to hand back
-/// @return the vec, holding the elems in HEAP order rather than sorted, with the capacity
-///         and the allocator they already had. The comparator does not travel with them,
-///         being the queue's rather than the elems'; tda_span_sort_heap over
-///         tda_vec_to_span_mut finishes the sort in place. Nothing is copied, so nothing
-///         can fail
+/// @return the vec, elems in HEAP order rather than sorted, with the capacity and the
+///         allocator they already had. The comparator stays behind, being the queue's and
+///         not the elems'; tda_span_sort_heap over tda_vec_to_span_mut finishes the sort
+///         in place. Nothing is copied, so nothing can fail
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Vec *tda_pqueue_into_vec(tda_PQueue *self);
@@ -185,7 +184,7 @@ size_t tda_pqueue_cap(const tda_PQueue *self);
 
 /// the size of one elem, as named at construction
 /// @param self the queue
-/// @return elem_size, which never moves
+/// @return elem_size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_pqueue_elem_size(const tda_PQueue *self);
@@ -270,10 +269,8 @@ tda_Status tda_pqueue_shrink_to_fit(tda_PQueue *self);
 /// @param[in,out] other must have the same elem_size and the same allocator: the vecs
 ///                      underneath change hands where they lie, so nothing is copied and
 ///                      nothing can fail. 'self' == 'other' is a no-op
-/// @note two allocators are a broken precondition, not a runtime state — a block belongs to
-///       the allocator that made it. To exchange across two, build each side on the other's
-///       allocator with tda_pqueue_copy_with and hand the results over with
-///       tda_pqueue_move_assign
+/// @note two allocators are a broken precondition, not a runtime state: a block belongs to
+///       the one that made it. Across two: tda_pqueue_copy_with, then tda_pqueue_move_assign
 /// @bigo{1}
 TDA_API
 void tda_pqueue_swap(tda_PQueue *self, tda_PQueue *other);
