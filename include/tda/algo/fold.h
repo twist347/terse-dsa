@@ -47,8 +47,9 @@ void tda_span_fold_back(tda_Span s, void *acc, tda_Fold fold, void *ctx);
 /// @{
 
 /// running totals: dst[0] = src[0], then dst[i] = op(dst[i - 1], src[i])
-/// @param dst where they go; asserts the same len as 'src' and no overlap with it — a
-///            scan reads past what it has written, and would feed itself its own output
+/// @param dst where they go; asserts the same len as 'src'. May be 'src' itself: the step
+///            reads dst[i - 1], which is already final, and src[i], which is not written
+///            until that same step
 /// @param src where they come from
 /// @param op what combines a running result with the next elem
 /// @param ctx handed to 'op'

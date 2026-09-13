@@ -139,12 +139,13 @@ tda_Status tda_hmap_new_raw_(
 
     // with no value to follow the key there is nothing to align it to, so a set's node is
     // the header plus the key and not a byte more
-    const size_t val_offset = val_size == 0
-                                  ? key_size
-                                  : tda_align_up(key_size, alignof(max_align_t));
+    size_t val_offset = key_size;
+    if (val_size > 0 && tda_ckd_align_up(&val_offset, key_size, alignof(max_align_t))) {
+        return TDA_STATUS_ERR_NO_MEM;
+    }
 
-    size_t kv_bytes;
-    if (ckd_add(&kv_bytes, val_offset, val_size)) {
+    size_t node_size;
+    if (ckd_add(&node_size, val_offset, val_size) || ckd_add(&node_size, node_size, sizeof(tda_HMapNode))) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
