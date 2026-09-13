@@ -1,4 +1,4 @@
-# tba — terse data structures and algorithms in C23
+# tda — terse data structures and algorithms in C23
 
 [![CI](https://github.com/twist347/terse-dsa/actions/workflows/ci.yml/badge.svg)](https://github.com/twist347/terse-dsa/actions/workflows/ci.yml)
 
