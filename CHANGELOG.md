@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — 2026-09-10
+## 1.0.0 — 2026-09-23
 
 The first stable release. Until 2.0 the public API only grows: nothing declared under
 `include/tda/` is renamed, removed or changes meaning.
