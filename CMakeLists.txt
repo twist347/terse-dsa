@@ -1,7 +1,15 @@
 cmake_minimum_required(VERSION 3.22)
 
+# the version is written once, in core/version.h, and read back from there
+file(STRINGS include/tda/core/version.h TDA_VERSION_DEFINES
+     REGEX "^#define TDA_VERSION_(MAJOR|MINOR|PATCH) +[0-9]+$")
+foreach (part MAJOR MINOR PATCH)
+    string(REGEX MATCH "TDA_VERSION_${part} +([0-9]+)" _ "${TDA_VERSION_DEFINES}")
+    set(TDA_VERSION_${part} ${CMAKE_MATCH_1})
+endforeach ()
+
 project(terse-dsa
-        VERSION 1.0.0
+        VERSION ${TDA_VERSION_MAJOR}.${TDA_VERSION_MINOR}.${TDA_VERSION_PATCH}
         DESCRIPTION "Terse data structures and algorithms in C23"
         LANGUAGES C
 )

@@ -78,7 +78,9 @@ uses stays the better habit.
 | `hash.h` | `tda_Hasher`, `tda_Hash`, hashers for the built-in types and `tda_hash_combine` |
 | `rng.h` | `tda_Rng` — a seeded generator, and uniform ints, floats and bools drawn from one |
 | `print.h` | `tda_FPrint`, the printer a container is handed to show itself, plus ready-made ones for the built-in types |
+| `check.h` | `TDA_CHECK`, an assert that survives NDEBUG |
 | `util.h` | `TDA_SWAP`, `TDA_UNUSED`, `TDA_STRINGIFY` |
+| `version.h` | `TDA_VERSION_MAJOR/MINOR/PATCH`, `TDA_VERSION_STRING`, `TDA_VERSION_AT_LEAST` |
 | `export.h` | `TDA_API` and the visibility it carries |
 
 **`alloc`** — memory, explicit and swappable.

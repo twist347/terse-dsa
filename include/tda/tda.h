@@ -12,6 +12,7 @@
 #include "tda/core/span.h"
 #include "tda/core/status.h"
 #include "tda/core/util.h"
+#include "tda/core/version.h"
 
 #include "tda/alloc/aligned.h"
 #include "tda/alloc/alloc.h"

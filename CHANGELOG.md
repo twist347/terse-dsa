@@ -7,7 +7,7 @@ The first stable release. Until 2.0 the public API only grows: nothing declared 
 
 ### Contents
 
-- **core** — `span`, `status`, `cmp`, `hash`, `print`, `rng`
+- **core** — `span`, `status`, `cmp`, `hash`, `print`, `rng`, `check`, `version`
 - **alloc** — `default`, `arena`, `pool`, `log`, `aligned`
 - **ds** — `arr`, `vec`, `deque`, `list`, `stack`, `queue`, `pqueue`, `hmap`, `hset`,
   `bitset`
