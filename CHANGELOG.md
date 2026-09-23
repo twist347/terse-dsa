@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1 — 2026-09-23
+
+### Fixed
+
+- gcc builds under `-Werror` again: an expression in `internal/ptr.h` had lost the
+  parentheses that `-Wparentheses` asks for, and the casts that keep an address mask
+  whole where `uintptr_t` is wider than `size_t`.
+
 ## 1.2.0 — 2026-09-23
 
 ### Added

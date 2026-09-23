@@ -95,7 +95,7 @@ static inline void *tda_ptr_align_up(void *ptr, size_t alignment) {
     const uintptr_t addr = (uintptr_t) ptr;
     assert(addr <= UINTPTR_MAX - (alignment - 1));
 
-    return (void *) ((addr + (alignment - 1)) & ~(alignment - 1));
+    return (void *) ((addr + ((uintptr_t) alignment - 1)) & ~((uintptr_t) alignment - 1));
 }
 
 /// how many bytes lie between 'ptr' and the first address at or after it aligned to
@@ -107,7 +107,7 @@ static inline size_t tda_ptr_align_pad(const void *ptr, size_t alignment) {
     assert(alignment > 0);
     assert((alignment & (alignment - 1)) == 0);
 
-    return -(uintptr_t) ptr & alignment - 1;
+    return -(uintptr_t) ptr & (alignment - 1);
 }
 
 [[nodiscard]]
