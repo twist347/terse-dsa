@@ -18,10 +18,10 @@
 /// The elems live in one block, allocated once, and no operation changes how many there
 /// are. This is ds/vec minus the growth.
 ///
-/// The length moves only when the whole arr is replaced: tda_arr_copy_assign overwrites
-/// one, tda_arr_swap exchanges two. Those are also the only two ops that move the block,
-/// and so the only two that invalidate what tda_arr_get_mut, tda_arr_data and
-/// tda_arr_to_span_mut handed out.
+/// The length moves only when the whole arr is replaced: tda_arr_copy_assign and
+/// tda_arr_move_assign overwrite one, tda_arr_swap exchanges two. Those are also the only
+/// ops that move the block, and so the only ones that invalidate what tda_arr_get_mut,
+/// tda_arr_data and tda_arr_to_span_mut handed out.
 ///
 /// The view is writable, so algo sorts and fills in place through it. An index out of
 /// range asserts; the ops that return a tda_Status are the ones that allocate.
@@ -166,7 +166,8 @@ bool tda_arr_eq_by(const tda_Arr *a, const tda_Arr *b, tda_Eq eq);
 /// @name info
 /// @{
 
-/// how many elems the arr holds — moved only by tda_arr_copy_assign and tda_arr_swap
+/// how many elems the arr holds — moved only by tda_arr_copy_assign, tda_arr_move_assign
+/// and tda_arr_swap
 /// @param self the arr
 /// @return the length
 /// @bigo{1}

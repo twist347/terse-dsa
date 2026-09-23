@@ -208,7 +208,8 @@ bool tda_bitset_none(const tda_BitSet *self);
 
 /// the size of the universe, as named at construction
 /// @param self the bitset
-/// @return nbits — moved only by tda_bitset_copy_assign
+/// @return nbits — moved only by tda_bitset_copy_assign, tda_bitset_move_assign and
+///         tda_bitset_swap
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_bitset_len(const tda_BitSet *self);

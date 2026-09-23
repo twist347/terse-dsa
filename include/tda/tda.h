@@ -3,6 +3,7 @@
 /// @file
 /// umbrella header
 
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/hash.h"

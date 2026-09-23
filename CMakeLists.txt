@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
 project(terse-dsa
-        VERSION 0.1.0
+        VERSION 1.0.0
         DESCRIPTION "Terse data structures and algorithms in C23"
         LANGUAGES C
 )

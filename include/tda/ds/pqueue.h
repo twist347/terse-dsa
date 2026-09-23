@@ -198,8 +198,8 @@ tda_Al *tda_pqueue_al(const tda_PQueue *self);
 
 /// the order the queue serves in
 /// @param self the queue
-/// @return the comparator, as given at construction; it moves only through copy_assign
-///         and swap
+/// @return the comparator, as given at construction; it moves only through
+///         copy_assign, move_assign and swap
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Cmp tda_pqueue_cmp(const tda_PQueue *self);
