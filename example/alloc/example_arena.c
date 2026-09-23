@@ -40,5 +40,20 @@ int main() {
 drop:
     tda_al_arena_drop(arena);
 
+    /// [buf]
+    // no parent and no heap: the arena, its header included, lives in the array
+    unsigned char mem[256];
+    tda_Al *local = tda_al_arena_from_buf(mem, sizeof mem);
+    if (!local) {
+        return 1;
+    }
+
+    int32_t *c = TDA_ALLOC(int32_t, local, 8);
+    printf("%s, %zu left\n", c ? "taken from the array" : "no room",
+           tda_al_arena_stats(local).available); // taken from the array, 144 left — the header took the front
+
+    tda_al_arena_drop(local); // takes nothing back: the array was never borrowed from anyone
+    /// [buf]
+
     return rc;
 }

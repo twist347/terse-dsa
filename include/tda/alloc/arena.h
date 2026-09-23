@@ -18,11 +18,13 @@
 /// tda_realloc grows or shrinks the last block where it stands, since nothing lies past
 /// it; any other block moves and leaves its old slot charged. A vec growing alone costs
 /// the arena its capacity, one growing beside others every capacity it passed through.
-/// The parent is borrowed and has to outlive it.
+/// The parent is borrowed and has to outlive it; tda_al_arena_from_buf needs none, and
+/// runs on memory the caller already has.
 ///
 /// @par Example
 /// @snippet alloc/example_arena.c build
 /// @snippet alloc/example_arena.c reset
+/// @snippet alloc/example_arena.c buf
 /// @{
 
 /// @name lifetime
@@ -36,7 +38,19 @@
 [[nodiscard]] TDA_API
 tda_Al *tda_al_arena_new(tda_Al *parent, size_t cap);
 
-/// gives the block back to the parent
+/// an arena inside 'buf', with no parent: its own header takes the front, aligned, and
+/// the rest is the block
+/// @param buf the memory, borrowed and not owned — an array, static or on the stack, or a
+///            block from anywhere; any alignment
+/// @param size its bytes, greater than 0
+/// @return the allocator, which points into 'buf', or null if 'buf' is too small to hold
+///         the header and a byte past it
+/// @warning 'buf' has to outlive the arena and everything built on it
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Al *tda_al_arena_from_buf(void *buf, size_t size);
+
+/// gives the block back to the parent; from tda_al_arena_from_buf there is nothing to give
 /// @param self the arena; null is a no-op
 /// @bigo{1}
 TDA_API

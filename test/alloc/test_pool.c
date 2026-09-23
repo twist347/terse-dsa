@@ -337,9 +337,8 @@ static void test_calloc_rejects_overflow() {
 
 /* ========== realloc ========== */
 
-// the pool has no realloc hook; the fallback copies into a fresh block and
-// returns the old one, so the net block count is unchanged
-static void test_realloc_falls_back_to_a_fresh_block() {
+// a block already has the pool's one size: a new size that fits keeps it where it is
+static void test_realloc_within_a_block_stays_in_place() {
     tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 3);
 
     unsigned char *p = tda_alloc(pool, 16);
@@ -348,11 +347,49 @@ static void test_realloc_falls_back_to_a_fresh_block() {
         p[i] = (unsigned char) (i + 1);
     }
 
-    unsigned char *q = tda_realloc(pool, p, 16, 32);
-    TEST_ASSERT_NOT_NULL(q);
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(pool, p, 16, 32));
     for (size_t i = 0; i < 16; ++i) {
-        TEST_ASSERT_EQUAL_UINT8((unsigned char) (i + 1), q[i]);
+        TEST_ASSERT_EQUAL_UINT8((unsigned char) (i + 1), p[i]);
     }
+    TEST_ASSERT_EQUAL_size_t(1, tda_al_pool_stats(pool).used);
+
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(pool, p, 32, 8));
+
+    tda_al_pool_drop(pool);
+}
+
+// in place needs no second block, so a full pool can still resize
+static void test_realloc_in_place_needs_no_free_block() {
+    tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 1);
+
+    void *p = tda_alloc(pool, 8);
+    TEST_ASSERT_NOT_NULL(p);
+    TEST_ASSERT_EQUAL_size_t(0, tda_al_pool_stats(pool).free);
+
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(pool, p, 8, 32));
+
+    tda_al_pool_drop(pool);
+}
+
+// past a block is past what the pool can ever give, and the old block stays yours
+static void test_realloc_beyond_a_block_fails_and_keeps_the_block() {
+    tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 3);
+
+    unsigned char *p = tda_alloc(pool, 16);
+    TEST_ASSERT_NOT_NULL(p);
+    memset(p, 0x5A, 16);
+
+    TEST_ASSERT_NULL(tda_realloc(pool, p, 16, 33));
+    TEST_ASSERT_EQUAL_UINT8(0x5A, p[15]);
+    TEST_ASSERT_EQUAL_size_t(1, tda_al_pool_stats(pool).used);
+
+    tda_al_pool_drop(pool);
+}
+
+static void test_realloc_of_null_is_an_alloc() {
+    tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 3);
+
+    TEST_ASSERT_NOT_NULL(tda_realloc(pool, nullptr, 0, 16));
     TEST_ASSERT_EQUAL_size_t(1, tda_al_pool_stats(pool).used);
 
     tda_al_pool_drop(pool);
@@ -404,6 +441,71 @@ static void test_reset_recovers_from_a_scrambled_free_list() {
     tda_al_pool_drop(pool);
 }
 
+/* ========== from_buf ========== */
+
+// the memory the tests build in; its size is well above any header
+static alignas(max_align_t) unsigned char mem[512];
+
+static bool inside(const void *ptr, size_t size, const void *buf, size_t buf_size) {
+    const uintptr_t addr = (uintptr_t) ptr;
+    const uintptr_t begin = (uintptr_t) buf;
+    return addr >= begin && addr + size <= begin + buf_size;
+}
+
+// the header is paid for out of the buffer, and the rest is cut into as many blocks as fit
+static void test_from_buf_fits_as_many_blocks_as_the_rest_holds() {
+    tda_Al *pool = tda_al_pool_from_buf(mem, sizeof mem, 32);
+    TEST_ASSERT_NOT_NULL(pool);
+    TEST_ASSERT_TRUE(inside(pool, sizeof(tda_Al), mem, sizeof mem));
+
+    const tda_AlPoolStats st = tda_al_pool_stats(pool);
+    TEST_ASSERT_EQUAL_size_t(aligned(32), st.block_size);
+    TEST_ASSERT_TRUE(st.block_count > 0);
+    TEST_ASSERT_TRUE(st.block_count * st.block_size < sizeof mem);
+
+    for (size_t i = 0; i < st.block_count; ++i) {
+        void *p = tda_alloc(pool, 32);
+        TEST_ASSERT_NOT_NULL(p);
+        TEST_ASSERT_TRUE(inside(p, 32, mem, sizeof mem));
+    }
+    TEST_ASSERT_NULL(tda_alloc(pool, 32));
+
+    tda_al_pool_drop(pool);
+}
+
+// the caller's array may sit at any address; every block still has to be aligned
+static void test_from_buf_aligns_whatever_the_buffer() {
+    for (size_t off = 0; off < ALIGNMENT; ++off) {
+        tda_Al *pool = tda_al_pool_from_buf(mem + off, sizeof mem - off, 24);
+        TEST_ASSERT_NOT_NULL(pool);
+
+        for (void *p; (p = tda_alloc(pool, 24));) {
+            TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) p % ALIGNMENT);
+            TEST_ASSERT_TRUE(inside(p, 24, mem + off, sizeof mem - off));
+        }
+
+        tda_al_pool_drop(pool);
+    }
+}
+
+static void test_from_buf_rejects_a_buffer_without_room_for_a_block() {
+    TEST_ASSERT_NULL(tda_al_pool_from_buf(mem, 8, 16));
+    TEST_ASSERT_NULL(tda_al_pool_from_buf(mem, sizeof mem, sizeof mem));
+}
+
+// drop gives nothing back to anyone, so the same buffer builds the next pool
+static void test_from_buf_can_be_built_again_after_drop() {
+    tda_Al *pool = tda_al_pool_from_buf(mem, sizeof mem, 32);
+    TEST_ASSERT_NOT_NULL(tda_alloc(pool, 32));
+    tda_al_pool_drop(pool);
+
+    pool = tda_al_pool_from_buf(mem, sizeof mem, 32);
+    TEST_ASSERT_NOT_NULL(pool);
+    TEST_ASSERT_EQUAL_size_t(0, tda_al_pool_stats(pool).used);
+
+    tda_al_pool_drop(pool);
+}
+
 /* ========== composition ========== */
 
 // a pool is an ordinary allocator, so an arena can back it
@@ -450,10 +552,18 @@ int main() {
     RUN_TEST(test_calloc_larger_than_a_block_fails);
     RUN_TEST(test_calloc_rejects_overflow);
 
-    RUN_TEST(test_realloc_falls_back_to_a_fresh_block);
+    RUN_TEST(test_realloc_within_a_block_stays_in_place);
+    RUN_TEST(test_realloc_in_place_needs_no_free_block);
+    RUN_TEST(test_realloc_beyond_a_block_fails_and_keeps_the_block);
+    RUN_TEST(test_realloc_of_null_is_an_alloc);
 
     RUN_TEST(test_reset_frees_every_block);
     RUN_TEST(test_reset_recovers_from_a_scrambled_free_list);
+
+    RUN_TEST(test_from_buf_fits_as_many_blocks_as_the_rest_holds);
+    RUN_TEST(test_from_buf_aligns_whatever_the_buffer);
+    RUN_TEST(test_from_buf_rejects_a_buffer_without_room_for_a_block);
+    RUN_TEST(test_from_buf_can_be_built_again_after_drop);
 
     RUN_TEST(test_pool_can_live_in_another_allocator);
 

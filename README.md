@@ -93,8 +93,8 @@ uses stays the better habit.
 |---|---|
 | `alloc.h` | the `tda_Al` interface and the `tda_alloc` / `tda_calloc` / `tda_realloc` / `tda_dealloc` wrappers |
 | `default.h` | malloc and friends |
-| `arena.h` | bump allocation, freed all at once |
-| `pool.h` | fixed-size blocks off a free list |
+| `arena.h` | bump allocation, freed all at once; over a parent or a buffer of your own |
+| `pool.h` | fixed-size blocks off a free list; over a parent or a buffer of your own |
 | `aligned.h` | wraps another allocator and over-aligns every block it hands out |
 | `log.h` | wraps another allocator and writes down what it is asked |
 

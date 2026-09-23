@@ -22,11 +22,19 @@ static void *arena_realloc(void *ctx, void *ptr, size_t old_size, size_t new_siz
 static void arena_dealloc(void *ctx, void *ptr, size_t size);
 
 typedef struct {
-    tda_Al *parent_al;
+    tda_Al *parent_al; // null when the arena lives in a buffer of the caller's
     void *data;
     size_t cap;
     size_t offset;
 } ArenaCtx;
+
+// what tda_al_arena_from_buf lays at the front of the buffer
+typedef struct {
+    tda_Al al;
+    ArenaCtx ctx;
+} ArenaHead;
+
+static void arena_init(tda_Al *obj, ArenaCtx *arena_ctx, tda_Al *parent, void *data, size_t cap);
 
 /// whether the block at 'ptr', 'size' bytes when it was handed out, is the last one: the
 /// only block with nothing but the free tail after it
@@ -64,18 +72,28 @@ tda_Al *tda_al_arena_new(tda_Al *parent, size_t cap) {
 
     assert(tda_ptr_is_aligned(data, TDA_DEFAULT_ALIGNMENT));
 
-    arena_ctx->parent_al = parent;
-    arena_ctx->data = data;
-    arena_ctx->cap = cap;
-    arena_ctx->offset = 0;
-
-    obj->ctx = arena_ctx;
-    obj->alloc = arena_alloc;
-    obj->calloc = nullptr;
-    obj->realloc = arena_realloc;
-    obj->dealloc = arena_dealloc;
+    arena_init(obj, arena_ctx, parent, data, cap);
 
     return obj;
+}
+
+tda_Al *tda_al_arena_from_buf(void *buf, size_t size) {
+    assert(buf);
+    assert(size > 0);
+
+    // the header goes first and the block right after it, both aligned; offsets and not
+    // pointers until they are known to fit, so no address is formed past the buffer
+    const size_t head_offset = tda_ptr_align_pad(buf, TDA_DEFAULT_ALIGNMENT);
+    size_t data_offset;
+    if (ckd_add(&data_offset, head_offset, tda_align_up(sizeof(ArenaHead), TDA_DEFAULT_ALIGNMENT))
+        || data_offset >= size) {
+        return nullptr;
+    }
+
+    ArenaHead *head = (void *) tda_byte_offset_mut(buf, 1, head_offset);
+    arena_init(&head->al, &head->ctx, nullptr, tda_byte_offset_mut(buf, 1, data_offset), size - data_offset);
+
+    return &head->al;
 }
 
 void tda_al_arena_drop(tda_Al *self) {
@@ -87,7 +105,10 @@ void tda_al_arena_drop(tda_Al *self) {
 
     ArenaCtx *arena_ctx = self->ctx;
     tda_Al *parent_al = arena_ctx->parent_al;
-    assert(parent_al);
+    if (!parent_al) {
+        // from_buf: header and block are the caller's buffer, and nothing was taken
+        return;
+    }
 
     tda_dealloc(parent_al, arena_ctx->data, arena_ctx->cap);
     tda_dealloc(parent_al, arena_ctx, sizeof(ArenaCtx));
@@ -171,6 +192,19 @@ static void *arena_realloc(void *ctx, void *ptr, size_t old_size, size_t new_siz
         memcpy(new_ptr, ptr, old_size < new_size ? old_size : new_size);
     }
     return new_ptr;
+}
+
+static void arena_init(tda_Al *obj, ArenaCtx *arena_ctx, tda_Al *parent, void *data, size_t cap) {
+    arena_ctx->parent_al = parent;
+    arena_ctx->data = data;
+    arena_ctx->cap = cap;
+    arena_ctx->offset = 0;
+
+    obj->ctx = arena_ctx;
+    obj->alloc = arena_alloc;
+    obj->calloc = nullptr;
+    obj->realloc = arena_realloc;
+    obj->dealloc = arena_dealloc;
 }
 
 static bool is_last_block(const ArenaCtx *arena_ctx, const void *ptr, size_t size) {

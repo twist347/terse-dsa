@@ -15,8 +15,9 @@
 /// pointer move and nothing fragments. The price is that every request must fit one
 /// piece.
 ///
-/// No realloc of its own, so tda_realloc falls back to alloc and copy — which fails as
-/// soon as the new size is over a block. The parent is borrowed and has to outlive it.
+/// tda_realloc keeps a block where it is while the new size fits it, and fails once it
+/// does not. The parent is borrowed and has to outlive it; tda_al_pool_from_buf needs
+/// none, and runs on memory the caller already has.
 ///
 /// @par Example
 /// @snippet alloc/example_pool.c build
@@ -36,7 +37,21 @@
 [[nodiscard]] TDA_API
 tda_Al *tda_al_pool_new(tda_Al *parent, size_t block_size, size_t block_count);
 
-/// gives the block back to the parent
+/// a pool inside 'buf', with no parent: its own header takes the front, aligned, and as
+/// many blocks as fit the rest
+/// @param buf the memory, borrowed and not owned — an array, static or on the stack, or a
+///            block from anywhere; any alignment
+/// @param size its bytes, greater than 0
+/// @param block_size a floor, greater than 0, rounded up as in tda_al_pool_new;
+///                   tda_al_pool_stats reports it and the block count
+/// @return the allocator, which points into 'buf', or null if 'buf' cannot hold the
+///         header and one block
+/// @warning 'buf' has to outlive the pool and everything built on it
+/// @bigo{n} — the free list is threaded through every block
+[[nodiscard]] TDA_API
+tda_Al *tda_al_pool_from_buf(void *buf, size_t size, size_t block_size);
+
+/// gives the block back to the parent; from tda_al_pool_from_buf there is nothing to give
 /// @param self the pool; null is a no-op
 /// @bigo{1}
 TDA_API

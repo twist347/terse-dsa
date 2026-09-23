@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.0 — 2026-09-23
+
+### Added
+
+- **Allocators over your own memory.** `tda_al_arena_from_buf` and `tda_al_pool_from_buf`
+  build an arena or a pool inside a buffer the caller already has — an array on the
+  stack, a static one, a block from anywhere — with no parent and no heap at all.
+- Hardened builds check `tda_al_pool` deallocs: a block from elsewhere, or one more free
+  than there were allocs, aborts instead of corrupting the free list.
+
+### Changed
+
+- `tda_al_pool` has a realloc of its own: a new size that fits the block keeps it where it
+  is, with no copy and no second block.
+
 ## 1.1.0 — 2026-09-23
 
 ### Added
