@@ -225,7 +225,7 @@ tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap **out) 
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_hmap_copy_assign(const tda_HMap *self, tda_HMap *other) {
+tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
     assert(self->key_size == other->key_size);
@@ -235,18 +235,18 @@ tda_Status tda_hmap_copy_assign(const tda_HMap *self, tda_HMap *other) {
         return TDA_STATUS_OK;
     }
 
-    // the whole clone is built before anything of 'other' is touched, so a refusal
+    // the whole clone is built before anything of 'self' is touched, so a refusal
     // halfway through leaves the target exactly as it was
     tda_HMap *clone;
-    const tda_Status st = tda_hmap_copy_with(self, other->al, &clone);
+    const tda_Status st = tda_hmap_copy_with(other, self->al, &clone);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    TDA_SWAP(*other, *clone);
+    TDA_SWAP(*self, *clone);
     tda_hmap_drop(clone);
 
-    ASSERT_HMAP(other);
+    ASSERT_HMAP(self);
 
     return TDA_STATUS_OK;
 }
@@ -261,11 +261,11 @@ tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the buckets are handed over, nodes and all. What 'other' held ends up in 'self' and is released
+    // one allocator: the buckets are handed over, nodes and all. What 'self' held ends up in 'other' and is released
     // there, through the very allocator that made it
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
-        release_buckets(self);
+        release_buckets(other);
 
         ASSERT_HMAP(self);
         ASSERT_HMAP(other);
@@ -276,14 +276,14 @@ tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
     // two allocators: the whole copy is built on the target's before anything of it is
     // touched, so a refusal leaves both as they were
     tda_HMap *obj;
-    const tda_Status st = tda_hmap_copy_with(self, other->al, &obj);
+    const tda_Status st = tda_hmap_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    TDA_SWAP(*other, *obj);
+    TDA_SWAP(*self, *obj);
     tda_hmap_drop(obj);
-    release_buckets(self);
+    release_buckets(other);
 
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);

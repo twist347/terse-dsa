@@ -116,7 +116,7 @@ tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue **ou
     return wrap(deque, out);
 }
 
-tda_Status tda_queue_copy_assign(const tda_Queue *self, tda_Queue *other) {
+tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
     assert(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));

@@ -85,7 +85,7 @@ int main() {
     }
     tda_arr_print(shorter, tda_fprint_i32); // [0, 0] — new_len zeroes the block
 
-    if (TDA_STATUS_IS_ERR(tda_arr_copy_assign(a, shorter))) {
+    if (TDA_STATUS_IS_ERR(tda_arr_copy_assign(shorter, a))) {
         goto out;
     }
     tda_arr_print(shorter, tda_fprint_i32); // [0, 2, 3, 4, 5]
@@ -105,7 +105,7 @@ int main() {
 
     // a move hands the elems over and leaves the source empty. These two sit on different
     // allocators, so it costs n and may refuse; on one it would be a handover that cannot
-    if (TDA_STATUS_IS_ERR(tda_arr_move_assign(in_arena, shorter))) {
+    if (TDA_STATUS_IS_ERR(tda_arr_move_assign(shorter, in_arena))) {
         goto out;
     }
     printf("%zu <- %zu\n", tda_arr_len(shorter), tda_arr_len(in_arena)); // 5 <- 0

@@ -285,7 +285,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     TDA_TEST_OK(TDA_VEC_OF(int32_t, &al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_vec_move_assign(src, dst));
+    TDA_TEST_OK(tda_vec_move_assign(dst, src));
 
     // nothing was asked of the allocator: the block changed hands, capacity and all
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
@@ -312,7 +312,7 @@ static void test_move_assign_across_allocators_empties_the_source() {
     tda_Vec *dst = nullptr;
     TDA_TEST_OK(TDA_VEC_OF(int32_t, arena, &dst, 9));
 
-    TDA_TEST_OK(tda_vec_move_assign(src, dst));
+    TDA_TEST_OK(tda_vec_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(4, tda_vec_len(dst));
     TEST_ASSERT_EQUAL_INT32(3, *TDA_VEC_GET_AS(int32_t, dst, 3));
@@ -336,7 +336,7 @@ static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
 
     tda_Vec *src = make_vec(4);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_move_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(4, tda_vec_len(src));
     TEST_ASSERT_EQUAL_size_t(1, tda_vec_len(dst));
@@ -363,19 +363,19 @@ static void test_copy_assign_grows_and_shrinks_the_len() {
     tda_Vec *dst = make_vec(2);
 
     // grow: 2 -> 6
-    TDA_TEST_OK(tda_vec_copy_assign(src, dst));
+    TDA_TEST_OK(tda_vec_copy_assign(dst, src));
     TEST_ASSERT_EQUAL_size_t(6, tda_vec_len(dst));
     TEST_ASSERT_EQUAL_INT32_ARRAY(tda_vec_data(src), tda_vec_data(dst), 6);
 
     // shrink: 6 -> 3
     tda_Vec *small = make_vec(3);
-    TDA_TEST_OK(tda_vec_copy_assign(small, dst));
+    TDA_TEST_OK(tda_vec_copy_assign(dst, small));
     TEST_ASSERT_EQUAL_size_t(3, tda_vec_len(dst));
     TEST_ASSERT_EQUAL_INT32_ARRAY(tda_vec_data(small), tda_vec_data(dst), 3);
 
     // shrink to empty: the len goes, the buffer stays
     tda_Vec *empty = make_vec(0);
-    TDA_TEST_OK(tda_vec_copy_assign(empty, dst));
+    TDA_TEST_OK(tda_vec_copy_assign(dst, empty));
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(dst));
     TEST_ASSERT_NOT_NULL(tda_vec_data(dst));
 
@@ -390,7 +390,7 @@ static void test_copy_assign_keeps_the_target_capacity() {
     tda_Vec *src = make_vec(2);
     tda_Vec *dst = make_vec(6);
 
-    TDA_TEST_OK(tda_vec_copy_assign(src, dst));
+    TDA_TEST_OK(tda_vec_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(2, tda_vec_len(dst));
     TEST_ASSERT_EQUAL_size_t(6, tda_vec_cap(dst));
@@ -419,7 +419,7 @@ static void test_copy_assign_keeps_the_target_allocator() {
     tda_Vec *dst = nullptr;
     TDA_TEST_OK(TDA_VEC_NEW_LEN(int32_t, 1, arena, &dst));
 
-    TDA_TEST_OK(tda_vec_copy_assign(src, dst));
+    TDA_TEST_OK(tda_vec_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(4, tda_vec_len(dst));
     TEST_ASSERT_EQUAL_PTR(arena, tda_vec_al(dst));

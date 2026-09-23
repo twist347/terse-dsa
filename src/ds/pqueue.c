@@ -131,7 +131,7 @@ tda_Status tda_pqueue_copy_with(const tda_PQueue *self, tda_Al *al, tda_PQueue *
     return wrap(vec, self->cmp, out);
 }
 
-tda_Status tda_pqueue_copy_assign(const tda_PQueue *self, tda_PQueue *other) {
+tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
     assert(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
@@ -145,11 +145,11 @@ tda_Status tda_pqueue_copy_assign(const tda_PQueue *self, tda_PQueue *other) {
         return st;
     }
 
-    // keeping other's own comparator would leave it holding a buffer that is a heap
+    // keeping self's own comparator would leave it holding a buffer that is a heap
     // under nobody's order
-    other->cmp = self->cmp;
+    self->cmp = other->cmp;
 
-    ASSERT_PQUEUE(other);
+    ASSERT_PQUEUE(self);
 
     return TDA_STATUS_OK;
 }
@@ -168,11 +168,11 @@ tda_Status tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other) {
         return st;
     }
 
-    // the elems arrive arranged under the comparator of 'self', so it travels with them —
+    // the elems arrive arranged under the comparator of 'other', so it travels with them —
     // the same reason copy_assign hands it over
-    other->cmp = self->cmp;
+    self->cmp = other->cmp;
 
-    ASSERT_PQUEUE(other);
+    ASSERT_PQUEUE(self);
 
     return TDA_STATUS_OK;
 }

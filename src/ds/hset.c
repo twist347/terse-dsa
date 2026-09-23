@@ -79,7 +79,7 @@ tda_Status tda_hset_copy_with(const tda_HSet *self, tda_Al *al, tda_HSet **out) 
     return wrap(map, out);
 }
 
-tda_Status tda_hset_copy_assign(const tda_HSet *self, tda_HSet *other) {
+tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
 

@@ -112,23 +112,23 @@ tda_Status tda_list_copy(const tda_List *self, tda_List **out);
 [[nodiscard]] TDA_API
 tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List **out);
 
-/// overwrites the elems of 'other' with those of 'self', reusing the nodes it already has
+/// overwrites the elems of 'self' with those of 'other', reusing the nodes it already has
 /// and taking or releasing the difference
-/// @param self the list to copy from
-/// @param[in,out] other must have the same elem_size; keeps its own allocator, and
-///                      'self' == 'other' is a no-op
+/// @param[in,out] self must have the same elem_size; keeps its own allocator, and
+///                     'self' == 'other' is a no-op
+/// @param other the list to copy from
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated, leaving 'other' as
+/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated, leaving 'self' as
 ///         it was
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_list_copy_assign(const tda_List *self, tda_List *other);
+tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other);
 
-/// moves the elems of 'self' into 'other', leaving 'self' empty
-/// @param[in,out] self the list to move from; emptied on success and still usable, on
-///                     its own allocator
-/// @param[in,out] other must have the same elem_size; releases what it held and keeps
-///                      its own allocator. 'self' == 'other' is a no-op
+/// moves the elems of 'other' into 'self', leaving 'other' empty
+/// @param[in,out] self must have the same elem_size; releases what it held and keeps
+///                     its own allocator. 'self' == 'other' is a no-op
+/// @param[in,out] other the list to move from; emptied on success and still usable, on
+///                      its own allocator
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and a node cannot be allocated,
 ///         leaving both as they were

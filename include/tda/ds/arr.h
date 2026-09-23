@@ -113,23 +113,23 @@ tda_Status tda_arr_copy(const tda_Arr *self, tda_Arr **out);
 [[nodiscard]] TDA_API
 tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr **out);
 
-/// overwrites the elems of 'other' with those of 'self', resizing its block when the two
+/// overwrites the elems of 'self' with those of 'other', resizing its block when the two
 /// lengths differ
-/// @param self the arr to copy from
-/// @param[in,out] other must have the same elem_size; keeps its own allocator, and
-///                      'self' == 'other' is a no-op
+/// @param[in,out] self must have the same elem_size; keeps its own allocator, and
+///                     'self' == 'other' is a no-op
+/// @param other the arr to copy from
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be resized, leaving 'other' as
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be resized, leaving 'self' as
 ///         it was
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_arr_copy_assign(const tda_Arr *self, tda_Arr *other);
+tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other);
 
-/// moves the elems of 'self' into 'other', leaving 'self' empty
-/// @param[in,out] self the arr to move from; emptied on success and still usable, on
-///                     its own allocator
-/// @param[in,out] other must have the same elem_size; releases what it held and keeps
-///                      its own allocator. 'self' == 'other' is a no-op
+/// moves the elems of 'other' into 'self', leaving 'other' empty
+/// @param[in,out] self must have the same elem_size; releases what it held and keeps
+///                     its own allocator. 'self' == 'other' is a no-op
+/// @param[in,out] other the arr to move from; emptied on success and still usable, on
+///                      its own allocator
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the block cannot be taken,
 ///         leaving both as they were

@@ -1014,7 +1014,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     put(dst, 9, 90);
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_hmap_move_assign(src, dst));
+    TDA_TEST_OK(tda_hmap_move_assign(dst, src));
 
     // nothing was asked of the allocator: the buckets and the nodes changed hands
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
@@ -1049,7 +1049,7 @@ static void test_move_assign_across_allocators_empties_the_source() {
     TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_all_alike, tda_eq_i32, arena, &dst));
     put(dst, 9, 90);
 
-    TDA_TEST_OK(tda_hmap_move_assign(src, dst));
+    TDA_TEST_OK(tda_hmap_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(8, tda_hmap_len(dst));
     assert_has(dst, 3, 30);
@@ -1077,7 +1077,7 @@ static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
 
     tda_HMap *src = make_filled(tda_hash_i32, 8);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hmap_move_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hmap_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(8, tda_hmap_len(src));
     TEST_ASSERT_EQUAL_size_t(1, tda_hmap_len(dst));
@@ -1116,7 +1116,7 @@ static void test_copy_assign_overwrites_the_target() {
     tda_HMap *dst = make_filled(tda_hash_i32, 2);
     put(dst, 100, 100);
 
-    TDA_TEST_OK(tda_hmap_copy_assign(src, dst));
+    TDA_TEST_OK(tda_hmap_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(6, tda_hmap_len(dst));
     assert_missing(dst, 100);
@@ -1135,7 +1135,7 @@ static void test_copy_assign_hands_over_the_hasher_too() {
     tda_HMap *dst = make_map(tda_hash_i32);
     put(dst, 2, 20);
 
-    TDA_TEST_OK(tda_hmap_copy_assign(src, dst));
+    TDA_TEST_OK(tda_hmap_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_PTR(hash_all_alike, tda_hmap_hasher(dst));
     assert_has(dst, 1, 10);
@@ -1165,7 +1165,7 @@ static void test_copy_assign_keeps_the_target_allocator() {
     tda_HMap *dst = nullptr;
     TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, tda_hash_i32, tda_eq_i32, arena, &dst));
 
-    TDA_TEST_OK(tda_hmap_copy_assign(src, dst));
+    TDA_TEST_OK(tda_hmap_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_PTR(arena, tda_hmap_al(dst));
     TEST_ASSERT_EQUAL_size_t(4, tda_hmap_len(dst));
@@ -1189,7 +1189,7 @@ static void test_copy_assign_hands_back_the_old_contents() {
     }
 
     tda_HMap *src = make_filled(tda_hash_i32, 3);
-    TDA_TEST_OK(tda_hmap_copy_assign(src, dst));
+    TDA_TEST_OK(tda_hmap_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(3, tda_hmap_len(dst));
 
@@ -1358,7 +1358,7 @@ static void test_copy_assign_leaves_the_target_untouched_on_failure() {
     put(dst, 7, 70);
     tda_test_arena_leave(arena, 0);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hmap_copy_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hmap_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(1, tda_hmap_len(dst));
     assert_has(dst, 7, 70);

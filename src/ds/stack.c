@@ -116,7 +116,7 @@ tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al *al, tda_Stack **ou
     return wrap(vec, out);
 }
 
-tda_Status tda_stack_copy_assign(const tda_Stack *self, tda_Stack *other) {
+tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
     assert(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));

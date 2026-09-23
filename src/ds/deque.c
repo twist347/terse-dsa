@@ -187,7 +187,7 @@ tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque **ou
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_deque_copy_assign(const tda_Deque *self, tda_Deque *other) {
+tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
     assert(self->elem_size == other->elem_size);
@@ -196,17 +196,17 @@ tda_Status tda_deque_copy_assign(const tda_Deque *self, tda_Deque *other) {
         return TDA_STATUS_OK;
     }
 
-    const tda_Status st = tda_deque_reserve(other, self->len);
+    const tda_Status st = tda_deque_reserve(self, other->len);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    // whatever 'other' held is gone, so its ring is laid out afresh from slot 0
-    other->head = 0;
-    other->len = self->len;
-    copy_out(self, other->data);
+    // whatever 'self' held is gone, so its ring is laid out afresh from slot 0
+    self->head = 0;
+    self->len = other->len;
+    copy_out(other, self->data);
 
-    ASSERT_DEQUE(other);
+    ASSERT_DEQUE(self);
 
     return TDA_STATUS_OK;
 }
@@ -220,11 +220,11 @@ tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the block is handed over, ring and all. What 'other' held ends up in 'self' and is released
+    // one allocator: the block is handed over, ring and all. What 'self' held ends up in 'other' and is released
     // there, through the very allocator that made it
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
-        release_data(self);
+        release_data(other);
 
         ASSERT_DEQUE(self);
         ASSERT_DEQUE(other);
@@ -235,14 +235,14 @@ tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
     // two allocators: the whole copy is built on the target's before anything of it is
     // touched, so a refusal leaves both as they were
     tda_Deque *obj;
-    const tda_Status st = tda_deque_copy_with(self, other->al, &obj);
+    const tda_Status st = tda_deque_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    TDA_SWAP(*other, *obj);
+    TDA_SWAP(*self, *obj);
     tda_deque_drop(obj);
-    release_data(self);
+    release_data(other);
 
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);

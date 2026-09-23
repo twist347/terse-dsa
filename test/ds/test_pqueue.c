@@ -489,7 +489,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, &al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_pqueue_move_assign(src, dst));
+    TDA_TEST_OK(tda_pqueue_move_assign(dst, src));
 
     // nothing was asked of the allocator: the vec's block changed hands
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
@@ -516,7 +516,7 @@ static void test_move_assign_across_allocators_empties_the_source() {
     tda_PQueue *dst = nullptr;
     TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, arena, &dst, 9));
 
-    TDA_TEST_OK(tda_pqueue_move_assign(src, dst));
+    TDA_TEST_OK(tda_pqueue_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_pqueue_len(dst));
     TEST_ASSERT_EQUAL_PTR(tda_cmp_i32, tda_pqueue_cmp(dst));
@@ -541,7 +541,7 @@ static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
 
     tda_PQueue *src = make_queue_from(SPREAD, SPREAD_LEN);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_pqueue_move_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_pqueue_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_pqueue_len(src));
     TEST_ASSERT_EQUAL_size_t(1, tda_pqueue_len(dst));
@@ -594,7 +594,7 @@ static void test_copy_assign_hands_over_the_comparator_too() {
     tda_PQueue *dst = nullptr;
     TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, tda_al_default(), &dst, 100, 200, 300));
 
-    TDA_TEST_OK(tda_pqueue_copy_assign(src, dst));
+    TDA_TEST_OK(tda_pqueue_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_PTR(tda_cmp_desc_i32, tda_pqueue_cmp(dst));
     TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(dst), tda_pqueue_cmp(dst)));

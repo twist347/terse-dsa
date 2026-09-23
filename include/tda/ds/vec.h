@@ -133,21 +133,21 @@ tda_Status tda_vec_copy(const tda_Vec *self, tda_Vec **out);
 [[nodiscard]] TDA_API
 tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al *al, tda_Vec **out);
 
-/// overwrites the elems of 'other' with those of 'self', growing its block when it must
-/// @param self the vec to copy from
-/// @param[in,out] other must have the same elem_size; keeps its own allocator, and
-///                      'self' == 'other' is a no-op
+/// overwrites the elems of 'self' with those of 'other', growing its block when it must
+/// @param[in,out] self must have the same elem_size; keeps its own allocator, and
+///                     'self' == 'other' is a no-op
+/// @param other the vec to copy from
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, leaving 'other' as it was
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, leaving 'self' as it was
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_copy_assign(const tda_Vec *self, tda_Vec *other);
+tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other);
 
-/// moves the elems of 'self' into 'other', leaving 'self' empty
-/// @param[in,out] self the vec to move from; emptied on success and still usable, on
-///                     its own allocator
-/// @param[in,out] other must have the same elem_size; releases what it held and keeps
-///                      its own allocator. 'self' == 'other' is a no-op
+/// moves the elems of 'other' into 'self', leaving 'other' empty
+/// @param[in,out] self must have the same elem_size; releases what it held and keeps
+///                     its own allocator. 'self' == 'other' is a no-op
+/// @param[in,out] other the vec to move from; emptied on success and still usable, on
+///                      its own allocator
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the block cannot be taken,
 ///         leaving both as they were

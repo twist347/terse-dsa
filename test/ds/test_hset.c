@@ -660,7 +660,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     put(dst, 9);
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_hset_move_assign(src, dst));
+    TDA_TEST_OK(tda_hset_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
@@ -692,7 +692,7 @@ static void test_move_assign_across_allocators_empties_the_source() {
     TDA_TEST_OK(TDA_HSET_NEW(int32_t, hash_all_alike, tda_eq_i32, arena, &dst));
     put(dst, 9);
 
-    TDA_TEST_OK(tda_hset_move_assign(src, dst));
+    TDA_TEST_OK(tda_hset_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(8, tda_hset_len(dst));
     assert_has(dst, 3);
@@ -720,7 +720,7 @@ static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
 
     tda_HSet *src = make_filled(tda_hash_i32, 8);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_move_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(8, tda_hset_len(src));
     TEST_ASSERT_EQUAL_size_t(1, tda_hset_len(dst));
@@ -759,7 +759,7 @@ static void test_copy_assign_overwrites_the_target() {
     tda_HSet *dst = make_filled(tda_hash_i32, 2);
     put(dst, 100);
 
-    TDA_TEST_OK(tda_hset_copy_assign(src, dst));
+    TDA_TEST_OK(tda_hset_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(6, tda_hset_len(dst));
     assert_missing(dst, 100);
@@ -925,7 +925,7 @@ static void test_copy_assign_leaves_the_target_untouched_on_failure() {
     put(dst, 7);
     tda_test_arena_leave(arena, 0);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_copy_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(1, tda_hset_len(dst));
     assert_has(dst, 7);

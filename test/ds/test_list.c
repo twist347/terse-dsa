@@ -286,7 +286,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     const tda_ListNode *node = tda_list_front_node(src);
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_list_move_assign(src, dst));
+    TDA_TEST_OK(tda_list_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
@@ -311,7 +311,7 @@ static void test_move_assign_across_allocators_empties_the_source() {
     tda_List *dst = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, arena, &dst, 9));
 
-    TDA_TEST_OK(tda_list_move_assign(src, dst));
+    TDA_TEST_OK(tda_list_move_assign(dst, src));
 
     assert_elems(dst, (int32_t[]){0, 1, 2, 3}, 4);
     TEST_ASSERT_EQUAL_PTR(arena, tda_list_al(dst));
@@ -334,7 +334,7 @@ static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
 
     tda_List *src = make_list(4);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_move_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_move_assign(dst, src));
 
     assert_elems(src, (int32_t[]){0, 1, 2, 3}, 4);
     assert_elems(dst, (int32_t[]){9}, 1);
@@ -369,7 +369,7 @@ static void test_copy_assign_grows_the_target() {
     tda_List *src = make_list(4);
     tda_List *dst = make_list(1);
 
-    TDA_TEST_OK(tda_list_copy_assign(src, dst));
+    TDA_TEST_OK(tda_list_copy_assign(dst, src));
 
     assert_elems(dst, (int32_t[]){0, 1, 2, 3}, 4);
     assert_elems(src, (int32_t[]){0, 1, 2, 3}, 4);
@@ -382,7 +382,7 @@ static void test_copy_assign_shrinks_the_target() {
     tda_List *src = make_list(1);
     tda_List *dst = make_list(4);
 
-    TDA_TEST_OK(tda_list_copy_assign(src, dst));
+    TDA_TEST_OK(tda_list_copy_assign(dst, src));
 
     assert_elems(dst, (int32_t[]){0}, 1);
 
@@ -394,7 +394,7 @@ static void test_copy_assign_from_empty_empties_the_target() {
     tda_List *src = make_list(0);
     tda_List *dst = make_list(3);
 
-    TDA_TEST_OK(tda_list_copy_assign(src, dst));
+    TDA_TEST_OK(tda_list_copy_assign(dst, src));
 
     assert_empty(dst);
     push_int(dst, 7); // still usable
@@ -408,7 +408,7 @@ static void test_copy_assign_to_empty_target() {
     tda_List *src = make_list(2);
     tda_List *dst = make_list(0);
 
-    TDA_TEST_OK(tda_list_copy_assign(src, dst));
+    TDA_TEST_OK(tda_list_copy_assign(dst, src));
 
     assert_elems(dst, (int32_t[]){0, 1}, 2);
 
@@ -434,7 +434,7 @@ static void test_copy_assign_keeps_the_target_allocator() {
     tda_List *dst = nullptr;
     TDA_TEST_OK(TDA_LIST_NEW(int32_t, arena, &dst));
 
-    TDA_TEST_OK(tda_list_copy_assign(src, dst));
+    TDA_TEST_OK(tda_list_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_PTR(arena, tda_list_al(dst));
     assert_elems(dst, (int32_t[]){0, 1}, 2);
@@ -458,7 +458,7 @@ static void test_copy_assign_reuses_the_target_nodes() {
     const tda_ListNode *tail = tda_list_back_node(dst);
     const size_t before = tda_test_probe_requests(&probe);
 
-    TDA_TEST_OK(tda_list_copy_assign(src, dst));
+    TDA_TEST_OK(tda_list_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(before, tda_test_probe_requests(&probe));
     TEST_ASSERT_EQUAL_PTR(head, tda_list_front_node(dst));
@@ -1771,7 +1771,7 @@ static void test_copy_assign_leaves_the_target_untouched_on_failure() {
     const size_t live = probe.live;
 
     tda_test_probe_fail_after_next(&probe, 1); // one node of the two it needs
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_copy_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_copy_assign(dst, src));
 
     assert_elems(dst, (int32_t[]){7, 8}, 2);
     TEST_ASSERT_EQUAL_size_t(live, probe.live);

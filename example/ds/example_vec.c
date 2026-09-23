@@ -34,11 +34,11 @@ static tda_Status exchange(tda_Vec *a, tda_Vec *b) {
 
     // from here every move stays inside one allocator: the block changes hands, and the
     // status is still checked because the operation as such can fail, not this call
-    st = tda_vec_move_assign(for_a, a);
+    st = tda_vec_move_assign(a, for_a);
     if (TDA_STATUS_IS_ERR(st)) {
         goto out;
     }
-    st = tda_vec_move_assign(for_b, b);
+    st = tda_vec_move_assign(b, for_b);
 
 out:
     // each copy is left empty by its move and is dropped either way

@@ -103,23 +103,23 @@ tda_Status tda_hset_copy(const tda_HSet *self, tda_HSet **out);
 [[nodiscard]] TDA_API
 tda_Status tda_hset_copy_with(const tda_HSet *self, tda_Al *al, tda_HSet **out);
 
-/// overwrites the keys of 'other' with those of 'self'
-/// @param self the set to copy from
-/// @param[in,out] other must have the same key_size; receives the hasher and the equality
-///                      along with the keys, overwriting its own, and keeps its own
-///                      allocator. 'self' == 'other' is a no-op
+/// overwrites the keys of 'self' with those of 'other'
+/// @param[in,out] self must have the same key_size; receives the hasher and the equality
+///                     along with the keys, overwriting its own, and keeps its own
+///                     allocator. 'self' == 'other' is a no-op
+/// @param other the set to copy from
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated, leaving 'other' as
+/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated, leaving 'self' as
 ///         it was
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_hset_copy_assign(const tda_HSet *self, tda_HSet *other);
+tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other);
 
-/// moves the keys of 'self' into 'other', leaving 'self' empty
-/// @param[in,out] self the set to move from; emptied on success and still usable, on
-///                     its own allocator
-/// @param[in,out] other must have the same key_size; receives the hasher and the equality along
-///                      with the keys, releases what it held and keeps its own allocator. 'self' == 'other' is a no-op
+/// moves the keys of 'other' into 'self', leaving 'other' empty
+/// @param[in,out] self must have the same key_size; receives the hasher and the equality along
+///                     with the keys, releases what it held and keeps its own allocator. 'self' == 'other' is a no-op
+/// @param[in,out] other the set to move from; emptied on success and still usable, on
+///                      its own allocator
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the buckets
 ///         or a node cannot be allocated, leaving both as they were

@@ -78,21 +78,21 @@ tda_Status tda_bitset_copy(const tda_BitSet *self, tda_BitSet **out);
 [[nodiscard]] TDA_API
 tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al *al, tda_BitSet **out);
 
-/// overwrites 'other' with 'self', resizing its words when the universes differ
-/// @param self the bitset to copy from
-/// @param[in,out] other keeps its own allocator; 'self' == 'other' is a no-op
+/// overwrites 'self' with 'other', resizing its words when the universes differ
+/// @param[in,out] self keeps its own allocator; 'self' == 'other' is a no-op
+/// @param other the bitset to copy from
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the words cannot be resized, leaving 'other' as
+/// @retval TDA_STATUS_ERR_NO_MEM when the words cannot be resized, leaving 'self' as
 ///         it was
 /// @bigo{n/64}
 [[nodiscard]] TDA_API
-tda_Status tda_bitset_copy_assign(const tda_BitSet *self, tda_BitSet *other);
+tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other);
 
-/// moves the members of 'self' into 'other', leaving 'self' empty
-/// @param[in,out] self the bitset to move from; emptied on success and still usable, on
-///                     its own allocator
-/// @param[in,out] other receives the universe along with the members, releases what it held and keeps
-///                      its own allocator. 'self' == 'other' is a no-op
+/// moves the members of 'other' into 'self', leaving 'other' empty
+/// @param[in,out] self receives the universe along with the members, releases what it held and keeps
+///                     its own allocator. 'self' == 'other' is a no-op
+/// @param[in,out] other the bitset to move from; emptied on success and still usable, on
+///                      its own allocator
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the words cannot be taken,
 ///         leaving both as they were

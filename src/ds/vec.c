@@ -147,7 +147,7 @@ tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al *al, tda_Vec **out) {
     return tda_vec_from_span(tda_vec_to_span(self), al, out);
 }
 
-tda_Status tda_vec_copy_assign(const tda_Vec *self, tda_Vec *other) {
+tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other) {
     ASSERT_VEC(self);
     ASSERT_VEC(other);
     assert(self->elem_size == other->elem_size);
@@ -156,18 +156,18 @@ tda_Status tda_vec_copy_assign(const tda_Vec *self, tda_Vec *other) {
         return TDA_STATUS_OK;
     }
 
-    const tda_Status st = tda_vec_reserve(other, self->len);
+    const tda_Status st = tda_vec_reserve(self, other->len);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    if (self->len > 0) {
-        memcpy(other->data, self->data, len_bytes(self));
+    if (other->len > 0) {
+        memcpy(self->data, other->data, len_bytes(other));
     }
 
-    other->len = self->len;
+    self->len = other->len;
 
-    ASSERT_VEC(other);
+    ASSERT_VEC(self);
 
     return TDA_STATUS_OK;
 }
@@ -181,11 +181,11 @@ tda_Status tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the block is handed over, capacity and all. What 'other' held ends up in 'self' and is released
+    // one allocator: the block is handed over, capacity and all. What 'self' held ends up in 'other' and is released
     // there, through the very allocator that made it
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
-        release_data(self);
+        release_data(other);
 
         ASSERT_VEC(self);
         ASSERT_VEC(other);
@@ -196,14 +196,14 @@ tda_Status tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
     // two allocators: the whole copy is built on the target's before anything of it is
     // touched, so a refusal leaves both as they were
     tda_Vec *obj;
-    const tda_Status st = tda_vec_copy_with(self, other->al, &obj);
+    const tda_Status st = tda_vec_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    TDA_SWAP(*other, *obj);
+    TDA_SWAP(*self, *obj);
     tda_vec_drop(obj);
-    release_data(self);
+    release_data(other);
 
     ASSERT_VEC(self);
     ASSERT_VEC(other);

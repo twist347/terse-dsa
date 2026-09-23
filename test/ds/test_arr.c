@@ -161,19 +161,19 @@ static void test_copy_assign_grow_shrink_empty() {
     tda_Arr *dst = make_arr(2);
 
     // grow: 2 -> 6
-    TDA_TEST_OK(tda_arr_copy_assign(src, dst));
+    TDA_TEST_OK(tda_arr_copy_assign(dst, src));
     TEST_ASSERT_EQUAL_size_t(6, tda_arr_len(dst));
     TEST_ASSERT_EQUAL_INT32_ARRAY(tda_arr_data(src), tda_arr_data(dst), 6);
 
     // shrink: 6 -> 3
     tda_Arr *small = make_arr(3);
-    TDA_TEST_OK(tda_arr_copy_assign(small, dst));
+    TDA_TEST_OK(tda_arr_copy_assign(dst, small));
     TEST_ASSERT_EQUAL_size_t(3, tda_arr_len(dst));
     TEST_ASSERT_EQUAL_INT32_ARRAY(tda_arr_data(small), tda_arr_data(dst), 3);
 
     // shrink to empty: buffer must be released, not kept
     tda_Arr *empty = make_arr(0);
-    TDA_TEST_OK(tda_arr_copy_assign(empty, dst));
+    TDA_TEST_OK(tda_arr_copy_assign(dst, empty));
     TEST_ASSERT_EQUAL_size_t(0, tda_arr_len(dst));
     TEST_ASSERT_NULL(tda_arr_data(dst));
 
@@ -486,7 +486,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     TDA_TEST_OK(TDA_ARR_OF(int32_t, &al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_arr_move_assign(src, dst));
+    TDA_TEST_OK(tda_arr_move_assign(dst, src));
 
     // nothing was asked of the allocator: the block changed hands as it stood
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
@@ -512,7 +512,7 @@ static void test_move_assign_across_allocators_empties_the_source() {
     tda_Arr *dst = nullptr;
     TDA_TEST_OK(TDA_ARR_OF(int32_t, arena, &dst, 9));
 
-    TDA_TEST_OK(tda_arr_move_assign(src, dst));
+    TDA_TEST_OK(tda_arr_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(4, tda_arr_len(dst));
     TEST_ASSERT_EQUAL_INT32(3, *TDA_ARR_GET_AS(int32_t, dst, 3));
@@ -536,7 +536,7 @@ static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
 
     tda_Arr *src = make_arr(4);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_move_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(4, tda_arr_len(src));
     TEST_ASSERT_EQUAL_size_t(1, tda_arr_len(dst));
@@ -568,7 +568,7 @@ static void test_copy_assign_keeps_the_target_allocator() {
     tda_Arr *dst = nullptr;
     TDA_TEST_OK(TDA_ARR_NEW_LEN(int32_t, 1, arena, &dst));
 
-    TDA_TEST_OK(tda_arr_copy_assign(src, dst));
+    TDA_TEST_OK(tda_arr_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(4, tda_arr_len(dst));
     TEST_ASSERT_EQUAL_PTR(arena, tda_arr_al(dst));
@@ -677,7 +677,7 @@ static void test_copy_assign_reports_an_exhausted_arena_and_changes_nothing() {
     const void *before = tda_arr_data(other);
     tda_test_arena_leave(arena, 0);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_copy_assign(self, other));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_copy_assign(other, self));
 
     TEST_ASSERT_EQUAL_size_t(2, tda_arr_len(other));
     TEST_ASSERT_EQUAL_PTR(before, tda_arr_data(other));
@@ -703,7 +703,7 @@ static void test_copy_assign_of_the_same_length_never_allocates() {
     const size_t requests = tda_test_probe_requests(&probe);
     const void *before = tda_arr_data(other);
 
-    TDA_TEST_OK(tda_arr_copy_assign(self, other));
+    TDA_TEST_OK(tda_arr_copy_assign(other, self));
 
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
     TEST_ASSERT_EQUAL_PTR(before, tda_arr_data(other));

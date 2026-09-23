@@ -185,7 +185,7 @@ tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List **out) 
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_list_copy_assign(const tda_List *self, tda_List *other) {
+tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other) {
     ASSERT_LIST(self);
     ASSERT_LIST(other);
     assert(self->elem_size == other->elem_size);
@@ -194,8 +194,8 @@ tda_Status tda_list_copy_assign(const tda_List *self, tda_List *other) {
         return TDA_STATUS_OK;
     }
 
-    const tda_ListNode *src = self->head;
-    const tda_ListNode *dst = other->head;
+    const tda_ListNode *src = other->head;
+    const tda_ListNode *dst = self->head;
 
     while (src && dst) {
         src = src->next;
@@ -208,8 +208,8 @@ tda_Status tda_list_copy_assign(const tda_List *self, tda_List *other) {
         .head = nullptr,
         .tail = nullptr,
         .len = 0,
-        .elem_size = other->elem_size,
-        .al = other->al,
+        .elem_size = self->elem_size,
+        .al = self->al,
     };
 
     for (const tda_ListNode *node = src; node; node = node->next) {
@@ -221,20 +221,20 @@ tda_Status tda_list_copy_assign(const tda_List *self, tda_List *other) {
     }
 
     // from here on nothing can fail
-    const tda_ListNode *from = self->head;
-    for (tda_ListNode *to = other->head; to && from; to = to->next, from = from->next) {
-        memcpy(to->elem, from->elem, other->elem_size);
+    const tda_ListNode *from = other->head;
+    for (tda_ListNode *to = self->head; to && from; to = to->next, from = from->next) {
+        memcpy(to->elem, from->elem, self->elem_size);
     }
 
-    while (other->len > self->len) {
-        remove_node(other, other->tail);
+    while (self->len > other->len) {
+        remove_node(self, self->tail);
     }
 
     if (spare.len > 0) {
-        splice_nodes(other, &spare, false);
+        splice_nodes(self, &spare, false);
     }
 
-    ASSERT_LIST(other);
+    ASSERT_LIST(self);
 
     return TDA_STATUS_OK;
 }
@@ -248,11 +248,11 @@ tda_Status tda_list_move_assign(tda_List *self, tda_List *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the nodes change list without moving. What 'other' held ends up in 'self' and is released
+    // one allocator: the nodes change list without moving. What 'self' held ends up in 'other' and is released
     // there, through the very allocator that made it
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
-        clear_nodes(self);
+        clear_nodes(other);
 
         ASSERT_LIST(self);
         ASSERT_LIST(other);
@@ -263,14 +263,14 @@ tda_Status tda_list_move_assign(tda_List *self, tda_List *other) {
     // two allocators: the whole copy is built on the target's before anything of it is
     // touched, so a refusal leaves both as they were
     tda_List *obj;
-    const tda_Status st = tda_list_copy_with(self, other->al, &obj);
+    const tda_Status st = tda_list_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    TDA_SWAP(*other, *obj);
+    TDA_SWAP(*self, *obj);
     tda_list_drop(obj);
-    clear_nodes(self);
+    clear_nodes(other);
 
     ASSERT_LIST(self);
     ASSERT_LIST(other);

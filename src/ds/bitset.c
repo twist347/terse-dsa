@@ -135,7 +135,7 @@ tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al *al, tda_BitSet *
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_bitset_copy_assign(const tda_BitSet *self, tda_BitSet *other) {
+tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
 
@@ -145,27 +145,27 @@ tda_Status tda_bitset_copy_assign(const tda_BitSet *self, tda_BitSet *other) {
 
     if (self->nwords != other->nwords) {
         uint64_t *new_words = tda_realloc(
-            other->al,
-            other->words,
-            words_bytes(other),
-            words_bytes(self)
+            self->al,
+            self->words,
+            words_bytes(self),
+            words_bytes(other)
         );
         // a new_size of 0 hands the block back and answers null, which is not a failure
-        if (self->nwords > 0 && !new_words) {
+        if (other->nwords > 0 && !new_words) {
             return TDA_STATUS_ERR_NO_MEM;
         }
 
-        other->words = new_words;
-        other->nwords = self->nwords;
+        self->words = new_words;
+        self->nwords = other->nwords;
     }
 
-    other->nbits = self->nbits;
+    self->nbits = other->nbits;
 
-    if (self->nwords > 0) {
-        memcpy(other->words, self->words, words_bytes(self));
+    if (other->nwords > 0) {
+        memcpy(self->words, other->words, words_bytes(other));
     }
 
-    ASSERT_BITSET(other);
+    ASSERT_BITSET(self);
 
     return TDA_STATUS_OK;
 }
@@ -178,11 +178,11 @@ tda_Status tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the words are handed over, universe and all. What 'other' held ends up in 'self' and is released
+    // one allocator: the words are handed over, universe and all. What 'self' held ends up in 'other' and is released
     // there, through the very allocator that made it
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
-        release_words(self);
+        release_words(other);
 
         ASSERT_BITSET(self);
         ASSERT_BITSET(other);
@@ -193,14 +193,14 @@ tda_Status tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other) {
     // two allocators: the whole copy is built on the target's before anything of it is
     // touched, so a refusal leaves both as they were
     tda_BitSet *obj;
-    const tda_Status st = tda_bitset_copy_with(self, other->al, &obj);
+    const tda_Status st = tda_bitset_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    TDA_SWAP(*other, *obj);
+    TDA_SWAP(*self, *obj);
     tda_bitset_drop(obj);
-    release_words(self);
+    release_words(other);
 
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);

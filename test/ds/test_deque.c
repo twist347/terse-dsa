@@ -425,7 +425,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_deque_move_assign(src, dst));
+    TDA_TEST_OK(tda_deque_move_assign(dst, src));
 
     // nothing was asked of the allocator: the ring changed hands as it stood
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
@@ -448,7 +448,7 @@ static void test_move_assign_across_allocators_empties_the_source() {
     tda_Deque *dst = nullptr;
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, arena, &dst, 9));
 
-    TDA_TEST_OK(tda_deque_move_assign(src, dst));
+    TDA_TEST_OK(tda_deque_move_assign(dst, src));
 
     assert_elems(dst, (int32_t[]){10, 20, 30, 40}, 4);
     TEST_ASSERT_EQUAL_PTR(arena, tda_deque_al(dst));
@@ -471,7 +471,7 @@ static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
 
     tda_Deque *src = make_deque(4);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_deque_move_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_deque_move_assign(dst, src));
 
     assert_elems(src, (int32_t[]){0, 1, 2, 3}, 4);
     assert_elems(dst, (int32_t[]){9}, 1);
@@ -495,7 +495,7 @@ static void test_copy_assign_overwrites_a_longer_target() {
     tda_Deque *src = make_deque(2);
     tda_Deque *dst = make_deque(6);
 
-    TDA_TEST_OK(tda_deque_copy_assign(src, dst));
+    TDA_TEST_OK(tda_deque_copy_assign(dst, src));
 
     assert_elems(dst, (int32_t[]){0, 1}, 2);
 
@@ -507,7 +507,7 @@ static void test_copy_assign_grows_a_shorter_target() {
     tda_Deque *src = make_wrapped();
     tda_Deque *dst = make_deque(1);
 
-    TDA_TEST_OK(tda_deque_copy_assign(src, dst));
+    TDA_TEST_OK(tda_deque_copy_assign(dst, src));
 
     assert_elems(dst, (int32_t[]){10, 20, 30, 40}, 4);
 

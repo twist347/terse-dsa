@@ -112,24 +112,24 @@ tda_Status tda_hmap_copy(const tda_HMap *self, tda_HMap **out);
 [[nodiscard]] TDA_API
 tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap **out);
 
-/// overwrites the entries of 'other' with those of 'self'
-/// @param self the map to copy from
-/// @param[in,out] other must have the same key_size and val_size; receives the hasher and
-///                      the equality along with the entries, overwriting its own, and
-///                      keeps its own allocator. 'self' == 'other' is a no-op
+/// overwrites the entries of 'self' with those of 'other'
+/// @param[in,out] self must have the same key_size and val_size; receives the hasher and
+///                     the equality along with the entries, overwriting its own, and
+///                     keeps its own allocator. 'self' == 'other' is a no-op
+/// @param other the map to copy from
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated, leaving 'other' as
+/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated, leaving 'self' as
 ///         it was
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_hmap_copy_assign(const tda_HMap *self, tda_HMap *other);
+tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other);
 
-/// moves the entries of 'self' into 'other', leaving 'self' empty
-/// @param[in,out] self the map to move from; emptied on success and still usable, on
-///                     its own allocator
-/// @param[in,out] other must have the same key_size and val_size; receives the hasher and the
-///                      equality along with the entries, releases what it held and keeps
-///                      its own allocator. 'self' == 'other' is a no-op
+/// moves the entries of 'other' into 'self', leaving 'other' empty
+/// @param[in,out] self must have the same key_size and val_size; receives the hasher and the
+///                     equality along with the entries, releases what it held and keeps
+///                     its own allocator. 'self' == 'other' is a no-op
+/// @param[in,out] other the map to move from; emptied on success and still usable, on
+///                      its own allocator
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the buckets
 ///         or a node cannot be allocated, leaving both as they were

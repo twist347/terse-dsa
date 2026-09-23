@@ -512,7 +512,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_bitset_set(dst, 3);
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_bitset_move_assign(src, dst));
+    TDA_TEST_OK(tda_bitset_move_assign(dst, src));
 
     // nothing was asked of the allocator: the words changed hands, universe and all
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
@@ -536,7 +536,7 @@ static void test_move_assign_across_allocators_empties_the_source() {
     TDA_TEST_OK(tda_bitset_new(8, arena, &dst));
     tda_bitset_set(dst, 3);
 
-    TDA_TEST_OK(tda_bitset_move_assign(src, dst));
+    TDA_TEST_OK(tda_bitset_move_assign(dst, src));
 
     assert_members(dst, 129, want, 3);
     TEST_ASSERT_EQUAL_PTR(arena, tda_bitset_al(dst));
@@ -561,7 +561,7 @@ static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
     constexpr size_t want[] = {0, 64, 128};
     tda_BitSet *src = make_bitset(129, want, 3);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_move_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_move_assign(dst, src));
 
     assert_members(src, 129, want, 3);
     assert_members(dst, 8, (const size_t[]){3}, 1);
@@ -672,30 +672,30 @@ static void test_copy_assign_grow_shrink_empty() {
 
     // grow: 65 -> 129
     tda_BitSet *dst = make_full(65);
-    TDA_TEST_OK(tda_bitset_copy_assign(src, dst));
+    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
     assert_members(dst, 129, want, 3);
     tda_bitset_drop(dst);
 
     // shrink: 200 -> 129
     dst = make_full(200);
-    TDA_TEST_OK(tda_bitset_copy_assign(src, dst));
+    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
     assert_members(dst, 129, want, 3);
     tda_bitset_drop(dst);
 
     // same size, no resize at all
     dst = make_full(129);
-    TDA_TEST_OK(tda_bitset_copy_assign(src, dst));
+    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
     assert_members(dst, 129, want, 3);
     tda_bitset_drop(dst);
 
     // down to an empty universe: the words are handed back, not kept
     tda_BitSet *empty = make_bitset(0, nullptr, 0);
     dst = make_full(129);
-    TDA_TEST_OK(tda_bitset_copy_assign(empty, dst));
+    TDA_TEST_OK(tda_bitset_copy_assign(dst, empty));
     assert_members(dst, 0, nullptr, 0);
 
     // and back up from one
-    TDA_TEST_OK(tda_bitset_copy_assign(src, dst));
+    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
     assert_members(dst, 129, want, 3);
 
     tda_bitset_drop(dst);
@@ -723,7 +723,7 @@ static void test_copy_assign_keeps_the_target_allocator() {
     constexpr size_t want[] = {0, 128};
     tda_BitSet *src = make_bitset(129, want, 2);
 
-    TDA_TEST_OK(tda_bitset_copy_assign(src, dst));
+    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
     assert_members(dst, 129, want, 2);
     TEST_ASSERT_EQUAL_PTR(arena, tda_bitset_al(dst));
 
@@ -1045,7 +1045,7 @@ static void test_copy_assign_leaves_the_target_untouched_on_failure() {
 
     // the resize is the only request copy_assign makes, so refusing the next one hits it
     tda_test_probe_fail_after_next(&probe, 0);
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy_assign(src, dst));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy_assign(dst, src));
 
     assert_members(dst, 65, kept, 2);
 
@@ -1067,7 +1067,7 @@ static void test_copy_assign_of_the_same_universe_never_allocates() {
     constexpr size_t want[] = {0, 128};
     tda_BitSet *src = make_bitset(129, want, 2);
 
-    TDA_TEST_OK(tda_bitset_copy_assign(src, dst));
+    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(before, tda_test_probe_requests(&probe));
     assert_members(dst, 129, want, 2);

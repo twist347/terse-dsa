@@ -108,7 +108,7 @@ tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr **out) {
     return tda_arr_from_span(tda_arr_to_span(self), al, out);
 }
 
-tda_Status tda_arr_copy_assign(const tda_Arr *self, tda_Arr *other) {
+tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
     assert(self->elem_size == other->elem_size);
@@ -121,20 +121,20 @@ tda_Status tda_arr_copy_assign(const tda_Arr *self, tda_Arr *other) {
     const size_t other_bytes = len_bytes(other);
 
     if (self_bytes != other_bytes) {
-        void *new_data = tda_realloc(other->al, other->data, other_bytes, self_bytes);
-        if (self_bytes > 0 && !new_data) {
+        void *new_data = tda_realloc(self->al, self->data, self_bytes, other_bytes);
+        if (other_bytes > 0 && !new_data) {
             return TDA_STATUS_ERR_NO_MEM;
         }
 
-        other->data = new_data;
-        other->len = self->len;
+        self->data = new_data;
+        self->len = other->len;
     }
 
-    if (self_bytes > 0) {
-        memcpy(other->data, self->data, self_bytes);
+    if (other_bytes > 0) {
+        memcpy(self->data, other->data, other_bytes);
     }
 
-    ASSERT_ARR(other);
+    ASSERT_ARR(self);
 
     return TDA_STATUS_OK;
 }
@@ -148,11 +148,11 @@ tda_Status tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the block is handed over as it is. What 'other' held ends up in 'self' and is released
+    // one allocator: the block is handed over as it is. What 'self' held ends up in 'other' and is released
     // there, through the very allocator that made it
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
-        release_data(self);
+        release_data(other);
 
         ASSERT_ARR(self);
         ASSERT_ARR(other);
@@ -163,14 +163,14 @@ tda_Status tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
     // two allocators: the whole copy is built on the target's before anything of it is
     // touched, so a refusal leaves both as they were
     tda_Arr *obj;
-    const tda_Status st = tda_arr_copy_with(self, other->al, &obj);
+    const tda_Status st = tda_arr_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    TDA_SWAP(*other, *obj);
+    TDA_SWAP(*self, *obj);
     tda_arr_drop(obj);
-    release_data(self);
+    release_data(other);
 
     ASSERT_ARR(self);
     ASSERT_ARR(other);
