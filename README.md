@@ -14,6 +14,10 @@ Two rules shape the whole API:
   compiler raises unasked, and a compile error under `-Werror`. Broken preconditions are
   `assert`, not status — those are bugs, not runtime states.
 
+Out of bounds is never silent in a build that asks: `-DTDA_HARDENED=ON` keeps every
+bounds, emptiness and range check in release, so an index past the end aborts with its
+place instead of reading past it.
+
 The rest of them — how a name is built, where the `mut` marker sits, what is an `assert`
 and what a status — are written down in [conventions](docs/conventions.md), each with the
 reason it is what it is.
@@ -78,7 +82,7 @@ uses stays the better habit.
 | `hash.h` | `tda_Hasher`, `tda_Hash`, hashers for the built-in types and `tda_hash_combine` |
 | `rng.h` | `tda_Rng` — a seeded generator, and uniform ints, floats and bools drawn from one |
 | `print.h` | `tda_FPrint`, the printer a container is handed to show itself, plus ready-made ones for the built-in types |
-| `check.h` | `TDA_CHECK`, an assert that survives NDEBUG |
+| `check.h` | `TDA_CHECK`, an assert that survives NDEBUG, and `TDA_EXPECT`, one that does under `TDA_HARDENED` |
 | `util.h` | `TDA_SWAP`, `TDA_UNUSED`, `TDA_STRINGIFY` |
 | `version.h` | `TDA_VERSION_MAJOR/MINOR/PATCH`, `TDA_VERSION_STRING`, `TDA_VERSION_AT_LEAST` |
 | `export.h` | `TDA_API` and the visibility it carries |
@@ -138,6 +142,11 @@ ctest --test-dir build
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all"
 cmake --build build-asan && ctest --test-dir build-asan
+```
+
+```sh
+cmake -S . -B build-hardened -DCMAKE_BUILD_TYPE=Release -DTDA_HARDENED=ON
+cmake --build build-hardened && ctest --test-dir build-hardened
 ```
 
 Requires a C23 toolchain.

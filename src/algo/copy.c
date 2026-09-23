@@ -1,13 +1,15 @@
 #include "tda/algo/copy.h"
 
+#include "tda/core/check.h"
+
 #include <assert.h>
 #include <string.h>
 
 void tda_span_copy(tda_SpanMut dst, tda_Span src) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
-    assert(dst.elem_size == src.elem_size);
-    assert(dst.len == src.len);
+    TDA_EXPECT(dst.elem_size == src.elem_size);
+    TDA_EXPECT(dst.len == src.len);
 
     if (dst.len == 0 || dst.data == src.data) {
         return;
@@ -19,8 +21,8 @@ void tda_span_copy(tda_SpanMut dst, tda_Span src) {
 size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
-    assert(dst.elem_size == src.elem_size);
-    assert(dst.len >= src.len);
+    TDA_EXPECT(dst.elem_size == src.elem_size);
+    TDA_EXPECT(dst.len >= src.len);
     assert(pred);
 
     size_t write = 0;
@@ -39,8 +41,8 @@ size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx)
 void tda_span_copy_overlapping(tda_SpanMut dst, tda_Span src) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
-    assert(dst.elem_size == src.elem_size);
-    assert(dst.len == src.len);
+    TDA_EXPECT(dst.elem_size == src.elem_size);
+    TDA_EXPECT(dst.len == src.len);
 
     if (dst.len == 0 || dst.data == src.data) {
         return;

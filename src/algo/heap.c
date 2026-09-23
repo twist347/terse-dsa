@@ -1,5 +1,7 @@
 #include "tda/algo/heap.h"
 
+#include "tda/core/check.h"
+
 #include <assert.h>
 
 /* ========== internals ========== */
@@ -29,7 +31,7 @@ void tda_span_make_heap(tda_SpanMut s, tda_Cmp cmp) {
 void tda_span_push_heap(tda_SpanMut s, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(s.len > 0);
+    TDA_EXPECT(s.len > 0);
 
     sift_up(s, s.len - 1, cmp);
 }
@@ -37,7 +39,7 @@ void tda_span_push_heap(tda_SpanMut s, tda_Cmp cmp) {
 void tda_span_pop_heap(tda_SpanMut s, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(s.len > 0);
+    TDA_EXPECT(s.len > 0);
 
     if (s.len == 1) {
         return;

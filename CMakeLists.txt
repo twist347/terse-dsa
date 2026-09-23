@@ -28,6 +28,7 @@ option(TDA_BUILD_SHARED "Build tda as a shared library" ${PROJECT_IS_TOP_LEVEL})
 option(TDA_BUILD_TEST "Build unit tests" ${PROJECT_IS_TOP_LEVEL})
 option(TDA_BUILD_EXAMPLE "Build the examples the reference quotes" ${PROJECT_IS_TOP_LEVEL})
 option(TDA_BUILD_BENCH "Build the benchmarks" OFF)
+option(TDA_HARDENED "Keep the bounds and emptiness checks in release builds" OFF)
 
 set(TDA_WARNINGS
         $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra;-Wpedantic>
@@ -105,9 +106,11 @@ if (UNIX)
     target_link_libraries(tda PRIVATE m)
 endif ()
 
+# PUBLIC: span.h checks inline, in the caller's own translation unit
 target_compile_definitions(tda
         PRIVATE TDA_BUILD
         PUBLIC $<$<NOT:$<BOOL:${TDA_BUILD_SHARED}>>:TDA_STATIC>
+        PUBLIC $<$<BOOL:${TDA_HARDENED}>:TDA_HARDENED>
 )
 
 set_target_properties(tda PROPERTIES
@@ -158,6 +161,7 @@ if (PROJECT_IS_TOP_LEVEL)
     message(STATUS "  library        : ${TDA_LIBRARY_TYPE_LOWER}")
     message(STATUS "  compiler       : ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
     message(STATUS "  C standard     : C${TDA_C_STANDARD}")
+    message(STATUS "  hardened       : ${TDA_HARDENED}")
     message(STATUS "  tests          : ${TDA_BUILD_TEST}")
     message(STATUS "  examples       : ${TDA_BUILD_EXAMPLE}")
     message(STATUS "  benchmarks     : ${TDA_BUILD_BENCH}")

@@ -1,5 +1,7 @@
 #include "tda/algo/set.h"
 
+#include "tda/core/check.h"
+
 #include "internal/emit.h"
 
 #include <assert.h>
@@ -11,9 +13,9 @@ size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) 
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    assert(dst.elem_size == a.elem_size);
-    assert(dst.elem_size == b.elem_size);
-    assert(dst.len >= a.len + b.len);
+    TDA_EXPECT(dst.elem_size == a.elem_size);
+    TDA_EXPECT(dst.elem_size == b.elem_size);
+    TDA_EXPECT(dst.len >= a.len + b.len);
 
     size_t i = 0, j = 0;
     size_t out = 0;
@@ -49,9 +51,9 @@ size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cm
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    assert(dst.elem_size == a.elem_size);
-    assert(dst.elem_size == b.elem_size);
-    assert(dst.len >= (a.len < b.len ? a.len : b.len));
+    TDA_EXPECT(dst.elem_size == a.elem_size);
+    TDA_EXPECT(dst.elem_size == b.elem_size);
+    TDA_EXPECT(dst.len >= (a.len < b.len ? a.len : b.len));
 
     size_t i = 0, j = 0;
     size_t out = 0;
@@ -82,9 +84,9 @@ size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp 
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    assert(dst.elem_size == a.elem_size);
-    assert(dst.elem_size == b.elem_size);
-    assert(dst.len >= a.len);
+    TDA_EXPECT(dst.elem_size == a.elem_size);
+    TDA_EXPECT(dst.elem_size == b.elem_size);
+    TDA_EXPECT(dst.len >= a.len);
 
     size_t i = 0, j = 0;
     size_t out = 0;
@@ -115,9 +117,9 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    assert(dst.elem_size == a.elem_size);
-    assert(dst.elem_size == b.elem_size);
-    assert(dst.len >= a.len + b.len);
+    TDA_EXPECT(dst.elem_size == a.elem_size);
+    TDA_EXPECT(dst.elem_size == b.elem_size);
+    TDA_EXPECT(dst.len >= a.len + b.len);
 
     size_t i = 0, j = 0;
     size_t out = 0;
@@ -153,7 +155,7 @@ bool tda_span_includes(tda_Span sup, tda_Span sub, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(sup);
     TDA_SPAN_ASSERT(sub);
     assert(cmp);
-    assert(sup.elem_size == sub.elem_size);
+    TDA_EXPECT(sup.elem_size == sub.elem_size);
 
     size_t i = 0;
 

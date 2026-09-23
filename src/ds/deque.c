@@ -1,5 +1,7 @@
 #include "tda/ds/deque.h"
 
+#include "tda/core/check.h"
+
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -190,7 +192,7 @@ tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque **ou
 tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
-    assert(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->elem_size == other->elem_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -214,7 +216,7 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
 tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
-    assert(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->elem_size == other->elem_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -253,8 +255,8 @@ tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
 void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(dst);
-    assert(dst.elem_size == self->elem_size);
-    assert(dst.len == self->len);
+    TDA_EXPECT(dst.elem_size == self->elem_size);
+    TDA_EXPECT(dst.len == self->len);
 
     copy_out(self, dst.data);
 }
@@ -262,8 +264,8 @@ void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst) {
 void tda_deque_copy_from_span(tda_Deque *self, tda_Span src) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(src);
-    assert(src.elem_size == self->elem_size);
-    assert(src.len == self->len);
+    TDA_EXPECT(src.elem_size == self->elem_size);
+    TDA_EXPECT(src.len == self->len);
 
     copy_in(self, src.data);
 }
@@ -273,7 +275,7 @@ void tda_deque_copy_from_span(tda_Deque *self, tda_Span src) {
 bool tda_deque_eq(const tda_Deque *a, const tda_Deque *b) {
     ASSERT_DEQUE(a);
     ASSERT_DEQUE(b);
-    assert(a->elem_size == b->elem_size);
+    TDA_EXPECT(a->elem_size == b->elem_size);
 
     if (a == b) {
         return true;
@@ -297,7 +299,7 @@ bool tda_deque_eq(const tda_Deque *a, const tda_Deque *b) {
 bool tda_deque_eq_by(const tda_Deque *a, const tda_Deque *b, tda_Eq eq) {
     ASSERT_DEQUE(a);
     ASSERT_DEQUE(b);
-    assert(a->elem_size == b->elem_size);
+    TDA_EXPECT(a->elem_size == b->elem_size);
     assert(eq);
 
     if (a == b) {
@@ -353,42 +355,42 @@ tda_Al *tda_deque_al(const tda_Deque *self) {
 
 const void *tda_deque_front(const tda_Deque *self) {
     ASSERT_DEQUE(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return elem_at(self, 0);
 }
 
 void *tda_deque_front_mut(tda_Deque *self) {
     ASSERT_DEQUE(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return elem_at_mut(self, 0);
 }
 
 const void *tda_deque_back(const tda_Deque *self) {
     ASSERT_DEQUE(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return elem_at(self, self->len - 1);
 }
 
 void *tda_deque_back_mut(tda_Deque *self) {
     ASSERT_DEQUE(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return elem_at_mut(self, self->len - 1);
 }
 
 const void *tda_deque_get(const tda_Deque *self, size_t idx) {
     ASSERT_DEQUE(self);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     return elem_at(self, idx);
 }
 
 void *tda_deque_get_mut(tda_Deque *self, size_t idx) {
     ASSERT_DEQUE(self);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     return elem_at_mut(self, idx);
 }
@@ -396,7 +398,7 @@ void *tda_deque_get_mut(tda_Deque *self, size_t idx) {
 void tda_deque_set(tda_Deque *self, size_t idx, const void *val) {
     ASSERT_DEQUE(self);
     assert(val);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     memcpy(elem_at_mut(self, idx), val, self->elem_size);
 }
@@ -437,7 +439,7 @@ tda_Status tda_deque_push_back(tda_Deque *self, const void *val) {
 
 void tda_deque_pop_front(tda_Deque *self) {
     ASSERT_DEQUE(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     self->head = self->head + 1 == self->cap ? 0 : self->head + 1;
     --self->len;
@@ -445,7 +447,7 @@ void tda_deque_pop_front(tda_Deque *self) {
 
 void tda_deque_pop_back(tda_Deque *self) {
     ASSERT_DEQUE(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     --self->len;
 }
@@ -453,7 +455,7 @@ void tda_deque_pop_back(tda_Deque *self) {
 tda_Status tda_deque_insert(tda_Deque *self, size_t idx, const void *val) {
     ASSERT_DEQUE(self);
     assert(val);
-    assert(idx <= self->len);
+    TDA_EXPECT(idx <= self->len);
 
     const tda_Status st = reserve_one(self);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -485,7 +487,7 @@ tda_Status tda_deque_insert(tda_Deque *self, size_t idx, const void *val) {
 
 void tda_deque_remove(tda_Deque *self, size_t idx) {
     ASSERT_DEQUE(self);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     if (idx < self->len - idx - 1) {
         // the front side is shorter: slide it forward over the hole
@@ -607,8 +609,8 @@ tda_Status tda_deque_resize(tda_Deque *self, size_t new_len) {
 void tda_deque_swap(tda_Deque *self, tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
-    assert(self->elem_size == other->elem_size);
-    assert(self->al == other->al);
+    TDA_EXPECT(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->al == other->al);
 
     if (self == other) {
         return;
@@ -622,8 +624,8 @@ void tda_deque_swap(tda_Deque *self, tda_Deque *other) {
 
 void tda_deque_swap_elems(tda_Deque *self, size_t i, size_t j) {
     ASSERT_DEQUE(self);
-    assert(i < self->len);
-    assert(j < self->len);
+    TDA_EXPECT(i < self->len);
+    TDA_EXPECT(j < self->len);
 
     if (i == j) {
         return;

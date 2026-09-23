@@ -1,5 +1,6 @@
 #include "tda/ds/hmap.h"
 
+#include "tda/core/check.h"
 #include "tda/core/util.h"
 
 #include "internal/hmap_impl.h"
@@ -228,8 +229,8 @@ tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap **out) 
 tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    assert(self->key_size == other->key_size);
-    assert(self->val_size == other->val_size);
+    TDA_EXPECT(self->key_size == other->key_size);
+    TDA_EXPECT(self->val_size == other->val_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -254,8 +255,8 @@ tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
 tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    assert(self->key_size == other->key_size);
-    assert(self->val_size == other->val_size);
+    TDA_EXPECT(self->key_size == other->key_size);
+    TDA_EXPECT(self->val_size == other->val_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -340,8 +341,8 @@ tda_Eq tda_hmap_key_eq(const tda_HMap *self) {
 bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b) {
     ASSERT_HMAP(a);
     ASSERT_HMAP(b);
-    assert(a->key_size == b->key_size);
-    assert(a->val_size == b->val_size);
+    TDA_EXPECT(a->key_size == b->key_size);
+    TDA_EXPECT(a->val_size == b->val_size);
 
     return eq_impl(a, b, nullptr);
 }
@@ -349,8 +350,8 @@ bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b) {
 bool tda_hmap_eq_by(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq) {
     ASSERT_HMAP(a);
     ASSERT_HMAP(b);
-    assert(a->key_size == b->key_size);
-    assert(a->val_size == b->val_size);
+    TDA_EXPECT(a->key_size == b->key_size);
+    TDA_EXPECT(a->val_size == b->val_size);
     assert(val_eq);
 
     return eq_impl(a, b, val_eq);
@@ -544,7 +545,7 @@ bool tda_hmap_remove(tda_HMap *self, const void *key) {
 void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node) {
     ASSERT_HMAP(self);
     assert(node);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     tda_HMapNode **link = &self->buckets[bucket_of(self, node->hash)];
     while (*link && *link != node) {
@@ -614,9 +615,9 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
 void tda_hmap_swap(tda_HMap *self, tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    assert(self->key_size == other->key_size);
-    assert(self->val_size == other->val_size);
-    assert(self->al == other->al);
+    TDA_EXPECT(self->key_size == other->key_size);
+    TDA_EXPECT(self->val_size == other->val_size);
+    TDA_EXPECT(self->al == other->al);
 
     if (self == other) {
         return;

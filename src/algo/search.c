@@ -1,5 +1,7 @@
 #include "tda/algo/search.h"
 
+#include "tda/core/check.h"
+
 #include <assert.h>
 
 /* ========== private decls ========== */
@@ -41,7 +43,7 @@ bool tda_span_find_if(tda_Span s, tda_Pred pred, void *ctx, size_t *out_idx) {
 bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(sub);
-    assert(s.elem_size == sub.elem_size);
+    TDA_EXPECT(s.elem_size == sub.elem_size);
     assert(eq);
     assert(out_idx);
 
@@ -67,7 +69,7 @@ bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx) {
 bool tda_span_find_sub_last(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(sub);
-    assert(s.elem_size == sub.elem_size);
+    TDA_EXPECT(s.elem_size == sub.elem_size);
     assert(eq);
     assert(out_idx);
 
@@ -117,7 +119,7 @@ bool tda_span_find_run(tda_Span s, const void *key, size_t count, tda_Eq eq,
 bool tda_span_find_any_of(tda_Span s, tda_Span set, tda_Eq eq, size_t *out_idx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(set);
-    assert(s.elem_size == set.elem_size);
+    TDA_EXPECT(s.elem_size == set.elem_size);
     assert(eq);
     assert(out_idx);
 
@@ -319,7 +321,7 @@ bool tda_span_none_of(tda_Span s, tda_Pred pred, void *ctx) {
 size_t tda_span_min_elem(tda_Span s, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(s.len > 0);
+    TDA_EXPECT(s.len > 0);
 
     size_t best = 0;
     const void *best_p = tda_span_get(s, 0);
@@ -338,7 +340,7 @@ size_t tda_span_min_elem(tda_Span s, tda_Cmp cmp) {
 size_t tda_span_max_elem(tda_Span s, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(s.len > 0);
+    TDA_EXPECT(s.len > 0);
 
     size_t best = 0;
     const void *best_p = tda_span_get(s, 0);
@@ -357,7 +359,7 @@ size_t tda_span_max_elem(tda_Span s, tda_Cmp cmp) {
 tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(s.len > 0);
+    TDA_EXPECT(s.len > 0);
 
     tda_MinMax out = {.min = 0, .max = 0};
     const void *min_p = tda_span_get(s, 0);

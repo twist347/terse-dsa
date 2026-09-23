@@ -2,6 +2,7 @@
 
 #include "tda/algo/permute.h"
 #include "tda/algo/search.h"
+#include "tda/core/check.h"
 
 #include "internal/emit.h"
 
@@ -22,8 +23,8 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    assert(dst.elem_size == a.elem_size);
-    assert(dst.elem_size == b.elem_size);
+    TDA_EXPECT(dst.elem_size == a.elem_size);
+    TDA_EXPECT(dst.elem_size == b.elem_size);
     assert(dst.len == a.len + b.len);
 
     size_t i = 0, j = 0;
@@ -56,7 +57,7 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
 void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, tda_Al *al) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(mid <= s.len);
+    TDA_EXPECT(mid <= s.len);
 
     const size_t left_len = mid;
     const size_t right_len = s.len - mid;

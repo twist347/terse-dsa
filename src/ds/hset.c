@@ -1,5 +1,7 @@
 #include "tda/ds/hset.h"
 
+#include "tda/core/check.h"
+
 #include "internal/hmap_impl.h"
 
 #include <assert.h>
@@ -140,7 +142,7 @@ tda_Eq tda_hset_key_eq(const tda_HSet *self) {
 bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b) {
     ASSERT_HSET(a);
     ASSERT_HSET(b);
-    assert(tda_hmap_key_size(a->map) == tda_hmap_key_size(b->map));
+    TDA_EXPECT(tda_hmap_key_size(a->map) == tda_hmap_key_size(b->map));
 
     if (a == b) {
         return true;

@@ -23,3 +23,8 @@ add_subdirectory(algo)
 add_subdirectory(alloc)
 add_subdirectory(core)
 add_subdirectory(ds)
+
+# a breach aborts only when the checks survive the build type
+if (TDA_HARDENED)
+    add_subdirectory(hardened)
+endif ()

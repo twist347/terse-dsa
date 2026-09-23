@@ -1,5 +1,7 @@
 #include "tda/algo/compare.h"
 
+#include "tda/core/check.h"
+
 #include <assert.h>
 #include <string.h>
 
@@ -8,7 +10,7 @@
 bool tda_span_eq(tda_Span a, tda_Span b) {
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
-    assert(a.elem_size == b.elem_size);
+    TDA_EXPECT(a.elem_size == b.elem_size);
 
     if (a.len != b.len) {
         return false;
@@ -24,7 +26,7 @@ bool tda_span_eq(tda_Span a, tda_Span b) {
 bool tda_span_eq_by(tda_Span a, tda_Span b, tda_Eq eq) {
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
-    assert(a.elem_size == b.elem_size);
+    TDA_EXPECT(a.elem_size == b.elem_size);
     assert(eq);
 
     if (a.len != b.len) {
@@ -50,7 +52,7 @@ bool tda_span_mismatch(tda_Span a, tda_Span b, tda_Eq eq, size_t *out_idx) {
     TDA_SPAN_ASSERT(b);
     assert(eq);
     assert(out_idx);
-    assert(a.elem_size == b.elem_size);
+    TDA_EXPECT(a.elem_size == b.elem_size);
 
     if (a.data == b.data && a.len == b.len) {
         return false;
@@ -73,7 +75,7 @@ int tda_span_cmp(tda_Span a, tda_Span b, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    assert(a.elem_size == b.elem_size);
+    TDA_EXPECT(a.elem_size == b.elem_size);
 
     if (a.data == b.data && a.len == b.len) {
         return 0;

@@ -1,5 +1,6 @@
 #include "tda/ds/queue.h"
 
+#include "tda/core/check.h"
 #include "tda/ds/deque.h"
 
 #include <assert.h>
@@ -119,7 +120,7 @@ tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue **ou
 tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
-    assert(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));
+    TDA_EXPECT(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));
 
     // self assignment is left to the deque, which already returns early on it: a guard
     // repeated here would be a branch no test could tell from its absence
@@ -129,7 +130,7 @@ tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
 tda_Status tda_queue_move_assign(tda_Queue *self, tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
-    assert(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));
+    TDA_EXPECT(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));
 
     // as in copy_assign, moving a queue onto itself is the deque's early return
     return tda_deque_move_assign(self->deque, other->deque);
@@ -188,28 +189,28 @@ tda_Al *tda_queue_al(const tda_Queue *self) {
 
 const void *tda_queue_front(const tda_Queue *self) {
     ASSERT_QUEUE(self);
-    assert(tda_deque_len(self->deque) > 0);
+    TDA_EXPECT(tda_deque_len(self->deque) > 0);
 
     return tda_deque_front(self->deque);
 }
 
 void *tda_queue_front_mut(tda_Queue *self) {
     ASSERT_QUEUE(self);
-    assert(tda_deque_len(self->deque) > 0);
+    TDA_EXPECT(tda_deque_len(self->deque) > 0);
 
     return tda_deque_front_mut(self->deque);
 }
 
 const void *tda_queue_back(const tda_Queue *self) {
     ASSERT_QUEUE(self);
-    assert(tda_deque_len(self->deque) > 0);
+    TDA_EXPECT(tda_deque_len(self->deque) > 0);
 
     return tda_deque_back(self->deque);
 }
 
 void *tda_queue_back_mut(tda_Queue *self) {
     ASSERT_QUEUE(self);
-    assert(tda_deque_len(self->deque) > 0);
+    TDA_EXPECT(tda_deque_len(self->deque) > 0);
 
     return tda_deque_back_mut(self->deque);
 }
@@ -225,7 +226,7 @@ tda_Status tda_queue_push(tda_Queue *self, const void *val) {
 
 void tda_queue_pop(tda_Queue *self) {
     ASSERT_QUEUE(self);
-    assert(tda_deque_len(self->deque) > 0);
+    TDA_EXPECT(tda_deque_len(self->deque) > 0);
 
     tda_deque_pop_front(self->deque);
 }
@@ -251,7 +252,7 @@ tda_Status tda_queue_shrink_to_fit(tda_Queue *self) {
 void tda_queue_swap(tda_Queue *self, tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
-    assert(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));
+    TDA_EXPECT(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));
 
     // as in copy_assign, swapping a queue with itself is the deque's early return
     tda_deque_swap(self->deque, other->deque);

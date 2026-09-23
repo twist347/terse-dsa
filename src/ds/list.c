@@ -1,5 +1,6 @@
 #include "tda/ds/list.h"
 
+#include "tda/core/check.h"
 #include "tda/core/util.h"
 
 #include "internal/ptr.h"
@@ -188,7 +189,7 @@ tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List **out) 
 tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other) {
     ASSERT_LIST(self);
     ASSERT_LIST(other);
-    assert(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->elem_size == other->elem_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -242,7 +243,7 @@ tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other) {
 tda_Status tda_list_move_assign(tda_List *self, tda_List *other) {
     ASSERT_LIST(self);
     ASSERT_LIST(other);
-    assert(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->elem_size == other->elem_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -283,7 +284,7 @@ tda_Status tda_list_move_assign(tda_List *self, tda_List *other) {
 bool tda_list_eq(const tda_List *a, const tda_List *b) {
     ASSERT_LIST(a);
     ASSERT_LIST(b);
-    assert(a->elem_size == b->elem_size);
+    TDA_EXPECT(a->elem_size == b->elem_size);
 
     if (a == b) {
         return true;
@@ -309,7 +310,7 @@ bool tda_list_eq(const tda_List *a, const tda_List *b) {
 bool tda_list_eq_by(const tda_List *a, const tda_List *b, tda_Eq eq) {
     ASSERT_LIST(a);
     ASSERT_LIST(b);
-    assert(a->elem_size == b->elem_size);
+    TDA_EXPECT(a->elem_size == b->elem_size);
     assert(eq);
 
     if (a == b) {
@@ -357,28 +358,28 @@ tda_Al *tda_list_al(const tda_List *self) {
 
 const void *tda_list_front(const tda_List *self) {
     ASSERT_LIST(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return self->head->elem;
 }
 
 void *tda_list_front_mut(tda_List *self) {
     ASSERT_LIST(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return self->head->elem;
 }
 
 const void *tda_list_back(const tda_List *self) {
     ASSERT_LIST(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return self->tail->elem;
 }
 
 void *tda_list_back_mut(tda_List *self) {
     ASSERT_LIST(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return self->tail->elem;
 }
@@ -479,14 +480,14 @@ tda_Status tda_list_push_back(tda_List *self, const void *val) {
 
 void tda_list_pop_front(tda_List *self) {
     ASSERT_LIST(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     remove_node(self, self->head);
 }
 
 void tda_list_pop_back(tda_List *self) {
     ASSERT_LIST(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     remove_node(self, self->tail);
 }
@@ -528,8 +529,8 @@ void tda_list_clear(tda_List *self) {
 tda_Status tda_list_splice_front(tda_List *self, tda_List *src) {
     ASSERT_LIST(self);
     ASSERT_LIST(src);
-    assert(self != src);
-    assert(self->elem_size == src->elem_size);
+    TDA_EXPECT(self != src);
+    TDA_EXPECT(self->elem_size == src->elem_size);
 
     if (src->len == 0) {
         return TDA_STATUS_OK;
@@ -559,8 +560,8 @@ tda_Status tda_list_splice_front(tda_List *self, tda_List *src) {
 tda_Status tda_list_splice_back(tda_List *self, tda_List *src) {
     ASSERT_LIST(self);
     ASSERT_LIST(src);
-    assert(self != src);
-    assert(self->elem_size == src->elem_size);
+    TDA_EXPECT(self != src);
+    TDA_EXPECT(self->elem_size == src->elem_size);
 
     if (src->len == 0) {
         return TDA_STATUS_OK;
@@ -590,8 +591,8 @@ tda_Status tda_list_splice_back(tda_List *self, tda_List *src) {
 void tda_list_swap(tda_List *self, tda_List *other) {
     ASSERT_LIST(self);
     ASSERT_LIST(other);
-    assert(self->elem_size == other->elem_size);
-    assert(self->al == other->al);
+    TDA_EXPECT(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->al == other->al);
 
     if (self == other) {
         return;
@@ -606,11 +607,11 @@ void tda_list_swap(tda_List *self, tda_List *other) {
 tda_Status tda_list_splice_node(tda_List *self, tda_ListNode *at, tda_List *src, tda_ListNode *node) {
     ASSERT_LIST(self);
     ASSERT_LIST(src);
-    assert(self->elem_size == src->elem_size);
+    TDA_EXPECT(self->elem_size == src->elem_size);
     assert(node);
     assert(owns_node(src, node));
     assert(!at || owns_node(self, at));
-    assert(at != node);
+    TDA_EXPECT(at != node);
 
     if (self->al != src->al) {
         // a node belongs to the allocator that made it, so it cannot change lists: the
@@ -675,8 +676,8 @@ void tda_list_sort(tda_List *self, tda_Cmp cmp) {
 tda_Status tda_list_merge(tda_List *self, tda_List *src, tda_Cmp cmp) {
     ASSERT_LIST(self);
     ASSERT_LIST(src);
-    assert(self != src);
-    assert(self->elem_size == src->elem_size);
+    TDA_EXPECT(self != src);
+    TDA_EXPECT(self->elem_size == src->elem_size);
     assert(cmp);
 
     if (src->len == 0) {
@@ -709,8 +710,8 @@ tda_Status tda_list_merge(tda_List *self, tda_List *src, tda_Cmp cmp) {
 void tda_list_copy_to_span(const tda_List *self, tda_SpanMut dst) {
     ASSERT_LIST(self);
     TDA_SPAN_ASSERT(dst);
-    assert(dst.elem_size == self->elem_size);
-    assert(dst.len == self->len);
+    TDA_EXPECT(dst.elem_size == self->elem_size);
+    TDA_EXPECT(dst.len == self->len);
 
     size_t i = 0;
     for (const tda_ListNode *node = self->head; node; node = node->next, ++i) {
@@ -721,8 +722,8 @@ void tda_list_copy_to_span(const tda_List *self, tda_SpanMut dst) {
 void tda_list_copy_from_span(tda_List *self, tda_Span src) {
     ASSERT_LIST(self);
     TDA_SPAN_ASSERT(src);
-    assert(src.elem_size == self->elem_size);
-    assert(src.len == self->len);
+    TDA_EXPECT(src.elem_size == self->elem_size);
+    TDA_EXPECT(src.len == self->len);
 
     size_t i = 0;
     for (tda_ListNode *node = self->head; node; node = node->next, ++i) {

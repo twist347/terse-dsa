@@ -1,5 +1,6 @@
 #include "tda/ds/stack.h"
 
+#include "tda/core/check.h"
 #include "tda/ds/vec.h"
 
 #include <assert.h>
@@ -119,7 +120,7 @@ tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al *al, tda_Stack **ou
 tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
-    assert(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
+    TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
 
     // self assignment is left to the vec, which already returns early on it: a guard
     // repeated here would be a branch no test could tell from its absence
@@ -129,7 +130,7 @@ tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
 tda_Status tda_stack_move_assign(tda_Stack *self, tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
-    assert(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
+    TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
 
     // as in copy_assign, moving a stack onto itself is the vec's early return
     return tda_vec_move_assign(self->vec, other->vec);
@@ -181,14 +182,14 @@ tda_Al *tda_stack_al(const tda_Stack *self) {
 
 const void *tda_stack_top(const tda_Stack *self) {
     ASSERT_STACK(self);
-    assert(tda_vec_len(self->vec) > 0);
+    TDA_EXPECT(tda_vec_len(self->vec) > 0);
 
     return tda_vec_back(self->vec);
 }
 
 void *tda_stack_top_mut(tda_Stack *self) {
     ASSERT_STACK(self);
-    assert(tda_vec_len(self->vec) > 0);
+    TDA_EXPECT(tda_vec_len(self->vec) > 0);
 
     return tda_vec_back_mut(self->vec);
 }
@@ -204,7 +205,7 @@ tda_Status tda_stack_push(tda_Stack *self, const void *val) {
 
 void tda_stack_pop(tda_Stack *self) {
     ASSERT_STACK(self);
-    assert(tda_vec_len(self->vec) > 0);
+    TDA_EXPECT(tda_vec_len(self->vec) > 0);
 
     tda_vec_pop(self->vec);
 }
@@ -230,7 +231,7 @@ tda_Status tda_stack_shrink_to_fit(tda_Stack *self) {
 void tda_stack_swap(tda_Stack *self, tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
-    assert(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
+    TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
 
     // as in copy_assign, swapping a stack with itself is the vec's early return
     tda_vec_swap(self->vec, other->vec);

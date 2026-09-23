@@ -1,6 +1,7 @@
 #include "tda/ds/arr.h"
 
 #include "tda/algo/compare.h"
+#include "tda/core/check.h"
 #include "tda/core/util.h"
 
 #include "internal/ptr.h"
@@ -111,7 +112,7 @@ tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr **out) {
 tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-    assert(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->elem_size == other->elem_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -142,7 +143,7 @@ tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
 tda_Status tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-    assert(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->elem_size == other->elem_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -225,42 +226,42 @@ tda_Al *tda_arr_al(const tda_Arr *self) {
 
 const void *tda_arr_front(const tda_Arr *self) {
     ASSERT_ARR(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return arr_offset(self, 0);
 }
 
 void *tda_arr_front_mut(tda_Arr *self) {
     ASSERT_ARR(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return arr_offset_mut(self, 0);
 }
 
 const void *tda_arr_back(const tda_Arr *self) {
     ASSERT_ARR(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return arr_offset(self, self->len - 1);
 }
 
 void *tda_arr_back_mut(tda_Arr *self) {
     ASSERT_ARR(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return arr_offset_mut(self, self->len - 1);
 }
 
 const void *tda_arr_get(const tda_Arr *self, size_t idx) {
     ASSERT_ARR(self);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     return arr_offset(self, idx);
 }
 
 void *tda_arr_get_mut(tda_Arr *self, size_t idx) {
     ASSERT_ARR(self);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     return arr_offset_mut(self, idx);
 }
@@ -268,7 +269,7 @@ void *tda_arr_get_mut(tda_Arr *self, size_t idx) {
 void tda_arr_set(tda_Arr *self, size_t idx, const void *val) {
     ASSERT_ARR(self);
     assert(val);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     memcpy(arr_offset_mut(self, idx), val, self->elem_size);
 }
@@ -290,8 +291,8 @@ void *tda_arr_data_mut(tda_Arr *self) {
 void tda_arr_swap(tda_Arr *self, tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-    assert(self->elem_size == other->elem_size);
-    assert(self->al == other->al);
+    TDA_EXPECT(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->al == other->al);
 
     if (self == other) {
         return;

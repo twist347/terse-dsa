@@ -1,6 +1,7 @@
 #include "tda/ds/vec.h"
 
 #include "tda/algo/compare.h"
+#include "tda/core/check.h"
 
 #include "internal/ptr.h"
 
@@ -150,7 +151,7 @@ tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al *al, tda_Vec **out) {
 tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other) {
     ASSERT_VEC(self);
     ASSERT_VEC(other);
-    assert(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->elem_size == other->elem_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -175,7 +176,7 @@ tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other) {
 tda_Status tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
     ASSERT_VEC(self);
     ASSERT_VEC(other);
-    assert(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->elem_size == other->elem_size);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -264,42 +265,42 @@ tda_Al *tda_vec_al(const tda_Vec *self) {
 
 const void *tda_vec_front(const tda_Vec *self) {
     ASSERT_VEC(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return vec_offset(self, 0);
 }
 
 void *tda_vec_front_mut(tda_Vec *self) {
     ASSERT_VEC(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return vec_offset_mut(self, 0);
 }
 
 const void *tda_vec_back(const tda_Vec *self) {
     ASSERT_VEC(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return vec_offset(self, self->len - 1);
 }
 
 void *tda_vec_back_mut(tda_Vec *self) {
     ASSERT_VEC(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     return vec_offset_mut(self, self->len - 1);
 }
 
 const void *tda_vec_get(const tda_Vec *self, size_t idx) {
     ASSERT_VEC(self);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     return vec_offset(self, idx);
 }
 
 void *tda_vec_get_mut(tda_Vec *self, size_t idx) {
     ASSERT_VEC(self);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     return vec_offset_mut(self, idx);
 }
@@ -307,7 +308,7 @@ void *tda_vec_get_mut(tda_Vec *self, size_t idx) {
 void tda_vec_set(tda_Vec *self, size_t idx, const void *val) {
     ASSERT_VEC(self);
     assert(val);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     memcpy(vec_offset_mut(self, idx), val, self->elem_size);
 }
@@ -343,7 +344,7 @@ tda_Status tda_vec_push(tda_Vec *self, const void *val) {
 
 void tda_vec_pop(tda_Vec *self) {
     ASSERT_VEC(self);
-    assert(self->len > 0);
+    TDA_EXPECT(self->len > 0);
 
     --self->len;
 }
@@ -351,7 +352,7 @@ void tda_vec_pop(tda_Vec *self) {
 tda_Status tda_vec_insert(tda_Vec *self, size_t idx, const void *val) {
     ASSERT_VEC(self);
     assert(val);
-    assert(idx <= self->len);
+    TDA_EXPECT(idx <= self->len);
 
     const tda_Status st = reserve_one(self);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -371,7 +372,7 @@ tda_Status tda_vec_insert(tda_Vec *self, size_t idx, const void *val) {
 
 void tda_vec_remove(tda_Vec *self, size_t idx) {
     ASSERT_VEC(self);
-    assert(idx < self->len);
+    TDA_EXPECT(idx < self->len);
 
     const size_t tail = self->len - idx - 1;
     if (tail > 0) {
@@ -464,8 +465,8 @@ tda_Status tda_vec_resize(tda_Vec *self, size_t new_len) {
 void tda_vec_swap(tda_Vec *self, tda_Vec *other) {
     ASSERT_VEC(self);
     ASSERT_VEC(other);
-    assert(self->elem_size == other->elem_size);
-    assert(self->al == other->al);
+    TDA_EXPECT(self->elem_size == other->elem_size);
+    TDA_EXPECT(self->al == other->al);
 
     if (self == other) {
         return;
@@ -488,7 +489,7 @@ void tda_vec_swap_elems(tda_Vec *self, size_t i, size_t j) {
 tda_Status tda_vec_extend(tda_Vec *self, tda_Span src) {
     ASSERT_VEC(self);
     TDA_SPAN_ASSERT(src);
-    assert(src.elem_size == self->elem_size);
+    TDA_EXPECT(src.elem_size == self->elem_size);
 
     return tda_vec_insert_span(self, self->len, src);
 }
@@ -496,8 +497,8 @@ tda_Status tda_vec_extend(tda_Vec *self, tda_Span src) {
 tda_Status tda_vec_insert_span(tda_Vec *self, size_t idx, tda_Span src) {
     ASSERT_VEC(self);
     TDA_SPAN_ASSERT(src);
-    assert(src.elem_size == self->elem_size);
-    assert(idx <= self->len);
+    TDA_EXPECT(src.elem_size == self->elem_size);
+    TDA_EXPECT(idx <= self->len);
 
     if (src.len == 0) {
         return TDA_STATUS_OK;
@@ -530,8 +531,8 @@ tda_Status tda_vec_insert_span(tda_Vec *self, size_t idx, tda_Span src) {
 
 void tda_vec_remove_range(tda_Vec *self, size_t idx, size_t count) {
     ASSERT_VEC(self);
-    assert(idx <= self->len);
-    assert(count <= self->len - idx);
+    TDA_EXPECT(idx <= self->len);
+    TDA_EXPECT(count <= self->len - idx);
 
     if (count == 0) {
         return;

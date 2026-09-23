@@ -1,7 +1,7 @@
 # doxygen docs/Doxyfile   (from the repo root) -> build-docs/html/index.html
 
 PROJECT_NAME           = terse
-PROJECT_NUMBER         = 1.0.0
+PROJECT_NUMBER         = 1.1.0
 PROJECT_BRIEF          = "data structures and algorithms in C23"
 OUTPUT_DIRECTORY       = build-docs
 

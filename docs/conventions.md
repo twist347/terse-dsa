@@ -116,5 +116,9 @@ an error cannot be silently dropped.
   not runtime states. `tda_Status` is for data-dependent failures reachable from correct
   code: OOM, and `len * elem_size` overflow folded into `tda_calloc`'s `ckd_mul` →
   `nullptr` → `TDA_STATUS_ERR_NO_MEM`. Never turn one of those into UB or an assert.
+- **`TDA_EXPECT` vs `assert`.** A precondition of a public function whose breach would
+  touch memory out of bounds — an index, emptiness, a range, matching `elem_size` — is a
+  `TDA_EXPECT`, which `TDA_HARDENED` keeps in release. Invariants and anything above O(1)
+  stay `assert`.
 - Public symbols carry `TDA_API` (see `core/export.h`); everything else stays hidden under
   the library's default-hidden visibility.

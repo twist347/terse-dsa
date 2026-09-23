@@ -18,7 +18,7 @@
 #define TDA_VERSION_MAJOR 1
 
 /// bumped by an addition
-#define TDA_VERSION_MINOR 0
+#define TDA_VERSION_MINOR 1
 
 /// bumped by a fix
 #define TDA_VERSION_PATCH 0

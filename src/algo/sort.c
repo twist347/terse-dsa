@@ -3,6 +3,7 @@
 #include "tda/algo/copy.h"
 #include "tda/algo/heap.h"
 #include "tda/algo/merge.h"
+#include "tda/core/check.h"
 #include "tda/core/util.h"
 
 #include <assert.h>
@@ -143,7 +144,7 @@ tda_Status tda_span_sort_stable(tda_SpanMut s, tda_Cmp cmp, tda_Al *al) {
 void tda_span_partial_sort(tda_SpanMut s, size_t count, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(count <= s.len);
+    TDA_EXPECT(count <= s.len);
 
     if (count == 0 || s.len < 2) {
         return;
@@ -164,7 +165,7 @@ void tda_span_partial_sort(tda_SpanMut s, size_t count, tda_Cmp cmp) {
 void tda_span_nth_elem(tda_SpanMut s, size_t nth, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(nth < s.len);
+    TDA_EXPECT(nth < s.len);
 
     if (s.len < 2) {
         return;

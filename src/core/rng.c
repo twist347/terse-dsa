@@ -1,5 +1,7 @@
 #include "tda/core/rng.h"
 
+#include "tda/core/check.h"
+
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
@@ -119,7 +121,7 @@ uint64_t tda_rng_u64_max(tda_Rng *self, uint64_t max) {
 
 size_t tda_rng_idx(tda_Rng *self, size_t len) {
     assert(self);
-    assert(len > 0);
+    TDA_EXPECT(len > 0);
 
     // len - 1 is the last index, and it fits a uint64_t on every platform size_t does
     return (size_t) tda_rng_u64_max(self, (uint64_t) len - 1);

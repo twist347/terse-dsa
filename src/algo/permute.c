@@ -1,6 +1,7 @@
 #include "tda/algo/permute.h"
 
 #include "tda/algo/copy.h"
+#include "tda/core/check.h"
 
 #include "internal/ptr.h"
 
@@ -31,7 +32,7 @@ void tda_span_reverse(tda_SpanMut s) {
 
 void tda_span_rotate(tda_SpanMut s, size_t mid) {
     TDA_SPAN_ASSERT(s);
-    assert(mid <= s.len);
+    TDA_EXPECT(mid <= s.len);
 
     if (mid == 0 || mid == s.len) {
         return;
@@ -49,8 +50,8 @@ void tda_span_rotate(tda_SpanMut s, size_t mid) {
 void tda_span_swap_ranges(tda_SpanMut a, tda_SpanMut b) {
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
-    assert(a.elem_size == b.elem_size);
-    assert(a.len == b.len);
+    TDA_EXPECT(a.elem_size == b.elem_size);
+    TDA_EXPECT(a.len == b.len);
 
     if (a.len == 0 || a.data == b.data) {
         return;
@@ -185,7 +186,7 @@ void tda_span_shuffle(tda_SpanMut s, tda_Rng *rng) {
 
 void tda_span_shuffle_prefix(tda_SpanMut s, size_t count, tda_Rng *rng) {
     TDA_SPAN_ASSERT(s);
-    assert(count <= s.len);
+    TDA_EXPECT(count <= s.len);
     assert(rng);
 
     // the same walk from the other end, so stopping early leaves the settled positions

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tda/core/check.h"
 #include "tda/core/print.h"
 #include "tda/core/util.h"
 
@@ -133,8 +134,8 @@ static inline tda_Span tda_span_mut_to_span(tda_SpanMut s) {
 [[nodiscard]]
 static inline tda_Span tda_span_sub(tda_Span self, size_t idx, size_t count) {
     TDA_SPAN_ASSERT(self);
-    assert(idx <= self.len);
-    assert(count <= self.len - idx);
+    TDA_EXPECT(idx <= self.len);
+    TDA_EXPECT(count <= self.len - idx);
 
     return (tda_Span){
         .data = self.data ? (const unsigned char *) self.data + idx * self.elem_size : nullptr,
@@ -152,8 +153,8 @@ static inline tda_Span tda_span_sub(tda_Span self, size_t idx, size_t count) {
 [[nodiscard]]
 static inline tda_SpanMut tda_span_sub_mut(tda_SpanMut self, size_t idx, size_t count) {
     TDA_SPAN_ASSERT(self);
-    assert(idx <= self.len);
-    assert(count <= self.len - idx);
+    TDA_EXPECT(idx <= self.len);
+    TDA_EXPECT(count <= self.len - idx);
 
     return (tda_SpanMut){
         .data = self.data ? (unsigned char *) self.data + idx * self.elem_size : nullptr,
@@ -191,7 +192,7 @@ static inline size_t tda_span_bytes(tda_Span self) {
 [[nodiscard]]
 static inline const void *tda_span_get(tda_Span self, size_t idx) {
     TDA_SPAN_ASSERT(self);
-    assert(idx < self.len);
+    TDA_EXPECT(idx < self.len);
 
     return (const unsigned char *) self.data + idx * self.elem_size;
 }
@@ -204,7 +205,7 @@ static inline const void *tda_span_get(tda_Span self, size_t idx) {
 [[nodiscard]]
 static inline void *tda_span_get_mut(tda_SpanMut self, size_t idx) {
     TDA_SPAN_ASSERT(self);
-    assert(idx < self.len);
+    TDA_EXPECT(idx < self.len);
 
     return (unsigned char *) self.data + idx * self.elem_size;
 }
@@ -232,8 +233,8 @@ static inline void tda_span_set(tda_SpanMut self, size_t idx, const void *val) {
 /// @bigo{1}
 static inline void tda_span_swap_elems(tda_SpanMut self, size_t i, size_t j) {
     TDA_SPAN_ASSERT(self);
-    assert(i < self.len);
-    assert(j < self.len);
+    TDA_EXPECT(i < self.len);
+    TDA_EXPECT(j < self.len);
 
     if (i == j) {
         return;

@@ -1,5 +1,7 @@
 #include "tda/algo/fold.h"
 
+#include "tda/core/check.h"
+
 #include <assert.h>
 #include <string.h>
 
@@ -30,8 +32,8 @@ void tda_span_fold_back(tda_Span s, void *acc, tda_Fold fold, void *ctx) {
 void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
-    assert(dst.elem_size == src.elem_size);
-    assert(dst.len == src.len);
+    TDA_EXPECT(dst.elem_size == src.elem_size);
+    TDA_EXPECT(dst.len == src.len);
     assert(op);
 
     if (src.len == 0) {
@@ -50,8 +52,8 @@ void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx
 void tda_span_adjacent_difference(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
-    assert(dst.elem_size == src.elem_size);
-    assert(dst.len == src.len);
+    TDA_EXPECT(dst.elem_size == src.elem_size);
+    TDA_EXPECT(dst.len == src.len);
     assert(op);
 
     if (src.len == 0) {

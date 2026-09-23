@@ -1,6 +1,7 @@
 #include "tda/ds/pqueue.h"
 
 #include "tda/algo/heap.h"
+#include "tda/core/check.h"
 #include "tda/core/util.h"
 #include "tda/ds/vec.h"
 
@@ -134,7 +135,7 @@ tda_Status tda_pqueue_copy_with(const tda_PQueue *self, tda_Al *al, tda_PQueue *
 tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
-    assert(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
+    TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -157,7 +158,7 @@ tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
 tda_Status tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
-    assert(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
+    TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -213,7 +214,7 @@ tda_Cmp tda_pqueue_cmp(const tda_PQueue *self) {
 
 const void *tda_pqueue_top(const tda_PQueue *self) {
     ASSERT_PQUEUE(self);
-    assert(tda_vec_len(self->vec) > 0);
+    TDA_EXPECT(tda_vec_len(self->vec) > 0);
 
     return tda_vec_front(self->vec);
 }
@@ -237,7 +238,7 @@ tda_Status tda_pqueue_push(tda_PQueue *self, const void *val) {
 
 void tda_pqueue_pop(tda_PQueue *self) {
     ASSERT_PQUEUE(self);
-    assert(tda_vec_len(self->vec) > 0);
+    TDA_EXPECT(tda_vec_len(self->vec) > 0);
 
     // pop_heap parks the greatest elem last and leaves a heap in front of it; dropping
     // the tail is then the vec's business
@@ -266,7 +267,7 @@ tda_Status tda_pqueue_shrink_to_fit(tda_PQueue *self) {
 void tda_pqueue_swap(tda_PQueue *self, tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
-    assert(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
+    TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
 
     if (self == other) {
         return;
