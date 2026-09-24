@@ -51,9 +51,10 @@ if (!arena) {
     return 1;
 }
 
+int rc = 1;
 tda_Vec *vec = nullptr;
 if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, arena, &vec, 5, 3, 1, 4, 2))) {
-    return 1;
+    goto out; // the arena is held by now, so no bare return
 }
 
 tda_span_sort(tda_vec_to_span_mut(vec), tda_cmp_i32);
@@ -62,9 +63,13 @@ size_t idx;
 if (tda_span_binary_search(tda_vec_to_span(vec), &(int32_t){4}, tda_cmp_i32, &idx)) {
     printf("4 is at %zu\n", idx); // 4 is at 3
 }
+rc = 0;
 
-tda_vec_drop(vec);
-tda_al_arena_drop(arena);
+out:
+    tda_vec_drop(vec);
+    tda_al_arena_drop(arena);
+    
+return rc;
 ```
 
 ## Layout
@@ -149,7 +154,8 @@ cmake -S . -B build-hardened -DCMAKE_BUILD_TYPE=Release -DTDA_HARDENED=ON
 cmake --build build-hardened && ctest --test-dir build-hardened
 ```
 
-Requires a C23 toolchain.
+Requires a C23 toolchain and a C library with `<stdbit.h>`, which glibc ships from 2.39
+on. CI builds on Linux with gcc 15 and clang 22; nothing else is tested.
 
 The reference, generated from the same headers:
 
@@ -169,7 +175,7 @@ With `FetchContent`:
 include(FetchContent)
 FetchContent_Declare(terse-dsa
     GIT_REPOSITORY https://github.com/twist347/terse-dsa.git
-    GIT_TAG main
+    GIT_TAG v1.2.2
 )
 FetchContent_MakeAvailable(terse-dsa)
 
@@ -181,6 +187,7 @@ As a submodule:
 ```sh
 git submodule add https://github.com/twist347/terse-dsa.git \
     thirdparty/terse-dsa
+git -C thirdparty/terse-dsa checkout v1.2.2
 ```
 
 ```cmake

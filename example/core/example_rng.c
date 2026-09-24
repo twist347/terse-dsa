@@ -25,7 +25,10 @@ int main() {
     // whole state, so this run can be replayed exactly by passing the same one.
     tda_Rng rng = tda_rng_from_seed(2026);
 
-    printf("%d %d\n", tda_rng_i32_range(&rng, 1, 6), tda_rng_i32_range(&rng, 1, 6)); // 4 3
+    // two draws, two statements: the order a call's arguments are evaluated in is unspecified
+    const int32_t first = tda_rng_i32_range(&rng, 1, 6);
+    const int32_t second = tda_rng_i32_range(&rng, 1, 6);
+    printf("%d %d\n", first, second); // 3 4
     /// [seed]
 
     /// [draw]

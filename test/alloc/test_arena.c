@@ -306,6 +306,22 @@ static void test_realloc_moves_a_block_that_is_not_the_last() {
     tda_al_arena_drop(arena);
 }
 
+// shrinking a block that is not the last one needs no new room: it stays where it is, and
+// even a full arena can do it
+static void test_realloc_shrinks_a_block_that_is_not_the_last_in_place() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 4 * ALIGNMENT);
+
+    void *p = tda_alloc(arena, 2 * ALIGNMENT);
+    TEST_ASSERT_NOT_NULL(p);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 2 * ALIGNMENT));
+    TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).available);
+
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, 2 * ALIGNMENT, 1));
+    TEST_ASSERT_EQUAL_size_t(4 * ALIGNMENT, tda_al_arena_stats(arena).used);
+
+    tda_al_arena_drop(arena);
+}
+
 // past the last block lies only the free tail: when growing there does not fit, nothing
 // would, and the block is left as it was
 static void test_realloc_of_the_last_block_beyond_the_capacity_fails() {
@@ -493,6 +509,7 @@ int main() {
     RUN_TEST(test_realloc_grows_the_last_block_in_place);
     RUN_TEST(test_realloc_shrinks_the_last_block_in_place);
     RUN_TEST(test_realloc_moves_a_block_that_is_not_the_last);
+    RUN_TEST(test_realloc_shrinks_a_block_that_is_not_the_last_in_place);
     RUN_TEST(test_realloc_of_the_last_block_beyond_the_capacity_fails);
     RUN_TEST(test_realloc_of_null_is_an_alloc);
 

@@ -236,7 +236,7 @@ size_t tda_span_min_elem(tda_Span s, tda_Cmp cmp);
 /// the largest elem
 /// @param s the span; asserts it is not empty
 /// @param cmp the order
-/// @return its index; a tie goes to the first, unlike std::max_element
+/// @return its index; a tie goes to the first, as in std::max_element
 /// @bigo{n}
 [[nodiscard]] TDA_API
 size_t tda_span_max_elem(tda_Span s, tda_Cmp cmp);
@@ -250,7 +250,8 @@ typedef struct {
 /// both extremes, in one pass
 /// @param s the span; asserts it is not empty
 /// @param cmp the order
-/// @return the two indices, each a tie going to the first
+/// @return the two indices, each a tie going to the first — unlike std::minmax_element,
+///         which gives the last of the largest
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp);

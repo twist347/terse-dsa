@@ -143,6 +143,7 @@ bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b) {
     ASSERT_HSET(a);
     ASSERT_HSET(b);
     TDA_EXPECT(tda_hmap_key_size(a->map) == tda_hmap_key_size(b->map));
+    TDA_EXPECT(tda_hmap_key_eq(a->map) == tda_hmap_key_eq(b->map));
 
     if (a == b) {
         return true;

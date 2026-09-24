@@ -46,7 +46,8 @@ size_t tda_span_unique(tda_SpanMut s, tda_Eq eq);
 
 /// drops every elem equal to 'key'
 /// @param s the span
-/// @param key the address of the value to drop
+/// @param key the address of the value to drop; must not point into 's': the elems move
+///            under it, and it would be compared as whatever lands there next
 /// @param eq the equality
 /// @return the new length
 /// @bigo{n}
@@ -69,7 +70,8 @@ size_t tda_span_remove_if(tda_SpanMut s, tda_Pred pred, void *ctx);
 
 /// overwrites every elem equal to 'key' with 'val'
 /// @param s the span
-/// @param key the address of the value to look for
+/// @param key the address of the value to look for; must not point into 's', as in
+///            tda_span_remove — the first match overwrites it
 /// @param val the address of the value to write; the length never changes, so there is
 ///            nothing to return
 /// @param eq the equality

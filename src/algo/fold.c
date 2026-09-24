@@ -40,7 +40,10 @@ void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx
         return;
     }
 
-    memcpy(tda_span_get_mut(dst, 0), tda_span_get(src, 0), dst.elem_size);
+    // in place the first elem is already where it goes, and memcpy onto itself is undefined
+    if (dst.data != src.data) {
+        memcpy(tda_span_get_mut(dst, 0), tda_span_get(src, 0), dst.elem_size);
+    }
 
     const tda_Span prev = tda_span_mut_to_span(dst);
 

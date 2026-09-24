@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tda/core/check.h"
 #include "tda/core/span.h"
 
 #include <string.h>
@@ -25,8 +26,11 @@ static inline size_t tda_emit_rest(tda_SpanMut dst, size_t out, tda_Span src, si
         return out;
     }
 
+    // tda_span_get_mut vouches only for the first slot; the run has to fit as a whole
     const size_t n = src.len - from;
-    memcpy(tda_span_get_mut(dst, out), tda_span_get(src, from), n * src.elem_size);
+    void *to = tda_span_get_mut(dst, out);
+    TDA_EXPECT(n <= dst.len - out);
+    memcpy(to, tda_span_get(src, from), n * src.elem_size);
 
     return out + n;
 }

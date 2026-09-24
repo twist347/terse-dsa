@@ -187,6 +187,12 @@ static void *arena_realloc(void *ctx, void *ptr, size_t old_size, size_t new_siz
         return ptr;
     }
 
+    // any other block shrinks where it stands: the arena takes nothing back per block, so
+    // the tail is lost either way, and a move would only spend more and could fail
+    if (new_size <= old_size) {
+        return ptr;
+    }
+
     void *new_ptr = arena_alloc(ctx, new_size);
     if (new_ptr) {
         memcpy(new_ptr, ptr, old_size < new_size ? old_size : new_size);

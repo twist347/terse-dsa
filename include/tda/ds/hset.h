@@ -181,9 +181,11 @@ tda_Eq tda_hset_key_eq(const tda_HSet *self);
 /// @name compare
 /// @{
 
-/// whether the two hold the same keys, matched by the hasher and the equality of 'b'
+/// whether the two hold the same keys, looked up with the hasher of 'b'
 /// @param a one set
-/// @param b must have the same key_size; a differing length is just false
+/// @param b must have the same key_size and key equality: the check runs one way, which is
+///          both ways only when the two agree on what a key is. A differing length is just
+///          false
 /// @return whether every key of 'a' is in 'b' and the lengths agree, which is containment
 ///         both ways
 /// @bigo{n}
@@ -281,9 +283,9 @@ bool tda_hset_remove(tda_HSet *self, const void *key);
 
 /// drops the entry 'node' names
 /// @param self the set
-/// @param node a position, asserted to be one of this set's own; every pointer into it
+/// @param node a position, checked to be one of this set's own; every pointer into it
 ///             dies here, and no other entry is touched
-/// @bigo{1}
+/// @bigo{1} expected, as in tda_hmap_remove_node
 TDA_API
 void tda_hset_remove_node(tda_HSet *self, tda_HSetNode *node);
 

@@ -263,10 +263,17 @@ tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
     }
 
     // one allocator: the buckets are handed over, nodes and all. What 'self' held ends up in 'other' and is released
-    // there, through the very allocator that made it
+    // there, through the very allocator that made it. The swap would hand 'other' the old hasher and equality of
+    // 'self' too, so its own go back: emptied, it stays the map it was, as it does across two allocators
     if (self->al == other->al) {
+        const tda_Hasher other_hasher = other->hasher;
+        const tda_Eq other_eq = other->eq;
+
         TDA_SWAP(*self, *other);
         release_buckets(other);
+
+        other->hasher = other_hasher;
+        other->eq = other_eq;
 
         ASSERT_HMAP(self);
         ASSERT_HMAP(other);
@@ -343,6 +350,7 @@ bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b) {
     ASSERT_HMAP(b);
     TDA_EXPECT(a->key_size == b->key_size);
     TDA_EXPECT(a->val_size == b->val_size);
+    TDA_EXPECT(a->eq == b->eq);
 
     return eq_impl(a, b, nullptr);
 }
@@ -352,6 +360,7 @@ bool tda_hmap_eq_by(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq) {
     ASSERT_HMAP(b);
     TDA_EXPECT(a->key_size == b->key_size);
     TDA_EXPECT(a->val_size == b->val_size);
+    TDA_EXPECT(a->eq == b->eq);
     assert(val_eq);
 
     return eq_impl(a, b, val_eq);
@@ -552,7 +561,9 @@ void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node) {
         link = &(*link)->next;
     }
 
-    assert(*link == node); // the node must belong to this map
+    // a node of another map would splice that map's chain into this one; the walk has
+    // already been paid for, so the check is free
+    TDA_EXPECT(*link == node);
 
     *link = node->next;
     node_drop(self, node);
@@ -843,8 +854,8 @@ static bool eq_impl(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq) {
     }
 
     // equal lengths plus every key of 'a' found in 'b' is containment both ways, so there
-    // is no second pass. 'b' answers with its own hasher and equality: the keys are being
-    // looked up in it
+    // is no second pass — which holds only because the two share one equality. 'b' answers
+    // with its own hasher: the keys are being looked up in it
     for (size_t i = 0; i < a->bucket_count; ++i) {
         for (const tda_HMapNode *node = a->buckets[i]; node; node = node->next) {
             const void *key = node_key(node);

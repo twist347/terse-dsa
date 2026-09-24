@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.2 — 2026-09-24
+
+### Fixed
+
+- `tda_span_merge` checks its destination's length in hardened builds; a short one used to
+  be written past its end.
+- `tda_hmap_move_assign` on one allocator no longer leaves the emptied source with the
+  target's old hasher and equality. `tda_hset_move_assign` inherits the fix.
+- `tda_hmap_remove_node` and `tda_hset_remove_node` check in hardened builds that the node
+  is the map's own.
+- An arena shrinks a block that is not its last one where it stands, instead of moving it
+  and failing when full.
+- `tda_span_partial_sum` in place no longer calls `memcpy` onto itself.
+- Docs: `tda_hmap_eq`, `tda_hmap_eq_by` and `tda_hset_eq` require one key equality on both
+  sides, checked in hardened builds; `tda_span_remove` and `tda_span_replace` forbid a key
+  inside the span; `remove_node` is O(1) expected; the pool's own realloc; which of
+  `max_elem` and `std::minmax_element` breaks a tie differently.
+- README: the example no longer leaks the arena on failure, FetchContent and the submodule
+  pin a release tag instead of `main`, and the C library requirement is stated.
+- The rng example no longer depends on the order function arguments are evaluated in.
+
 ## 1.2.1 — 2026-09-23
 
 ### Fixed

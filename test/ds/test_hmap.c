@@ -1030,6 +1030,11 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     TEST_ASSERT_EQUAL_size_t(0, tda_hmap_len(src));
     TEST_ASSERT_EQUAL_size_t(0, tda_hmap_bucket_count(src));
 
+    // but keeps its own order: the swap that moved the table must not leave it the
+    // target's old hasher, as a move across two allocators does not either
+    TEST_ASSERT_EQUAL_PTR(hash_all_alike, tda_hmap_hasher(src));
+    TEST_ASSERT_EQUAL_PTR(tda_eq_i32, tda_hmap_key_eq(src));
+
     // and is still a map: the first insert makes its buckets anew
     put(src, 5, 50);
     assert_has(src, 5, 50);

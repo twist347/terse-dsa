@@ -25,7 +25,7 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
     assert(cmp);
     TDA_EXPECT(dst.elem_size == a.elem_size);
     TDA_EXPECT(dst.elem_size == b.elem_size);
-    assert(dst.len == a.len + b.len);
+    TDA_EXPECT(dst.len == a.len + b.len);
 
     size_t i = 0, j = 0;
     size_t out = 0;

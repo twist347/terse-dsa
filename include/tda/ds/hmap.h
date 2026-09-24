@@ -201,8 +201,9 @@ tda_Eq tda_hmap_key_eq(const tda_HMap *self);
 
 /// whether the two hold the same entries: the same keys, each with an equal value
 /// @param a one map
-/// @param b must have the same key_size and val_size; a differing length is just false.
-///          Keys are matched by the hasher and the equality of 'b'
+/// @param b must have the same key_size, val_size and key equality: the check runs one
+///          way, which is both ways only when the two agree on what a key is. A differing
+///          length is just false; keys are looked up with the hasher of 'b'
 /// @return whether the lengths agree and every entry of 'a' is in 'b' with the same value
 ///         byte for byte — the one comparison the caller cannot hand over as a tda_Eq,
 ///         which takes two pointers and no size
@@ -212,7 +213,7 @@ bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b);
 
 /// the same, with 'val_eq' deciding what an equal value is
 /// @param a one map
-/// @param b must have the same key_size and val_size
+/// @param b must have the same key_size, val_size and key equality, as in tda_hmap_eq
 /// @param val_eq the caller's to name: a map carries no equality for its value side, and
 ///               this is what a value with padding or a field that does not count needs
 /// @return whether the lengths agree and every entry of 'a' is in 'b' with an equal value
@@ -344,10 +345,10 @@ bool tda_hmap_remove(tda_HMap *self, const void *key);
 
 /// drops the entry 'node' names
 /// @param self the map
-/// @param node a position, asserted to be one of this map's own; every pointer into it
+/// @param node a position, checked to be one of this map's own; every pointer into it
 ///             dies here, and no other entry is touched. The bucket is found from the
 ///             hash the node carries, so the key is never hashed again
-/// @bigo{1}
+/// @bigo{1} expected — the node's bucket is walked to reach the link to it
 TDA_API
 void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node);
 
