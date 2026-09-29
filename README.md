@@ -6,45 +6,6 @@
 
 Classic containers and algorithms, written plainly. No dependencies.
 
-Two rules shape the whole API:
-
-- **Memory is explicit and swappable.** Nothing allocates on its own — every container is
-  handed a `tda_Al *` and uses only that. Swapping in an arena, a pool or a logging
-  allocator is a one-line change at the call site.
-- **Errors cannot be dropped.** A fallible operation returns `tda_Status` and writes its
-  result through a trailing `out`; `[[nodiscard]]` makes ignoring it a warning every
-  compiler raises unasked, and a compile error under `-Werror`. Broken preconditions are
-  `assert`, not status — those are bugs, not runtime states.
-
-Out of bounds is never silent in a build that asks: `-DTDA_HARDENED=ON` keeps every
-bounds, emptiness and range check in release, so an index past the end aborts with its
-place instead of reading past it.
-
-The rest of them — how a name is built, where the `mut` marker sits, what is an `assert`
-and what a status — are written down in [conventions](docs/conventions.md), each with the
-reason it is what it is.
-
-## What it does not do
-
-- **Elems are bytes.** A container copies `elem_size` bytes in and out, and drops them by
-  releasing the block — it never calls anything of yours. A `tda_Vec` of `strdup`ed
-  `char *` leaks unless the caller frees them first.
-- **Nothing is thread-safe.** No container takes a lock; sharing one across threads is the
-  caller's problem.
-
-## Allocators, in three rules
-
-A container is built on one `tda_Al *` and never touches another:
-
-- **A copy is born on its source's allocator** — `tda_vec_copy_with` names another one.
-- **An assignment keeps the target's.** On one allocator a move hands the block over and
-  cannot fail; across two it costs `n` and may return `TDA_STATUS_ERR_NO_MEM`, leaving
-  both sides as they were.
-- **`swap` wants both sides on one allocator** — it is O(1) and returns nothing, so a
-  mismatch is an `assert`, exactly as C++ leaves it undefined when
-  `propagate_on_container_swap` is false. Across two, copy with `copy_with` and hand the
-  results over with `move_assign`.
-
 ## Example
 
 ```c
@@ -73,6 +34,26 @@ out:
     
 return rc;
 ```
+
+## Design
+
+Two rules shape the whole API:
+
+- **Memory is explicit and swappable.** Nothing allocates on its own — every container is
+  handed a `tda_Al *` and uses only that. Swapping in an arena, a pool or a logging
+  allocator is a one-line change at the call site.
+- **Errors cannot be dropped.** A fallible operation returns `tda_Status` and writes its
+  result through a trailing `out`; `[[nodiscard]]` makes ignoring it a warning every
+  compiler raises unasked, and a compile error under `-Werror`. Broken preconditions are
+  `assert`, not status — those are bugs, not runtime states.
+
+Out of bounds is never silent in a build that asks: `-DTDA_HARDENED=ON` keeps every
+bounds, emptiness and range check in release, so an index past the end aborts with its
+place instead of reading past it.
+
+The rest of them — how a name is built, where the `mut` marker sits, what is an `assert`
+and what a status — are written down in [conventions](docs/conventions.md), each with the
+reason it is what it is.
 
 ## Layout
 
@@ -199,6 +180,27 @@ add_subdirectory(thirdparty/terse-dsa)
 
 target_link_libraries(app PRIVATE tda::tda)
 ```
+
+## Allocators, in three rules
+
+A container is built on one `tda_Al *` and never touches another:
+
+- **A copy is born on its source's allocator** — `tda_vec_copy_with` names another one.
+- **An assignment keeps the target's.** On one allocator a move hands the block over and
+  cannot fail; across two it costs `n` and may return `TDA_STATUS_ERR_NO_MEM`, leaving
+  both sides as they were.
+- **`swap` wants both sides on one allocator** — it is O(1) and returns nothing, so a
+  mismatch is an `assert`, exactly as C++ leaves it undefined when
+  `propagate_on_container_swap` is false. Across two, copy with `copy_with` and hand the
+  results over with `move_assign`.
+
+## What it does not do
+
+- **Elems are bytes.** A container copies `elem_size` bytes in and out, and drops them by
+  releasing the block — it never calls anything of yours. A `tda_Vec` of `strdup`ed
+  `char *` leaks unless the caller frees them first.
+- **Nothing is thread-safe.** No container takes a lock; sharing one across threads is the
+  caller's problem.
 
 ## License
 
