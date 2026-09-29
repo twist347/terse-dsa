@@ -20,6 +20,10 @@ if (PROJECT_IS_TOP_LEVEL)
     endif ()
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
     set(CMAKE_C_EXTENSIONS OFF)
+
+    # one directory for every exe: Windows has no rpath, so a DLL is found next to the
+    # exe or not at all, and the other platforms keep the same layout
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 endif ()
 
 set(TDA_C_STANDARD 23)
