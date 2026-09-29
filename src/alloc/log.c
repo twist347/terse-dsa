@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 /* ========== internals ========== */
@@ -112,8 +113,18 @@ static void *log_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size)
     const LogCtx *log_ctx = ctx;
     assert(log_ctx->stream);
 
+    // a moved block leaves 'ptr' indeterminate, and even reading it is undefined; the
+    // address is kept as an integer while it is still valid
+    const uintptr_t old_addr = (uintptr_t) ptr;
     void *p = tda_realloc(log_ctx->wrapped, ptr, old_size, new_size);
-    log_line(log_ctx, "[TDA] realloc %p old size = %zu new_size = %zu -> %p\n", ptr, old_size, new_size, p);
+    log_line(
+        log_ctx,
+        "[TDA] realloc %p old size = %zu new_size = %zu -> %p\n",
+        (void *) old_addr,
+        old_size,
+        new_size,
+        p
+    );
     return p;
 }
 

@@ -15,8 +15,9 @@
 /// maps into a span of int64_t. algo/copy, which moves bytes as they are, is the other
 /// half of that line.
 ///
-/// A destination that is a source is fine; a partial overlap is not, since every position
-/// is written before the next is read.
+/// A destination that is a source is fine while its elems are no wider than the source's
+/// — a wider one writes over elems not yet read. A partial overlap is never fine, since
+/// every position is written before the next is read.
 ///
 /// @par Example
 /// @snippet algo/example_transform.c ops

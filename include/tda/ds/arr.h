@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tda/alloc/alloc.h"
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/print.h"
@@ -324,6 +325,19 @@ void tda_arr_print(const tda_Arr *self, tda_FPrint fprint);
 /// @name macros
 /// @{
 
+/// @cond
+// hands 'self' back once T is checked against the elem size, so a typed macro reads its
+// handle once; typeof keeps the handle's constness, which the function has to drop
+[[nodiscard]]
+static inline tda_Arr *tda_arr_typed_(const tda_Arr *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_arr_elem_size(self) == size);
+    return (tda_Arr *) self;
+}
+
+#define TDA_ARR_TYPED_(T, self) \
+    ((typeof(self)) tda_arr_typed_((self), sizeof(T)))
+/// @endcond
+
 /// tda_arr_new_len with sizeof(T) for the elem size
 /// @param T the elem type
 /// @param len how many elems
@@ -360,22 +374,22 @@ void tda_arr_print(const tda_Arr *self, tda_FPrint fprint);
 /// @param self the arr
 /// @bigo{1}
 #define TDA_ARR_FRONT_AS(T, self) \
-    ((const T *) tda_arr_front((self)))
+    ((const T *) tda_arr_front(TDA_ARR_TYPED_(T, self)))
 
 /// tda_arr_front_mut as a T *
 /// @copydetails TDA_ARR_FRONT_AS
 #define TDA_ARR_FRONT_MUT_AS(T, self) \
-    ((T *) tda_arr_front_mut((self)))
+    ((T *) tda_arr_front_mut(TDA_ARR_TYPED_(T, self)))
 
 /// tda_arr_back as a const T *
 /// @copydetails TDA_ARR_FRONT_AS
 #define TDA_ARR_BACK_AS(T, self) \
-    ((const T *) tda_arr_back((self)))
+    ((const T *) tda_arr_back(TDA_ARR_TYPED_(T, self)))
 
 /// tda_arr_back_mut as a T *
 /// @copydetails TDA_ARR_FRONT_AS
 #define TDA_ARR_BACK_MUT_AS(T, self) \
-    ((T *) tda_arr_back_mut((self)))
+    ((T *) tda_arr_back_mut(TDA_ARR_TYPED_(T, self)))
 
 /// tda_arr_get as a const T *
 /// @param T the elem type
@@ -383,12 +397,12 @@ void tda_arr_print(const tda_Arr *self, tda_FPrint fprint);
 /// @param idx the index
 /// @bigo{1}
 #define TDA_ARR_GET_AS(T, self, idx) \
-    ((const T *) tda_arr_get((self), (idx)))
+    ((const T *) tda_arr_get(TDA_ARR_TYPED_(T, self), (idx)))
 
 /// tda_arr_get_mut as a T *
 /// @copydetails TDA_ARR_GET_AS
 #define TDA_ARR_GET_MUT_AS(T, self, idx) \
-    ((T *) tda_arr_get_mut((self), (idx)))
+    ((T *) tda_arr_get_mut(TDA_ARR_TYPED_(T, self), (idx)))
 
 /// tda_arr_set from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -397,7 +411,7 @@ void tda_arr_print(const tda_Arr *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_ARR_SET(T, self, idx, val) \
-    tda_arr_set((self), (idx), &(T){ (val) })
+    tda_arr_set(TDA_ARR_TYPED_(T, self), (idx), &(T){ (val) })
 
 /// @}
 

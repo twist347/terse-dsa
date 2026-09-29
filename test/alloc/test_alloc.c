@@ -255,9 +255,6 @@ static void test_realloc_fallback_failure_keeps_the_original() {
  * These are the only cases that expand TDA_ALLOC and friends. Nothing else in the
  * project uses them, so without these the preprocessor never reads the macro bodies
  * and a broken one ships behind a green build.
- *
- * TDA_ALLOC and TDA_REALLOC evaluate their count twice, so every count here is a
- * plain value.
  */
 
 static void test_macro_alloc_scales_the_count_by_elem_size() {
@@ -275,6 +272,20 @@ static void test_macro_alloc_scales_the_count_by_elem_size() {
     TDA_DEALLOC(int32_t, &al, p, 4);
     TEST_ASSERT_EQUAL_size_t(4 * sizeof(int32_t), probe.last_dealloc_size);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+// a count with a side effect is taken once, so the size handed to TDA_DEALLOC later is
+// the size that was allocated
+static void test_macro_alloc_reads_the_count_once() {
+    tda_Al al = bare_al();
+
+    size_t n = 4;
+    int32_t *p = TDA_ALLOC(int32_t, &al, n++);
+    TEST_ASSERT_NOT_NULL(p);
+    TEST_ASSERT_EQUAL_size_t(5, n);
+    TEST_ASSERT_EQUAL_size_t(4 * sizeof(int32_t), probe.last_alloc_size);
+
+    TDA_DEALLOC(int32_t, &al, p, 4);
 }
 
 // count * sizeof(T) would wrap: the request is refused before it reaches the
@@ -337,6 +348,23 @@ static void test_macro_realloc_scales_both_counts() {
     TDA_DEALLOC(int32_t, &al, q, 8);
 }
 
+static void test_macro_realloc_reads_each_count_once() {
+    tda_Al al = bare_al();
+
+    int32_t *p = TDA_ALLOC(int32_t, &al, 4);
+
+    size_t old_n = 4;
+    size_t new_n = 8;
+    int32_t *q = TDA_REALLOC(int32_t, &al, p, old_n++, new_n++);
+    TEST_ASSERT_NOT_NULL(q);
+    TEST_ASSERT_EQUAL_size_t(5, old_n);
+    TEST_ASSERT_EQUAL_size_t(9, new_n);
+    TEST_ASSERT_EQUAL_size_t(8 * sizeof(int32_t), probe.last_alloc_size);
+    TEST_ASSERT_EQUAL_size_t(4 * sizeof(int32_t), probe.last_dealloc_size);
+
+    TDA_DEALLOC(int32_t, &al, q, 8);
+}
+
 // new_count * sizeof(T) wraps to exactly 0 here. Unguarded that reaches tda_realloc as
 // "resize to nothing", which releases the block and reports nullptr — and the caller,
 // told its pointer survives a failure, is left holding freed memory.
@@ -383,11 +411,13 @@ int main() {
     RUN_TEST(test_realloc_fallback_failure_keeps_the_original);
 
     RUN_TEST(test_macro_alloc_scales_the_count_by_elem_size);
+    RUN_TEST(test_macro_alloc_reads_the_count_once);
     RUN_TEST(test_macro_alloc_rejects_a_count_that_would_wrap);
     RUN_TEST(test_macro_alloc_passes_the_largest_fitting_count_through);
     RUN_TEST(test_macro_calloc_hands_the_operands_over_unmultiplied);
     RUN_TEST(test_macro_calloc_overflow_is_caught_below_the_macro);
     RUN_TEST(test_macro_realloc_scales_both_counts);
+    RUN_TEST(test_macro_realloc_reads_each_count_once);
     RUN_TEST(test_macro_realloc_rejects_a_new_count_that_would_wrap);
 
     return UNITY_END();

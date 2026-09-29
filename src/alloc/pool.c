@@ -222,10 +222,12 @@ static void pool_dealloc(void *ctx, void *ptr, size_t size) {
     PoolCtx *pool_ctx = ctx;
 
     // a foreign block would be threaded into the free list and handed out as the pool's
-    // own, so a hardened build keeps these; a block freed twice is caught only when it
-    // would take 'used' below zero — anything more is not O(1)
+    // own, so a hardened build keeps these. A block freed twice is caught only when it is
+    // still the head of the list or would take 'used' below zero — one freed twice with
+    // other frees in between needs a walk of the list, which is not O(1)
     TDA_EXPECT(pool_owns(pool_ctx, ptr));
     TDA_EXPECT(pool_ctx->used > 0);
+    TDA_EXPECT(ptr != pool_ctx->free_head);
 
     // push onto free list
     PoolNode *node = ptr;

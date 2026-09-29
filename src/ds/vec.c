@@ -310,7 +310,8 @@ void tda_vec_set(tda_Vec *self, size_t idx, const void *val) {
     assert(val);
     TDA_EXPECT(idx < self->len);
 
-    memcpy(vec_offset_mut(self, idx), val, self->elem_size);
+    // memmove: 'val' may be the very elem being set, and memcpy onto itself is undefined
+    memmove(vec_offset_mut(self, idx), val, self->elem_size);
 }
 
 const void *tda_vec_data(const tda_Vec *self) {

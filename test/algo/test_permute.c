@@ -312,6 +312,26 @@ static void test_next_permutation_stays_within_the_subspan() {
 
 /* ========== prev_permutation ========== */
 
+// what a comparator carried over from a C++ less-than gives: never positive
+static int cmp_less_only(const void *lhs, const void *rhs) {
+    return *(const int32_t *) lhs < *(const int32_t *) rhs ? -1 : 0;
+}
+
+static void test_permutations_count_right_with_a_less_only_comparator() {
+    int32_t buf[3] = {1, 2, 3};
+    const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
+
+    for (size_t i = 0; i < 5; ++i) {
+        TEST_ASSERT_TRUE(tda_span_next_permutation(s, cmp_less_only));
+        TEST_ASSERT_EQUAL_INT32_ARRAY(ALL_3[i + 1], buf, 3);
+    }
+
+    for (size_t i = 5; i > 0; --i) {
+        TEST_ASSERT_TRUE(tda_span_prev_permutation(s, cmp_less_only));
+        TEST_ASSERT_EQUAL_INT32_ARRAY(ALL_3[i - 1], buf, 3);
+    }
+}
+
 static void test_prev_permutation_walks_the_order_backwards() {
     int32_t buf[3] = {3, 2, 1};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
@@ -843,6 +863,7 @@ int main() {
     RUN_TEST(test_next_permutation_follows_the_comparator);
     RUN_TEST(test_next_permutation_stays_within_the_subspan);
 
+    RUN_TEST(test_permutations_count_right_with_a_less_only_comparator);
     RUN_TEST(test_prev_permutation_walks_the_order_backwards);
     RUN_TEST(test_prev_permutation_undoes_next_permutation);
     RUN_TEST(test_prev_permutation_empty_and_single_report_false);

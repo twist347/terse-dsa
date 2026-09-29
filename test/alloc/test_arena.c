@@ -195,6 +195,18 @@ static void test_arena_can_be_filled_exactly() {
     tda_al_arena_drop(arena);
 }
 
+// a cap off the alignment is rounded up, so a request for all of it still fits
+static void test_cap_off_the_alignment_is_rounded_up() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 100);
+
+    const tda_AlArenaStats st = tda_al_arena_stats(arena);
+    TEST_ASSERT_EQUAL_size_t(aligned(100), st.cap);
+    TEST_ASSERT_EQUAL_size_t(aligned(100), st.available);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 100));
+
+    tda_al_arena_drop(arena);
+}
+
 // rounding up must be accounted for: a small request still consumes a whole slot
 static void test_capacity_accounts_for_rounding() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), ALIGNMENT);
@@ -438,6 +450,21 @@ static void test_from_buf_rejects_a_buffer_too_small_for_the_header() {
     TEST_ASSERT_NULL(tda_al_arena_from_buf(mem, 8));
 }
 
+// the smallest buffer it takes still hands out a byte, and the next size down is refused
+static void test_from_buf_on_the_smallest_buffer_hands_out_a_slot() {
+    size_t size = 1;
+    tda_Al *arena;
+    while (!(arena = tda_al_arena_from_buf(mem, size))) {
+        TEST_ASSERT_TRUE(size < sizeof(mem));
+        ++size;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(ALIGNMENT, tda_al_arena_stats(arena).cap);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 1));
+
+    tda_al_arena_drop(arena);
+}
+
 // every byte it hands out is inside the buffer, up to the last one
 static void test_from_buf_runs_out_inside_the_buffer() {
     tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem));
@@ -447,7 +474,7 @@ static void test_from_buf_runs_out_inside_the_buffer() {
     for (void *p; (p = tda_alloc(arena, ALIGNMENT)); taken += ALIGNMENT) {
         TEST_ASSERT_TRUE(inside(p, ALIGNMENT, mem, sizeof(mem)));
     }
-    TEST_ASSERT_EQUAL_size_t(cap / ALIGNMENT * ALIGNMENT, taken);
+    TEST_ASSERT_EQUAL_size_t(cap, taken);
 
     tda_al_arena_drop(arena);
 }
@@ -501,6 +528,7 @@ int main() {
     RUN_TEST(test_alloc_beyond_the_capacity_fails);
     RUN_TEST(test_arena_can_be_filled_exactly);
     RUN_TEST(test_capacity_accounts_for_rounding);
+    RUN_TEST(test_cap_off_the_alignment_is_rounded_up);
 
     RUN_TEST(test_calloc_zeroes_the_block);
     RUN_TEST(test_calloc_zeroes_reused_memory);
@@ -520,6 +548,7 @@ int main() {
     RUN_TEST(test_from_buf_hands_out_the_buffer_itself);
     RUN_TEST(test_from_buf_aligns_whatever_the_buffer);
     RUN_TEST(test_from_buf_rejects_a_buffer_too_small_for_the_header);
+    RUN_TEST(test_from_buf_on_the_smallest_buffer_hands_out_a_slot);
     RUN_TEST(test_from_buf_runs_out_inside_the_buffer);
     RUN_TEST(test_from_buf_can_be_built_again_after_drop);
 

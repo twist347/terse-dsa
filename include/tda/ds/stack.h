@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tda/alloc/alloc.h"
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/print.h"
@@ -26,7 +27,9 @@
 /// The order of the elems IS the stack's meaning, so the bridge to algo runs one way
 /// only: tda_stack_to_span is a view to read, and there is no mutable one to sort through.
 ///
-/// The pointers are not stable: growing moves every elem. That is what ds/list is for.
+/// The pointers are not stable: an op that may reallocate — push, reserve, shrink_to_fit,
+/// copy_assign, move_assign, swap — moves every elem, and a pop ends the one it takes.
+/// That is what ds/list is for.
 ///
 /// @par Example
 /// @snippet ds/example_stack.c build
@@ -212,7 +215,7 @@ tda_Al *tda_stack_al(const tda_Stack *self);
 
 /// the elem that will be popped next
 /// @param self asserts the stack is not empty
-/// @return a pointer into the block, good until the next push
+/// @return a pointer into the block, good until the stack next changes
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_stack_top(const tda_Stack *self);
@@ -288,8 +291,8 @@ void tda_stack_swap(tda_Stack *self, tda_Stack *other);
 
 /// the elems bottom to top, so the top is the LAST of them
 /// @param self the stack
-/// @return a read-only view, good until the next push. Read only because the arrival
-///         order is the stack's to keep — this is the whole bridge to algo
+/// @return a read-only view, good until the stack next changes. Read only because the
+///         arrival order is the stack's to keep — this is the whole bridge to algo
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Span tda_stack_to_span(const tda_Stack *self);
@@ -318,6 +321,19 @@ void tda_stack_print(const tda_Stack *self, tda_FPrint fprint);
 
 /// @name macros
 /// @{
+
+/// @cond
+// hands 'self' back once T is checked against the elem size, so a typed macro reads its
+// handle once; typeof keeps the handle's constness, which the function has to drop
+[[nodiscard]]
+static inline tda_Stack *tda_stack_typed_(const tda_Stack *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_stack_elem_size(self) == size);
+    return (tda_Stack *) self;
+}
+
+#define TDA_STACK_TYPED_(T, self) \
+    ((typeof(self)) tda_stack_typed_((self), sizeof(T)))
+/// @endcond
 
 /// tda_stack_new with sizeof(T) for the elem size
 /// @param T the elem type
@@ -363,12 +379,12 @@ void tda_stack_print(const tda_Stack *self, tda_FPrint fprint);
 /// @param self the stack
 /// @bigo{1}
 #define TDA_STACK_TOP_AS(T, self) \
-    ((const T *) tda_stack_top((self)))
+    ((const T *) tda_stack_top(TDA_STACK_TYPED_(T, self)))
 
 /// tda_stack_top_mut as a T *
 /// @copydetails TDA_STACK_TOP_AS
 #define TDA_STACK_TOP_MUT_AS(T, self) \
-    ((T *) tda_stack_top_mut((self)))
+    ((T *) tda_stack_top_mut(TDA_STACK_TYPED_(T, self)))
 
 /// tda_stack_push from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -376,7 +392,7 @@ void tda_stack_print(const tda_Stack *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_STACK_PUSH(T, self, val) \
-    tda_stack_push((self), &(T){ (val) })
+    tda_stack_push(TDA_STACK_TYPED_(T, self), &(T){ (val) })
 
 /// @}
 

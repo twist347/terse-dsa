@@ -2,8 +2,8 @@
 
 #include "tda/core/export.h"
 
+#include <stdckdint.h>
 #include <stddef.h>
-#include <stdint.h>
 
 /// @file
 
@@ -94,14 +94,38 @@ void tda_dealloc(tda_Al *al, void *ptr, size_t size);
 /// @name macros
 /// @{
 
+/// @cond
+// what TDA_ALLOC and TDA_REALLOC expand to: a function reads each argument once, where a
+// macro that checks the product before forming it has to read the count twice
+
+[[nodiscard]]
+static inline void *tda_alloc_n_(tda_Al *al, size_t count, size_t size) {
+    size_t bytes;
+    if (ckd_mul(&bytes, count, size)) {
+        return nullptr;
+    }
+
+    return tda_alloc(al, bytes);
+}
+
+[[nodiscard]]
+static inline void *tda_realloc_n_(tda_Al *al, void *ptr, size_t old_count, size_t new_count, size_t size) {
+    size_t new_bytes;
+    if (ckd_mul(&new_bytes, new_count, size)) {
+        return nullptr;
+    }
+
+    // 'ptr' was allocated as old_count * size, so that product is known to fit
+    return tda_realloc(al, ptr, old_count * size, new_bytes);
+}
+/// @endcond
+
 /// tda_alloc for 'count' elems of T, with the multiplication checked
 /// @param T the elem type
 /// @param al the allocator
 /// @param count how many elems; one that would overflow gives null, not a wrapped request
-#define TDA_ALLOC(T, al, count)                \
-    ((T *) ((count) > SIZE_MAX / sizeof(T)     \
-        ? nullptr                              \
-        : tda_alloc((al), (count) * sizeof(T))))
+#define TDA_ALLOC(T, al, count) \
+    ((T *) tda_alloc_n_((al), (count), sizeof(T)))
 
 /// tda_calloc for 'count' elems of T — the overflow check is tda_calloc's own
 /// @param T the elem type
@@ -116,10 +140,8 @@ void tda_dealloc(tda_Al *al, void *ptr, size_t size);
 /// @param ptr the block to resize
 /// @param old_count what it holds now
 /// @param new_count what it should hold; one that would overflow gives null
-#define TDA_REALLOC(T, al, ptr, old_count, new_count)                                 \
-    ((T *) ((new_count) > SIZE_MAX / sizeof(T)                                        \
-        ? nullptr                                                                     \
-        : tda_realloc((al), (ptr), (old_count) * sizeof(T), (new_count) * sizeof(T))))
+#define TDA_REALLOC(T, al, ptr, old_count, new_count) \
+    ((T *) tda_realloc_n_((al), (ptr), (old_count), (new_count), sizeof(T)))
 
 /// tda_dealloc for 'count' elems of T
 /// @param T the elem type

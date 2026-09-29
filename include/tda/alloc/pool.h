@@ -19,6 +19,11 @@
 /// does not. The parent is borrowed and has to outlive it; tda_al_pool_from_buf needs
 /// none, and runs on memory the caller already has.
 ///
+/// A block freed twice goes onto the free list twice and is then handed out to two
+/// owners. The check for it is partial: it catches the second free when nothing was freed
+/// in between, or when no other block is taken; free x, free y, free x passes, since
+/// catching that means walking the list.
+///
 /// @par Example
 /// @snippet alloc/example_pool.c build
 /// @snippet alloc/example_pool.c limits

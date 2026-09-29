@@ -234,6 +234,18 @@ static void test_insert_overwrites_an_existing_key() {
     tda_hmap_drop(m);
 }
 
+// the new value may be the one it overwrites, handed back from a lookup
+static void test_insert_over_a_key_with_its_own_value() {
+    tda_HMap *m = make_map(tda_hash_i32);
+    put(m, 1, 10);
+
+    TDA_TEST_OK(tda_hmap_insert(m, &(int32_t){1}, tda_hmap_get(m, &(int32_t){1}), nullptr));
+
+    assert_has(m, 1, 10);
+
+    tda_hmap_drop(m);
+}
+
 static void test_insert_reports_whether_the_key_was_new() {
     tda_HMap *m = make_map(tda_hash_i32);
 
@@ -1654,6 +1666,7 @@ int main() {
     RUN_TEST(test_get_of_a_missing_key_is_null);
     RUN_TEST(test_get_on_an_empty_map_is_null);
     RUN_TEST(test_insert_overwrites_an_existing_key);
+    RUN_TEST(test_insert_over_a_key_with_its_own_value);
     RUN_TEST(test_insert_reports_whether_the_key_was_new);
     RUN_TEST(test_get_mut_writes_through);
     RUN_TEST(test_find_gives_the_entry_as_a_node);

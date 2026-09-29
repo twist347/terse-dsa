@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.2.4 — 2026-09-29
+
+### Fixed
+
+- A `break` inside `TDA_DEQUE_FOR_EACH_AS` and `TDA_DEQUE_FOR_EACH_MUT_AS` ends the walk;
+  it used to act as a `continue`.
+- Typed macros check their type. Every `*_AS`, `SET`, `PUSH`, `INSERT` and kin compares
+  `sizeof(T)` with the elem size — an assert, kept in hardened builds — and still reads
+  its handle once; a wrong `T` used to read and write past the elem. The node macros
+  (`TDA_LIST_NODE_ELEM_AS`, `TDA_HMAP_NODE_KEY_AS`, `TDA_HSET_NODE_KEY_AS`) have no
+  container to ask, and say so.
+- `tda_span_next_permutation` and `tda_span_prev_permutation` work with a comparator that
+  never answers "greater" (`a < b ? -1 : 0`, as carried over from a C++ less-than); the
+  search for the elem to swap used to run off the front of the span.
+- An arena hands out all of its capacity. `tda_al_arena_new` rounds `cap` up to the
+  alignment, and `tda_al_arena_from_buf` cuts the block down to whole slots and refuses a
+  buffer without room for one; the stats report the result. A tail short of a slot used to
+  count as available and never be handed out.
+- `tda_span_copy_if` needs room only for the elems that pass, as documented, not for all
+  of the source.
+- `TDA_ALLOC` and `TDA_REALLOC` read each argument once. A count with a side effect used
+  to be read twice, and the size later handed to `TDA_DEALLOC` did not match the block.
+- Hardened builds catch a pool block freed twice in a row, not only when no other block is
+  taken. One freed twice with other frees in between still passes, and `pool.h` says so.
+- `tda_vec_set`, `tda_deque_set` and `tda_hmap_insert` over an existing key take a value
+  that is the very elem they overwrite; that was a `memcpy` onto itself.
+- `TDA_SPAN_FOR_EACH_AS` over an empty view no longer adds 0 to a null pointer.
+- The log allocator no longer reads a pointer `tda_realloc` has just freed.
+- Docs: removing the current node inside `TDA_HMAP_FOR_EACH`, `TDA_HSET_FOR_EACH` or
+  `TDA_LIST_FOR_EACH` steps through freed memory, and the loop that does it safely is
+  shown; a node goes with a clear, an assign or a drop, not only its own removal; the ops
+  that move the elems of vec, stack, queue and pqueue are listed in full; a walk or a
+  clear of hmap and hset pays for every bucket; `tda_span_transform` in place wants
+  destination elems no wider than the source's; `tda_pqueue_pop` sifts down;
+  `tda_fprint_char` and `tda_fprint_cstr` escape less than a reader splitting on
+  separators would need.
+
+### Changed
+
+- `tda_deque_copy_assign` no longer copies the target's old elems into a grown block only
+  to overwrite them.
+- `alloc/alloc.h` no longer includes `<stdint.h>`, which it had stopped using. Code that
+  took `uint32_t` and kin from it includes `<stdint.h>` itself.
+
 ## 1.2.3 — 2026-09-29
 
 ### Fixed

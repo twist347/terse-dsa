@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tda/alloc/alloc.h"
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/print.h"
@@ -28,7 +29,9 @@
 /// to write one back. There is no to_span either — the elems may wrap the ring, so there
 /// is no run of bytes to view.
 ///
-/// The pointers are not stable: growing moves every elem. That is what ds/list is for.
+/// The pointers are not stable: an op that may reallocate — push, reserve, shrink_to_fit,
+/// copy_assign, move_assign, swap — moves every elem, and a pop ends the one it takes.
+/// That is what ds/list is for.
 ///
 /// @par Example
 /// @snippet ds/example_queue.c build
@@ -223,7 +226,7 @@ tda_Al *tda_queue_al(const tda_Queue *self);
 /// the elem to be served next. Named front rather than first because a queue names roles,
 /// not places in a sequence
 /// @param self asserts the queue is not empty
-/// @return a pointer into the block, good until the next push
+/// @return a pointer into the block, good until the queue next changes
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_queue_front(const tda_Queue *self);
@@ -236,7 +239,7 @@ void *tda_queue_front_mut(tda_Queue *self);
 
 /// the elem that arrived most recently
 /// @param self asserts the queue is not empty
-/// @return a pointer into the block, good until the next push
+/// @return a pointer into the block, good until the queue next changes
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_queue_back(const tda_Queue *self);
@@ -329,6 +332,19 @@ void tda_queue_print(const tda_Queue *self, tda_FPrint fprint);
 /// @name macros
 /// @{
 
+/// @cond
+// hands 'self' back once T is checked against the elem size, so a typed macro reads its
+// handle once; typeof keeps the handle's constness, which the function has to drop
+[[nodiscard]]
+static inline tda_Queue *tda_queue_typed_(const tda_Queue *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_queue_elem_size(self) == size);
+    return (tda_Queue *) self;
+}
+
+#define TDA_QUEUE_TYPED_(T, self) \
+    ((typeof(self)) tda_queue_typed_((self), sizeof(T)))
+/// @endcond
+
 /// tda_queue_new with sizeof(T) for the elem size
 /// @param T the elem type
 /// @param al the allocator
@@ -373,22 +389,22 @@ void tda_queue_print(const tda_Queue *self, tda_FPrint fprint);
 /// @param self the queue
 /// @bigo{1}
 #define TDA_QUEUE_FRONT_AS(T, self) \
-    ((const T *) tda_queue_front((self)))
+    ((const T *) tda_queue_front(TDA_QUEUE_TYPED_(T, self)))
 
 /// tda_queue_front_mut as a T *
 /// @copydetails TDA_QUEUE_FRONT_AS
 #define TDA_QUEUE_FRONT_MUT_AS(T, self) \
-    ((T *) tda_queue_front_mut((self)))
+    ((T *) tda_queue_front_mut(TDA_QUEUE_TYPED_(T, self)))
 
 /// tda_queue_back as a const T *
 /// @copydetails TDA_QUEUE_FRONT_AS
 #define TDA_QUEUE_BACK_AS(T, self) \
-    ((const T *) tda_queue_back((self)))
+    ((const T *) tda_queue_back(TDA_QUEUE_TYPED_(T, self)))
 
 /// tda_queue_back_mut as a T *
 /// @copydetails TDA_QUEUE_FRONT_AS
 #define TDA_QUEUE_BACK_MUT_AS(T, self) \
-    ((T *) tda_queue_back_mut((self)))
+    ((T *) tda_queue_back_mut(TDA_QUEUE_TYPED_(T, self)))
 
 /// tda_queue_push from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -396,7 +412,7 @@ void tda_queue_print(const tda_Queue *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_QUEUE_PUSH(T, self, val) \
-    tda_queue_push((self), &(T){ (val) })
+    tda_queue_push(TDA_QUEUE_TYPED_(T, self), &(T){ (val) })
 
 /// @}
 

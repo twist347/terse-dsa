@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tda/alloc/alloc.h"
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/print.h"
@@ -30,6 +31,10 @@
 ///
 /// Nothing here hands out a mutable elem — no top_mut, no get, no to_span_mut: a write
 /// through one would break the heap invariant with no way for the queue to notice.
+///
+/// Nor is anything it hands out stable: every push and pop rearranges the heap, and an op
+/// that may reallocate — push, reserve, shrink_to_fit, copy_assign, move_assign, swap —
+/// moves every elem.
 ///
 /// @par Example
 /// @snippet ds/example_pqueue.c build
@@ -211,7 +216,7 @@ tda_Cmp tda_pqueue_cmp(const tda_PQueue *self);
 
 /// the greatest elem by 'cmp', the one the next pop drops
 /// @param self asserts the queue is not empty
-/// @return a read-only pointer into the block, good until the next push or pop. There is
+/// @return a read-only pointer into the block, good until the queue next changes. There is
 ///         no mutable form: a write through one would break the heap invariant
 /// @bigo{1}
 [[nodiscard]] TDA_API
@@ -232,7 +237,7 @@ const void *tda_pqueue_top(const tda_PQueue *self);
 [[nodiscard]] TDA_API
 tda_Status tda_pqueue_push(tda_PQueue *self, const void *val);
 
-/// drops the greatest elem and sifts the next one up
+/// drops the greatest elem: the last one takes its place and is sifted down
 /// @param self asserts the queue is not empty. Read the elem with tda_pqueue_top first —
 ///             a pop that returned it would have nowhere to put it
 /// @bigo{log n}
@@ -283,7 +288,7 @@ void tda_pqueue_swap(tda_PQueue *self, tda_PQueue *other);
 /// the elems in heap order, which is not sorted order: only the first is in its final
 /// place
 /// @param self the queue
-/// @return a read-only view, good until the next push or pop. Read only because the
+/// @return a read-only view, good until the queue next changes. Read only because the
 ///         arrangement is the queue's to keep
 /// @bigo{1}
 [[nodiscard]] TDA_API
@@ -313,6 +318,19 @@ void tda_pqueue_print(const tda_PQueue *self, tda_FPrint fprint);
 
 /// @name macros
 /// @{
+
+/// @cond
+// hands 'self' back once T is checked against the elem size, so a typed macro reads its
+// handle once; typeof keeps the handle's constness, which the function has to drop
+[[nodiscard]]
+static inline tda_PQueue *tda_pqueue_typed_(const tda_PQueue *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_pqueue_elem_size(self) == size);
+    return (tda_PQueue *) self;
+}
+
+#define TDA_PQUEUE_TYPED_(T, self) \
+    ((typeof(self)) tda_pqueue_typed_((self), sizeof(T)))
+/// @endcond
 
 /// tda_pqueue_new with sizeof(T) for the elem size
 /// @param T the elem type
@@ -362,7 +380,7 @@ void tda_pqueue_print(const tda_PQueue *self, tda_FPrint fprint);
 /// @param self the queue
 /// @bigo{1}
 #define TDA_PQUEUE_TOP_AS(T, self) \
-    ((const T *) tda_pqueue_top((self)))
+    ((const T *) tda_pqueue_top(TDA_PQUEUE_TYPED_(T, self)))
 
 /// tda_pqueue_push from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -370,7 +388,7 @@ void tda_pqueue_print(const tda_PQueue *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{log n}
 #define TDA_PQUEUE_PUSH(T, self, val) \
-    tda_pqueue_push((self), &(T){ (val) })
+    tda_pqueue_push(TDA_PQUEUE_TYPED_(T, self), &(T){ (val) })
 
 /// @}
 

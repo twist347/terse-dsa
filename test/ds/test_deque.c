@@ -298,6 +298,18 @@ static void test_draining_and_refilling_walks_the_ring_round() {
     tda_deque_drop(d);
 }
 
+// the value may be the elem it is set over — a copy onto itself is still a copy
+static void test_set_from_its_own_elem() {
+    tda_Deque *d = make_wrapped();
+
+    tda_deque_set(d, 1, tda_deque_get(d, 1));
+    tda_deque_set(d, 0, tda_deque_get(d, 3));
+
+    assert_elems(d, (int32_t[]){40, 20, 30, 40}, 4);
+
+    tda_deque_drop(d);
+}
+
 static void test_get_mut_and_set_write_through_to_the_ring() {
     tda_Deque *d = make_wrapped();
 
@@ -409,6 +421,49 @@ static void test_for_each_mut_writes_through_every_slot() {
     }
 
     assert_elems(d, (int32_t[]){11, 21, 31, 41}, 4);
+
+    tda_deque_drop(d);
+}
+
+static void test_for_each_stops_at_a_break() {
+    // two nested loops make up the walk, and a bare break would leave only the inner one
+    tda_Deque *d = make_wrapped();
+
+    size_t n = 0;
+    TDA_DEQUE_FOR_EACH_AS(int32_t, elem, d) {
+        ++n;
+        if (*elem == 20) {
+            break;
+        }
+    }
+
+    TEST_ASSERT_EQUAL_size_t(2, n);
+
+    n = 0;
+    TDA_DEQUE_FOR_EACH_MUT_AS(int32_t, elem, d) {
+        ++n;
+        if (*elem == 20) {
+            break;
+        }
+    }
+
+    TEST_ASSERT_EQUAL_size_t(2, n);
+
+    tda_deque_drop(d);
+}
+
+static void test_for_each_goes_on_past_a_continue() {
+    tda_Deque *d = make_wrapped();
+
+    int32_t sum = 0;
+    TDA_DEQUE_FOR_EACH_AS(int32_t, elem, d) {
+        if (*elem == 20) {
+            continue;
+        }
+        sum += *elem;
+    }
+
+    TEST_ASSERT_EQUAL_INT32(10 + 30 + 40, sum);
 
     tda_deque_drop(d);
 }
@@ -929,6 +984,26 @@ static void test_swap_elems_across_the_seam() {
 
 /* ========== failure ========== */
 
+// the new block is taken before the old one goes, so a refusal leaves the target whole
+static void test_copy_assign_that_cannot_grow_leaves_the_target() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Deque *dst = nullptr;
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al, &dst, 7, 8));
+    tda_Deque *src = make_wrapped();
+
+    tda_test_probe_fail_after_next(&probe, 0);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_deque_copy_assign(dst, src));
+
+    assert_elems(dst, (int32_t[]){7, 8}, 2);
+
+    tda_deque_drop(src);
+    tda_deque_drop(dst);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
 static void test_new_reports_a_refused_allocator() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1217,6 +1292,7 @@ int main() {
     RUN_TEST(test_push_front_on_an_empty_deque_allocates);
     RUN_TEST(test_draining_and_refilling_walks_the_ring_round);
     RUN_TEST(test_get_mut_and_set_write_through_to_the_ring);
+    RUN_TEST(test_set_from_its_own_elem);
 
     RUN_TEST(test_copy_is_independent_of_a_wrapped_source);
     RUN_TEST(test_copy_with_builds_on_the_given_allocator);
@@ -1224,6 +1300,8 @@ int main() {
     RUN_TEST(test_for_each_walks_a_split_ring_in_order);
     RUN_TEST(test_for_each_over_an_empty_deque_runs_no_body);
     RUN_TEST(test_for_each_mut_writes_through_every_slot);
+    RUN_TEST(test_for_each_stops_at_a_break);
+    RUN_TEST(test_for_each_goes_on_past_a_continue);
 
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
     RUN_TEST(test_move_assign_across_allocators_empties_the_source);
@@ -1265,6 +1343,7 @@ int main() {
 
     RUN_TEST(test_new_reports_a_refused_allocator);
     RUN_TEST(test_new_cap_reports_a_refused_buffer);
+    RUN_TEST(test_copy_assign_that_cannot_grow_leaves_the_target);
     RUN_TEST(test_the_pushes_report_a_refused_growth);
     RUN_TEST(test_insert_reports_a_refused_growth);
     RUN_TEST(test_reserve_reports_a_refused_allocator);

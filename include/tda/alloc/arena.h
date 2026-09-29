@@ -32,19 +32,20 @@
 
 /// an arena over 'cap' bytes taken from 'parent'
 /// @param parent where the block comes from, borrowed and not owned
-/// @param cap how many bytes it will ever hand out, greater than 0
+/// @param cap how many bytes it will ever hand out, greater than 0; rounded up to
+///            the alignment, since every request is
 /// @return the allocator, or null if 'parent' could not give the block
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Al *tda_al_arena_new(tda_Al *parent, size_t cap);
 
 /// an arena inside 'buf', with no parent: its own header takes the front, aligned, and
-/// the rest is the block
+/// the rest is the block, cut down to a multiple of the alignment
 /// @param buf the memory, borrowed and not owned — an array, static or on the stack, or a
 ///            block from anywhere; any alignment
 /// @param size its bytes, greater than 0
 /// @return the allocator, which points into 'buf', or null if 'buf' is too small to hold
-///         the header and a byte past it
+///         the header and one aligned slot past it
 /// @warning 'buf' has to outlive the arena and everything built on it
 /// @bigo{1}
 [[nodiscard]] TDA_API
@@ -75,7 +76,7 @@ void tda_al_arena_reset(tda_Al *self);
 
 /// What an arena is holding.
 typedef struct {
-    size_t cap;       ///< the block it was built with
+    size_t cap;       ///< the block it was built with, a multiple of the alignment
     size_t used;      ///< how far the pointer is bumped, alignment padding and all
     size_t available; ///< cap - used, an upper bound on the next request
 } tda_AlArenaStats;

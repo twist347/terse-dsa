@@ -475,7 +475,8 @@ tda_Status tda_hmap_insert(tda_HMap *self, const void *key, const void *val, boo
     tda_HMapNode *found = find_node(self, key, hash);
     if (found) {
         if (self->val_size > 0) {
-            memcpy(node_val_mut(self, found), val, self->val_size);
+            // memmove: 'val' may be the very value being overwritten
+            memmove(node_val_mut(self, found), val, self->val_size);
         }
 
         if (out_is_new) {

@@ -312,6 +312,23 @@ static inline void tda_span_mut_print(tda_SpanMut self, tda_FPrint fprint) {
 /// @name macros
 /// @{
 
+/// @cond
+// hand the view back once T is checked against its elem size, so a typed macro reads it
+// once and still checks it
+
+[[nodiscard]]
+static inline tda_Span tda_span_typed_(tda_Span s, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(s.elem_size == size);
+    return s;
+}
+
+[[nodiscard]]
+static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(s.elem_size == size);
+    return s;
+}
+/// @endcond
+
 /// tda_span_from_data with sizeof(T) for the elem size
 /// @param T the elem type
 /// @param data the first elem, made to typecheck as a const T *
@@ -356,7 +373,7 @@ static inline void tda_span_mut_print(tda_SpanMut self, tda_FPrint fprint) {
 /// @param idx the index
 /// @bigo{1}
 #define TDA_SPAN_GET_AS(T, s, idx) \
-    ((const T *) tda_span_get((s), (idx)))
+    ((const T *) tda_span_get(tda_span_typed_((s), sizeof(T)), (idx)))
 
 /// tda_span_get_mut as a T *
 /// @param T the elem type
@@ -364,25 +381,32 @@ static inline void tda_span_mut_print(tda_SpanMut self, tda_FPrint fprint) {
 /// @param idx the index
 /// @bigo{1}
 #define TDA_SPAN_GET_MUT_AS(T, s, idx) \
-    ((T *) tda_span_get_mut((s), (idx)))
+    ((T *) tda_span_get_mut(tda_span_mut_typed_((s), sizeof(T)), (idx)))
+
+// an empty view may carry a null data pointer, and null + 0 is undefined in C23, so the
+// end is formed only when there are elems to step over
 
 /// walks the span front to back, binding 'elem' to each elem in turn
 /// @param T the elem type: a span carries sizes, not types, so the walk has to be told
 /// @param elem the name the loop variable takes; it is a const T *
 /// @param s the view, evaluated once — tda_vec_to_span(v) and its kin belong here
 /// @bigo{n} over the whole walk
-#define TDA_SPAN_FOR_EACH_AS(T, elem, s)                                \
-    for (tda_Span span_ = (s), *once_ = &span_; once_; once_ = nullptr) \
-        for (const T *elem = span_.data, *end_ = elem + span_.len;      \
-             elem != end_;                                              \
+#define TDA_SPAN_FOR_EACH_AS(T, elem, s)                                              \
+    for (tda_Span span_ = tda_span_typed_((s), sizeof(T)), *once_ = &span_;           \
+         once_;                                                                       \
+         once_ = nullptr)                                                             \
+        for (const T *elem = span_.data, *end_ = span_.len ? elem + span_.len : elem; \
+             elem != end_;                                                            \
              ++elem)
 
 /// the same walk over elems that may be written through
 /// @copydetails TDA_SPAN_FOR_EACH_AS
-#define TDA_SPAN_FOR_EACH_MUT_AS(T, elem, s)                               \
-    for (tda_SpanMut span_ = (s), *once_ = &span_; once_; once_ = nullptr) \
-        for (T *elem = span_.data, *end_ = elem + span_.len;               \
-             elem != end_;                                                 \
+#define TDA_SPAN_FOR_EACH_MUT_AS(T, elem, s)                                       \
+    for (tda_SpanMut span_ = tda_span_mut_typed_((s), sizeof(T)), *once_ = &span_; \
+         once_;                                                                    \
+         once_ = nullptr)                                                          \
+        for (T *elem = span_.data, *end_ = span_.len ? elem + span_.len : elem;    \
+             elem != end_;                                                         \
              ++elem)
 
 /// tda_span_set from a value rather than its address
@@ -392,7 +416,7 @@ static inline void tda_span_mut_print(tda_SpanMut self, tda_FPrint fprint) {
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_SPAN_SET(T, s, idx, val) \
-    tda_span_set((s), (idx), &(T){ (val) })
+    tda_span_set(tda_span_mut_typed_((s), sizeof(T)), (idx), &(T){ (val) })
 
 /// @}
 

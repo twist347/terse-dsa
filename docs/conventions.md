@@ -120,5 +120,10 @@ an error cannot be silently dropped.
   touch memory out of bounds — an index, emptiness, a range, matching `elem_size` — is a
   `TDA_EXPECT`, which `TDA_HARDENED` keeps in release. Invariants and anything above O(1)
   stay `assert`.
+- **Typed macros check their type.** A `*_AS`, `SET`, `PUSH` and kin passes its handle
+  through `tda_<slug>_typed_`, which `TDA_EXPECT`s `sizeof(T)` against the elem size and
+  hands the handle back — one evaluation, constness kept through `typeof`. The node
+  macros (`TDA_LIST_NODE_ELEM_AS`, `TDA_HMAP_NODE_KEY_AS`, `TDA_HSET_NODE_KEY_AS`) are the
+  exception: a node has no container to ask, so their type is taken on trust.
 - Public symbols carry `TDA_API` (see `core/export.h`); everything else stays hidden under
   the library's default-hidden visibility.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tda/alloc/alloc.h"
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/hash.h"
@@ -23,10 +24,14 @@
 /// must agree: keys equal under 'eq' must hash alike.
 ///
 /// An entry never moves. Growing reallocates the bucket array and RELINKS the nodes into
-/// it, so a borrowed node survives every operation but the removal of that very entry.
+/// it, so a borrowed node survives inserts, growth and the removal of other entries; it
+/// goes only with its own entry — removed, cleared, assigned over or dropped with the map.
 /// That is why a position here is a node rather than a slot index.
 ///
-/// The iteration order is unspecified and may change on any insert that grows.
+/// The iteration order is unspecified and may change on any insert that grows. A walk —
+/// and so clear, copy, eq, print and drop — visits every bucket as well as every entry, so
+/// a map that grew and then emptied walks as slowly as it did full, until
+/// tda_hmap_shrink_to_fit gives the buckets back.
 ///
 /// @par Example
 /// @snippet ds/example_hmap.c build
@@ -40,7 +45,8 @@
 typedef struct tda_HMap tda_HMap;
 
 /// A position in the map.
-/// Borrowed from it and invalidated only by removing that very entry. Its key is readable
+/// Borrowed from it and good until its own entry goes: removed, cleared, assigned over or
+/// dropped with the map. Its key is readable
 /// but never writable — a written key would belong to a bucket the map no longer chose
 /// for it, with no way for the map to notice
 typedef struct tda_HMapNode tda_HMapNode;
@@ -284,7 +290,7 @@ tda_HMapNode *tda_hmap_first_node_mut(tda_HMap *self);
 ///             list node, which knows its own successor
 /// @param node the position to step from
 /// @return the next node, or null at the end
-/// @bigo{1} amortized over a whole walk
+/// @bigo{1} amortized over a whole walk, which is n plus the bucket count
 [[nodiscard]] TDA_API
 const tda_HMapNode *tda_hmap_node_next(const tda_HMap *self, const tda_HMapNode *node);
 
@@ -374,7 +380,7 @@ tda_Status tda_hmap_get_or_insert(
 
 /// drops every entry, keeping the buckets
 /// @param self the map
-/// @bigo{n}
+/// @bigo{n} plus the bucket count, every bucket being emptied
 TDA_API
 void tda_hmap_clear(tda_HMap *self);
 
@@ -439,6 +445,31 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 /// @name macros
 /// @{
 
+/// @cond
+// hands 'self' back once K and V are checked against the key and value sizes, so a typed
+// macro reads its handle once; typeof keeps the handle's constness, which the function
+// has to drop. A size of 0 is one the macro has no type for
+[[nodiscard]]
+static inline tda_HMap *tda_hmap_typed_(
+    const tda_HMap *self,
+    [[maybe_unused]] size_t key_size,
+    [[maybe_unused]] size_t val_size
+) {
+    TDA_EXPECT(key_size == 0 || tda_hmap_key_size(self) == key_size);
+    TDA_EXPECT(val_size == 0 || tda_hmap_val_size(self) == val_size);
+    return (tda_HMap *) self;
+}
+
+#define TDA_HMAP_TYPED_(K, V, self) \
+    ((typeof(self)) tda_hmap_typed_((self), sizeof(K), sizeof(V)))
+
+#define TDA_HMAP_KEY_TYPED_(K, self) \
+    ((typeof(self)) tda_hmap_typed_((self), sizeof(K), 0))
+
+#define TDA_HMAP_VAL_TYPED_(V, self) \
+    ((typeof(self)) tda_hmap_typed_((self), 0, sizeof(V)))
+/// @endcond
+
 /// tda_hmap_new with sizeof(K) and sizeof(V)
 /// @param K the key type
 /// @param V the value type
@@ -469,12 +500,12 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HMAP_GET_AS(K, V, self, key) \
-    ((const V *) tda_hmap_get((self), &(K){ (key) }))
+    ((const V *) tda_hmap_get(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }))
 
 /// tda_hmap_get_mut as a V *
 /// @copydetails TDA_HMAP_GET_AS
 #define TDA_HMAP_GET_MUT_AS(K, V, self, key) \
-    ((V *) tda_hmap_get_mut((self), &(K){ (key) }))
+    ((V *) tda_hmap_get_mut(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }))
 
 /// tda_hmap_contains from a key value rather than an address
 /// @param K the key type; a scalar, since 'key' becomes a compound literal
@@ -482,17 +513,17 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HMAP_CONTAINS(K, self, key) \
-    tda_hmap_contains((self), &(K){ (key) })
+    tda_hmap_contains(TDA_HMAP_KEY_TYPED_(K, self), &(K){ (key) })
 
 /// tda_hmap_find from a key value rather than an address
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_FIND(K, self, key) \
-    tda_hmap_find((self), &(K){ (key) })
+    tda_hmap_find(TDA_HMAP_KEY_TYPED_(K, self), &(K){ (key) })
 
 /// tda_hmap_find_mut from a key value rather than an address
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_FIND_MUT(K, self, key) \
-    tda_hmap_find_mut((self), &(K){ (key) })
+    tda_hmap_find_mut(TDA_HMAP_KEY_TYPED_(K, self), &(K){ (key) })
 
 /// tda_hmap_insert from values rather than addresses
 /// @param K the key type; a scalar, since 'key' becomes a compound literal
@@ -503,7 +534,7 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 /// @param[out] out_is_new whether the key was absent; may be null
 /// @bigo{1} expected
 #define TDA_HMAP_INSERT(K, V, self, key, val, out_is_new) \
-    tda_hmap_insert((self), &(K){ (key) }, &(V){ (val) }, (out_is_new))
+    tda_hmap_insert(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }, &(V){ (val) }, (out_is_new))
 
 /// tda_hmap_get_or_insert from values rather than addresses
 /// @param K the key type; a scalar, since 'key' becomes a compound literal
@@ -514,19 +545,28 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 /// @param[out] out_node the entry either way
 /// @bigo{1} expected
 #define TDA_HMAP_GET_OR_INSERT(K, V, self, key, val, out_node) \
-    tda_hmap_get_or_insert((self), &(K){ (key) }, &(V){ (val) }, (out_node))
+    tda_hmap_get_or_insert(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }, &(V){ (val) }, (out_node))
 
 /// tda_hmap_remove from a key value rather than an address
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_REMOVE(K, self, key) \
-    tda_hmap_remove((self), &(K){ (key) })
+    tda_hmap_remove(TDA_HMAP_KEY_TYPED_(K, self), &(K){ (key) })
 
 /// walks every entry of the map, binding 'node' to each in turn. The order is
 /// unspecified: it follows the buckets, not the insertions
 /// @param node the name the loop variable takes; it is a const tda_HMapNode *
 /// @param self the map
-/// @note the step to the next entry happens after the body, through the node the body
-///       saw — so removing that entry inside the loop cuts the walk
+/// @warning the step to the next entry happens after the body, through the node the body
+///          saw — so removing that entry inside the loop steps through a freed node. To
+///          remove while walking, take the next node first:
+/// @code
+/// for (tda_HMapNode *node = tda_hmap_first_node_mut(m), *next; node; node = next) {
+///     next = tda_hmap_node_next_mut(m, node);
+///     if (drop_it(node)) {
+///         tda_hmap_remove_node(m, node);
+///     }
+/// }
+/// @endcode
 #define TDA_HMAP_FOR_EACH(node, self)                                \
     for (const tda_HMapNode *node = tda_hmap_first_node(self);       \
          node;                                                       \
@@ -542,6 +582,8 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 /// tda_hmap_node_key as a const K *
 /// @param K the key type
 /// @param node the position
+/// @warning K is taken on trust: a node does not know the size of what it holds, and
+///          without the container there is nothing to check K against
 /// @bigo{1}
 #define TDA_HMAP_NODE_KEY_AS(K, node) \
     ((const K *) tda_hmap_node_key((node)))
@@ -552,12 +594,12 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 /// @param node the position
 /// @bigo{1}
 #define TDA_HMAP_NODE_VAL_AS(V, self, node) \
-    ((const V *) tda_hmap_node_val((self), (node)))
+    ((const V *) tda_hmap_node_val(TDA_HMAP_VAL_TYPED_(V, self), (node)))
 
 /// tda_hmap_node_val_mut as a V *
 /// @copydetails TDA_HMAP_NODE_VAL_AS
 #define TDA_HMAP_NODE_VAL_MUT_AS(V, self, node) \
-    ((V *) tda_hmap_node_val_mut((self), (node)))
+    ((V *) tda_hmap_node_val_mut(TDA_HMAP_VAL_TYPED_(V, self), (node)))
 
 /// @}
 

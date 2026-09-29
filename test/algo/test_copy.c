@@ -152,6 +152,23 @@ static void test_copy_if_takes_only_the_matching_elems() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, dst, 3);
 }
 
+// only the elems that pass need room, so a dst shorter than the source is fine
+static void test_copy_if_needs_room_only_for_the_matches() {
+    constexpr int32_t src[6] = {1, 2, 3, 4, 5, 6};
+    int32_t dst[3] = {0};
+
+    const size_t n = tda_span_copy_if(
+        TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 3),
+        TDA_SPAN_FROM_DATA(int32_t, src, 6),
+        is_even,
+        nullptr
+    );
+
+    TEST_ASSERT_EQUAL_size_t(3, n);
+    constexpr int32_t want[3] = {2, 4, 6};
+    TEST_ASSERT_EQUAL_INT32_ARRAY(want, dst, 3);
+}
+
 // what lies past the returned length is the caller's business, so the
 // tail of dst must be left exactly as it was
 static void test_copy_if_leaves_the_tail_of_dst_alone() {
@@ -280,6 +297,7 @@ int main() {
     RUN_TEST(test_copy_overlapping_empty_is_noop);
 
     RUN_TEST(test_copy_if_takes_only_the_matching_elems);
+    RUN_TEST(test_copy_if_needs_room_only_for_the_matches);
     RUN_TEST(test_copy_if_leaves_the_tail_of_dst_alone);
     RUN_TEST(test_copy_if_takes_everything_when_all_match);
     RUN_TEST(test_copy_if_takes_nothing_when_none_match);

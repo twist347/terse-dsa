@@ -21,7 +21,7 @@
 #define TDA_VERSION_MINOR 2
 
 /// bumped by a fix
-#define TDA_VERSION_PATCH 3
+#define TDA_VERSION_PATCH 4
 
 /// the version as one comparable number
 /// @param major the major part

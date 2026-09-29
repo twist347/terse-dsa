@@ -9,6 +9,12 @@
 
 /* ========== internals ========== */
 
+/// whether v[i] comes strictly before v[j] in the order being walked — asked only as
+/// "less than", with the operands swapped for a descending walk, so a comparator that
+/// never answers "greater" (a < b ? -1 : 0) still counts permutations right
+[[nodiscard]]
+static bool goes_before(tda_Span v, tda_Cmp cmp, bool asc, size_t i, size_t j);
+
 [[nodiscard]]
 static bool permute_step(tda_SpanMut s, tda_Cmp cmp, bool asc);
 
@@ -198,6 +204,13 @@ void tda_span_shuffle_prefix(tda_SpanMut s, size_t count, tda_Rng *rng) {
 
 /* ========== internals ========== */
 
+static bool goes_before(tda_Span v, tda_Cmp cmp, bool asc, size_t i, size_t j) {
+    const void *lhs = tda_span_get(v, i);
+    const void *rhs = tda_span_get(v, j);
+
+    return asc ? cmp(lhs, rhs) < 0 : cmp(rhs, lhs) < 0;
+}
+
 static bool permute_step(tda_SpanMut s, tda_Cmp cmp, bool asc) {
     if (s.len < 2) {
         return false;
@@ -206,11 +219,7 @@ static bool permute_step(tda_SpanMut s, tda_Cmp cmp, bool asc) {
     const tda_Span v = tda_span_mut_to_span(s);
 
     size_t pivot = s.len - 1;
-    while (pivot > 0) {
-        const int c = cmp(tda_span_get(v, pivot - 1), tda_span_get(v, pivot));
-        if (asc ? c < 0 : c > 0) {
-            break;
-        }
+    while (pivot > 0 && !goes_before(v, cmp, asc, pivot - 1, pivot)) {
         --pivot;
     }
 
@@ -220,12 +229,11 @@ static bool permute_step(tda_SpanMut s, tda_Cmp cmp, bool asc) {
     }
     --pivot;
 
+    // the search asks the question that just stopped the one above, so it is answered by
+    // pivot + 1 at the latest; the bound is for a comparator that answers it differently
+    // the second time
     size_t mate = s.len - 1;
-    while (true) {
-        const int c = cmp(tda_span_get(v, mate), tda_span_get(v, pivot));
-        if (asc ? c > 0 : c < 0) {
-            break;
-        }
+    while (mate > pivot + 1 && !goes_before(v, cmp, asc, pivot, mate)) {
         --mate;
     }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tda/alloc/alloc.h"
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/print.h"
@@ -43,7 +44,8 @@
 typedef struct tda_List tda_List;
 
 /// A position in the list.
-/// Borrowed from the list and invalidated only by removing that very elem
+/// Borrowed from the list and good until its own elem goes: removed, cleared, assigned
+/// over or dropped with the list
 typedef struct tda_ListNode tda_ListNode;
 
 /// @name lifetime
@@ -471,6 +473,19 @@ void tda_list_print(const tda_List *self, tda_FPrint fprint);
 /// @name macros
 /// @{
 
+/// @cond
+// hands 'self' back once T is checked against the elem size, so a typed macro reads its
+// handle once; typeof keeps the handle's constness, which the function has to drop
+[[nodiscard]]
+static inline tda_List *tda_list_typed_(const tda_List *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_list_elem_size(self) == size);
+    return (tda_List *) self;
+}
+
+#define TDA_LIST_TYPED_(T, self) \
+    ((typeof(self)) tda_list_typed_((self), sizeof(T)))
+/// @endcond
+
 /// tda_list_new with sizeof(T) for the elem size
 /// @param T the elem type
 /// @param al the allocator
@@ -506,29 +521,37 @@ void tda_list_print(const tda_List *self, tda_FPrint fprint);
 /// @param self the list
 /// @bigo{1}
 #define TDA_LIST_FRONT_AS(T, self) \
-    ((const T *) tda_list_front((self)))
+    ((const T *) tda_list_front(TDA_LIST_TYPED_(T, self)))
 
 /// tda_list_front_mut as a T *
 /// @copydetails TDA_LIST_FRONT_AS
 #define TDA_LIST_FRONT_MUT_AS(T, self) \
-    ((T *) tda_list_front_mut((self)))
+    ((T *) tda_list_front_mut(TDA_LIST_TYPED_(T, self)))
 
 /// tda_list_back as a const T *
 /// @copydetails TDA_LIST_FRONT_AS
 #define TDA_LIST_BACK_AS(T, self) \
-    ((const T *) tda_list_back((self)))
+    ((const T *) tda_list_back(TDA_LIST_TYPED_(T, self)))
 
 /// tda_list_back_mut as a T *
 /// @copydetails TDA_LIST_FRONT_AS
 #define TDA_LIST_BACK_MUT_AS(T, self) \
-    ((T *) tda_list_back_mut((self)))
+    ((T *) tda_list_back_mut(TDA_LIST_TYPED_(T, self)))
 
 /// walks the list front to back, binding 'node' to each position in turn
 /// @param node the name the loop variable takes; it is a const tda_ListNode *
 /// @param self the list
-/// @note the step to the next position happens after the body, through the node the body
-///       saw — so removing that node inside the loop cuts the walk. Take the next
-///       position first, or walk by hand
+/// @warning the step to the next position happens after the body, through the node the
+///          body saw — so removing that node inside the loop steps through a freed node.
+///          To remove while walking, take the next position first:
+/// @code
+/// for (tda_ListNode *node = tda_list_front_node_mut(l), *next; node; node = next) {
+///     next = tda_list_node_next_mut(node);
+///     if (drop_it(node)) {
+///         tda_list_remove(l, node);
+///     }
+/// }
+/// @endcode
 #define TDA_LIST_FOR_EACH(node, self)                          \
     for (const tda_ListNode *node = tda_list_front_node(self); \
          node;                                                 \
@@ -548,16 +571,18 @@ void tda_list_print(const tda_List *self, tda_FPrint fprint);
 /// @param eq the equality
 /// @bigo{n}
 #define TDA_LIST_FIND(T, self, val, eq) \
-    tda_list_find((self), &(T){ (val) }, (eq))
+    tda_list_find(TDA_LIST_TYPED_(T, self), &(T){ (val) }, (eq))
 
 /// tda_list_find_mut from a value rather than an address
 /// @copydetails TDA_LIST_FIND
 #define TDA_LIST_FIND_MUT(T, self, val, eq) \
-    tda_list_find_mut((self), &(T){ (val) }, (eq))
+    tda_list_find_mut(TDA_LIST_TYPED_(T, self), &(T){ (val) }, (eq))
 
 /// tda_list_node_elem as a const T *
 /// @param T the elem type
 /// @param node the position
+/// @warning T is taken on trust: a node does not know the size of what it holds, and
+///          without the container there is nothing to check T against
 /// @bigo{1}
 #define TDA_LIST_NODE_ELEM_AS(T, node) \
     ((const T *) tda_list_node_elem((node)))
@@ -573,12 +598,12 @@ void tda_list_print(const tda_List *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_LIST_PUSH_FRONT(T, self, val) \
-    tda_list_push_front((self), &(T){ (val) })
+    tda_list_push_front(TDA_LIST_TYPED_(T, self), &(T){ (val) })
 
 /// tda_list_push_back from a value rather than an address
 /// @copydetails TDA_LIST_PUSH_FRONT
 #define TDA_LIST_PUSH_BACK(T, self, val) \
-    tda_list_push_back((self), &(T){ (val) })
+    tda_list_push_back(TDA_LIST_TYPED_(T, self), &(T){ (val) })
 
 /// tda_list_insert_before from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -587,12 +612,12 @@ void tda_list_print(const tda_List *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_LIST_INSERT_BEFORE(T, self, at, val) \
-    tda_list_insert_before((self), (at), &(T){ (val) })
+    tda_list_insert_before(TDA_LIST_TYPED_(T, self), (at), &(T){ (val) })
 
 /// tda_list_insert_after from a value rather than an address
 /// @copydetails TDA_LIST_INSERT_BEFORE
 #define TDA_LIST_INSERT_AFTER(T, self, at, val) \
-    tda_list_insert_after((self), (at), &(T){ (val) })
+    tda_list_insert_after(TDA_LIST_TYPED_(T, self), (at), &(T){ (val) })
 
 /// @}
 

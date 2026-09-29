@@ -150,7 +150,8 @@ void tda_fprint_bool(FILE *stream, const void *val);
 /// @name char
 /// @{
 
-/// the character when printable, \\xNN when not, so an elem is always one token
+/// the character when printable, \\xNN when not, so nothing unprintable reaches the stream.
+/// Not quoted: a ',' or ' ' elem prints as itself and reads as a separator
 /// @param stream where to write
 /// @param val the address of the elem
 /// @bigo{1}
@@ -163,7 +164,8 @@ void tda_fprint_char(FILE *stream, const void *val);
 /// @{
 
 /// the string, quoted, so one holding a comma cannot read as two elems; a null pointer
-/// prints as an unquoted null, a value of its own rather than ""
+/// prints as an unquoted null, a value of its own rather than "". Nothing inside is
+/// escaped, so a string holding a quote still breaks the reading
 /// @param stream where to write
 /// @param val the address of the elem — a pointer to the const char *, not the string
 /// @bigo{n} — n is the length of the string

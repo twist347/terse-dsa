@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tda/alloc/alloc.h"
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/hash.h"
@@ -27,8 +28,10 @@
 /// the keys: there is no value to get, to set or to hand out. An entry is either in or out.
 ///
 /// A key never moves: growing relinks the nodes rather than moving them, so a borrowed
-/// node survives everything but the removal of that very key. The iteration order is
-/// unspecified and may change on any insert that grows.
+/// node survives inserts, growth and the removal of other keys; it goes only with its own
+/// key — removed, cleared, assigned over or dropped with the set. The iteration order is
+/// unspecified and may change on any insert that grows, and a walk pays for every bucket
+/// as ds/hmap's does.
 ///
 /// @par Example
 /// @snippet ds/example_hset.c build
@@ -239,7 +242,7 @@ tda_HSetNode *tda_hset_first_node_mut(tda_HSet *self);
 /// @param self the set, needed because a chain ends long before the buckets do
 /// @param node the position to step from
 /// @return the next node, or null at the end
-/// @bigo{1} amortized over a whole walk
+/// @bigo{1} amortized over a whole walk, which is n plus the bucket count
 [[nodiscard]] TDA_API
 const tda_HSetNode *tda_hset_node_next(const tda_HSet *self, const tda_HSetNode *node);
 
@@ -291,7 +294,7 @@ void tda_hset_remove_node(tda_HSet *self, tda_HSetNode *node);
 
 /// drops every key, keeping the buckets
 /// @param self the set
-/// @bigo{n}
+/// @bigo{n} plus the bucket count, every bucket being emptied
 TDA_API
 void tda_hset_clear(tda_HSet *self);
 
@@ -350,6 +353,19 @@ void tda_hset_print(const tda_HSet *self, tda_FPrint fprint);
 /// @name macros
 /// @{
 
+/// @cond
+// hands 'self' back once K is checked against the key size, so a typed macro reads its
+// handle once; typeof keeps the handle's constness, which the function has to drop
+[[nodiscard]]
+static inline tda_HSet *tda_hset_typed_(const tda_HSet *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_hset_key_size(self) == size);
+    return (tda_HSet *) self;
+}
+
+#define TDA_HSET_TYPED_(K, self) \
+    ((typeof(self)) tda_hset_typed_((self), sizeof(K)))
+/// @endcond
+
 /// tda_hset_new with sizeof(K) for the key size
 /// @param K the key type
 /// @param hasher the hash the keys are placed by
@@ -378,7 +394,7 @@ void tda_hset_print(const tda_HSet *self, tda_FPrint fprint);
 /// @param[out] out_is_new whether the key was absent; may be null
 /// @bigo{1} expected
 #define TDA_HSET_INSERT(K, self, key, out_is_new) \
-    tda_hset_insert((self), &(K){ (key) }, (out_is_new))
+    tda_hset_insert(TDA_HSET_TYPED_(K, self), &(K){ (key) }, (out_is_new))
 
 /// tda_hset_contains from a value rather than an address
 /// @param K the key type; a scalar, since 'key' becomes a compound literal
@@ -386,29 +402,38 @@ void tda_hset_print(const tda_HSet *self, tda_FPrint fprint);
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HSET_CONTAINS(K, self, key) \
-    tda_hset_contains((self), &(K){ (key) })
+    tda_hset_contains(TDA_HSET_TYPED_(K, self), &(K){ (key) })
 
 /// tda_hset_find from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_FIND(K, self, key) \
-    tda_hset_find((self), &(K){ (key) })
+    tda_hset_find(TDA_HSET_TYPED_(K, self), &(K){ (key) })
 
 /// tda_hset_find_mut from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_FIND_MUT(K, self, key) \
-    tda_hset_find_mut((self), &(K){ (key) })
+    tda_hset_find_mut(TDA_HSET_TYPED_(K, self), &(K){ (key) })
 
 /// tda_hset_remove from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_REMOVE(K, self, key) \
-    tda_hset_remove((self), &(K){ (key) })
+    tda_hset_remove(TDA_HSET_TYPED_(K, self), &(K){ (key) })
 
 /// walks every key of the set, binding 'node' to each in turn. The order is unspecified:
 /// it follows the buckets, not the insertions
 /// @param node the name the loop variable takes; it is a const tda_HSetNode *
 /// @param self the set
-/// @note the step to the next key happens after the body, through the node the body saw —
-///       so removing that key inside the loop cuts the walk
+/// @warning the step to the next key happens after the body, through the node the body
+///          saw — so removing that key inside the loop steps through a freed node. To
+///          remove while walking, take the next node first:
+/// @code
+/// for (tda_HSetNode *node = tda_hset_first_node_mut(s), *next; node; node = next) {
+///     next = tda_hset_node_next_mut(s, node);
+///     if (drop_it(node)) {
+///         tda_hset_remove_node(s, node);
+///     }
+/// }
+/// @endcode
 #define TDA_HSET_FOR_EACH(node, self)                          \
     for (const tda_HSetNode *node = tda_hset_first_node(self); \
          node;                                                 \
@@ -424,6 +449,8 @@ void tda_hset_print(const tda_HSet *self, tda_FPrint fprint);
 /// tda_hset_node_key as a const K *
 /// @param K the key type
 /// @param node the position
+/// @warning K is taken on trust: a node does not know the size of what it holds, and
+///          without the container there is nothing to check K against
 /// @bigo{1}
 #define TDA_HSET_NODE_KEY_AS(K, node) \
     ((const K *) tda_hset_node_key((node)))

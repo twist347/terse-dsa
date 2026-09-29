@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tda/alloc/alloc.h"
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/span.h"
@@ -22,7 +23,8 @@
 /// Growing moves the elems, so a pointer from tda_vec_get_mut, a view from
 /// tda_vec_to_span_mut and the block from tda_vec_data are good only until the next
 /// operation that may reallocate: push, insert, extend, insert_span, reserve, resize,
-/// shrink_to_fit, swap. Stable positions are what ds/list is for.
+/// shrink_to_fit, copy_assign, move_assign, swap. Stable positions are what ds/list is
+/// for.
 ///
 /// The bridge to algo runs both ways — tda_vec_to_span_mut hands the elems over to be
 /// sorted or filled in place, tda_vec_resize adopts the length the algorithm leaves
@@ -449,6 +451,19 @@ void tda_vec_print(const tda_Vec *self, tda_FPrint fprint);
 /// @name macros
 /// @{
 
+/// @cond
+// hands 'self' back once T is checked against the elem size, so a typed macro reads its
+// handle once; typeof keeps the handle's constness, which the function has to drop
+[[nodiscard]]
+static inline tda_Vec *tda_vec_typed_(const tda_Vec *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_vec_elem_size(self) == size);
+    return (tda_Vec *) self;
+}
+
+#define TDA_VEC_TYPED_(T, self) \
+    ((typeof(self)) tda_vec_typed_((self), sizeof(T)))
+/// @endcond
+
 /// tda_vec_new with sizeof(T) for the elem size
 /// @param T the elem type
 /// @param al the allocator
@@ -502,22 +517,22 @@ void tda_vec_print(const tda_Vec *self, tda_FPrint fprint);
 /// @param self the vec
 /// @bigo{1}
 #define TDA_VEC_FRONT_AS(T, self) \
-    ((const T *) tda_vec_front((self)))
+    ((const T *) tda_vec_front(TDA_VEC_TYPED_(T, self)))
 
 /// tda_vec_front_mut as a T *
 /// @copydetails TDA_VEC_FRONT_AS
 #define TDA_VEC_FRONT_MUT_AS(T, self) \
-    ((T *) tda_vec_front_mut((self)))
+    ((T *) tda_vec_front_mut(TDA_VEC_TYPED_(T, self)))
 
 /// tda_vec_back as a const T *
 /// @copydetails TDA_VEC_FRONT_AS
 #define TDA_VEC_BACK_AS(T, self) \
-    ((const T *) tda_vec_back((self)))
+    ((const T *) tda_vec_back(TDA_VEC_TYPED_(T, self)))
 
 /// tda_vec_back_mut as a T *
 /// @copydetails TDA_VEC_FRONT_AS
 #define TDA_VEC_BACK_MUT_AS(T, self) \
-    ((T *) tda_vec_back_mut((self)))
+    ((T *) tda_vec_back_mut(TDA_VEC_TYPED_(T, self)))
 
 /// tda_vec_get as a const T *
 /// @param T the elem type
@@ -525,12 +540,12 @@ void tda_vec_print(const tda_Vec *self, tda_FPrint fprint);
 /// @param idx the index
 /// @bigo{1}
 #define TDA_VEC_GET_AS(T, self, idx) \
-    ((const T *) tda_vec_get((self), (idx)))
+    ((const T *) tda_vec_get(TDA_VEC_TYPED_(T, self), (idx)))
 
 /// tda_vec_get_mut as a T *
 /// @copydetails TDA_VEC_GET_AS
 #define TDA_VEC_GET_MUT_AS(T, self, idx) \
-    ((T *) tda_vec_get_mut((self), (idx)))
+    ((T *) tda_vec_get_mut(TDA_VEC_TYPED_(T, self), (idx)))
 
 /// tda_vec_set from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -539,7 +554,7 @@ void tda_vec_print(const tda_Vec *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_VEC_SET(T, self, idx, val) \
-    tda_vec_set((self), (idx), &(T){ (val) })
+    tda_vec_set(TDA_VEC_TYPED_(T, self), (idx), &(T){ (val) })
 
 /// tda_vec_push from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -547,7 +562,7 @@ void tda_vec_print(const tda_Vec *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_VEC_PUSH(T, self, val) \
-    tda_vec_push((self), &(T){ (val) })
+    tda_vec_push(TDA_VEC_TYPED_(T, self), &(T){ (val) })
 
 /// tda_vec_insert from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -556,7 +571,7 @@ void tda_vec_print(const tda_Vec *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{n}
 #define TDA_VEC_INSERT(T, self, idx, val) \
-    tda_vec_insert((self), (idx), &(T){ (val) })
+    tda_vec_insert(TDA_VEC_TYPED_(T, self), (idx), &(T){ (val) })
 
 /// tda_vec_extend from the elems written out
 /// @param T the elem type

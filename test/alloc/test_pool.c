@@ -261,6 +261,23 @@ static void test_freed_block_is_reused_first() {
     tda_al_pool_drop(pool);
 }
 
+// the head of the free list is what the double-free check looks at, and a block taken
+// back from there belongs to its new owner — freeing it again is an ordinary free
+static void test_block_taken_back_from_the_head_frees_again() {
+    tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 3);
+
+    void *a = tda_alloc(pool, 32);
+    TEST_ASSERT_NOT_NULL(tda_alloc(pool, 32));
+
+    tda_dealloc(pool, a, 32);
+    TEST_ASSERT_EQUAL_PTR(a, tda_alloc(pool, 32));
+    tda_dealloc(pool, a, 32);
+
+    TEST_ASSERT_EQUAL_size_t(1, tda_al_pool_stats(pool).used);
+
+    tda_al_pool_drop(pool);
+}
+
 // a fully drained pool becomes usable again once blocks come back
 static void test_exhausted_pool_recovers_after_a_free() {
     tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 2);
@@ -544,6 +561,7 @@ int main() {
 
     RUN_TEST(test_dealloc_returns_the_block);
     RUN_TEST(test_freed_block_is_reused_first);
+    RUN_TEST(test_block_taken_back_from_the_head_frees_again);
     RUN_TEST(test_exhausted_pool_recovers_after_a_free);
     RUN_TEST(test_dealloc_null_is_noop);
 

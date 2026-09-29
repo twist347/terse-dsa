@@ -198,9 +198,18 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
         return TDA_STATUS_OK;
     }
 
-    const tda_Status st = tda_deque_reserve(self, other->len);
-    if (TDA_STATUS_IS_ERR(st)) {
-        return st;
+    // a new block rather than tda_deque_reserve, which would carry over the elems about to
+    // be overwritten; the old one goes only once the new one is in hand, so a failure
+    // leaves 'self' as it was. 'other' holds this many, so the product fits
+    if (other->len > self->cap) {
+        void *data = tda_alloc(self->al, other->len * self->elem_size);
+        if (!data) {
+            return TDA_STATUS_ERR_NO_MEM;
+        }
+
+        tda_dealloc(self->al, self->data, cap_bytes(self));
+        self->data = data;
+        self->cap = other->len;
     }
 
     // whatever 'self' held is gone, so its ring is laid out afresh from slot 0
@@ -400,7 +409,8 @@ void tda_deque_set(tda_Deque *self, size_t idx, const void *val) {
     assert(val);
     TDA_EXPECT(idx < self->len);
 
-    memcpy(elem_at_mut(self, idx), val, self->elem_size);
+    // memmove: 'val' may be the very elem being set, and memcpy onto itself is undefined
+    memmove(elem_at_mut(self, idx), val, self->elem_size);
 }
 
 /* ========== mods ========== */

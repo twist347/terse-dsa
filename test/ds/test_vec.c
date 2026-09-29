@@ -496,6 +496,19 @@ static void test_set_get_roundtrip() {
     tda_vec_drop(v);
 }
 
+// the value may be the elem it is set over — a copy onto itself is still a copy
+static void test_set_from_its_own_elem() {
+    tda_Vec *v = make_vec(3);
+
+    tda_vec_set(v, 1, tda_vec_get(v, 1));
+    tda_vec_set(v, 0, tda_vec_get(v, 2));
+
+    TEST_ASSERT_EQUAL_INT32(2, *TDA_VEC_GET_AS(int32_t, v, 0));
+    TEST_ASSERT_EQUAL_INT32(1, *TDA_VEC_GET_AS(int32_t, v, 1));
+
+    tda_vec_drop(v);
+}
+
 static void test_get_mut_writes_through() {
     tda_Vec *v = make_vec(3);
 
@@ -1851,6 +1864,7 @@ int main() {
     RUN_TEST(test_bytes_agrees_with_the_span);
 
     RUN_TEST(test_set_get_roundtrip);
+    RUN_TEST(test_set_from_its_own_elem);
     RUN_TEST(test_get_mut_writes_through);
     RUN_TEST(test_first_and_last_address_the_ends);
     RUN_TEST(test_first_and_last_mut_write_through);

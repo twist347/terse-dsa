@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tda/alloc/alloc.h"
+#include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/print.h"
@@ -411,6 +412,19 @@ void tda_deque_print(const tda_Deque *self, tda_FPrint fprint);
 /// @name macros
 /// @{
 
+/// @cond
+// hands 'self' back once T is checked against the elem size, so a typed macro reads its
+// handle once; typeof keeps the handle's constness, which the function has to drop
+[[nodiscard]]
+static inline tda_Deque *tda_deque_typed_(const tda_Deque *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_deque_elem_size(self) == size);
+    return (tda_Deque *) self;
+}
+
+#define TDA_DEQUE_TYPED_(T, self) \
+    ((typeof(self)) tda_deque_typed_((self), sizeof(T)))
+/// @endcond
+
 /// tda_deque_new with sizeof(T) for the elem size
 /// @param T the elem type
 /// @param al the allocator
@@ -464,22 +478,26 @@ void tda_deque_print(const tda_Deque *self, tda_FPrint fprint);
 /// @param self the deque
 /// @bigo{1}
 #define TDA_DEQUE_FRONT_AS(T, self) \
-    ((const T *) tda_deque_front((self)))
+    ((const T *) tda_deque_front(TDA_DEQUE_TYPED_(T, self)))
 
 /// tda_deque_front_mut as a T *
 /// @copydetails TDA_DEQUE_FRONT_AS
 #define TDA_DEQUE_FRONT_MUT_AS(T, self) \
-    ((T *) tda_deque_front_mut((self)))
+    ((T *) tda_deque_front_mut(TDA_DEQUE_TYPED_(T, self)))
 
 /// tda_deque_back as a const T *
 /// @copydetails TDA_DEQUE_FRONT_AS
 #define TDA_DEQUE_BACK_AS(T, self) \
-    ((const T *) tda_deque_back((self)))
+    ((const T *) tda_deque_back(TDA_DEQUE_TYPED_(T, self)))
 
 /// tda_deque_back_mut as a T *
 /// @copydetails TDA_DEQUE_FRONT_AS
 #define TDA_DEQUE_BACK_MUT_AS(T, self) \
-    ((T *) tda_deque_back_mut((self)))
+    ((T *) tda_deque_back_mut(TDA_DEQUE_TYPED_(T, self)))
+
+// the inner loop only binds 'elem', so a break leaves just that one; 'brk_' is set before
+// the body and cleared only when the body runs to its end, so after a break it is still
+// set and stops the outer loop too. T is checked once, in the init, and not per step
 
 /// walks the deque front to back, binding 'elem' to each elem in turn. A ring has no
 /// view to hand out, so this is the walk that copies nothing
@@ -488,16 +506,21 @@ void tda_deque_print(const tda_Deque *self, tda_FPrint fprint);
 /// @param self the deque
 /// @note the length is read on every step, so pushing or popping inside the body changes
 ///       what the walk covers — and a growth moves the elems out from under 'elem'
+/// @note break and continue act on the walk as they would on a plain loop
 /// @bigo{n} over the whole walk
-#define TDA_DEQUE_FOR_EACH_AS(T, elem, self)                                       \
-    for (size_t idx_ = 0, step_ = 0; idx_ < tda_deque_len(self); ++idx_, step_ = 0) \
-        for (const T *elem = TDA_DEQUE_GET_AS(T, (self), idx_); !step_; step_ = 1)
+#define TDA_DEQUE_FOR_EACH_AS(T, elem, self)                                  \
+    for (size_t idx_ = ((void) TDA_DEQUE_TYPED_(T, self), 0), brk_ = 0;       \
+         !brk_ && idx_ < tda_deque_len(self);                                 \
+         ++idx_)                                                              \
+        for (const T *elem = (brk_ = 1, tda_deque_get((self), idx_)); brk_; brk_ = 0)
 
 /// the same walk over elems that may be written through
 /// @copydetails TDA_DEQUE_FOR_EACH_AS
-#define TDA_DEQUE_FOR_EACH_MUT_AS(T, elem, self)                                   \
-    for (size_t idx_ = 0, step_ = 0; idx_ < tda_deque_len(self); ++idx_, step_ = 0) \
-        for (T *elem = TDA_DEQUE_GET_MUT_AS(T, (self), idx_); !step_; step_ = 1)
+#define TDA_DEQUE_FOR_EACH_MUT_AS(T, elem, self)                              \
+    for (size_t idx_ = ((void) TDA_DEQUE_TYPED_(T, self), 0), brk_ = 0;       \
+         !brk_ && idx_ < tda_deque_len(self);                                 \
+         ++idx_)                                                              \
+        for (T *elem = (brk_ = 1, tda_deque_get_mut((self), idx_)); brk_; brk_ = 0)
 
 /// tda_deque_get as a const T *
 /// @param T the elem type
@@ -505,12 +528,12 @@ void tda_deque_print(const tda_Deque *self, tda_FPrint fprint);
 /// @param idx the index, counted from the front
 /// @bigo{1}
 #define TDA_DEQUE_GET_AS(T, self, idx) \
-    ((const T *) tda_deque_get((self), (idx)))
+    ((const T *) tda_deque_get(TDA_DEQUE_TYPED_(T, self), (idx)))
 
 /// tda_deque_get_mut as a T *
 /// @copydetails TDA_DEQUE_GET_AS
 #define TDA_DEQUE_GET_MUT_AS(T, self, idx) \
-    ((T *) tda_deque_get_mut((self), (idx)))
+    ((T *) tda_deque_get_mut(TDA_DEQUE_TYPED_(T, self), (idx)))
 
 /// tda_deque_set from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -519,7 +542,7 @@ void tda_deque_print(const tda_Deque *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_DEQUE_SET(T, self, idx, val) \
-    tda_deque_set((self), (idx), &(T){ (val) })
+    tda_deque_set(TDA_DEQUE_TYPED_(T, self), (idx), &(T){ (val) })
 
 /// tda_deque_push_front from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -527,12 +550,12 @@ void tda_deque_print(const tda_Deque *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_DEQUE_PUSH_FRONT(T, self, val) \
-    tda_deque_push_front((self), &(T){ (val) })
+    tda_deque_push_front(TDA_DEQUE_TYPED_(T, self), &(T){ (val) })
 
 /// tda_deque_push_back from a value rather than an address
 /// @copydetails TDA_DEQUE_PUSH_FRONT
 #define TDA_DEQUE_PUSH_BACK(T, self, val) \
-    tda_deque_push_back((self), &(T){ (val) })
+    tda_deque_push_back(TDA_DEQUE_TYPED_(T, self), &(T){ (val) })
 
 /// tda_deque_insert from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal
@@ -541,7 +564,7 @@ void tda_deque_print(const tda_Deque *self, tda_FPrint fprint);
 /// @param val the value to copy in
 /// @bigo{n}
 #define TDA_DEQUE_INSERT(T, self, idx, val) \
-    tda_deque_insert((self), (idx), &(T){ (val) })
+    tda_deque_insert(TDA_DEQUE_TYPED_(T, self), (idx), &(T){ (val) })
 
 /// @}
 

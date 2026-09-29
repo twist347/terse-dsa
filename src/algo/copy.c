@@ -22,9 +22,10 @@ size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx)
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
     TDA_EXPECT(dst.elem_size == src.elem_size);
-    TDA_EXPECT(dst.len >= src.len);
     assert(pred);
 
+    // how many pass is known only at the end, so room is checked write by write, in
+    // tda_span_get_mut — a 'dst' shorter than 'src' is fine while the passers fit
     size_t write = 0;
 
     for (size_t read = 0; read < src.len; ++read) {
