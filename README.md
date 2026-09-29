@@ -9,32 +9,37 @@ Classic containers and algorithms, written plainly. No dependencies.
 ## Example
 
 ```c
-unsigned char mem[1024];
+#include "tda/tda.h"
 
-tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem)); // on the stack, no heap anywhere
-if (!arena) {
-    return 1;
-}
+#include <stdio.h>
 
-int rc = 1;
-tda_Vec *vec = nullptr;
-if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, arena, &vec, 5, 3, 1, 4, 2))) {
-    goto out; // the arena is held by now, so no bare return
-}
+int main() {
+    unsigned char mem[1024];
 
-tda_span_sort(tda_vec_to_span_mut(vec), tda_cmp_i32);
+    tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem)); // on the stack, no heap anywhere
+    if (!arena) {
+        return 1;
+    }
 
-size_t idx;
-if (tda_span_binary_search(tda_vec_to_span(vec), &(int32_t){4}, tda_cmp_i32, &idx)) {
-    printf("4 is at %zu\n", idx); // 4 is at 3
-}
-rc = 0;
+    int rc = 1;
+    tda_Vec *vec = nullptr;
+    if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, arena, &vec, 5, 3, 1, 4, 2))) {
+        goto out; // the arena is held by now, so no bare return
+    }
+
+    tda_span_sort(tda_vec_to_span_mut(vec), tda_cmp_i32);
+
+    size_t idx;
+    if (tda_span_binary_search(tda_vec_to_span(vec), &(int32_t){4}, tda_cmp_i32, &idx)) {
+        printf("4 is at %zu\n", idx); // 4 is at 3
+    }
+    rc = 0;
 
 out:
     tda_vec_drop(vec);
     tda_al_arena_drop(arena);
-    
-return rc;
+    return rc;
+}
 ```
 
 ## Design
