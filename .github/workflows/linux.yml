@@ -1,0 +1,54 @@
+name: linux
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-26.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: clang-debug, cc: clang-22, type: Debug, shared: "ON", flags: "" }
+          - { name: clang-release, cc: clang-22, type: Release, shared: "ON", flags: "" }
+          - { name: clang-debug-san, cc: clang-22, type: Debug, shared: "ON", flags: "-fsanitize=address,undefined,implicit-conversion,local-bounds -fno-sanitize-recover=all" }
+          - { name: gcc-debug, cc: gcc-15, type: Debug, shared: "ON", flags: "" }
+          - { name: gcc-release-static, cc: gcc-15, type: Release, shared: "OFF", flags: "" }
+          - { name: clang-release-hardened, cc: clang-22, type: Release, shared: "ON", flags: "", hardened: "ON" }
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: >-
+          cmake -S . -B build
+          -DCMAKE_C_COMPILER=${{ matrix.cc }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.type }}
+          -DTDA_BUILD_SHARED=${{ matrix.shared }}
+          -DTDA_HARDENED=${{ matrix.hardened || 'OFF' }}
+          -DCMAKE_C_FLAGS="-Werror ${{ matrix.flags }}"
+
+      - run: cmake --build build -j
+
+      - run: ctest --test-dir build --output-on-failure
+
+  consumer:
+    name: consumer
+    runs-on: ubuntu-26.04
+
+    # tda is consumed as a source dependency and nothing else, so the one path that has
+    # to keep working is add_subdirectory — the same one FetchContent takes once it has
+    # fetched. The build above it is always top-level, so only this leg sees the defaults
+    # that hold for a subproject.
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: cmake -S test/consumer -B build-consumer
+
+      - run: cmake --build build-consumer -j
+
+      - run: ./build-consumer/consumer_app

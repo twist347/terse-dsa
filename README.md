@@ -1,6 +1,8 @@
 # tda — terse data structures and algorithms in C23
 
-[![CI](https://github.com/twist347/terse-dsa/actions/workflows/ci.yml/badge.svg)](https://github.com/twist347/terse-dsa/actions/workflows/ci.yml)
+[![linux](https://github.com/twist347/terse-dsa/actions/workflows/linux.yml/badge.svg)](https://github.com/twist347/terse-dsa/actions/workflows/linux.yml)
+[![macos](https://github.com/twist347/terse-dsa/actions/workflows/macos.yml/badge.svg)](https://github.com/twist347/terse-dsa/actions/workflows/macos.yml)
+[![windows](https://github.com/twist347/terse-dsa/actions/workflows/windows.yml/badge.svg)](https://github.com/twist347/terse-dsa/actions/workflows/windows.yml)
 
 Classic containers and algorithms, written plainly. No dependencies.
 
@@ -154,8 +156,10 @@ cmake -S . -B build-hardened -DCMAKE_BUILD_TYPE=Release -DTDA_HARDENED=ON
 cmake --build build-hardened && ctest --test-dir build-hardened
 ```
 
-Requires a C23 toolchain and a C library with `<stdbit.h>`, which glibc ships from 2.39
-on. CI builds on Linux with gcc 15 and clang 22; nothing else is tested.
+Requires a C23 toolchain. CI builds and runs the tests on Linux with gcc 15 and clang 22,
+on macOS with Apple clang, and on Windows with clang from MSYS2 against the UCRT, the
+shared library included. MSVC's `cl` does not build it: it lacks too much of C23
+(`constexpr`, `_BitInt`, `<stdckdint.h>`).
 
 The reference, generated from the same headers:
 

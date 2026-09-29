@@ -1,0 +1,45 @@
+name: windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: windows-latest
+
+    # clang from MSYS2 rather than the LLVM the image ships, whose version is not pinned;
+    # the C library is still the UCRT, and the shared build is what tests dllexport
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: clang-debug, type: Debug }
+          - { name: clang-release, type: Release }
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          install: >-
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-cmake
+            mingw-w64-clang-x86_64-ninja
+
+      - run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_BUILD_TYPE=${{ matrix.type }}
+          -DCMAKE_C_FLAGS="-Werror"
+
+      - run: cmake --build build
+
+      - run: ctest --test-dir build --output-on-failure

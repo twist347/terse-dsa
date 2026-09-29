@@ -1,0 +1,33 @@
+name: macos
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: macos-latest
+
+    # Apple clang; the libc there has no <stdbit.h>, so this is the leg that builds
+    # internal/bits.h through the builtins
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: clang-debug, type: Debug }
+          - { name: clang-release, type: Release }
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: >-
+          cmake -S . -B build
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_BUILD_TYPE=${{ matrix.type }}
+          -DCMAKE_C_FLAGS="-Werror"
+
+      - run: cmake --build build -j
+
+      - run: ctest --test-dir build --output-on-failure
