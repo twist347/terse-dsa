@@ -40,12 +40,12 @@ static void test_rng_matches_the_reference_stream() {
     };
 
     tda_Rng rng = tda_rng_from_seed(0);
-    for (size_t i = 0; i < sizeof seed_0 / sizeof *seed_0; ++i) {
+    for (size_t i = 0; i < sizeof(seed_0) / sizeof(*seed_0); ++i) {
         TEST_ASSERT_EQUAL_UINT64(seed_0[i], tda_rng_u64(&rng));
     }
 
     rng = tda_rng_from_seed(42);
-    for (size_t i = 0; i < sizeof seed_42 / sizeof *seed_42; ++i) {
+    for (size_t i = 0; i < sizeof(seed_42) / sizeof(*seed_42); ++i) {
         TEST_ASSERT_EQUAL_UINT64(seed_42[i], tda_rng_u64(&rng));
     }
 }
@@ -123,7 +123,7 @@ static void test_rng_u64_max_stays_in_range() {
 
     static constexpr uint64_t maxes[] = {0, 1, 2, 6, 7, 8, 999, UINT64_C(1) << 40};
 
-    for (size_t m = 0; m < sizeof maxes / sizeof *maxes; ++m) {
+    for (size_t m = 0; m < sizeof(maxes) / sizeof(*maxes); ++m) {
         for (size_t i = 0; i < 2000; ++i) {
             TEST_ASSERT_TRUE(tda_rng_u64_max(&rng, maxes[m]) <= maxes[m]);
         }
@@ -145,7 +145,7 @@ static void test_rng_u32_max_stays_in_range() {
 
     static constexpr uint32_t maxes[] = {0, 1, 5, 255, 256, UINT32_MAX};
 
-    for (size_t m = 0; m < sizeof maxes / sizeof *maxes; ++m) {
+    for (size_t m = 0; m < sizeof(maxes) / sizeof(*maxes); ++m) {
         for (size_t i = 0; i < 2000; ++i) {
             TEST_ASSERT_TRUE(tda_rng_u32_max(&rng, maxes[m]) <= maxes[m]);
         }

@@ -454,19 +454,19 @@ static bool inside(const void *ptr, size_t size, const void *buf, size_t buf_siz
 
 // the header is paid for out of the buffer, and the rest is cut into as many blocks as fit
 static void test_from_buf_fits_as_many_blocks_as_the_rest_holds() {
-    tda_Al *pool = tda_al_pool_from_buf(mem, sizeof mem, 32);
+    tda_Al *pool = tda_al_pool_from_buf(mem, sizeof(mem), 32);
     TEST_ASSERT_NOT_NULL(pool);
-    TEST_ASSERT_TRUE(inside(pool, sizeof(tda_Al), mem, sizeof mem));
+    TEST_ASSERT_TRUE(inside(pool, sizeof(tda_Al), mem, sizeof(mem)));
 
     const tda_AlPoolStats st = tda_al_pool_stats(pool);
     TEST_ASSERT_EQUAL_size_t(aligned(32), st.block_size);
     TEST_ASSERT_TRUE(st.block_count > 0);
-    TEST_ASSERT_TRUE(st.block_count * st.block_size < sizeof mem);
+    TEST_ASSERT_TRUE(st.block_count * st.block_size < sizeof(mem));
 
     for (size_t i = 0; i < st.block_count; ++i) {
         void *p = tda_alloc(pool, 32);
         TEST_ASSERT_NOT_NULL(p);
-        TEST_ASSERT_TRUE(inside(p, 32, mem, sizeof mem));
+        TEST_ASSERT_TRUE(inside(p, 32, mem, sizeof(mem)));
     }
     TEST_ASSERT_NULL(tda_alloc(pool, 32));
 
@@ -476,12 +476,12 @@ static void test_from_buf_fits_as_many_blocks_as_the_rest_holds() {
 // the caller's array may sit at any address; every block still has to be aligned
 static void test_from_buf_aligns_whatever_the_buffer() {
     for (size_t off = 0; off < ALIGNMENT; ++off) {
-        tda_Al *pool = tda_al_pool_from_buf(mem + off, sizeof mem - off, 24);
+        tda_Al *pool = tda_al_pool_from_buf(mem + off, sizeof(mem) - off, 24);
         TEST_ASSERT_NOT_NULL(pool);
 
         for (void *p; (p = tda_alloc(pool, 24));) {
             TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) p % ALIGNMENT);
-            TEST_ASSERT_TRUE(inside(p, 24, mem + off, sizeof mem - off));
+            TEST_ASSERT_TRUE(inside(p, 24, mem + off, sizeof(mem) - off));
         }
 
         tda_al_pool_drop(pool);
@@ -490,16 +490,16 @@ static void test_from_buf_aligns_whatever_the_buffer() {
 
 static void test_from_buf_rejects_a_buffer_without_room_for_a_block() {
     TEST_ASSERT_NULL(tda_al_pool_from_buf(mem, 8, 16));
-    TEST_ASSERT_NULL(tda_al_pool_from_buf(mem, sizeof mem, sizeof mem));
+    TEST_ASSERT_NULL(tda_al_pool_from_buf(mem, sizeof(mem), sizeof(mem)));
 }
 
 // drop gives nothing back to anyone, so the same buffer builds the next pool
 static void test_from_buf_can_be_built_again_after_drop() {
-    tda_Al *pool = tda_al_pool_from_buf(mem, sizeof mem, 32);
+    tda_Al *pool = tda_al_pool_from_buf(mem, sizeof(mem), 32);
     TEST_ASSERT_NOT_NULL(tda_alloc(pool, 32));
     tda_al_pool_drop(pool);
 
-    pool = tda_al_pool_from_buf(mem, sizeof mem, 32);
+    pool = tda_al_pool_from_buf(mem, sizeof(mem), 32);
     TEST_ASSERT_NOT_NULL(pool);
     TEST_ASSERT_EQUAL_size_t(0, tda_al_pool_stats(pool).used);
 

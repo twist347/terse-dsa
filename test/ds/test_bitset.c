@@ -84,7 +84,7 @@ static void assert_prints(const char *expected, const tda_BitSet *b) {
     rewind(stream);
 
     char buf[256];
-    const size_t n = fread(buf, 1, sizeof buf - 1, stream);
+    const size_t n = fread(buf, 1, sizeof(buf) - 1, stream);
     buf[n] = '\0';
     fclose(stream);
 
@@ -104,7 +104,7 @@ static void test_new_sets_len_and_allocator() {
 }
 
 static void test_new_starts_with_nothing_in_it() {
-    for (size_t s = 0; s < sizeof SEAMS / sizeof SEAMS[0]; ++s) {
+    for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         tda_BitSet *b = make_bitset(SEAMS[s], nullptr, 0);
 
         assert_members(b, SEAMS[s], nullptr, 0);
@@ -247,7 +247,7 @@ static void test_the_bits_at_the_word_seams() {
 /* ========== all bits ========== */
 
 static void test_set_all_fills_the_universe() {
-    for (size_t s = 0; s < sizeof SEAMS / sizeof SEAMS[0]; ++s) {
+    for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
 
         tda_BitSet *b = make_full(nbits);
@@ -266,7 +266,7 @@ static void test_set_all_fills_the_universe() {
 }
 
 static void test_clear_all_empties_the_set() {
-    for (size_t s = 0; s < sizeof SEAMS / sizeof SEAMS[0]; ++s) {
+    for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         tda_BitSet *b = make_full(SEAMS[s]);
 
         tda_bitset_clear_all(b);
@@ -277,7 +277,7 @@ static void test_clear_all_empties_the_set() {
 }
 
 static void test_flip_all_is_the_complement() {
-    for (size_t s = 0; s < sizeof SEAMS / sizeof SEAMS[0]; ++s) {
+    for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
 
         tda_BitSet *b = make_bitset(nbits, nullptr, 0);
@@ -383,7 +383,7 @@ static void test_find_next_clear_walks_the_gaps() {
 // the complement of a full last word is a word of ones above nbits, and not one of them
 // is an index of this set
 static void test_find_next_clear_misses_on_a_full_set() {
-    for (size_t s = 0; s < sizeof SEAMS / sizeof SEAMS[0]; ++s) {
+    for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         tda_BitSet *b = make_full(SEAMS[s]);
 
         size_t idx = 12345;
@@ -415,7 +415,7 @@ static void test_find_next_clear_on_an_empty_set_answers_the_start() {
 // a single member at the far end of every universe: the scans have to cross whole empty
 // words to reach it
 static void test_the_scans_cross_whole_words() {
-    for (size_t s = 0; s < sizeof SEAMS / sizeof SEAMS[0]; ++s) {
+    for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
         if (nbits == 0) {
             continue;
@@ -856,7 +856,7 @@ static void test_the_pairwise_ops_on_one_set() {
 // the pairwise ops cannot dirty the tail, whatever the operands: this is the case that
 // would catch it if one ever did
 static void test_the_pairwise_ops_keep_the_tail_clear() {
-    for (size_t s = 0; s < sizeof SEAMS / sizeof SEAMS[0]; ++s) {
+    for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
 
         tda_BitSet *a = make_full(nbits);

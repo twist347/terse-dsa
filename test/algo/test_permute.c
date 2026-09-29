@@ -335,7 +335,7 @@ static void test_prev_permutation_walks_the_order_backwards() {
 static void test_prev_permutation_undoes_next_permutation() {
     for (size_t i = 0; i < 5; ++i) {
         int32_t buf[3];
-        memcpy(buf, ALL_3[i], sizeof buf);
+        memcpy(buf, ALL_3[i], sizeof(buf));
         const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
 
         TEST_ASSERT_TRUE(tda_span_next_permutation(s, tda_cmp_i32));

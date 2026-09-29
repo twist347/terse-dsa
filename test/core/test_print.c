@@ -29,7 +29,7 @@ static void capture(char *buf, size_t cap, tda_FPrint fprint, const void *x) {
 
 static void assert_prints(const char *expected, tda_FPrint fprint, const void *x) {
     char buf[64];
-    capture(buf, sizeof buf, fprint, x);
+    capture(buf, sizeof(buf), fprint, x);
 
     TEST_ASSERT_EQUAL_STRING(expected, buf);
 }

@@ -249,11 +249,11 @@ static void test_inplace_merge_at_the_edges_changes_nothing() {
     constexpr int32_t src[4] = {2, 4, 1, 3};
     int32_t buf[4];
 
-    memcpy(buf, src, sizeof buf);
+    memcpy(buf, src, sizeof(buf));
     tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 0, tda_cmp_i32, tda_al_default());
     TEST_ASSERT_EQUAL_INT32_ARRAY(src, buf, 4);
 
-    memcpy(buf, src, sizeof buf);
+    memcpy(buf, src, sizeof(buf));
     tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 4, tda_cmp_i32, tda_al_default());
     TEST_ASSERT_EQUAL_INT32_ARRAY(src, buf, 4);
 }

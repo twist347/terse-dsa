@@ -401,18 +401,18 @@ static bool inside(const void *ptr, size_t size, const void *buf, size_t buf_siz
 }
 
 static void test_from_buf_hands_out_the_buffer_itself() {
-    tda_Al *arena = tda_al_arena_from_buf(mem, sizeof mem);
+    tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem));
     TEST_ASSERT_NOT_NULL(arena);
-    TEST_ASSERT_TRUE(inside(arena, sizeof(tda_Al), mem, sizeof mem));
+    TEST_ASSERT_TRUE(inside(arena, sizeof(tda_Al), mem, sizeof(mem)));
 
     // the header is paid for out of the buffer, and the rest is the block
     const tda_AlArenaStats st = tda_al_arena_stats(arena);
-    TEST_ASSERT_TRUE(st.cap > 0 && st.cap < sizeof mem);
+    TEST_ASSERT_TRUE(st.cap > 0 && st.cap < sizeof(mem));
     TEST_ASSERT_EQUAL_size_t(0, st.used);
 
     void *p = tda_alloc(arena, 16);
     TEST_ASSERT_NOT_NULL(p);
-    TEST_ASSERT_TRUE(inside(p, 16, mem, sizeof mem));
+    TEST_ASSERT_TRUE(inside(p, 16, mem, sizeof(mem)));
 
     tda_al_arena_drop(arena);
 }
@@ -420,14 +420,14 @@ static void test_from_buf_hands_out_the_buffer_itself() {
 // the caller's array may sit at any address; every block still has to be aligned
 static void test_from_buf_aligns_whatever_the_buffer() {
     for (size_t off = 0; off < ALIGNMENT; ++off) {
-        tda_Al *arena = tda_al_arena_from_buf(mem + off, sizeof mem - off);
+        tda_Al *arena = tda_al_arena_from_buf(mem + off, sizeof(mem) - off);
         TEST_ASSERT_NOT_NULL(arena);
 
         for (size_t size = 1; size <= 40; size += 13) {
             void *p = tda_alloc(arena, size);
             TEST_ASSERT_NOT_NULL(p);
             TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) p % ALIGNMENT);
-            TEST_ASSERT_TRUE(inside(p, size, mem + off, sizeof mem - off));
+            TEST_ASSERT_TRUE(inside(p, size, mem + off, sizeof(mem) - off));
         }
 
         tda_al_arena_drop(arena);
@@ -440,12 +440,12 @@ static void test_from_buf_rejects_a_buffer_too_small_for_the_header() {
 
 // every byte it hands out is inside the buffer, up to the last one
 static void test_from_buf_runs_out_inside_the_buffer() {
-    tda_Al *arena = tda_al_arena_from_buf(mem, sizeof mem);
+    tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem));
     const size_t cap = tda_al_arena_stats(arena).cap;
 
     size_t taken = 0;
     for (void *p; (p = tda_alloc(arena, ALIGNMENT)); taken += ALIGNMENT) {
-        TEST_ASSERT_TRUE(inside(p, ALIGNMENT, mem, sizeof mem));
+        TEST_ASSERT_TRUE(inside(p, ALIGNMENT, mem, sizeof(mem)));
     }
     TEST_ASSERT_EQUAL_size_t(cap / ALIGNMENT * ALIGNMENT, taken);
 
@@ -454,11 +454,11 @@ static void test_from_buf_runs_out_inside_the_buffer() {
 
 // drop gives nothing back to anyone, so the same buffer builds the next arena
 static void test_from_buf_can_be_built_again_after_drop() {
-    tda_Al *arena = tda_al_arena_from_buf(mem, sizeof mem);
+    tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem));
     TEST_ASSERT_NOT_NULL(tda_alloc(arena, 64));
     tda_al_arena_drop(arena);
 
-    arena = tda_al_arena_from_buf(mem, sizeof mem);
+    arena = tda_al_arena_from_buf(mem, sizeof(mem));
     TEST_ASSERT_NOT_NULL(arena);
     TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).used);
 

@@ -43,7 +43,7 @@ drop:
     /// [buf]
     // no parent and no heap: the arena, its header included, lives in the array
     unsigned char mem[256];
-    tda_Al *local = tda_al_arena_from_buf(mem, sizeof mem);
+    tda_Al *local = tda_al_arena_from_buf(mem, sizeof(mem));
     if (!local) {
         return 1;
     }

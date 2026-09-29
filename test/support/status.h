@@ -29,7 +29,7 @@
 [[nodiscard]]
 static inline const char *tda_test_status_msg_(const char *text, tda_Status want, tda_Status got) {
     static char buf[256];
-    snprintf(buf, sizeof buf, "%s: expected %s, got %s", text, tda_status_to_str(want), tda_status_to_str(got));
+    snprintf(buf, sizeof(buf), "%s: expected %s, got %s", text, tda_status_to_str(want), tda_status_to_str(got));
 
     return buf;
 }

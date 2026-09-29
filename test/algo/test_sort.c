@@ -481,7 +481,7 @@ static void test_nth_elem_places_every_position() {
 
     for (size_t nth = 0; nth < 7; ++nth) {
         int32_t buf[7];
-        memcpy(buf, src, sizeof buf);
+        memcpy(buf, src, sizeof(buf));
 
         tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), nth, tda_cmp_i32);
 
@@ -523,7 +523,7 @@ static void test_nth_elem_handles_duplicates() {
 
     for (size_t nth = 0; nth < 8; ++nth) {
         int32_t buf[8];
-        memcpy(buf, src, sizeof buf);
+        memcpy(buf, src, sizeof(buf));
 
         tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), nth, tda_cmp_i32);
 

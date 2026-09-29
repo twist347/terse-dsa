@@ -30,7 +30,7 @@ static const struct {
     {TDA_STATUS_ERR_NO_MEM, "TDA_STATUS_ERR_NO_MEM"}
 };
 
-static constexpr size_t NAMED_LEN = sizeof NAMED / sizeof NAMED[0];
+static constexpr size_t NAMED_LEN = sizeof(NAMED) / sizeof(NAMED[0]);
 
 // values no enumerator has; the last two are the ends of the underlying type
 static constexpr tda_Status UNKNOWN[] = {
@@ -40,7 +40,7 @@ static constexpr tda_Status UNKNOWN[] = {
     (tda_Status) INT32_MIN,
 };
 
-static constexpr size_t UNKNOWN_LEN = sizeof UNKNOWN / sizeof UNKNOWN[0];
+static constexpr size_t UNKNOWN_LEN = sizeof(UNKNOWN) / sizeof(UNKNOWN[0]);
 
 /* ========== to str ========== */
 

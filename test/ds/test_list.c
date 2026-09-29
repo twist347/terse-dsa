@@ -1992,7 +1992,7 @@ static void assert_prints(const char *expected, const tda_List *l) {
     rewind(stream);
 
     char buf[128];
-    const size_t n = fread(buf, 1, sizeof buf - 1, stream);
+    const size_t n = fread(buf, 1, sizeof(buf) - 1, stream);
     buf[n] = '\0';
     fclose(stream);
 

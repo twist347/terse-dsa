@@ -45,7 +45,7 @@ static void sort_tda_stable(int32_t *a) {
 }
 
 static void sort_libc(int32_t *a) {
-    qsort(a, LEN, sizeof *a, tda_cmp_i32);
+    qsort(a, LEN, sizeof(*a), tda_cmp_i32);
 }
 
 // the pristine input stays untouched outside the timed loop; only the copy and the sort

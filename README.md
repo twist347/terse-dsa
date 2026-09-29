@@ -9,7 +9,9 @@ Classic containers and algorithms, written plainly. No dependencies.
 ## Example
 
 ```c
-tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+unsigned char mem[1024];
+
+tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem)); // on the stack, no heap anywhere
 if (!arena) {
     return 1;
 }

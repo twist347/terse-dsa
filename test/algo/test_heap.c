@@ -101,7 +101,7 @@ static void test_make_heap_of_empty_or_single_is_a_heap() {
 static void test_make_heap_keeps_duplicates() {
     constexpr int32_t src[6] = {5, 5, 1, 5, 1, 5};
     int32_t buf[6];
-    memcpy(buf, src, sizeof buf);
+    memcpy(buf, src, sizeof(buf));
 
     tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32);
 
@@ -178,7 +178,7 @@ static void test_pop_heap_parks_the_largest_at_the_end() {
 static void test_pop_heap_drains_in_descending_order() {
     constexpr int32_t src[7] = {3, 1, 4, 1, 5, 9, 2};
     int32_t buf[7];
-    memcpy(buf, src, sizeof buf);
+    memcpy(buf, src, sizeof(buf));
 
     tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), tda_cmp_i32);
 
@@ -224,7 +224,7 @@ static void test_sort_heap_orders_every_permutation() {
 static void test_sort_heap_orders_duplicates() {
     constexpr int32_t src[8] = {5, 1, 5, 5, 1, 9, 1, 5};
     int32_t buf[8];
-    memcpy(buf, src, sizeof buf);
+    memcpy(buf, src, sizeof(buf));
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8);
     tda_span_make_heap(s, tda_cmp_i32);
@@ -289,7 +289,7 @@ static void test_is_heap_accepts_empty_and_single() {
 static void test_descending_comparator_gives_a_min_heap() {
     constexpr int32_t src[7] = {3, 1, 4, 1, 5, 9, 2};
     int32_t buf[7];
-    memcpy(buf, src, sizeof buf);
+    memcpy(buf, src, sizeof(buf));
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7);
     tda_span_make_heap(s, tda_cmp_desc_i32);

@@ -60,7 +60,7 @@ int main() {
     // key it meets for the first time
     constexpr int32_t data[] = {3, 1, 3, 3, 1};
 
-    for (size_t i = 0; i < sizeof data / sizeof data[0]; ++i) {
+    for (size_t i = 0; i < sizeof(data) / sizeof(data[0]); ++i) {
         tda_HMapNode *entry;
         if (TDA_STATUS_IS_ERR(tda_hmap_get_or_insert(m, &data[i], &(int32_t){0}, &entry))) {
             goto out;
