@@ -2,6 +2,7 @@
 
 #include <unity.h>
 
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -87,17 +88,19 @@ static void test_float_does_not_round_trip() {
 }
 
 static void test_float_prints_the_specials() {
-    assert_prints("inf", tda_fprint_f64, &(double){1.0 / 0.0});
-    assert_prints("-inf", tda_fprint_f64, &(double){-1.0 / 0.0});
+    assert_prints("inf", tda_fprint_f32, &(float){INFINITY});
+    assert_prints("-inf", tda_fprint_f32, &(float){-INFINITY});
+    assert_prints("inf", tda_fprint_f64, &(double){INFINITY});
+    assert_prints("-inf", tda_fprint_f64, &(double){-INFINITY});
 }
 
-// The sign of a NaN is unspecified and 0.0 / 0.0 yields a negative one on x86, so this
-// pins the word and not the sign — %g prints whichever the platform produced.
-static void test_float_prints_nan() {
-    char buf[64];
-    capture(buf, sizeof buf, tda_fprint_f64, &(double){0.0 / 0.0});
-
-    TEST_ASSERT_EQUAL_STRING("nan", buf[0] == '-' ? buf + 1 : buf);
+// both signs on purpose: the C library would print the negative one as "-nan", or
+// "-nan(ind)" in the UCRT
+static void test_float_prints_nan_without_its_sign() {
+    assert_prints("nan", tda_fprint_f32, &(float){NAN});
+    assert_prints("nan", tda_fprint_f32, &(float){copysignf(NAN, -1.0f)});
+    assert_prints("nan", tda_fprint_f64, &(double){NAN});
+    assert_prints("nan", tda_fprint_f64, &(double){copysign(NAN, -1.0)});
 }
 
 // -0.0 is a distinct value that tda_cmp_f64 deliberately treats as equal to +0.0; the
@@ -168,7 +171,7 @@ int main() {
     RUN_TEST(test_float_prints_through_g);
     RUN_TEST(test_float_does_not_round_trip);
     RUN_TEST(test_float_prints_the_specials);
-    RUN_TEST(test_float_prints_nan);
+    RUN_TEST(test_float_prints_nan_without_its_sign);
     RUN_TEST(test_float_prints_negative_zero);
 
     RUN_TEST(test_bool_prints_words);

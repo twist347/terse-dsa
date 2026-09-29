@@ -118,7 +118,8 @@ void tda_fprint_ptrdiff(FILE *stream, const void *val);
 /// @name float
 /// @{
 
-/// a float through %g — readable, and deliberately not round-trip
+/// a float through %g — readable, and deliberately not round-trip. The specials are
+/// spelled the same everywhere: inf, -inf, and nan whatever its sign bit
 /// @param stream where to write
 /// @param val the address of the elem
 /// @bigo{1}

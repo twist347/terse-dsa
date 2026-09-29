@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -32,9 +33,36 @@ DEFINE_FPRINT(u64, uint64_t, "%" PRIu64)
 DEFINE_FPRINT(size, size_t, "%zu")
 DEFINE_FPRINT(ptrdiff, ptrdiff_t, "%td")
 
-// float promotes to double on the way into fprintf, which is what %g expects
-DEFINE_FPRINT(f32, float, "%g")
-DEFINE_FPRINT(f64, double, "%g")
+/* ========== float ========== */
+
+// %g leaves the specials to the C library: an infinity may come out as "inf" or
+// "infinity", a NaN with a sign and a tail ("-nan(ind)" in the UCRT). They are spelled
+// out here instead, and a NaN without its sign, which says nothing — 0.0 / 0.0 sets it on
+// x86 and not on ARM.
+static void fprint_double(FILE *stream, double val) {
+    if (isnan(val)) {
+        fputs("nan", stream);
+    } else if (isinf(val)) {
+        fputs(val < 0 ? "-inf" : "inf", stream);
+    } else {
+        fprintf(stream, "%g", val);
+    }
+}
+
+// a float widens to a double exactly, the specials included
+void tda_fprint_f32(FILE *stream, const void *val) {
+    assert(stream);
+    assert(val);
+
+    fprint_double(stream, *(const float *) val);
+}
+
+void tda_fprint_f64(FILE *stream, const void *val) {
+    assert(stream);
+    assert(val);
+
+    fprint_double(stream, *(const double *) val);
+}
 
 /* ========== bool ========== */
 
