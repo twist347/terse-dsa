@@ -14,12 +14,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: clang-debug, cc: clang-22, type: Debug, shared: "ON", flags: "" }
-          - { name: clang-release, cc: clang-22, type: Release, shared: "ON", flags: "" }
-          - { name: clang-debug-san, cc: clang-22, type: Debug, shared: "ON", flags: "-fsanitize=address,undefined,implicit-conversion,local-bounds -fno-sanitize-recover=all" }
-          - { name: gcc-debug, cc: gcc-15, type: Debug, shared: "ON", flags: "" }
-          - { name: gcc-release-static, cc: gcc-15, type: Release, shared: "OFF", flags: "" }
-          - { name: clang-release-hardened, cc: clang-22, type: Release, shared: "ON", flags: "", hardened: "ON" }
+          - { name: linux-clang-debug, cc: clang-22, type: Debug, shared: "ON", flags: "" }
+          - { name: linux-clang-release, cc: clang-22, type: Release, shared: "ON", flags: "" }
+          - { name: linux-clang-debug-san, cc: clang-22, type: Debug, shared: "ON", flags: "-fsanitize=address,undefined,implicit-conversion,local-bounds -fno-sanitize-recover=all" }
+          - { name: linux-gcc-debug, cc: gcc-15, type: Debug, shared: "ON", flags: "" }
+          - { name: linux-gcc-release-static, cc: gcc-15, type: Release, shared: "OFF", flags: "" }
+          - { name: linux-clang-release-hardened, cc: clang-22, type: Release, shared: "ON", flags: "", hardened: "ON" }
           # Apple clang; the libc there has no <stdbit.h>, so this is the leg that builds
           # internal/bits.h through the builtins
           - { name: macos-clang-debug, os: macos-latest, cc: clang, type: Debug, shared: "ON", flags: "" }
@@ -63,7 +63,6 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           msystem: CLANG64
-          update: true
           install: >-
             mingw-w64-clang-x86_64-clang
             mingw-w64-clang-x86_64-cmake
