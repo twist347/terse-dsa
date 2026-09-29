@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.3 — 2026-09-29
+
+### Fixed
+
+- Builds on macOS and on Windows. `<stdbit.h>` ships with the C library, and neither
+  Apple's nor the UCRT has it; it is used where it exists and compiler builtins stand in
+  elsewhere.
+- Tests and examples find the DLL on Windows: every exe now builds into `build/bin`, on
+  every platform.
+
+### Changed
+
+- `tda_fprint_f32` and `tda_fprint_f64` spell `inf`, `-inf` and `nan` out instead of
+  leaving them to `%g`, so every C library prints the same. A NaN prints without its sign,
+  which `0.0 / 0.0` sets on x86 and not on ARM.
+- CI builds and runs the tests on macOS with Apple clang and on Windows with clang from
+  MSYS2 as well, with a badge per platform.
+
 ## 1.2.2 — 2026-09-24
 
 ### Fixed
