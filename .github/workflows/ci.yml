@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-26.04
+    runs-on: ${{ matrix.os || 'ubuntu-26.04' }}
 
     strategy:
       fail-fast: false
@@ -20,6 +20,10 @@ jobs:
           - { name: gcc-debug, cc: gcc-15, type: Debug, shared: "ON", flags: "" }
           - { name: gcc-release-static, cc: gcc-15, type: Release, shared: "OFF", flags: "" }
           - { name: clang-release-hardened, cc: clang-22, type: Release, shared: "ON", flags: "", hardened: "ON" }
+          # Apple clang; the libc there has no <stdbit.h>, so this is the leg that builds
+          # internal/bits.h through the builtins
+          - { name: macos-clang-debug, os: macos-latest, cc: clang, type: Debug, shared: "ON", flags: "" }
+          - { name: macos-clang-release, os: macos-latest, cc: clang, type: Release, shared: "ON", flags: "" }
 
     steps:
       - uses: actions/checkout@v7
@@ -33,6 +37,45 @@ jobs:
           -DCMAKE_C_FLAGS="-Werror ${{ matrix.flags }}"
 
       - run: cmake --build build -j
+
+      - run: ctest --test-dir build --output-on-failure
+
+  windows:
+    name: ${{ matrix.name }}
+    runs-on: windows-latest
+
+    # clang from MSYS2 rather than the LLVM the image ships, whose version is not pinned;
+    # the C library is still the UCRT, and the shared build is what tests dllexport
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-clang-debug, type: Debug }
+          - { name: windows-clang-release, type: Release }
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-cmake
+            mingw-w64-clang-x86_64-ninja
+
+      - run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_BUILD_TYPE=${{ matrix.type }}
+          -DCMAKE_C_FLAGS="-Werror"
+
+      - run: cmake --build build
 
       - run: ctest --test-dir build --output-on-failure
 
