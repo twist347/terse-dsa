@@ -3,8 +3,9 @@
 #include "tda/core/check.h"
 #include "tda/core/util.h"
 
+#include "internal/bits.h"
+
 #include <assert.h>
-#include <stdbit.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -300,7 +301,7 @@ size_t tda_bitset_count(const tda_BitSet *self) {
 
     size_t count = 0;
     for (size_t w = 0; w < self->nwords; ++w) {
-        count += stdc_count_ones_ull(self->words[w]);
+        count += tda_bit_count(self->words[w]);
     }
 
     return count;
@@ -566,9 +567,5 @@ static uint64_t word_from(uint64_t word, size_t from) {
 }
 
 static size_t idx_of_first_one(size_t w, uint64_t word) {
-    // stdc_first_trailing_one_* counts from 1 and answers 0 for a word with no bits at
-    // all, which is what this rules out
-    assert(word != 0);
-
-    return w * WORD_BITS + (stdc_first_trailing_one_ull(word) - 1);
+    return w * WORD_BITS + tda_bit_ctz(word);
 }

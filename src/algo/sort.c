@@ -6,8 +6,9 @@
 #include "tda/core/check.h"
 #include "tda/core/util.h"
 
+#include "internal/bits.h"
+
 #include <assert.h>
-#include <stdbit.h>
 #include <string.h>
 
 /* ========== internals ========== */
@@ -307,7 +308,7 @@ static size_t depth_limit(size_t len) {
 
     // balanced partitions need floor(log2(len)) levels; twice that is the slack allowed
     // before the pivots are judged to have gone bad
-    return 2 * (stdc_bit_width(len) - 1);
+    return 2 * tda_bit_log2_floor(len);
 }
 
 static void quicksort(tda_SpanMut s, size_t left, size_t right, size_t depth, tda_Cmp cmp) {
