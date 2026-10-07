@@ -36,6 +36,22 @@ int main() {
     printf("%zu used after the reset\n", tda_al_arena_stats(arena).used); // 0
     /// [reset]
 
+    /// [mark]
+    // scratch inside a phase: what the phase keeps comes first, the mark goes after it,
+    // and the rewind takes back the scratch alone
+    int32_t *kept = TDA_ALLOC(int32_t, arena, 4);
+    const tda_AlArenaMark mark = tda_al_arena_mark(arena);
+
+    int32_t *scratch = TDA_ALLOC(int32_t, arena, 64);
+    if (!kept || !scratch) {
+        goto drop;
+    }
+    printf("%zu used with the scratch\n", tda_al_arena_stats(arena).used); // 272
+
+    tda_al_arena_rewind(arena, mark); // 'scratch' is dead, 'kept' is not
+    printf("%zu used after the rewind\n", tda_al_arena_stats(arena).used); // 16
+    /// [mark]
+
     rc = 0;
 drop:
     tda_al_arena_drop(arena);

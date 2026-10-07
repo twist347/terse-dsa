@@ -21,9 +21,16 @@
 /// The parent is borrowed and has to outlive it; tda_al_arena_from_buf needs none, and
 /// runs on memory the caller already has.
 ///
+/// Between the two ends sits tda_al_arena_mark / tda_al_arena_rewind: scratch memory
+/// inside a long-lived arena, a frame's arena lending a pathfind or a string its room and
+/// taking it back without dropping the frame. Marks nest, rewound in the reverse order
+/// they were taken. A mark also sets a floor: a block from below it never grows in place
+/// past it, but moves, so a rewind can never cut the tail off a block that outlives it.
+///
 /// @par Example
 /// @snippet alloc/example_arena.c build
 /// @snippet alloc/example_arena.c reset
+/// @snippet alloc/example_arena.c mark
 /// @snippet alloc/example_arena.c buf
 /// @{
 
@@ -64,10 +71,38 @@ void tda_al_arena_drop(tda_Al *self);
 
 /// takes everything back at once, leaving the arena as new
 /// @param self the arena
-/// @warning every pointer it ever handed out dies here
+/// @warning every pointer it ever handed out dies here, and every mark taken on it
 /// @bigo{1}
 TDA_API
 void tda_al_arena_reset(tda_Al *self);
+
+/// Where an arena stood, to rewind it to.
+/// A value to hand back to tda_al_arena_rewind, not to read: the fields are the arena's
+typedef struct {
+    const void *arena; ///< the arena it was taken on
+    size_t offset;     ///< how far the pointer was bumped
+    size_t floor;      ///< the floor before this mark, which the rewind puts back
+} tda_AlArenaMark;
+
+/// marks where the arena stands, and raises its floor there: from now on a block handed
+/// out before the mark that grows moves rather than growing in place past it
+/// @param self the arena
+/// @return the mark, for tda_al_arena_rewind; one never rewound costs nothing but the
+///         in-place growth of the blocks below it
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_AlArenaMark tda_al_arena_mark(tda_Al *self);
+
+/// takes back everything handed out since 'mark', and the floor with it
+/// @param self the arena
+/// @param mark taken on this arena and not rewound past since — by a rewind to an earlier
+///             mark, or a reset — both asserted as far as they can be: a mark the arena has
+///             since been refilled past cannot be told from a live one
+/// @warning every pointer handed out since the mark dies here, and every mark taken
+///          after it
+/// @bigo{1}
+TDA_API
+void tda_al_arena_rewind(tda_Al *self, tda_AlArenaMark mark);
 
 /// @}
 

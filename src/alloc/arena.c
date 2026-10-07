@@ -1,5 +1,6 @@
 #include "tda/alloc/arena.h"
 
+#include "tda/core/check.h"
 #include "tda/core/util.h"
 
 #include "internal/ptr.h"
@@ -26,6 +27,9 @@ typedef struct {
     void *data;
     size_t cap;
     size_t offset;
+    // where the latest live mark stands. A last block that starts below it moves to grow
+    // rather than growing in place, so a rewind to the mark never cuts it short
+    size_t floor;
 } ArenaCtx;
 
 // what tda_al_arena_from_buf lays at the front of the buffer
@@ -40,6 +44,10 @@ static void arena_init(tda_Al *obj, ArenaCtx *arena_ctx, tda_Al *parent, void *d
 /// only block with nothing but the free tail after it
 [[nodiscard]]
 static bool is_last_block(const ArenaCtx *arena_ctx, const void *ptr, size_t size);
+
+/// how far into the block 'ptr' starts
+[[nodiscard]]
+static size_t block_start(const ArenaCtx *arena_ctx, const void *ptr);
 
 #define ASSERT_ARENA(al)                 \
     (assert(al),                         \
@@ -133,6 +141,38 @@ void tda_al_arena_reset(tda_Al *self) {
 
     ArenaCtx *arena_ctx = self->ctx;
     arena_ctx->offset = 0;
+    arena_ctx->floor = 0;
+}
+
+tda_AlArenaMark tda_al_arena_mark(tda_Al *self) {
+    ASSERT_ARENA(self);
+
+    ArenaCtx *arena_ctx = self->ctx;
+    assert(arena_ctx->floor <= arena_ctx->offset);
+
+    const tda_AlArenaMark mark = {
+        .arena = arena_ctx,
+        .offset = arena_ctx->offset,
+        .floor = arena_ctx->floor,
+    };
+    arena_ctx->floor = arena_ctx->offset;
+
+    return mark;
+}
+
+void tda_al_arena_rewind(tda_Al *self, tda_AlArenaMark mark) {
+    ASSERT_ARENA(self);
+
+    ArenaCtx *arena_ctx = self->ctx;
+    TDA_EXPECT(mark.arena == arena_ctx);
+    // nothing but a rewind or a reset takes the offset below a live mark: a block from
+    // under the floor never shrinks it, and one from above stays above. So a mark past
+    // the offset is one already rewound past
+    TDA_EXPECT(mark.offset <= arena_ctx->offset);
+    assert(mark.floor <= mark.offset);
+
+    arena_ctx->offset = mark.offset;
+    arena_ctx->floor = mark.floor;
 }
 
 /* ========== stats ========== */
@@ -184,7 +224,9 @@ static void *arena_realloc(void *ctx, void *ptr, size_t old_size, size_t new_siz
         return arena_alloc(ctx, new_size);
     }
 
-    if (is_last_block(arena_ctx, ptr, old_size)) {
+    // the last block resizes where it stands, unless it starts under the floor: grown in
+    // place it would reach past a mark, and the rewind would hand its tail out again
+    if (is_last_block(arena_ctx, ptr, old_size) && block_start(arena_ctx, ptr) >= arena_ctx->floor) {
         const size_t start = arena_ctx->offset - tda_align_up(old_size, TDA_DEFAULT_ALIGNMENT);
         size_t aligned_size;
         size_t end;
@@ -216,6 +258,7 @@ static void arena_init(tda_Al *obj, ArenaCtx *arena_ctx, tda_Al *parent, void *d
     arena_ctx->data = data;
     arena_ctx->cap = cap;
     arena_ctx->offset = 0;
+    arena_ctx->floor = 0;
 
     obj->ctx = arena_ctx;
     obj->alloc = arena_alloc;
@@ -225,8 +268,11 @@ static void arena_init(tda_Al *obj, ArenaCtx *arena_ctx, tda_Al *parent, void *d
 }
 
 static bool is_last_block(const ArenaCtx *arena_ctx, const void *ptr, size_t size) {
-    const size_t start = (size_t) tda_byte_diff(ptr, arena_ctx->data);
-    return start + tda_align_up(size, TDA_DEFAULT_ALIGNMENT) == arena_ctx->offset;
+    return block_start(arena_ctx, ptr) + tda_align_up(size, TDA_DEFAULT_ALIGNMENT) == arena_ctx->offset;
+}
+
+static size_t block_start(const ArenaCtx *arena_ctx, const void *ptr) {
+    return (size_t) tda_byte_diff(ptr, arena_ctx->data);
 }
 
 static void arena_dealloc(void *ctx, void *ptr, size_t size) {

@@ -401,6 +401,191 @@ static void test_reset_of_an_untouched_arena_is_harmless() {
     tda_al_arena_drop(arena);
 }
 
+/* ========== mark / rewind ========== */
+
+static void test_rewind_takes_back_what_came_after_the_mark() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+
+    void *kept = tda_alloc(arena, 40);
+    TEST_ASSERT_NOT_NULL(kept);
+    const tda_AlArenaMark mark = tda_al_arena_mark(arena);
+    TEST_ASSERT_EQUAL_size_t(aligned(40), mark.offset);
+
+    void *scratch = tda_alloc(arena, 100);
+    TEST_ASSERT_NOT_NULL(scratch);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 7));
+
+    tda_al_arena_rewind(arena, mark);
+    TEST_ASSERT_EQUAL_size_t(aligned(40), tda_al_arena_stats(arena).used);
+
+    // the room is handed out again from where the mark stood
+    TEST_ASSERT_EQUAL_PTR(scratch, tda_alloc(arena, 8));
+
+    tda_al_arena_drop(arena);
+}
+
+static void test_a_rewind_with_nothing_since_changes_nothing() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+
+    tda_al_arena_rewind(arena, tda_al_arena_mark(arena));
+
+    TEST_ASSERT_EQUAL_size_t(aligned(16), tda_al_arena_stats(arena).used);
+
+    tda_al_arena_drop(arena);
+}
+
+// marks nest: each rewind goes back to its own mark, innermost first
+static void test_marks_nest() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+
+    const tda_AlArenaMark outer = tda_al_arena_mark(arena);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    const tda_AlArenaMark inner = tda_al_arena_mark(arena);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 32));
+
+    tda_al_arena_rewind(arena, inner);
+    TEST_ASSERT_EQUAL_size_t(aligned(16), tda_al_arena_stats(arena).used);
+
+    tda_al_arena_rewind(arena, outer);
+    TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).used);
+
+    tda_al_arena_drop(arena);
+}
+
+// the outer rewind takes the inner scratch with it, never rewound on its own
+static void test_rewinding_an_outer_mark_skips_the_inner_ones() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+
+    void *first = tda_alloc(arena, 16);
+    TEST_ASSERT_NOT_NULL(first);
+    const tda_AlArenaMark outer = tda_al_arena_mark(arena);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    (void) tda_al_arena_mark(arena);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+
+    tda_al_arena_rewind(arena, outer);
+    TEST_ASSERT_EQUAL_size_t(aligned(16), tda_al_arena_stats(arena).used);
+
+    // and the floor is the one from before the outer mark, not the inner one's: the first
+    // block, last again, grows in place
+    TEST_ASSERT_EQUAL_PTR(first, tda_realloc(arena, first, 16, 64));
+
+    tda_al_arena_drop(arena);
+}
+
+// the trap the floor exists for: a block from before the mark, last when the mark was
+// taken, must not grow in place past it, or the rewind hands its tail out a second time
+static void test_a_block_from_under_the_mark_moves_to_grow() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+
+    unsigned char *old = tda_alloc(arena, 16);
+    TEST_ASSERT_NOT_NULL(old);
+    memset(old, 0xab, 16);
+
+    const tda_AlArenaMark mark = tda_al_arena_mark(arena);
+
+    unsigned char *grown = tda_realloc(arena, old, 16, 64);
+    TEST_ASSERT_NOT_NULL(grown);
+    TEST_ASSERT_TRUE(grown != old);
+    for (size_t i = 0; i < 16; ++i) {
+        TEST_ASSERT_EQUAL_UINT8(0xab, grown[i]);
+    }
+
+    tda_al_arena_rewind(arena, mark);
+
+    // what the rewind frees is the moved copy's room, and 'old' is whole
+    unsigned char *next = tda_alloc(arena, 64);
+    TEST_ASSERT_NOT_NULL(next);
+    memset(next, 0, 64);
+    for (size_t i = 0; i < 16; ++i) {
+        TEST_ASSERT_EQUAL_UINT8(0xab, old[i]);
+    }
+
+    tda_al_arena_drop(arena);
+}
+
+// and shrinking one leaves the offset where it is, so the mark stays below it
+static void test_a_block_from_under_the_mark_shrinks_where_it_stands() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+
+    void *old = tda_alloc(arena, 64);
+    TEST_ASSERT_NOT_NULL(old);
+    const tda_AlArenaMark mark = tda_al_arena_mark(arena);
+
+    TEST_ASSERT_EQUAL_PTR(old, tda_realloc(arena, old, 64, 16));
+    TEST_ASSERT_EQUAL_size_t(aligned(64), tda_al_arena_stats(arena).used);
+
+    tda_al_arena_rewind(arena, mark);
+    TEST_ASSERT_EQUAL_size_t(aligned(64), tda_al_arena_stats(arena).used);
+
+    tda_al_arena_drop(arena);
+}
+
+// a block from above the mark is the arena's own business again: it grows in place
+static void test_a_block_from_above_the_mark_grows_in_place() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    const tda_AlArenaMark mark = tda_al_arena_mark(arena);
+
+    void *p = tda_alloc(arena, 16);
+    TEST_ASSERT_NOT_NULL(p);
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, 16, 64));
+    TEST_ASSERT_EQUAL_size_t(aligned(16) + 64, tda_al_arena_stats(arena).used);
+
+    tda_al_arena_rewind(arena, mark);
+    TEST_ASSERT_EQUAL_size_t(aligned(16), tda_al_arena_stats(arena).used);
+
+    tda_al_arena_drop(arena);
+}
+
+// the rewind puts the floor back, so the block that had to move under the mark grows in
+// place once the mark is gone
+static void test_the_rewind_lowers_the_floor_again() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+
+    void *p = tda_alloc(arena, 16);
+    TEST_ASSERT_NOT_NULL(p);
+
+    tda_al_arena_rewind(arena, tda_al_arena_mark(arena));
+
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, 16, 64));
+
+    tda_al_arena_drop(arena);
+}
+
+// a reset drops the floor as well as the blocks
+static void test_reset_drops_the_floor() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
+
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    (void) tda_al_arena_mark(arena);
+    tda_al_arena_reset(arena);
+
+    void *p = tda_alloc(arena, 16);
+    TEST_ASSERT_NOT_NULL(p);
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, 16, 64));
+
+    tda_al_arena_drop(arena);
+}
+
+// scratch in a caller's buffer works the same: the mark is about the offset, not the parent
+static void test_mark_and_rewind_in_a_buffer() {
+    alignas(max_align_t) unsigned char buf[512];
+    tda_Al *arena = tda_al_arena_from_buf(buf, sizeof(buf));
+    TEST_ASSERT_NOT_NULL(arena);
+
+    const size_t before = tda_al_arena_stats(arena).used;
+    const tda_AlArenaMark mark = tda_al_arena_mark(arena);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 100));
+
+    tda_al_arena_rewind(arena, mark);
+    TEST_ASSERT_EQUAL_size_t(before, tda_al_arena_stats(arena).used);
+
+    tda_al_arena_drop(arena);
+}
+
 /* ========== from_buf ========== */
 
 // the memory the tests build in; its size is well above any header
@@ -544,6 +729,17 @@ int main() {
     RUN_TEST(test_dealloc_does_not_reclaim);
     RUN_TEST(test_reset_reclaims_everything);
     RUN_TEST(test_reset_of_an_untouched_arena_is_harmless);
+
+    RUN_TEST(test_rewind_takes_back_what_came_after_the_mark);
+    RUN_TEST(test_a_rewind_with_nothing_since_changes_nothing);
+    RUN_TEST(test_marks_nest);
+    RUN_TEST(test_rewinding_an_outer_mark_skips_the_inner_ones);
+    RUN_TEST(test_a_block_from_under_the_mark_moves_to_grow);
+    RUN_TEST(test_a_block_from_under_the_mark_shrinks_where_it_stands);
+    RUN_TEST(test_a_block_from_above_the_mark_grows_in_place);
+    RUN_TEST(test_the_rewind_lowers_the_floor_again);
+    RUN_TEST(test_reset_drops_the_floor);
+    RUN_TEST(test_mark_and_rewind_in_a_buffer);
 
     RUN_TEST(test_from_buf_hands_out_the_buffer_itself);
     RUN_TEST(test_from_buf_aligns_whatever_the_buffer);
