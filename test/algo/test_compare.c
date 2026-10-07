@@ -5,6 +5,7 @@
 #include <unity.h>
 
 #include <stdint.h>
+#include <string.h>
 
 void setUp() {
 }
@@ -231,6 +232,116 @@ static void test_mismatch_honours_the_callback() {
     TEST_ASSERT_EQUAL_size_t(2, idx);
 }
 
+/* ========== is_permutation ========== */
+
+// how many times 'key' is in 'arr': the oracle counts with plain ==, sharing no code with
+// what is tested
+static size_t occurrences(const int32_t *arr, size_t n, int32_t key) {
+    size_t c = 0;
+    for (size_t i = 0; i < n; ++i) {
+        c += arr[i] == key;
+    }
+    return c;
+}
+
+// the 'idx'-th array of 'n' digits over {0, 1, 2}, as its base-3 spelling
+static void nth_array(int32_t *dst, size_t n, size_t idx) {
+    for (size_t i = 0; i < n; ++i) {
+        dst[i] = (int32_t) (idx % 3);
+        idx /= 3;
+    }
+}
+
+// every pair of arrays of up to five elems over three values, against the counts: equal
+// counts of every value is what a permutation is. Few values, so repeats are everywhere
+static void test_is_permutation_matches_the_counts_everywhere() {
+    for (size_t n = 0; n <= 5; ++n) {
+        size_t arrays = 1;
+        for (size_t i = 0; i < n; ++i) {
+            arrays *= 3;
+        }
+
+        for (size_t i = 0; i < arrays; ++i) {
+            for (size_t j = 0; j < arrays; ++j) {
+                int32_t a[5];
+                int32_t b[5];
+                nth_array(a, n, i);
+                nth_array(b, n, j);
+
+                bool want = true;
+                for (int32_t v = 0; v < 3; ++v) {
+                    want = want && occurrences(a, n, v) == occurrences(b, n, v);
+                }
+
+                const bool got = tda_span_is_permutation(
+                    TDA_SPAN_FROM_DATA(int32_t, a, n),
+                    TDA_SPAN_FROM_DATA(int32_t, b, n),
+                    tda_eq_i32
+                );
+                TEST_ASSERT_EQUAL(want, got);
+            }
+        }
+    }
+}
+
+// the trap of asking only whether each elem of one is somewhere in the other
+static void test_is_permutation_counts_the_repeats() {
+    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 1, 2);
+    const tda_Span b = TDA_SPAN_OF(int32_t, 1, 2, 2);
+
+    TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_span_is_permutation(b, a, tda_eq_i32));
+}
+
+static void test_is_permutation_of_different_lengths_is_false() {
+    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 2);
+    const tda_Span b = TDA_SPAN_OF(int32_t, 2, 1, 1);
+
+    TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32));
+}
+
+static void test_is_permutation_of_empty_spans() {
+    const tda_Span empty = TDA_SPAN_FROM_DATA(int32_t, (const int32_t *) nullptr, 0);
+
+    TEST_ASSERT_TRUE(tda_span_is_permutation(empty, empty, tda_eq_i32));
+}
+
+// equal under the predicate, not by the bytes: {1, -2} is {2, -1} by absolute value
+static void test_is_permutation_honours_the_equality() {
+    const tda_Span a = TDA_SPAN_OF(int32_t, 1, -2, 3);
+    const tda_Span b = TDA_SPAN_OF(int32_t, -3, 2, -1);
+
+    TEST_ASSERT_TRUE(tda_span_is_permutation(a, b, eq_abs_i32));
+    TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32));
+}
+
+static void test_is_permutation_compares_whole_elems() {
+    const tda_Span a = TDA_SPAN_OF(Pair, {1, 10}, {2, 20}, {1, 30});
+    const tda_Span b = TDA_SPAN_OF(Pair, {2, 99}, {1, 98}, {1, 97});
+    const tda_Span c = TDA_SPAN_OF(Pair, {2, 99}, {2, 98}, {1, 97});
+
+    TEST_ASSERT_TRUE(tda_span_is_permutation(a, b, tda_test_pair_eq_a));
+    TEST_ASSERT_FALSE(tda_span_is_permutation(a, c, tda_test_pair_eq_a));
+}
+
+// spans that agree elem by elem are settled by the prefix walk alone: one call per pair
+static void test_is_permutation_of_equal_spans_is_linear() {
+    int32_t buf[100];
+    for (size_t i = 0; i < 100; ++i) {
+        buf[i] = (int32_t) i;
+    }
+    int32_t copy[100];
+    memcpy(copy, buf, sizeof(buf));
+
+    eq_calls = 0;
+    TEST_ASSERT_TRUE(tda_span_is_permutation(
+        TDA_SPAN_FROM_DATA(int32_t, buf, 100),
+        TDA_SPAN_FROM_DATA(int32_t, copy, 100),
+        eq_counting_i32
+    ));
+    TEST_ASSERT_EQUAL_size_t(100, eq_calls);
+}
+
 /* ========== cmp ========== */
 
 static void test_cmp_of_equal_spans_is_zero() {
@@ -345,6 +456,14 @@ int main() {
     RUN_TEST(test_mismatch_inside_the_prefix_of_unequal_lengths);
     RUN_TEST(test_mismatch_of_empty_spans_finds_nothing);
     RUN_TEST(test_mismatch_honours_the_callback);
+
+    RUN_TEST(test_is_permutation_matches_the_counts_everywhere);
+    RUN_TEST(test_is_permutation_counts_the_repeats);
+    RUN_TEST(test_is_permutation_of_different_lengths_is_false);
+    RUN_TEST(test_is_permutation_of_empty_spans);
+    RUN_TEST(test_is_permutation_honours_the_equality);
+    RUN_TEST(test_is_permutation_compares_whole_elems);
+    RUN_TEST(test_is_permutation_of_equal_spans_is_linear);
 
     RUN_TEST(test_cmp_of_equal_spans_is_zero);
     RUN_TEST(test_cmp_is_decided_by_the_first_difference);

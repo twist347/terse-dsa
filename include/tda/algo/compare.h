@@ -49,6 +49,18 @@ bool tda_span_eq_by(tda_Span a, tda_Span b, tda_Eq eq);
 [[nodiscard]] TDA_API
 bool tda_span_mismatch(tda_Span a, tda_Span b, tda_Eq eq, size_t *out_idx);
 
+/// whether the two hold the same elems in any order, each as many times
+/// @param a one span
+/// @param b the other; a differing length is just false
+/// @param eq the equality, which has to be one — reflexive, symmetric and transitive — for
+///           counting under it to mean anything
+/// @return whether one is a rearrangement of the other
+/// @bigo{n^2} worst, with nothing allocated: each distinct elem is counted on both sides.
+///          The common prefix is skipped first, so two spans that agree elem by elem cost
+///          O(n)
+[[nodiscard]] TDA_API
+bool tda_span_is_permutation(tda_Span a, tda_Span b, tda_Eq eq);
+
 /// @}
 
 /// @name ordering
