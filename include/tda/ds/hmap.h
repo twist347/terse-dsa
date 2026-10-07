@@ -447,27 +447,41 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 
 /// @cond
 // hands 'self' back once K and V are checked against the key and value sizes, so a typed
-// macro reads its handle once; typeof keeps the handle's constness, which the function
-// has to drop. A size of 0 is one the macro has no type for
+// macro reads its handle once; _Generic picks the one of the pair that keeps the handle's
+// constness. A size of 0 is one the macro has no type for
 [[nodiscard]]
-static inline tda_HMap *tda_hmap_typed_(
+static inline const tda_HMap *tda_hmap_typed_c_(
     const tda_HMap *self,
     [[maybe_unused]] size_t key_size,
     [[maybe_unused]] size_t val_size
 ) {
     TDA_EXPECT(key_size == 0 || tda_hmap_key_size(self) == key_size);
     TDA_EXPECT(val_size == 0 || tda_hmap_val_size(self) == val_size);
-    return (tda_HMap *) self;
+    return self;
 }
 
+[[nodiscard]]
+static inline tda_HMap *tda_hmap_typed_(
+    tda_HMap *self,
+    [[maybe_unused]] size_t key_size,
+    [[maybe_unused]] size_t val_size
+) {
+    TDA_EXPECT(key_size == 0 || tda_hmap_key_size(self) == key_size);
+    TDA_EXPECT(val_size == 0 || tda_hmap_val_size(self) == val_size);
+    return self;
+}
+
+#define TDA_HMAP_SELECT_TYPED_(self) \
+    _Generic((self), const tda_HMap *: tda_hmap_typed_c_, tda_HMap *: tda_hmap_typed_)
+
 #define TDA_HMAP_TYPED_(K, V, self) \
-    ((typeof(self)) tda_hmap_typed_((self), sizeof(K), sizeof(V)))
+    TDA_HMAP_SELECT_TYPED_(self)((self), sizeof(K), sizeof(V))
 
 #define TDA_HMAP_KEY_TYPED_(K, self) \
-    ((typeof(self)) tda_hmap_typed_((self), sizeof(K), 0))
+    TDA_HMAP_SELECT_TYPED_(self)((self), sizeof(K), 0)
 
 #define TDA_HMAP_VAL_TYPED_(V, self) \
-    ((typeof(self)) tda_hmap_typed_((self), 0, sizeof(V)))
+    TDA_HMAP_SELECT_TYPED_(self)((self), 0, sizeof(V))
 /// @endcond
 
 /// tda_hmap_new with sizeof(K) and sizeof(V)

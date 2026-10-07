@@ -334,15 +334,21 @@ void tda_queue_print(const tda_Queue *self, tda_FPrint fprint);
 
 /// @cond
 // hands 'self' back once T is checked against the elem size, so a typed macro reads its
-// handle once; typeof keeps the handle's constness, which the function has to drop
+// handle once; _Generic picks the one of the pair that keeps the handle's constness
 [[nodiscard]]
-static inline tda_Queue *tda_queue_typed_(const tda_Queue *self, [[maybe_unused]] size_t size) {
+static inline const tda_Queue *tda_queue_typed_c_(const tda_Queue *self, [[maybe_unused]] size_t size) {
     TDA_EXPECT(tda_queue_elem_size(self) == size);
-    return (tda_Queue *) self;
+    return self;
+}
+
+[[nodiscard]]
+static inline tda_Queue *tda_queue_typed_(tda_Queue *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_queue_elem_size(self) == size);
+    return self;
 }
 
 #define TDA_QUEUE_TYPED_(T, self) \
-    ((typeof(self)) tda_queue_typed_((self), sizeof(T)))
+    _Generic((self), const tda_Queue *: tda_queue_typed_c_, tda_Queue *: tda_queue_typed_)((self), sizeof(T))
 /// @endcond
 
 /// tda_queue_new with sizeof(T) for the elem size

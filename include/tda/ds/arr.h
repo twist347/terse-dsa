@@ -327,15 +327,21 @@ void tda_arr_print(const tda_Arr *self, tda_FPrint fprint);
 
 /// @cond
 // hands 'self' back once T is checked against the elem size, so a typed macro reads its
-// handle once; typeof keeps the handle's constness, which the function has to drop
+// handle once; _Generic picks the one of the pair that keeps the handle's constness
 [[nodiscard]]
-static inline tda_Arr *tda_arr_typed_(const tda_Arr *self, [[maybe_unused]] size_t size) {
+static inline const tda_Arr *tda_arr_typed_c_(const tda_Arr *self, [[maybe_unused]] size_t size) {
     TDA_EXPECT(tda_arr_elem_size(self) == size);
-    return (tda_Arr *) self;
+    return self;
+}
+
+[[nodiscard]]
+static inline tda_Arr *tda_arr_typed_(tda_Arr *self, [[maybe_unused]] size_t size) {
+    TDA_EXPECT(tda_arr_elem_size(self) == size);
+    return self;
 }
 
 #define TDA_ARR_TYPED_(T, self) \
-    ((typeof(self)) tda_arr_typed_((self), sizeof(T)))
+    _Generic((self), const tda_Arr *: tda_arr_typed_c_, tda_Arr *: tda_arr_typed_)((self), sizeof(T))
 /// @endcond
 
 /// tda_arr_new_len with sizeof(T) for the elem size
