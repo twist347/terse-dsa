@@ -94,6 +94,13 @@ static void copy_in(tda_Deque *self, const void *src);
 
 static void move_elem(tda_Deque *self, size_t to, size_t from);
 
+/// 'count' elems of 'src' bytes over the elems from 'idx' on, which may straddle the seam
+static void copy_range_in(tda_Deque *self, size_t idx, const void *src, size_t count);
+
+/// the slot 'count' places before 'slot', one lap back when that passes slot 0
+[[nodiscard]]
+static size_t slot_back(const tda_Deque *self, size_t slot, size_t count);
+
 /* ========== lifetime ========== */
 
 tda_Status tda_deque_new(size_t elem_size, tda_Al *al, tda_Deque **out) {
@@ -462,6 +469,27 @@ void tda_deque_pop_back(tda_Deque *self) {
     --self->len;
 }
 
+void tda_deque_pop_front_to(tda_Deque *self, void *out) {
+    ASSERT_DEQUE(self);
+    assert(out);
+    TDA_EXPECT(self->len > 0);
+
+    // memmove: 'out' may be the very slot about to be dropped, and memcpy onto itself is
+    // undefined
+    memmove(out, elem_at(self, 0), self->elem_size);
+    tda_deque_pop_front(self);
+}
+
+void tda_deque_pop_back_to(tda_Deque *self, void *out) {
+    ASSERT_DEQUE(self);
+    assert(out);
+    TDA_EXPECT(self->len > 0);
+
+    // memmove, as in tda_deque_pop_front_to
+    memmove(out, elem_at(self, self->len - 1), self->elem_size);
+    tda_deque_pop_back(self);
+}
+
 tda_Status tda_deque_insert(tda_Deque *self, size_t idx, const void *val) {
     ASSERT_DEQUE(self);
     assert(val);
@@ -616,6 +644,14 @@ tda_Status tda_deque_resize(tda_Deque *self, size_t new_len) {
     return TDA_STATUS_OK;
 }
 
+void tda_deque_truncate(tda_Deque *self, size_t len) {
+    ASSERT_DEQUE(self);
+
+    if (len < self->len) {
+        self->len = len;
+    }
+}
+
 void tda_deque_swap(tda_Deque *self, tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
@@ -642,6 +678,109 @@ void tda_deque_swap_elems(tda_Deque *self, size_t i, size_t j) {
     }
 
     tda_bytes_swap(elem_at_mut(self, i), elem_at_mut(self, j), self->elem_size);
+}
+
+/* ========== bulk mods ========== */
+
+tda_Status tda_deque_extend(tda_Deque *self, tda_Span src) {
+    ASSERT_DEQUE(self);
+    TDA_SPAN_ASSERT(src);
+    TDA_EXPECT(src.elem_size == self->elem_size);
+
+    return tda_deque_insert_span(self, self->len, src);
+}
+
+tda_Status tda_deque_insert_span(tda_Deque *self, size_t idx, tda_Span src) {
+    ASSERT_DEQUE(self);
+    TDA_SPAN_ASSERT(src);
+    TDA_EXPECT(src.elem_size == self->elem_size);
+    TDA_EXPECT(idx <= self->len);
+
+    if (src.len == 0) {
+        return TDA_STATUS_OK;
+    }
+
+    size_t new_len;
+    if (ckd_add(&new_len, self->len, src.len)) {
+        return TDA_STATUS_ERR_NO_MEM;
+    }
+
+    if (new_len > self->cap) {
+        const tda_Status st = reserve_for(self, new_len);
+        if (TDA_STATUS_IS_ERR(st)) {
+            return st;
+        }
+    }
+
+    const size_t count = src.len;
+
+    // as in tda_deque_insert, with a gap 'count' wide: each side moves the way that reads
+    // an elem before anything is written over it
+    if (idx < self->len - idx) {
+        self->head = slot_back(self, self->head, count);
+        self->len = new_len;
+
+        for (size_t i = 0; i < idx; ++i) {
+            move_elem(self, i, i + count);
+        }
+    } else {
+        self->len = new_len;
+
+        for (size_t i = new_len - 1; i >= idx + count; --i) {
+            move_elem(self, i, i - count);
+        }
+    }
+
+    copy_range_in(self, idx, src.data, count);
+
+    ASSERT_DEQUE(self);
+
+    return TDA_STATUS_OK;
+}
+
+void tda_deque_remove_range(tda_Deque *self, size_t idx, size_t count) {
+    ASSERT_DEQUE(self);
+    TDA_EXPECT(idx <= self->len);
+    TDA_EXPECT(count <= self->len - idx);
+
+    if (count == 0) {
+        return;
+    }
+
+    if (idx < self->len - idx - count) {
+        // the front side is shorter: slide it forward over the gap, back elem first
+        for (size_t i = idx; i > 0; --i) {
+            move_elem(self, i - 1 + count, i - 1);
+        }
+        const size_t raw = self->head + count;
+        self->head = raw < self->cap ? raw : raw - self->cap;
+    } else {
+        for (size_t i = idx; i + count < self->len; ++i) {
+            move_elem(self, i, i + count);
+        }
+    }
+
+    self->len -= count;
+
+    ASSERT_DEQUE(self);
+}
+
+void tda_deque_retain(tda_Deque *self, tda_Pred pred, void *ctx) {
+    ASSERT_DEQUE(self);
+    assert(pred);
+
+    size_t kept = 0;
+    for (size_t i = 0; i < self->len; ++i) {
+        if (!pred(elem_at(self, i), ctx)) {
+            continue;
+        }
+        // until the first drop every kept elem is already in place
+        if (kept != i) {
+            move_elem(self, kept, i);
+        }
+        ++kept;
+    }
+    self->len = kept;
 }
 
 /* ========== print ========== */
@@ -847,6 +986,31 @@ static void copy_in(tda_Deque *self, const void *src) {
             (self->len - run) * self->elem_size
         );
     }
+}
+
+static void copy_range_in(tda_Deque *self, size_t idx, const void *src, size_t count) {
+    assert(idx + count <= self->len);
+
+    const size_t slot = slot_of(self, idx);
+    const size_t to_end = self->cap - slot;
+    const size_t run = to_end < count ? to_end : count;
+
+    memcpy(slot_at_mut(self, slot), src, run * self->elem_size);
+
+    if (run < count) {
+        memcpy(
+            slot_at_mut(self, 0),
+            tda_byte_offset(src, self->elem_size, run),
+            (count - run) * self->elem_size
+        );
+    }
+}
+
+static size_t slot_back(const tda_Deque *self, size_t slot, size_t count) {
+    assert(slot < self->cap);
+    assert(count <= self->cap);
+
+    return slot >= count ? slot - count : slot + self->cap - count;
 }
 
 static void move_elem(tda_Deque *self, size_t to, size_t from) {

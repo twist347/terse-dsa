@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tda/algo/fn.h"
 #include "tda/alloc/alloc.h"
 #include "tda/core/check.h"
 #include "tda/core/cmp.h"
@@ -315,6 +316,18 @@ void tda_deque_pop_front(tda_Deque *self);
 TDA_API
 void tda_deque_pop_back(tda_Deque *self);
 
+/// copies the front elem to 'out', then drops it as tda_deque_pop_front does
+/// @param self asserts the deque is not empty
+/// @param[out] out where the elem goes; may point anywhere, this deque's own block included
+/// @bigo{1}
+TDA_API
+void tda_deque_pop_front_to(tda_Deque *self, void *out);
+
+/// copies the back elem to 'out', then drops it as tda_deque_pop_back does
+/// @copydetails tda_deque_pop_front_to
+TDA_API
+void tda_deque_pop_back_to(tda_Deque *self, void *out);
+
 /// puts a copy of 'val' at 'idx', shifting whichever side is shorter
 /// @param self the deque
 /// @param idx asserts idx <= len; idx == len is push_back
@@ -368,6 +381,14 @@ tda_Status tda_deque_shrink_to_fit(tda_Deque *self);
 [[nodiscard]] TDA_API
 tda_Status tda_deque_resize(tda_Deque *self, size_t new_len);
 
+/// drops the elems from 'len' on, keeping the capacity — tda_deque_resize that only
+/// shrinks, and so cannot fail
+/// @param self the deque
+/// @param len at or above the length changes nothing
+/// @bigo{1}
+TDA_API
+void tda_deque_truncate(tda_Deque *self, size_t len);
+
 /// exchanges the two deques whole, rings and all
 /// @param[in,out] self one deque
 /// @param[in,out] other must have the same elem_size and the same allocator: the blocks
@@ -386,6 +407,51 @@ void tda_deque_swap(tda_Deque *self, tda_Deque *other);
 /// @bigo{1}
 TDA_API
 void tda_deque_swap_elems(tda_Deque *self, size_t i, size_t j);
+
+/// @}
+
+/// @name bulk mods
+/// @{
+
+/// appends every elem of 'src' at the back, in order
+/// @param self the deque
+/// @param src must have the same elem_size, and must not view this deque's own block:
+///            growing frees what 'src' would be reading from
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
+/// @bigo{n} — the room is taken once for the whole run and with the growth factor a push
+///            uses, so a run of extends stays amortized O(1) per elem
+[[nodiscard]] TDA_API
+tda_Status tda_deque_extend(tda_Deque *self, tda_Span src);
+
+/// inserts every elem of 'src' before 'idx', in order, shifting whichever side is shorter
+/// @param self the deque
+/// @param idx asserts idx <= len; idx == len extends
+/// @param src must have the same elem_size, and must not view this deque's own block, as
+///            in tda_deque_extend
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
+/// @bigo{n} — the shorter side moves once for the whole run, which a loop of insert
+///            cannot do: it moves that side once per elem
+[[nodiscard]] TDA_API
+tda_Status tda_deque_insert_span(tda_Deque *self, size_t idx, tda_Span src);
+
+/// drops 'count' elems starting at 'idx', closing the gap from whichever side is shorter
+/// @param self the deque
+/// @param idx asserts idx <= len
+/// @param count asserts idx + count <= len; 0 does nothing. Nothing is allocated, so
+///              nothing can fail
+/// @bigo{n}
+TDA_API
+void tda_deque_remove_range(tda_Deque *self, size_t idx, size_t count);
+
+/// keeps the elems 'pred' passes and drops the rest, in one pass that keeps their order
+/// @param self the deque; the capacity stays as it is
+/// @param pred asked once per elem, front to back; it must not change the deque
+/// @param ctx handed to 'pred'
+/// @bigo{n}
+TDA_API
+void tda_deque_retain(tda_Deque *self, tda_Pred pred, void *ctx);
 
 /// @}
 
@@ -571,6 +637,36 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 /// @bigo{n}
 #define TDA_DEQUE_INSERT(T, self, idx, val) \
     tda_deque_insert(TDA_DEQUE_TYPED_(T, self), (idx), &(T){ (val) })
+
+/// tda_deque_pop_front_to with 'out' made to typecheck as a T *
+/// @param T the elem type
+/// @param self the deque
+/// @param[out] out where the elem goes
+/// @bigo{1}
+#define TDA_DEQUE_POP_FRONT_TO(T, self, out) \
+    tda_deque_pop_front_to(TDA_DEQUE_TYPED_(T, self), (T *){ (out) })
+
+/// tda_deque_pop_back_to with 'out' made to typecheck as a T *
+/// @copydetails TDA_DEQUE_POP_FRONT_TO
+#define TDA_DEQUE_POP_BACK_TO(T, self, out) \
+    tda_deque_pop_back_to(TDA_DEQUE_TYPED_(T, self), (T *){ (out) })
+
+/// tda_deque_extend from the elems written out
+/// @param T the elem type
+/// @param self the deque
+/// @param ... the elems, as a T initializer list
+/// @bigo{n}
+#define TDA_DEQUE_EXTEND(T, self, ...) \
+    tda_deque_extend((self), TDA_SPAN_OF(T, __VA_ARGS__))
+
+/// tda_deque_insert_span from the elems written out
+/// @param T the elem type
+/// @param self the deque
+/// @param idx the index, counted from the front
+/// @param ... the elems, as a T initializer list
+/// @bigo{n}
+#define TDA_DEQUE_INSERT_SPAN(T, self, idx, ...) \
+    tda_deque_insert_span((self), (idx), TDA_SPAN_OF(T, __VA_ARGS__))
 
 /// @}
 

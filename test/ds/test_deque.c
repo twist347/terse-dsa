@@ -84,6 +84,28 @@ static tda_Deque *make_wrapped(void) {
     return d;
 }
 
+// int32_t deque with room for exactly 'cap', its front at slot 'head', holding
+// 100, 101, ... 100+len-1. Walking 'head' over every slot puts the seam everywhere a
+// ring op can meet it
+[[nodiscard]]
+static tda_Deque *make_at(size_t cap, size_t head, size_t len) {
+    tda_Deque *d = nullptr;
+    TDA_TEST_OK(TDA_DEQUE_NEW_CAP(int32_t, cap, tda_al_default(), &d));
+
+    for (size_t i = 0; i < head; ++i) {
+        push_back_int(d, -1);
+    }
+    for (size_t i = 0; i < head; ++i) {
+        tda_deque_pop_front(d);
+    }
+    for (size_t i = 0; i < len; ++i) {
+        push_back_int(d, 100 + (int32_t) i);
+    }
+
+    TEST_ASSERT_EQUAL_size_t(cap, tda_deque_cap(d));
+    return d;
+}
+
 /* ========== lifetime ========== */
 
 static void test_new_starts_empty_and_unallocated() {
@@ -213,6 +235,56 @@ static void test_first_and_last_follow_the_ends() {
     TEST_ASSERT_EQUAL_PTR(tda_deque_front(one), tda_deque_back(one));
 
     tda_deque_drop(one);
+    tda_deque_drop(d);
+}
+
+static void test_pop_to_hands_each_end_out() {
+    tda_Deque *d = make_wrapped(); // 10, 20, 30, 40
+    const size_t cap = tda_deque_cap(d);
+
+    int32_t out = -1;
+    tda_deque_pop_front_to(d, &out);
+    TEST_ASSERT_EQUAL_INT32(10, out);
+
+    tda_deque_pop_back_to(d, &out);
+    TEST_ASSERT_EQUAL_INT32(40, out);
+
+    assert_elems(d, (int32_t[]){20, 30}, 2);
+    TEST_ASSERT_EQUAL_size_t(cap, tda_deque_cap(d));
+
+    tda_deque_drop(d);
+}
+
+// 'out' may be any slot of the block, the one being dropped included
+static void test_pop_to_into_the_deque_itself() {
+    tda_Deque *d = make_wrapped();
+
+    tda_deque_pop_back_to(d, tda_deque_get_mut(d, 1));
+    assert_elems(d, (int32_t[]){10, 40, 30}, 3);
+
+    int32_t *front = tda_deque_front_mut(d);
+    tda_deque_pop_front_to(d, front);
+    TEST_ASSERT_EQUAL_INT32(10, *front);
+    assert_elems(d, (int32_t[]){40, 30}, 2);
+
+    tda_deque_drop(d);
+}
+
+static void test_pop_to_macros_move_whole_elems() {
+    tda_Deque *d = nullptr;
+    TDA_TEST_OK(TDA_DEQUE_OF(Pair, tda_al_default(), &d, {1, 2}, {3, 4}, {5, 6}));
+
+    Pair out = {0, 0};
+    TDA_DEQUE_POP_FRONT_TO(Pair, d, &out);
+    TEST_ASSERT_EQUAL_INT64(1, out.a);
+    TEST_ASSERT_EQUAL_INT64(2, out.b);
+
+    TDA_DEQUE_POP_BACK_TO(Pair, d, &out);
+    TEST_ASSERT_EQUAL_INT64(5, out.a);
+    TEST_ASSERT_EQUAL_INT64(6, out.b);
+
+    TEST_ASSERT_EQUAL_size_t(1, tda_deque_len(d));
+
     tda_deque_drop(d);
 }
 
@@ -810,6 +882,245 @@ static void test_remove_shifts_the_shorter_side() {
     tda_deque_drop(front_half);
 }
 
+/* ========== bulk mods ========== */
+
+static void test_extend_appends_in_order() {
+    tda_Deque *d = make_wrapped();
+
+    TDA_TEST_OK(TDA_DEQUE_EXTEND(int32_t, d, 50, 60, 70));
+
+    assert_elems(d, (int32_t[]){10, 20, 30, 40, 50, 60, 70}, 7);
+
+    tda_deque_drop(d);
+}
+
+static void test_extend_of_nothing_changes_nothing() {
+    tda_Deque *d = make_wrapped();
+
+    TDA_TEST_OK(tda_deque_extend(d, TDA_SPAN_FROM_DATA(int32_t, (int32_t[]){0}, 0)));
+
+    assert_elems(d, (int32_t[]){10, 20, 30, 40}, 4);
+    TEST_ASSERT_EQUAL_size_t(4, tda_deque_cap(d));
+
+    tda_deque_drop(d);
+}
+
+// one-elem extends grow with the same factor a push does, not by one slot each
+static void test_a_run_of_extends_stays_amortized() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Deque *d = nullptr;
+    TDA_TEST_OK(TDA_DEQUE_NEW(int32_t, &al, &d));
+
+    for (int32_t i = 0; i < 64; ++i) {
+        TDA_TEST_OK(TDA_DEQUE_EXTEND(int32_t, d, i));
+    }
+
+    TEST_ASSERT_EQUAL_size_t(64, tda_deque_len(d));
+    TEST_ASSERT_TRUE(tda_test_probe_requests(&probe) < 20);
+
+    tda_deque_drop(d);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+// every head, length, index and run size of a ring of 8, with and without the growth
+// the run forces, against the same insert on a plain array
+static void test_insert_span_matches_a_plain_array_everywhere() {
+    constexpr size_t cap = 8;
+    const int32_t run[3] = {-1, -2, -3};
+
+    for (size_t head = 0; head < cap; ++head) {
+        for (size_t len = 0; len <= cap; ++len) {
+            for (size_t idx = 0; idx <= len; ++idx) {
+                for (size_t count = 0; count <= 3; ++count) {
+                    tda_Deque *d = make_at(cap, head, len);
+
+                    TDA_TEST_OK(tda_deque_insert_span(d, idx, TDA_SPAN_FROM_DATA(int32_t, run, count)));
+
+                    int32_t want[cap + 3];
+                    size_t n = 0;
+                    for (size_t i = 0; i < idx; ++i) {
+                        want[n++] = 100 + (int32_t) i;
+                    }
+                    for (size_t i = 0; i < count; ++i) {
+                        want[n++] = run[i];
+                    }
+                    for (size_t i = idx; i < len; ++i) {
+                        want[n++] = 100 + (int32_t) i;
+                    }
+                    assert_elems(d, want, n);
+
+                    tda_deque_drop(d);
+                }
+            }
+        }
+    }
+}
+
+// as with insert: the elems on the side that stays keep their addresses
+static void test_insert_span_shifts_the_shorter_side() {
+    tda_Deque *front_half = make_at(16, 12, 8);
+    const void *back_elem = tda_deque_back(front_half);
+
+    TDA_TEST_OK(TDA_DEQUE_INSERT_SPAN(int32_t, front_half, 2, 7, 8, 9));
+    TEST_ASSERT_EQUAL_PTR(back_elem, tda_deque_back(front_half));
+
+    tda_Deque *back_half = make_at(16, 12, 8);
+    const void *front_elem = tda_deque_front(back_half);
+
+    TDA_TEST_OK(TDA_DEQUE_INSERT_SPAN(int32_t, back_half, 6, 7, 8, 9));
+    TEST_ASSERT_EQUAL_PTR(front_elem, tda_deque_front(back_half));
+
+    tda_deque_drop(back_half);
+    tda_deque_drop(front_half);
+}
+
+static void test_insert_span_reports_a_refused_growth() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Deque *d = nullptr;
+    TDA_TEST_OK(TDA_DEQUE_NEW_CAP(int32_t, 2, &al, &d));
+    TDA_TEST_OK(TDA_DEQUE_PUSH_BACK(int32_t, d, 1));
+    TDA_TEST_OK(TDA_DEQUE_PUSH_BACK(int32_t, d, 2));
+
+    tda_test_probe_fail_after_next(&probe, 0);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_DEQUE_INSERT_SPAN(int32_t, d, 1, 7, 8));
+
+    assert_elems(d, (int32_t[]){1, 2}, 2);
+    TEST_ASSERT_EQUAL_size_t(2, tda_deque_cap(d));
+
+    tda_deque_drop(d);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+static void test_insert_span_moves_whole_elems() {
+    tda_Deque *d = nullptr;
+    TDA_TEST_OK(TDA_DEQUE_OF(Pair, tda_al_default(), &d, {1, 10}, {4, 40}));
+
+    TDA_TEST_OK(TDA_DEQUE_INSERT_SPAN(Pair, d, 1, {2, 20}, {3, 30}));
+
+    TEST_ASSERT_EQUAL_size_t(4, tda_deque_len(d));
+    for (size_t i = 0; i < 4; ++i) {
+        TEST_ASSERT_EQUAL_INT64((int64_t) i + 1, TDA_DEQUE_GET_AS(Pair, d, i)->a);
+        TEST_ASSERT_EQUAL_INT64(10 * ((int64_t) i + 1), TDA_DEQUE_GET_AS(Pair, d, i)->b);
+    }
+
+    tda_deque_drop(d);
+}
+
+// every head, length, index and count of a ring of 8 against a plain array
+static void test_remove_range_matches_a_plain_array_everywhere() {
+    constexpr size_t cap = 8;
+
+    for (size_t head = 0; head < cap; ++head) {
+        for (size_t len = 0; len <= cap; ++len) {
+            for (size_t idx = 0; idx <= len; ++idx) {
+                for (size_t count = 0; count <= len - idx; ++count) {
+                    tda_Deque *d = make_at(cap, head, len);
+
+                    tda_deque_remove_range(d, idx, count);
+
+                    int32_t want[cap];
+                    size_t n = 0;
+                    for (size_t i = 0; i < len; ++i) {
+                        if (i < idx || i >= idx + count) {
+                            want[n++] = 100 + (int32_t) i;
+                        }
+                    }
+                    assert_elems(d, want, n);
+                    TEST_ASSERT_EQUAL_size_t(cap, tda_deque_cap(d));
+
+                    tda_deque_drop(d);
+                }
+            }
+        }
+    }
+}
+
+static void test_remove_range_shifts_the_shorter_side() {
+    tda_Deque *front_half = make_at(16, 12, 8);
+    const void *back_elem = tda_deque_back(front_half);
+
+    tda_deque_remove_range(front_half, 1, 2);
+    TEST_ASSERT_EQUAL_PTR(back_elem, tda_deque_back(front_half));
+
+    tda_Deque *back_half = make_at(16, 12, 8);
+    const void *front_elem = tda_deque_front(back_half);
+
+    tda_deque_remove_range(back_half, 5, 2);
+    TEST_ASSERT_EQUAL_PTR(front_elem, tda_deque_front(back_half));
+
+    tda_deque_drop(back_half);
+    tda_deque_drop(front_half);
+}
+
+static bool is_even(const void *elem, [[maybe_unused]] void *ctx) {
+    return *(const int32_t *) elem % 2 == 0;
+}
+
+// writes each elem it is asked about to the back of the deque at 'ctx', and passes them all
+static bool record(const void *elem, void *ctx) {
+    TDA_TEST_OK(tda_deque_push_back(ctx, elem));
+    return true;
+}
+
+// a ring split at every slot, so kept elems are moved across the seam
+static void test_retain_keeps_what_passes_in_order() {
+    constexpr size_t cap = 8;
+
+    for (size_t head = 0; head < cap; ++head) {
+        tda_Deque *d = make_at(cap, head, cap); // 100 .. 107
+
+        tda_deque_retain(d, is_even, nullptr);
+
+        assert_elems(d, (int32_t[]){100, 102, 104, 106}, 4);
+        TEST_ASSERT_EQUAL_size_t(cap, tda_deque_cap(d));
+
+        tda_deque_drop(d);
+    }
+}
+
+// pred sees every elem once, front to back
+static void test_retain_asks_once_per_elem_front_to_back() {
+    tda_Deque *d = make_wrapped();
+    tda_Deque *seen = make_deque(0);
+
+    tda_deque_retain(d, record, seen);
+
+    assert_elems(seen, (int32_t[]){10, 20, 30, 40}, 4);
+    assert_elems(d, (int32_t[]){10, 20, 30, 40}, 4);
+
+    tda_deque_drop(seen);
+    tda_deque_drop(d);
+}
+
+static void test_retain_of_none_empties_the_deque() {
+    tda_Deque *d = nullptr;
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, tda_al_default(), &d, 1, 3, 5));
+
+    tda_deque_retain(d, is_even, nullptr);
+
+    TEST_ASSERT_EQUAL_size_t(0, tda_deque_len(d));
+
+    tda_deque_drop(d);
+}
+
+static void test_retain_on_an_empty_deque_asks_nothing() {
+    tda_Deque *d = make_deque(0);
+    tda_Deque *seen = make_deque(0);
+
+    tda_deque_retain(d, record, seen);
+
+    TEST_ASSERT_EQUAL_size_t(0, tda_deque_len(seen));
+
+    tda_deque_drop(seen);
+    tda_deque_drop(d);
+}
+
 /* ========== mods ========== */
 
 static void test_clear_empties_but_keeps_the_capacity() {
@@ -922,6 +1233,32 @@ static void test_resize_shrinks_from_the_back() {
 
 // resize(len + 1) is how a caller grows by one elem it then fills in place, so a run of
 // them must cost what a run of pushes does, not one allocation per call
+static void test_truncate_drops_from_the_back() {
+    tda_Deque *d = make_wrapped();
+
+    tda_deque_truncate(d, 3);
+    assert_elems(d, (int32_t[]){10, 20, 30}, 3);
+
+    tda_deque_truncate(d, 1);
+    assert_elems(d, (int32_t[]){10}, 1);
+    TEST_ASSERT_EQUAL_size_t(4, tda_deque_cap(d));
+
+    tda_deque_drop(d);
+}
+
+// unlike resize, a len past the end is not a request to grow
+static void test_truncate_at_or_above_the_len_changes_nothing() {
+    tda_Deque *d = make_wrapped();
+
+    tda_deque_truncate(d, 4);
+    tda_deque_truncate(d, 10);
+
+    assert_elems(d, (int32_t[]){10, 20, 30, 40}, 4);
+    TEST_ASSERT_EQUAL_size_t(4, tda_deque_cap(d));
+
+    tda_deque_drop(d);
+}
+
 static void test_a_run_of_resizes_stays_amortized() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1286,6 +1623,10 @@ int main() {
     RUN_TEST(test_pop_front_and_pop_back_take_from_their_own_ends);
     RUN_TEST(test_first_and_last_follow_the_ends);
 
+    RUN_TEST(test_pop_to_hands_each_end_out);
+    RUN_TEST(test_pop_to_into_the_deque_itself);
+    RUN_TEST(test_pop_to_macros_move_whole_elems);
+
     RUN_TEST(test_the_ring_wraps_and_get_stays_relative_to_the_front);
     RUN_TEST(test_growth_while_wrapped_keeps_the_order);
     RUN_TEST(test_growth_while_wrapped_from_the_front_keeps_the_order);
@@ -1328,6 +1669,20 @@ int main() {
     RUN_TEST(test_insert_shifts_the_shorter_side);
     RUN_TEST(test_remove_shifts_the_shorter_side);
 
+    RUN_TEST(test_extend_appends_in_order);
+    RUN_TEST(test_extend_of_nothing_changes_nothing);
+    RUN_TEST(test_a_run_of_extends_stays_amortized);
+    RUN_TEST(test_insert_span_matches_a_plain_array_everywhere);
+    RUN_TEST(test_insert_span_shifts_the_shorter_side);
+    RUN_TEST(test_insert_span_reports_a_refused_growth);
+    RUN_TEST(test_insert_span_moves_whole_elems);
+    RUN_TEST(test_remove_range_matches_a_plain_array_everywhere);
+    RUN_TEST(test_remove_range_shifts_the_shorter_side);
+    RUN_TEST(test_retain_keeps_what_passes_in_order);
+    RUN_TEST(test_retain_asks_once_per_elem_front_to_back);
+    RUN_TEST(test_retain_of_none_empties_the_deque);
+    RUN_TEST(test_retain_on_an_empty_deque_asks_nothing);
+
     RUN_TEST(test_clear_empties_but_keeps_the_capacity);
     RUN_TEST(test_reserve_grows_and_never_shrinks);
     RUN_TEST(test_reserve_unwraps_the_ring);
@@ -1336,6 +1691,8 @@ int main() {
     RUN_TEST(test_resize_grows_at_the_back_with_zeros);
     RUN_TEST(test_resize_grows_inside_a_wrapped_capacity);
     RUN_TEST(test_resize_shrinks_from_the_back);
+    RUN_TEST(test_truncate_drops_from_the_back);
+    RUN_TEST(test_truncate_at_or_above_the_len_changes_nothing);
     RUN_TEST(test_a_run_of_resizes_stays_amortized);
     RUN_TEST(test_swap_on_one_allocator_hands_over_the_buffers);
     RUN_TEST(test_swap_of_itself_changes_nothing);
