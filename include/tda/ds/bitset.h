@@ -245,6 +245,25 @@ bool tda_bitset_find_next(const tda_BitSet *self, size_t from, size_t *out_idx);
 [[nodiscard]] TDA_API
 bool tda_bitset_find_next_clear(const tda_BitSet *self, size_t from, size_t *out_idx);
 
+/// the last index in the set at or before 'from'
+/// @param self the bitset
+/// @param from a 'from' past the universe starts at its last index, so SIZE_MAX finds the
+///             greatest member
+/// @param[out] out_idx written only on a hit
+/// @return whether there is one
+/// @bigo{n/64}
+[[nodiscard]] TDA_API
+bool tda_bitset_find_prev(const tda_BitSet *self, size_t from, size_t *out_idx);
+
+/// the last index outside the set at or before 'from'
+/// @param self the bitset
+/// @param from a 'from' past the universe starts at its last index
+/// @param[out] out_idx written only on a hit
+/// @return false for a full set
+/// @bigo{n/64}
+[[nodiscard]] TDA_API
+bool tda_bitset_find_prev_clear(const tda_BitSet *self, size_t from, size_t *out_idx);
+
 /// @}
 
 /// @name set ops

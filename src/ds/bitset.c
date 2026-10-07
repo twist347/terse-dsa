@@ -63,6 +63,19 @@ static uint64_t word_from(uint64_t word, size_t from);
 [[nodiscard]]
 static size_t idx_of_first_one(size_t w, uint64_t word);
 
+/// the word with the bits above 'upto' masked off; 'upto' must be inside the set
+[[nodiscard]]
+static uint64_t word_upto(uint64_t word, size_t upto);
+
+/// where the highest one bit of 'word' sits, given that 'word' is word number 'w'
+[[nodiscard]]
+static size_t idx_of_last_one(size_t w, uint64_t word);
+
+/// find_prev over 'self' or its complement. Starting inside the universe and walking
+/// down, it never meets the bits above it — the ones a complement would make of them
+[[nodiscard]]
+static bool find_prev_impl(const tda_BitSet *self, bool clear, size_t from, size_t *out_idx);
+
 /* ========== lifetime ========== */
 
 tda_Status tda_bitset_new(size_t nbits, tda_Al *al, tda_BitSet **out) {
@@ -409,6 +422,20 @@ bool tda_bitset_find_next_clear(const tda_BitSet *self, size_t from, size_t *out
     }
 }
 
+bool tda_bitset_find_prev(const tda_BitSet *self, size_t from, size_t *out_idx) {
+    ASSERT_BITSET(self);
+    assert(out_idx);
+
+    return find_prev_impl(self, false, from, out_idx);
+}
+
+bool tda_bitset_find_prev_clear(const tda_BitSet *self, size_t from, size_t *out_idx) {
+    ASSERT_BITSET(self);
+    assert(out_idx);
+
+    return find_prev_impl(self, true, from, out_idx);
+}
+
 /* ========== set ops ========== */
 
 bool tda_bitset_eq(const tda_BitSet *a, const tda_BitSet *b) {
@@ -568,4 +595,39 @@ static uint64_t word_from(uint64_t word, size_t from) {
 
 static size_t idx_of_first_one(size_t w, uint64_t word) {
     return w * WORD_BITS + tda_bit_ctz(word);
+}
+
+static uint64_t word_upto(uint64_t word, size_t upto) {
+    return word & (~UINT64_C(0) >> (WORD_BITS - 1 - upto % WORD_BITS));
+}
+
+static size_t idx_of_last_one(size_t w, uint64_t word) {
+    return w * WORD_BITS + (WORD_BITS - 1 - tda_bit_clz(word));
+}
+
+static bool find_prev_impl(const tda_BitSet *self, bool clear, size_t from, size_t *out_idx) {
+    if (self->nbits == 0) {
+        return false;
+    }
+
+    if (from >= self->nbits) {
+        from = self->nbits - 1;
+    }
+
+    const uint64_t flip = clear ? ~UINT64_C(0) : 0;
+    size_t w = word_of(from);
+    uint64_t word = word_upto(self->words[w] ^ flip, from);
+
+    for (;;) {
+        if (word != 0) {
+            *out_idx = idx_of_last_one(w, word);
+            return true;
+        }
+
+        if (w == 0) {
+            return false;
+        }
+
+        word = self->words[--w] ^ flip;
+    }
 }

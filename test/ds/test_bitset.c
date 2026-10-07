@@ -72,6 +72,18 @@ static void assert_members(const tda_BitSet *b, size_t nbits, const size_t *want
         ++seen;
     }
     TEST_ASSERT_EQUAL_size_t(n, seen);
+
+    // and the same walk the other way, from past the universe down
+    seen = 0;
+    for (size_t from = SIZE_MAX; tda_bitset_find_prev(b, from, &idx); from = idx - 1) {
+        TEST_ASSERT_TRUE_MESSAGE(seen < n, "the scan runs past the members");
+        TEST_ASSERT_EQUAL_size_t(want[n - 1 - seen], idx);
+        ++seen;
+        if (idx == 0) {
+            break;
+        }
+    }
+    TEST_ASSERT_EQUAL_size_t(n, seen);
 }
 
 // a printer writes to a stream, so a case reads one back through tmpfile, as
@@ -431,6 +443,66 @@ static void test_the_scans_cross_whole_words() {
         tda_bitset_flip_all(b);
         TEST_ASSERT_TRUE(tda_bitset_find_next_clear(b, 0, &idx));
         TEST_ASSERT_EQUAL_size_t(last, idx);
+
+        tda_bitset_drop(b);
+    }
+}
+
+// find_prev and find_prev_clear from every start, against a brute-force walk down
+// through test. Each seam, with members laid out so every word is empty, full or mixed
+static void test_find_prev_matches_a_walk_down_everywhere() {
+    for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
+        const size_t nbits = SEAMS[s];
+
+        for (size_t pattern = 0; pattern < 5; ++pattern) {
+            tda_BitSet *b = make_bitset(nbits, nullptr, 0);
+            for (size_t i = 0; i < nbits; ++i) {
+                const bool member = pattern == 1                   // full
+                                    || (pattern == 2 && i % 3 == 0) // spread
+                                    || (pattern == 3 && i == 0)     // the first alone
+                                    || (pattern == 4 && i >= 64 && i < 128); // one word
+                if (member) {
+                    tda_bitset_set(b, i);
+                }
+            }
+
+            const size_t froms_past[] = {nbits, nbits + 1, SIZE_MAX};
+            for (size_t k = 0; k < nbits + 3; ++k) {
+                const size_t from = k < nbits ? k : froms_past[k - nbits];
+                const size_t start = from < nbits ? from : nbits - 1;
+
+                for (int clear = 0; clear <= 1; ++clear) {
+                    bool want_hit = false;
+                    size_t want_idx = 0;
+                    for (size_t i = start + 1; nbits > 0 && i > 0; --i) {
+                        if (tda_bitset_test(b, i - 1) != (bool) clear) {
+                            want_hit = true;
+                            want_idx = i - 1;
+                            break;
+                        }
+                    }
+
+                    size_t idx = 12345;
+                    const bool hit = clear ? tda_bitset_find_prev_clear(b, from, &idx)
+                                           : tda_bitset_find_prev(b, from, &idx);
+                    TEST_ASSERT_EQUAL_INT(want_hit, hit);
+                    TEST_ASSERT_EQUAL_size_t(want_hit ? want_idx : 12345, idx);
+                }
+            }
+
+            tda_bitset_drop(b);
+        }
+    }
+}
+
+// no bit above the universe is a member, nor a gap: complemented, they are all ones
+static void test_find_prev_clear_misses_on_a_full_set() {
+    for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
+        tda_BitSet *b = make_full(SEAMS[s]);
+
+        size_t idx = 12345;
+        TEST_ASSERT_FALSE(tda_bitset_find_prev_clear(b, SIZE_MAX, &idx));
+        TEST_ASSERT_EQUAL_size_t(12345, idx);
 
         tda_bitset_drop(b);
     }
@@ -1105,6 +1177,8 @@ int main() {
     RUN_TEST(test_find_next_clear_walks_the_gaps);
     RUN_TEST(test_find_next_clear_misses_on_a_full_set);
     RUN_TEST(test_find_next_clear_on_an_empty_set_answers_the_start);
+    RUN_TEST(test_find_prev_matches_a_walk_down_everywhere);
+    RUN_TEST(test_find_prev_clear_misses_on_a_full_set);
     RUN_TEST(test_the_scans_cross_whole_words);
 
     RUN_TEST(test_copy_is_independent);
