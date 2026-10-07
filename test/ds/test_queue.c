@@ -299,6 +299,39 @@ static void test_a_wrapped_queue_keeps_its_order_through_growth() {
     tda_queue_drop(q);
 }
 
+// pop_to hands out what front + pop would have read, oldest first, across the seam
+static void test_pop_to_hands_the_front_out() {
+    tda_Queue *q = make_wrapped(); // 10, 20, 30, 40
+
+    int32_t out = -1;
+    tda_queue_pop_to(q, &out);
+    TEST_ASSERT_EQUAL_INT32(10, out);
+
+    tda_queue_pop_to(q, &out);
+    TEST_ASSERT_EQUAL_INT32(20, out);
+
+    assert_elems(q, (int32_t[]){30, 40}, 2);
+    TEST_ASSERT_EQUAL_size_t(4, tda_queue_cap(q));
+
+    tda_queue_drop(q);
+}
+
+static void test_pop_to_macro_moves_whole_elems() {
+    tda_Queue *q = nullptr;
+    TDA_TEST_OK(TDA_QUEUE_NEW(Pair, tda_al_default(), &q));
+    TDA_TEST_OK(tda_queue_push(q, &(Pair){1, 2}));
+    TDA_TEST_OK(tda_queue_push(q, &(Pair){3, 4}));
+
+    Pair out = {0, 0};
+    TDA_QUEUE_POP_TO(Pair, q, &out);
+
+    TEST_ASSERT_EQUAL_INT64(1, out.a);
+    TEST_ASSERT_EQUAL_INT64(2, out.b);
+    TEST_ASSERT_EQUAL_size_t(1, tda_queue_len(q));
+
+    tda_queue_drop(q);
+}
+
 /* ========== access ========== */
 
 static void test_front_reads_without_removing() {
@@ -1102,6 +1135,8 @@ int main() {
     RUN_TEST(test_duplicates_all_come_back);
     RUN_TEST(test_a_wrapped_queue_drains_in_order);
     RUN_TEST(test_a_wrapped_queue_keeps_its_order_through_growth);
+    RUN_TEST(test_pop_to_hands_the_front_out);
+    RUN_TEST(test_pop_to_macro_moves_whole_elems);
 
     RUN_TEST(test_front_reads_without_removing);
     RUN_TEST(test_back_follows_the_last_push);

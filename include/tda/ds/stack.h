@@ -242,11 +242,18 @@ void *tda_stack_top_mut(tda_Stack *self);
 tda_Status tda_stack_push(tda_Stack *self, const void *val);
 
 /// drops the top elem, keeping the capacity
-/// @param self asserts the stack is not empty. Read the elem with tda_stack_top first —
-///             a pop that returned it would have nowhere to put it
+/// @param self asserts the stack is not empty. To keep the elem, take it with
+///             tda_stack_pop_to instead
 /// @bigo{1}
 TDA_API
 void tda_stack_pop(tda_Stack *self);
+
+/// copies the top elem to 'out', then drops it as tda_stack_pop does
+/// @param self asserts the stack is not empty
+/// @param[out] out where the elem goes
+/// @bigo{1}
+TDA_API
+void tda_stack_pop_to(tda_Stack *self, void *out);
 
 /// drops every elem, keeping the block
 /// @param self the stack
@@ -399,6 +406,14 @@ static inline tda_Stack *tda_stack_typed_(tda_Stack *self, [[maybe_unused]] size
 /// @bigo{1} amortized
 #define TDA_STACK_PUSH(T, self, val) \
     tda_stack_push(TDA_STACK_TYPED_(T, self), &(T){ (val) })
+
+/// tda_stack_pop_to with 'out' made to typecheck as a T *
+/// @param T the elem type
+/// @param self the stack
+/// @param[out] out where the elem goes
+/// @bigo{1}
+#define TDA_STACK_POP_TO(T, self, out) \
+    tda_stack_pop_to(TDA_STACK_TYPED_(T, self), (T *){ (out) })
 
 /// @}
 

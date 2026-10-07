@@ -5,6 +5,8 @@
 #include "tda/core/util.h"
 #include "tda/ds/vec.h"
 
+#include "internal/heap.h"
+
 #include <assert.h>
 
 /* ========== internals ========== */
@@ -244,6 +246,29 @@ void tda_pqueue_pop(tda_PQueue *self) {
     // the tail is then the vec's business
     tda_span_pop_heap(tda_vec_to_span_mut(self->vec), self->cmp);
     tda_vec_pop(self->vec);
+}
+
+void tda_pqueue_pop_to(tda_PQueue *self, void *out) {
+    ASSERT_PQUEUE(self);
+    assert(out);
+    TDA_EXPECT(tda_vec_len(self->vec) > 0);
+
+    // as in tda_pqueue_pop, and the elem pop_heap parks last is the one handed out
+    tda_span_pop_heap(tda_vec_to_span_mut(self->vec), self->cmp);
+    tda_vec_pop_to(self->vec, out);
+}
+
+void tda_pqueue_replace_top(tda_PQueue *self, const void *val) {
+    ASSERT_PQUEUE(self);
+    assert(val);
+    TDA_EXPECT(tda_vec_len(self->vec) > 0);
+
+    // only the root can be out of place, and the sift down from it is what pop_heap
+    // runs after its swap. vec_set copes with 'val' being the root itself
+    tda_vec_set(self->vec, 0, val);
+
+    const tda_SpanMut s = tda_vec_to_span_mut(self->vec);
+    tda_heap_sift_down(s, 0, s.len, self->cmp);
 }
 
 void tda_pqueue_clear(tda_PQueue *self) {

@@ -256,6 +256,39 @@ static void test_a_pop_uncovers_the_elem_below() {
     tda_stack_drop(s);
 }
 
+// pop_to hands out what top + pop would have read, newest first
+static void test_pop_to_hands_the_top_out() {
+    tda_Stack *s = make_stack(SPREAD, SPREAD_LEN);
+    const size_t cap = tda_stack_cap(s);
+
+    for (size_t i = SPREAD_LEN; i > 0; --i) {
+        int32_t out = -1;
+        tda_stack_pop_to(s, &out);
+
+        TEST_ASSERT_EQUAL_INT32(SPREAD[i - 1], out);
+        TEST_ASSERT_EQUAL_size_t(i - 1, tda_stack_len(s));
+    }
+    TEST_ASSERT_EQUAL_size_t(cap, tda_stack_cap(s));
+
+    tda_stack_drop(s);
+}
+
+static void test_pop_to_macro_moves_whole_elems() {
+    tda_Stack *s = nullptr;
+    TDA_TEST_OK(TDA_STACK_NEW(Pair, tda_al_default(), &s));
+    TDA_TEST_OK(tda_stack_push(s, &(Pair){1, 2}));
+    TDA_TEST_OK(tda_stack_push(s, &(Pair){3, 4}));
+
+    Pair out = {0, 0};
+    TDA_STACK_POP_TO(Pair, s, &out);
+
+    TEST_ASSERT_EQUAL_INT64(3, out.a);
+    TEST_ASSERT_EQUAL_INT64(4, out.b);
+    TEST_ASSERT_EQUAL_size_t(1, tda_stack_len(s));
+
+    tda_stack_drop(s);
+}
+
 /* ========== access ========== */
 
 static void test_top_reads_without_removing() {
@@ -1037,6 +1070,8 @@ int main() {
     RUN_TEST(test_pushes_after_a_full_drain_are_ordered_again);
     RUN_TEST(test_duplicates_all_come_back);
     RUN_TEST(test_a_pop_uncovers_the_elem_below);
+    RUN_TEST(test_pop_to_hands_the_top_out);
+    RUN_TEST(test_pop_to_macro_moves_whole_elems);
 
     RUN_TEST(test_top_reads_without_removing);
     RUN_TEST(test_top_follows_the_last_push);

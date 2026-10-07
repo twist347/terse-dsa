@@ -231,6 +231,14 @@ void tda_queue_pop(tda_Queue *self) {
     tda_deque_pop_front(self->deque);
 }
 
+void tda_queue_pop_to(tda_Queue *self, void *out) {
+    ASSERT_QUEUE(self);
+    assert(out);
+    TDA_EXPECT(tda_deque_len(self->deque) > 0);
+
+    tda_deque_pop_front_to(self->deque, out);
+}
+
 void tda_queue_clear(tda_Queue *self) {
     ASSERT_QUEUE(self);
 

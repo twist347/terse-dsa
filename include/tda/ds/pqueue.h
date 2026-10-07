@@ -238,11 +238,27 @@ const void *tda_pqueue_top(const tda_PQueue *self);
 tda_Status tda_pqueue_push(tda_PQueue *self, const void *val);
 
 /// drops the greatest elem: the last one takes its place and is sifted down
-/// @param self asserts the queue is not empty. Read the elem with tda_pqueue_top first —
-///             a pop that returned it would have nowhere to put it
+/// @param self asserts the queue is not empty. To keep the elem, take it with
+///             tda_pqueue_pop_to instead
 /// @bigo{log n}
 TDA_API
 void tda_pqueue_pop(tda_PQueue *self);
+
+/// copies the greatest elem to 'out', then drops it as tda_pqueue_pop does
+/// @param self asserts the queue is not empty
+/// @param[out] out where the elem goes
+/// @bigo{log n}
+TDA_API
+void tda_pqueue_pop_to(tda_PQueue *self, void *out);
+
+/// puts a copy of 'val' where the greatest elem was and sifts it down: a pop and a push
+/// in one sift instead of two, and with nothing allocated. The greatest elem is gone —
+/// read it with tda_pqueue_top first to keep it
+/// @param self asserts the queue is not empty
+/// @param val the elem to put in; may be tda_pqueue_top itself
+/// @bigo{log n}
+TDA_API
+void tda_pqueue_replace_top(tda_PQueue *self, const void *val);
 
 /// drops every elem, keeping the block
 /// @param self the queue
@@ -395,6 +411,22 @@ static inline tda_PQueue *tda_pqueue_typed_(tda_PQueue *self, [[maybe_unused]] s
 /// @bigo{log n}
 #define TDA_PQUEUE_PUSH(T, self, val) \
     tda_pqueue_push(TDA_PQUEUE_TYPED_(T, self), &(T){ (val) })
+
+/// tda_pqueue_pop_to with 'out' made to typecheck as a T *
+/// @param T the elem type
+/// @param self the queue
+/// @param[out] out where the elem goes
+/// @bigo{log n}
+#define TDA_PQUEUE_POP_TO(T, self, out) \
+    tda_pqueue_pop_to(TDA_PQUEUE_TYPED_(T, self), (T *){ (out) })
+
+/// tda_pqueue_replace_top from a value rather than an address
+/// @param T the elem type; a scalar, since 'val' becomes a compound literal
+/// @param self the queue
+/// @param val the value to put in
+/// @bigo{log n}
+#define TDA_PQUEUE_REPLACE_TOP(T, self, val) \
+    tda_pqueue_replace_top(TDA_PQUEUE_TYPED_(T, self), &(T){ (val) })
 
 /// @}
 

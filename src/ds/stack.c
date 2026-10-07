@@ -210,6 +210,14 @@ void tda_stack_pop(tda_Stack *self) {
     tda_vec_pop(self->vec);
 }
 
+void tda_stack_pop_to(tda_Stack *self, void *out) {
+    ASSERT_STACK(self);
+    assert(out);
+    TDA_EXPECT(tda_vec_len(self->vec) > 0);
+
+    tda_vec_pop_to(self->vec, out);
+}
+
 void tda_stack_clear(tda_Stack *self) {
     ASSERT_STACK(self);
 

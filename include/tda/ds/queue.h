@@ -265,11 +265,18 @@ void *tda_queue_back_mut(tda_Queue *self);
 tda_Status tda_queue_push(tda_Queue *self, const void *val);
 
 /// drops the front elem, keeping the capacity
-/// @param self asserts the queue is not empty. Read the elem with tda_queue_front first —
-///             a pop that returned it would have nowhere to put it
+/// @param self asserts the queue is not empty. To keep the elem, take it with
+///             tda_queue_pop_to instead
 /// @bigo{1}
 TDA_API
 void tda_queue_pop(tda_Queue *self);
+
+/// copies the front elem to 'out', then drops it as tda_queue_pop does
+/// @param self asserts the queue is not empty
+/// @param[out] out where the elem goes
+/// @bigo{1}
+TDA_API
+void tda_queue_pop_to(tda_Queue *self, void *out);
 
 /// drops every elem, keeping the block
 /// @param self the queue
@@ -419,6 +426,14 @@ static inline tda_Queue *tda_queue_typed_(tda_Queue *self, [[maybe_unused]] size
 /// @bigo{1} amortized
 #define TDA_QUEUE_PUSH(T, self, val) \
     tda_queue_push(TDA_QUEUE_TYPED_(T, self), &(T){ (val) })
+
+/// tda_queue_pop_to with 'out' made to typecheck as a T *
+/// @param T the elem type
+/// @param self the queue
+/// @param[out] out where the elem goes
+/// @bigo{1}
+#define TDA_QUEUE_POP_TO(T, self, out) \
+    tda_queue_pop_to(TDA_QUEUE_TYPED_(T, self), (T *){ (out) })
 
 /// @}
 

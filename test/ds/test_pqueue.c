@@ -312,6 +312,124 @@ static void test_equal_keys_keep_every_payload() {
     tda_pqueue_drop(q);
 }
 
+// pop_to hands out what top + pop would have read, and leaves a heap after every one
+static void test_pop_to_drains_greatest_first() {
+    tda_PQueue *q = make_queue(SPREAD, SPREAD_LEN);
+
+    int32_t want[SPREAD_LEN];
+    expected_order(want, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+
+    for (size_t i = 0; i < SPREAD_LEN; ++i) {
+        int32_t out = -1;
+        tda_pqueue_pop_to(q, &out);
+
+        TEST_ASSERT_EQUAL_INT32(want[i], out);
+        TEST_ASSERT_EQUAL_size_t(SPREAD_LEN - i - 1, tda_pqueue_len(q));
+        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_pqueue_cmp(q)));
+    }
+
+    tda_pqueue_drop(q);
+}
+
+static void test_pop_to_macro_moves_whole_elems() {
+    tda_PQueue *q = nullptr;
+    TDA_TEST_OK(TDA_PQUEUE_NEW(Pair, cmp_pair_a, tda_al_default(), &q));
+    TDA_TEST_OK(tda_pqueue_push(q, &(Pair){1, 10}));
+    TDA_TEST_OK(tda_pqueue_push(q, &(Pair){3, 30}));
+    TDA_TEST_OK(tda_pqueue_push(q, &(Pair){2, 20}));
+
+    Pair out = {0, 0};
+    TDA_PQUEUE_POP_TO(Pair, q, &out);
+
+    TEST_ASSERT_EQUAL_INT64(3, out.a);
+    TEST_ASSERT_EQUAL_INT64(30, out.b);
+    TEST_ASSERT_EQUAL_size_t(2, tda_pqueue_len(q));
+
+    tda_pqueue_drop(q);
+}
+
+// replacing the top must leave what dropping it and pushing 'val' would: the same
+// multiset, as a heap. Every value from below the least to above the greatest
+static void check_replace_top(const int32_t *src, size_t n) {
+    for (int32_t val = 0; val <= (int32_t) n + 1; ++val) {
+        tda_PQueue *q = make_queue_from(src, n);
+
+        tda_pqueue_replace_top(q, &val);
+        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_pqueue_cmp(q)));
+
+        // src is a permutation of 1..n, so the dropped top is n
+        int32_t after[8];
+        size_t m = 0;
+        for (size_t i = 0; i < n; ++i) {
+            if (src[i] != (int32_t) n) {
+                after[m++] = src[i];
+            }
+        }
+        after[m++] = val;
+
+        assert_drains_sorted(q, after, m, tda_cmp_desc_i32);
+        tda_pqueue_drop(q);
+    }
+}
+
+static void test_replace_top_matches_a_pop_and_a_push() {
+    for (size_t n = 1; n <= 6; ++n) {
+        for_every_permutation(n, check_replace_top);
+    }
+}
+
+// one sift and a write over the root: the queue never asks for room
+static void test_replace_top_allocates_nothing() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_PQueue *q = nullptr;
+    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, tda_cmp_i32, &al, &q));
+    const size_t before = tda_test_probe_requests(&probe);
+
+    for (int32_t i = 0; i < 32; ++i) {
+        TDA_PQUEUE_REPLACE_TOP(int32_t, q, i);
+    }
+
+    TEST_ASSERT_EQUAL_size_t(before, tda_test_probe_requests(&probe));
+    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_pqueue_len(q));
+
+    tda_pqueue_drop(q);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+// 'val' may be the top itself, which writes the root over itself and sifts nothing
+static void test_replace_top_with_the_top_itself_changes_nothing() {
+    tda_PQueue *q = make_queue(SPREAD, SPREAD_LEN);
+
+    tda_pqueue_replace_top(q, tda_pqueue_top(q));
+
+    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+
+    tda_pqueue_drop(q);
+}
+
+// the k greatest of a stream, kept in a min-queue of k: what replace_top is for
+static void test_replace_top_keeps_the_k_greatest() {
+    constexpr size_t k = 4;
+
+    tda_PQueue *least_first = nullptr;
+    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_desc_i32, tda_al_default(), &least_first));
+
+    for (size_t i = 0; i < SPREAD_LEN; ++i) {
+        if (tda_pqueue_len(least_first) < k) {
+            TDA_TEST_OK(tda_pqueue_push(least_first, &SPREAD[i]));
+        } else if (SPREAD[i] > *TDA_PQUEUE_TOP_AS(int32_t, least_first)) {
+            tda_pqueue_replace_top(least_first, &SPREAD[i]);
+        }
+    }
+
+    assert_drains(least_first, (const int32_t[]){8, 9, 9, 9}, k);
+
+    tda_pqueue_drop(least_first);
+}
+
 /* ========== access ========== */
 
 static void test_top_reads_without_removing() {
@@ -924,6 +1042,13 @@ int main() {
     RUN_TEST(test_pushes_after_a_full_drain_are_ordered_again);
     RUN_TEST(test_duplicates_all_come_back);
     RUN_TEST(test_equal_keys_keep_every_payload);
+
+    RUN_TEST(test_pop_to_drains_greatest_first);
+    RUN_TEST(test_pop_to_macro_moves_whole_elems);
+    RUN_TEST(test_replace_top_matches_a_pop_and_a_push);
+    RUN_TEST(test_replace_top_allocates_nothing);
+    RUN_TEST(test_replace_top_with_the_top_itself_changes_nothing);
+    RUN_TEST(test_replace_top_keeps_the_k_greatest);
 
     RUN_TEST(test_top_reads_without_removing);
 
