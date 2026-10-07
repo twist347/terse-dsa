@@ -349,6 +349,18 @@ tda_Status tda_hmap_insert(tda_HMap *self, const void *key, const void *val, boo
 TDA_API
 bool tda_hmap_remove(tda_HMap *self, const void *key);
 
+/// drops the entry under 'key' if there is one, handing its key and value out first —
+/// what a map that owns what its entries point to needs, to free them
+/// @param self the map
+/// @param key the key to drop
+/// @param[out] out_key the stored key, which may differ from 'key' in whatever 'eq'
+///                     ignores; may be null, may be 'key' itself, written only on a hit
+/// @param[out] out_val the stored value; may be null, written only on a hit
+/// @return whether there was an entry. Nothing is allocated, so nothing can fail
+/// @bigo{1} expected
+TDA_API
+bool tda_hmap_take(tda_HMap *self, const void *key, void *out_key, void *out_val);
+
 /// drops the entry 'node' names
 /// @param self the map
 /// @param node a position, checked to be one of this map's own; every pointer into it
@@ -565,6 +577,18 @@ static inline tda_HMap *tda_hmap_typed_(
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_REMOVE(K, self, key) \
     tda_hmap_remove(TDA_HMAP_KEY_TYPED_(K, self), &(K){ (key) })
+
+/// tda_hmap_take from a key value rather than an address, with 'out_key' and 'out_val'
+/// made to typecheck as a K * and a V *
+/// @param K the key type; a scalar, since 'key' becomes a compound literal
+/// @param V the value type
+/// @param self the map
+/// @param key the key to drop
+/// @param[out] out_key the stored key, or nullptr
+/// @param[out] out_val the stored value, or nullptr
+/// @bigo{1} expected
+#define TDA_HMAP_TAKE(K, V, self, key, out_key, out_val) \
+    tda_hmap_take(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }, (K *){ (out_key) }, (V *){ (out_val) })
 
 /// walks every entry of the map, binding 'node' to each in turn. The order is
 /// unspecified: it follows the buckets, not the insertions

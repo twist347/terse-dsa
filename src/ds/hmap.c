@@ -526,6 +526,13 @@ bool tda_hmap_remove(tda_HMap *self, const void *key) {
     ASSERT_HMAP(self);
     assert(key);
 
+    return tda_hmap_take(self, key, nullptr, nullptr);
+}
+
+bool tda_hmap_take(tda_HMap *self, const void *key, void *out_key, void *out_val) {
+    ASSERT_HMAP(self);
+    assert(key);
+
     if (self->bucket_count == 0) {
         return false;
     }
@@ -539,6 +546,14 @@ bool tda_hmap_remove(tda_HMap *self, const void *key) {
         if ((*link)->hash == hash && self->eq(node_key(*link), key)) {
             tda_HMapNode *dead = *link;
             *link = dead->next;
+
+            // memmove: 'out_key' may be 'key' itself, and memcpy onto itself is undefined
+            if (out_key) {
+                memmove(out_key, node_key(dead), self->key_size);
+            }
+            if (out_val) {
+                memcpy(out_val, node_val(self, dead), self->val_size);
+            }
             node_drop(self, dead);
             --self->len;
 

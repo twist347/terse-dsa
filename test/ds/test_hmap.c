@@ -587,6 +587,123 @@ static void test_remove_node_drops_the_entry_it_names() {
     tda_hmap_drop(m);
 }
 
+static void test_take_hands_the_key_and_the_value_out() {
+    tda_HMap *m = make_filled(tda_hash_i32, 5);
+
+    int32_t key = -1;
+    int32_t val = -1;
+    TEST_ASSERT_TRUE(TDA_HMAP_TAKE(int32_t, int32_t, m, 3, &key, &val));
+
+    TEST_ASSERT_EQUAL_INT32(3, key);
+    TEST_ASSERT_EQUAL_INT32(30, val);
+    TEST_ASSERT_EQUAL_size_t(4, tda_hmap_len(m));
+    assert_missing(m, 3);
+    assert_walk_sees_everything(m);
+
+    tda_hmap_drop(m);
+}
+
+static void test_take_of_a_missing_key_writes_nothing() {
+    tda_HMap *m = make_filled(tda_hash_i32, 3);
+
+    int32_t key = -1;
+    int32_t val = -1;
+    TEST_ASSERT_FALSE(TDA_HMAP_TAKE(int32_t, int32_t, m, 99, &key, &val));
+
+    TEST_ASSERT_EQUAL_INT32(-1, key);
+    TEST_ASSERT_EQUAL_INT32(-1, val);
+    TEST_ASSERT_EQUAL_size_t(3, tda_hmap_len(m));
+
+    tda_hmap_drop(m);
+}
+
+// either side may be left behind, and with both left behind take is remove
+static void test_take_with_null_outs() {
+    tda_HMap *m = make_filled(tda_hash_i32, 4);
+
+    int32_t val = -1;
+    TEST_ASSERT_TRUE(TDA_HMAP_TAKE(int32_t, int32_t, m, 1, nullptr, &val));
+    TEST_ASSERT_EQUAL_INT32(10, val);
+
+    int32_t key = -1;
+    TEST_ASSERT_TRUE(TDA_HMAP_TAKE(int32_t, int32_t, m, 2, &key, nullptr));
+    TEST_ASSERT_EQUAL_INT32(2, key);
+
+    TEST_ASSERT_TRUE(tda_hmap_take(m, &(int32_t){3}, nullptr, nullptr));
+    TEST_ASSERT_FALSE(tda_hmap_take(m, &(int32_t){3}, nullptr, nullptr));
+
+    TEST_ASSERT_EQUAL_size_t(1, tda_hmap_len(m));
+    assert_has(m, 0, 0);
+
+    tda_hmap_drop(m);
+}
+
+static void test_take_on_an_empty_map_says_so() {
+    tda_HMap *m = make_map(tda_hash_i32);
+
+    TEST_ASSERT_FALSE(TDA_HMAP_TAKE(int32_t, int32_t, m, 1, nullptr, nullptr));
+
+    tda_hmap_drop(m);
+}
+
+// every key of one chain in turn, each value coming out with its own key
+static void test_take_every_key_of_a_chain_in_turn() {
+    tda_HMap *m = make_filled(hash_all_alike, 6);
+
+    for (int32_t i = 5; i >= 0; --i) {
+        int32_t val = -1;
+        TEST_ASSERT_TRUE(TDA_HMAP_TAKE(int32_t, int32_t, m, i, nullptr, &val));
+        TEST_ASSERT_EQUAL_INT32(i * 10, val);
+    }
+
+    TEST_ASSERT_NULL(tda_hmap_first_node(m));
+
+    tda_hmap_drop(m);
+}
+
+// keys equal modulo 100: what equality ignores is what tells the stored key from the
+// probe, and the stored one is what a map owning its keys has to free
+static tda_Hash hash_mod_100(const void *x) {
+    return tda_hash_i32(&(int32_t){ *(const int32_t *) x % 100 });
+}
+
+static bool eq_mod_100(const void *lhs, const void *rhs) {
+    return *(const int32_t *) lhs % 100 == *(const int32_t *) rhs % 100;
+}
+
+// the stored key comes out, not the probe — even into the probe's own storage, which is
+// read before it is written
+static void test_take_hands_out_the_stored_key_over_the_probe() {
+    tda_HMap *m = nullptr;
+    TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_mod_100, eq_mod_100, tda_al_default(), &m));
+    put(m, 105, 1);
+
+    int32_t key = 5;
+    TEST_ASSERT_TRUE(tda_hmap_take(m, &key, &key, nullptr));
+
+    TEST_ASSERT_EQUAL_INT32(105, key);
+    TEST_ASSERT_EQUAL_size_t(0, tda_hmap_len(m));
+
+    tda_hmap_drop(m);
+}
+
+static void test_take_moves_whole_keys_and_values() {
+    tda_HMap *m = nullptr;
+    TDA_TEST_OK(TDA_HMAP_NEW(Pair, Pair, hash_pair, eq_pair, tda_al_default(), &m));
+    TDA_TEST_OK(tda_hmap_insert(m, &(Pair){1, 2}, &(Pair){3, 4}, nullptr));
+
+    Pair key = {0, 0};
+    Pair val = {0, 0};
+    TEST_ASSERT_TRUE(tda_hmap_take(m, &(Pair){1, 2}, &key, &val));
+
+    TEST_ASSERT_EQUAL_INT64(1, key.a);
+    TEST_ASSERT_EQUAL_INT64(2, key.b);
+    TEST_ASSERT_EQUAL_INT64(3, val.a);
+    TEST_ASSERT_EQUAL_INT64(4, val.b);
+
+    tda_hmap_drop(m);
+}
+
 static void test_a_key_can_be_put_back_after_removal() {
     tda_HMap *m = make_filled(tda_hash_i32, 3);
 
@@ -1706,6 +1823,13 @@ int main() {
     RUN_TEST(test_mut_walk_writes_through_every_entry);
     RUN_TEST(test_mut_walk_of_an_empty_map_stops_at_once);
     RUN_TEST(test_remove_node_drops_the_entry_it_names);
+    RUN_TEST(test_take_hands_the_key_and_the_value_out);
+    RUN_TEST(test_take_of_a_missing_key_writes_nothing);
+    RUN_TEST(test_take_with_null_outs);
+    RUN_TEST(test_take_on_an_empty_map_says_so);
+    RUN_TEST(test_take_every_key_of_a_chain_in_turn);
+    RUN_TEST(test_take_hands_out_the_stored_key_over_the_probe);
+    RUN_TEST(test_take_moves_whole_keys_and_values);
     RUN_TEST(test_a_key_can_be_put_back_after_removal);
     RUN_TEST(test_clear_empties_and_keeps_the_buckets);
     RUN_TEST(test_clear_leaves_a_usable_map);
