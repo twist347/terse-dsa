@@ -150,9 +150,7 @@ int main() {
     // back: an algorithm that drops elems packs the kept ones to the front and returns
     // how many there are, and the vec adopts that length
     const size_t kept = tda_span_remove(tda_vec_to_span_mut(v), &(int32_t){3}, tda_eq_i32);
-    if (TDA_STATUS_IS_ERR(tda_vec_resize(v, kept))) {
-        goto out;
-    }
+    tda_vec_truncate(v, kept);
     tda_vec_print(v, tda_fprint_i32); // [1, 2, 4, 5]
 
     printf(

@@ -350,6 +350,16 @@ void tda_vec_pop(tda_Vec *self) {
     --self->len;
 }
 
+void tda_vec_pop_to(tda_Vec *self, void *out) {
+    ASSERT_VEC(self);
+    assert(out);
+    TDA_EXPECT(self->len > 0);
+
+    --self->len;
+    // memmove: 'out' may be the very slot just dropped, and memcpy onto itself is undefined
+    memmove(out, vec_offset(self, self->len), self->elem_size);
+}
+
 tda_Status tda_vec_insert(tda_Vec *self, size_t idx, const void *val) {
     ASSERT_VEC(self);
     assert(val);
@@ -380,6 +390,17 @@ void tda_vec_remove(tda_Vec *self, size_t idx) {
         memmove(vec_offset_mut(self, idx), vec_offset_mut(self, idx + 1), tail * self->elem_size);
     }
     --self->len;
+}
+
+void tda_vec_swap_remove(tda_Vec *self, size_t idx) {
+    ASSERT_VEC(self);
+    TDA_EXPECT(idx < self->len);
+
+    --self->len;
+    // the back elem leaves no gap to fill, and memcpy onto itself is undefined
+    if (idx != self->len) {
+        memcpy(vec_offset_mut(self, idx), vec_offset(self, self->len), self->elem_size);
+    }
 }
 
 void tda_vec_clear(tda_Vec *self) {
@@ -461,6 +482,14 @@ tda_Status tda_vec_resize(tda_Vec *self, size_t new_len) {
     self->len = new_len;
 
     return TDA_STATUS_OK;
+}
+
+void tda_vec_truncate(tda_Vec *self, size_t len) {
+    ASSERT_VEC(self);
+
+    if (len < self->len) {
+        self->len = len;
+    }
 }
 
 void tda_vec_swap(tda_Vec *self, tda_Vec *other) {
@@ -545,6 +574,24 @@ void tda_vec_remove_range(tda_Vec *self, size_t idx, size_t count) {
     }
 
     self->len -= count;
+}
+
+void tda_vec_retain(tda_Vec *self, tda_Pred pred, void *ctx) {
+    ASSERT_VEC(self);
+    assert(pred);
+
+    size_t kept = 0;
+    for (size_t i = 0; i < self->len; ++i) {
+        if (!pred(vec_offset(self, i), ctx)) {
+            continue;
+        }
+        // until the first drop every kept elem is already in place
+        if (kept != i) {
+            memcpy(vec_offset_mut(self, kept), vec_offset(self, i), self->elem_size);
+        }
+        ++kept;
+    }
+    self->len = kept;
 }
 
 /* ========== to span ========== */

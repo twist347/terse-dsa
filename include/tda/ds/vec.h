@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tda/algo/fn.h"
 #include "tda/alloc/alloc.h"
 #include "tda/core/check.h"
 #include "tda/core/cmp.h"
@@ -27,7 +28,7 @@
 /// for.
 ///
 /// The bridge to algo runs both ways — tda_vec_to_span_mut hands the elems over to be
-/// sorted or filled in place, tda_vec_resize adopts the length the algorithm leaves
+/// sorted or filled in place, tda_vec_truncate adopts the length the algorithm leaves
 /// behind. A vec keeps no order of its own to protect, unlike ds/stack and ds/queue.
 ///
 /// An index out of range asserts; the ops that return a tda_Status are the ones that
@@ -302,6 +303,13 @@ tda_Status tda_vec_push(tda_Vec *self, const void *val);
 TDA_API
 void tda_vec_pop(tda_Vec *self);
 
+/// copies the back elem to 'out', then drops it as tda_vec_pop does
+/// @param self asserts the vec is not empty
+/// @param[out] out where the elem goes; may point anywhere, this vec's own block included
+/// @bigo{1}
+TDA_API
+void tda_vec_pop_to(tda_Vec *self, void *out);
+
 /// puts a copy of 'val' at 'idx', moving the elems from there on one place up
 /// @param self the vec
 /// @param idx asserts idx <= len; idx == len appends
@@ -318,6 +326,13 @@ tda_Status tda_vec_insert(tda_Vec *self, size_t idx, const void *val);
 /// @bigo{n}
 TDA_API
 void tda_vec_remove(tda_Vec *self, size_t idx);
+
+/// drops the elem at 'idx' and fills the gap with the back elem, so the order is not kept
+/// @param self the vec
+/// @param idx asserts idx < len; the back elem itself is dropped as tda_vec_pop drops it
+/// @bigo{1}
+TDA_API
+void tda_vec_swap_remove(tda_Vec *self, size_t idx);
 
 /// drops every elem, keeping the block
 /// @param self the vec
@@ -352,6 +367,14 @@ tda_Status tda_vec_shrink_to_fit(tda_Vec *self);
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_Status tda_vec_resize(tda_Vec *self, size_t new_len);
+
+/// drops the elems from 'len' on, keeping the capacity — tda_vec_resize that only shrinks,
+/// and so cannot fail
+/// @param self the vec
+/// @param len at or above the length changes nothing
+/// @bigo{1}
+TDA_API
+void tda_vec_truncate(tda_Vec *self, size_t len);
 
 /// exchanges the two vecs whole, lengths, capacities and all
 /// @param[in,out] self one vec
@@ -408,6 +431,14 @@ tda_Status tda_vec_insert_span(tda_Vec *self, size_t idx, tda_Span src);
 /// @bigo{n}
 TDA_API
 void tda_vec_remove_range(tda_Vec *self, size_t idx, size_t count);
+
+/// keeps the elems 'pred' passes and drops the rest, in one pass that keeps their order
+/// @param self the vec; the capacity stays as it is
+/// @param pred asked once per elem, front to back; it must not change the vec
+/// @param ctx handed to 'pred'
+/// @bigo{n}
+TDA_API
+void tda_vec_retain(tda_Vec *self, tda_Pred pred, void *ctx);
 
 /// @}
 
@@ -569,6 +600,14 @@ static inline tda_Vec *tda_vec_typed_(tda_Vec *self, [[maybe_unused]] size_t siz
 /// @bigo{1} amortized
 #define TDA_VEC_PUSH(T, self, val) \
     tda_vec_push(TDA_VEC_TYPED_(T, self), &(T){ (val) })
+
+/// tda_vec_pop_to with 'out' made to typecheck as a T *
+/// @param T the elem type
+/// @param self the vec
+/// @param[out] out where the elem goes
+/// @bigo{1}
+#define TDA_VEC_POP_TO(T, self, out) \
+    tda_vec_pop_to(TDA_VEC_TYPED_(T, self), (T *){ (out) })
 
 /// tda_vec_insert from a value rather than an address
 /// @param T the elem type; a scalar, since 'val' becomes a compound literal

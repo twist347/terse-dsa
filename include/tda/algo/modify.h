@@ -18,7 +18,7 @@
 /// an unspecified state. The caller shortens its own container:
 ///
 ///     const size_t kept = tda_span_unique(tda_vec_to_span_mut(v), tda_eq_i32);
-///     tda_Status st = tda_vec_resize(v, kept);
+///     tda_vec_truncate(v, kept);
 ///
 /// [[nodiscard]] makes dropping that length a warning the compiler raises unasked, and an
 /// error under -Werror.

@@ -657,6 +657,60 @@ static void test_push_after_pop_overwrites_the_slot() {
     tda_vec_drop(v);
 }
 
+static void test_pop_to_hands_the_back_elem_out() {
+    tda_Vec *v = make_vec(3);
+    const size_t cap = tda_vec_cap(v);
+
+    int32_t out = -1;
+    tda_vec_pop_to(v, &out);
+
+    TEST_ASSERT_EQUAL_INT32(2, out);
+    TEST_ASSERT_EQUAL_size_t(2, tda_vec_len(v));
+    TEST_ASSERT_EQUAL_size_t(cap, tda_vec_cap(v));
+
+    tda_vec_pop_to(v, &out);
+    tda_vec_pop_to(v, &out);
+
+    TEST_ASSERT_EQUAL_INT32(0, out);
+    TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(v));
+
+    tda_vec_drop(v);
+}
+
+// 'out' may be any slot of the block, the one just dropped included
+static void test_pop_to_into_the_vec_itself() {
+    tda_Vec *v = make_vec(3);
+
+    tda_vec_pop_to(v, TDA_VEC_GET_MUT_AS(int32_t, v, 0));
+
+    constexpr int32_t want[2] = {2, 1};
+    assert_elems(v, want, 2);
+
+    int32_t *back = TDA_VEC_BACK_MUT_AS(int32_t, v);
+    tda_vec_pop_to(v, back);
+
+    TEST_ASSERT_EQUAL_INT32(1, *back);
+    TEST_ASSERT_EQUAL_size_t(1, tda_vec_len(v));
+
+    tda_vec_drop(v);
+}
+
+static void test_pop_to_moves_whole_elems() {
+    constexpr Pair src[2] = {{1, 2}, {3, 4}};
+
+    tda_Vec *v = nullptr;
+    TDA_TEST_OK(TDA_VEC_FROM_DATA(Pair, src, 2, tda_al_default(), &v));
+
+    Pair out = {0, 0};
+    TDA_VEC_POP_TO(Pair, v, &out);
+
+    TEST_ASSERT_EQUAL_INT64(3, out.a);
+    TEST_ASSERT_EQUAL_INT64(4, out.b);
+    TEST_ASSERT_EQUAL_size_t(1, tda_vec_len(v));
+
+    tda_vec_drop(v);
+}
+
 /* ========== insert / remove ========== */
 
 static void test_insert_at_front_middle_and_end() {
@@ -749,6 +803,52 @@ static void test_insert_and_remove_move_whole_elems() {
     TEST_ASSERT_EQUAL_INT64(6, TDA_VEC_GET_AS(Pair, v, 0)->b);
     TEST_ASSERT_EQUAL_INT64(3, TDA_VEC_GET_AS(Pair, v, 1)->a);
     TEST_ASSERT_EQUAL_INT64(4, TDA_VEC_GET_AS(Pair, v, 1)->b);
+
+    tda_vec_drop(v);
+}
+
+static void test_swap_remove_fills_the_gap_with_the_back() {
+    tda_Vec *v = make_vec(5); // 0, 1, 2, 3, 4
+    const size_t cap = tda_vec_cap(v);
+
+    tda_vec_swap_remove(v, 1); // 0, 4, 2, 3
+    tda_vec_swap_remove(v, 0); // 3, 4, 2
+
+    constexpr int32_t want[3] = {3, 4, 2};
+    assert_elems(v, want, 3);
+    TEST_ASSERT_EQUAL_size_t(cap, tda_vec_cap(v));
+
+    tda_vec_drop(v);
+}
+
+// the back elem has no gap to fill: it is dropped and nothing moves
+static void test_swap_remove_of_the_back_elem() {
+    tda_Vec *v = make_vec(3);
+
+    tda_vec_swap_remove(v, 2);
+
+    constexpr int32_t want[2] = {0, 1};
+    assert_elems(v, want, 2);
+
+    tda_vec_swap_remove(v, 1);
+    tda_vec_swap_remove(v, 0);
+    TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(v));
+
+    tda_vec_drop(v);
+}
+
+static void test_swap_remove_moves_whole_elems() {
+    constexpr Pair src[3] = {{1, 10}, {2, 20}, {3, 30}};
+
+    tda_Vec *v = nullptr;
+    TDA_TEST_OK(TDA_VEC_FROM_DATA(Pair, src, 3, tda_al_default(), &v));
+
+    tda_vec_swap_remove(v, 0);
+
+    TEST_ASSERT_EQUAL_size_t(2, tda_vec_len(v));
+    TEST_ASSERT_EQUAL_INT64(3, TDA_VEC_GET_AS(Pair, v, 0)->a);
+    TEST_ASSERT_EQUAL_INT64(30, TDA_VEC_GET_AS(Pair, v, 0)->b);
+    TEST_ASSERT_EQUAL_INT64(2, TDA_VEC_GET_AS(Pair, v, 1)->a);
 
     tda_vec_drop(v);
 }
@@ -1051,6 +1151,84 @@ static void test_remove_range_moves_wide_elems_whole() {
     tda_vec_drop(v);
 }
 
+static bool is_even(const void *elem, [[maybe_unused]] void *ctx) {
+    return *(const int32_t *) elem % 2 == 0;
+}
+
+// writes each elem it is asked about into the vec at 'ctx', and passes them all
+static bool record(const void *elem, void *ctx) {
+    TDA_TEST_OK(tda_vec_push(ctx, elem));
+    return true;
+}
+
+static void test_retain_keeps_what_passes_in_order() {
+    tda_Vec *v = make_vec(7); // 0 .. 6
+    const size_t cap = tda_vec_cap(v);
+
+    tda_vec_retain(v, is_even, nullptr);
+
+    constexpr int32_t want[4] = {0, 2, 4, 6};
+    assert_elems(v, want, 4);
+    TEST_ASSERT_EQUAL_size_t(cap, tda_vec_cap(v));
+
+    tda_vec_drop(v);
+}
+
+// pred sees every elem once, front to back
+static void test_retain_asks_once_per_elem_front_to_back() {
+    tda_Vec *v = make_vec(5);
+    tda_Vec *seen = make_vec_cap(5);
+
+    tda_vec_retain(v, record, seen);
+
+    constexpr int32_t want[5] = {0, 1, 2, 3, 4};
+    assert_elems(seen, want, 5);
+    assert_elems(v, want, 5);
+
+    tda_vec_drop(seen);
+    tda_vec_drop(v);
+}
+
+static void test_retain_of_none_empties_the_vec() {
+    tda_Vec *v = nullptr;
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, tda_al_default(), &v, 1, 3, 5));
+
+    tda_vec_retain(v, is_even, nullptr);
+
+    TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(v));
+
+    tda_vec_drop(v);
+}
+
+static void test_retain_on_an_empty_vec_asks_nothing() {
+    tda_Vec *v = make_vec_cap(0);
+    tda_Vec *seen = make_vec_cap(1);
+
+    tda_vec_retain(v, record, seen);
+
+    TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(v));
+    TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(seen));
+
+    tda_vec_drop(seen);
+    tda_vec_drop(v);
+}
+
+static void test_retain_moves_whole_elems() {
+    constexpr Pair src[4] = {{1, 10}, {-2, 20}, {3, 30}, {-4, 40}};
+
+    tda_Vec *v = nullptr;
+    TDA_TEST_OK(TDA_VEC_FROM_DATA(Pair, src, 4, tda_al_default(), &v));
+
+    tda_vec_retain(v, tda_test_pair_a_is_positive, nullptr);
+
+    TEST_ASSERT_EQUAL_size_t(2, tda_vec_len(v));
+    TEST_ASSERT_EQUAL_INT64(1, TDA_VEC_GET_AS(Pair, v, 0)->a);
+    TEST_ASSERT_EQUAL_INT64(3, TDA_VEC_GET_AS(Pair, v, 1)->a);
+    TEST_ASSERT_EQUAL_INT64(30, TDA_VEC_GET_AS(Pair, v, 1)->b);
+
+    tda_vec_drop(v);
+}
+
 /* ========== clear ========== */
 
 static void test_clear_drops_the_len_and_keeps_the_buffer() {
@@ -1262,6 +1440,38 @@ static void test_resize_reports_size_overflow() {
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_resize(v, SIZE_MAX));
 
     TEST_ASSERT_EQUAL_size_t(3, tda_vec_len(v));
+    TEST_ASSERT_EQUAL_size_t(3, tda_vec_cap(v));
+
+    tda_vec_drop(v);
+}
+
+static void test_truncate_drops_the_tail_and_keeps_the_block() {
+    tda_Vec *v = make_vec(5);
+    const size_t cap = tda_vec_cap(v);
+    const void *before = tda_vec_data(v);
+
+    tda_vec_truncate(v, 2);
+
+    constexpr int32_t want[2] = {0, 1};
+    assert_elems(v, want, 2);
+    TEST_ASSERT_EQUAL_size_t(cap, tda_vec_cap(v));
+    TEST_ASSERT_EQUAL_PTR(before, tda_vec_data(v));
+
+    tda_vec_truncate(v, 0);
+    TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(v));
+
+    tda_vec_drop(v);
+}
+
+// unlike resize, a len past the end is not a request to grow
+static void test_truncate_at_or_above_the_len_changes_nothing() {
+    tda_Vec *v = make_vec(3);
+
+    tda_vec_truncate(v, 3);
+    tda_vec_truncate(v, 10);
+
+    constexpr int32_t want[3] = {0, 1, 2};
+    assert_elems(v, want, 3);
     TEST_ASSERT_EQUAL_size_t(3, tda_vec_cap(v));
 
     tda_vec_drop(v);
@@ -1877,6 +2087,9 @@ int main() {
     RUN_TEST(test_push_moves_whole_elems);
     RUN_TEST(test_pop_shortens_and_keeps_the_capacity);
     RUN_TEST(test_push_after_pop_overwrites_the_slot);
+    RUN_TEST(test_pop_to_hands_the_back_elem_out);
+    RUN_TEST(test_pop_to_into_the_vec_itself);
+    RUN_TEST(test_pop_to_moves_whole_elems);
 
     RUN_TEST(test_insert_at_front_middle_and_end);
     RUN_TEST(test_insert_into_an_empty_vec);
@@ -1884,6 +2097,9 @@ int main() {
     RUN_TEST(test_remove_from_front_middle_and_end);
     RUN_TEST(test_remove_of_the_last_elem_empties_the_vec);
     RUN_TEST(test_insert_and_remove_move_whole_elems);
+    RUN_TEST(test_swap_remove_fills_the_gap_with_the_back);
+    RUN_TEST(test_swap_remove_of_the_back_elem);
+    RUN_TEST(test_swap_remove_moves_whole_elems);
 
     RUN_TEST(test_extend_appends_in_order);
     RUN_TEST(test_extend_onto_an_empty_vec);
@@ -1907,6 +2123,11 @@ int main() {
     RUN_TEST(test_remove_range_of_everything_empties_the_vec);
     RUN_TEST(test_remove_range_leaves_the_capacity_alone);
     RUN_TEST(test_remove_range_moves_wide_elems_whole);
+    RUN_TEST(test_retain_keeps_what_passes_in_order);
+    RUN_TEST(test_retain_asks_once_per_elem_front_to_back);
+    RUN_TEST(test_retain_of_none_empties_the_vec);
+    RUN_TEST(test_retain_on_an_empty_vec_asks_nothing);
+    RUN_TEST(test_retain_moves_whole_elems);
 
     RUN_TEST(test_clear_drops_the_len_and_keeps_the_buffer);
     RUN_TEST(test_clear_of_an_empty_vec_is_a_noop);
@@ -1926,6 +2147,8 @@ int main() {
     RUN_TEST(test_resize_to_zero_keeps_the_buffer);
     RUN_TEST(test_resize_to_the_same_len_is_a_noop);
     RUN_TEST(test_resize_reports_size_overflow);
+    RUN_TEST(test_truncate_drops_the_tail_and_keeps_the_block);
+    RUN_TEST(test_truncate_at_or_above_the_len_changes_nothing);
 
     RUN_TEST(test_swap_self_is_noop);
     RUN_TEST(test_swap_same_allocator_hands_over_buffers);
