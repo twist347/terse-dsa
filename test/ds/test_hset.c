@@ -409,6 +409,50 @@ static void test_remove_node_drops_the_key_it_names() {
     tda_hset_drop(s);
 }
 
+static void test_take_hands_the_stored_key_out() {
+    tda_HSet *s = make_filled(tda_hash_i32, 5);
+
+    int32_t key = -1;
+    TEST_ASSERT_TRUE(TDA_HSET_TAKE(int32_t, s, 3, &key));
+
+    TEST_ASSERT_EQUAL_INT32(3, key);
+    TEST_ASSERT_EQUAL_size_t(4, tda_hset_len(s));
+    assert_missing(s, 3);
+
+    key = -1;
+    TEST_ASSERT_FALSE(TDA_HSET_TAKE(int32_t, s, 3, &key));
+    TEST_ASSERT_EQUAL_INT32(-1, key);
+
+    TEST_ASSERT_TRUE(TDA_HSET_TAKE(int32_t, s, 4, nullptr));
+    TEST_ASSERT_EQUAL_size_t(3, tda_hset_len(s));
+
+    tda_hset_drop(s);
+}
+
+// keys equal modulo 100: the stored key comes out, not the probe, and the probe's own
+// storage may take it, being read before it is written
+static tda_Hash hash_mod_100(const void *x) {
+    return tda_hash_i32(&(int32_t){ *(const int32_t *) x % 100 });
+}
+
+static bool eq_mod_100(const void *lhs, const void *rhs) {
+    return *(const int32_t *) lhs % 100 == *(const int32_t *) rhs % 100;
+}
+
+static void test_take_hands_out_the_stored_key_over_the_probe() {
+    tda_HSet *s = nullptr;
+    TDA_TEST_OK(TDA_HSET_NEW(int32_t, hash_mod_100, eq_mod_100, tda_al_default(), &s));
+    put(s, 105);
+
+    int32_t key = 5;
+    TEST_ASSERT_TRUE(tda_hset_take(s, &key, &key));
+
+    TEST_ASSERT_EQUAL_INT32(105, key);
+    TEST_ASSERT_EQUAL_size_t(0, tda_hset_len(s));
+
+    tda_hset_drop(s);
+}
+
 static void test_a_key_can_be_put_back_after_removal() {
     tda_HSet *s = make_filled(tda_hash_i32, 3);
 
@@ -1034,6 +1078,193 @@ static void test_eq_matches_a_copy() {
     tda_hset_drop(copy);
 }
 
+/* ========== set ops ========== */
+
+// the keys of a small universe as the bits of a mask, so every pair of subsets can be
+// built, and every result read back and compared with the bit op it should equal
+static constexpr int32_t UNIVERSE = 6;
+static constexpr unsigned SUBSETS = 1u << UNIVERSE;
+
+[[nodiscard]]
+static tda_HSet *make_from_mask(tda_Hasher hasher, unsigned mask) {
+    tda_HSet *s = make_set(hasher);
+    for (int32_t i = 0; i < UNIVERSE; ++i) {
+        if (mask & (1u << i)) {
+            put(s, i);
+        }
+    }
+    return s;
+}
+
+static void assert_mask(const tda_HSet *s, unsigned mask) {
+    size_t want_len = 0;
+    for (int32_t i = 0; i < UNIVERSE; ++i) {
+        if (mask & (1u << i)) {
+            assert_has(s, i);
+            ++want_len;
+        } else {
+            assert_missing(s, i);
+        }
+    }
+    TEST_ASSERT_EQUAL_size_t(want_len, tda_hset_len(s));
+    assert_walk_sees_everything(s);
+}
+
+typedef enum { OP_UNION, OP_INTERSECT, OP_DIFFERENCE, OP_SYMMETRIC_DIFFERENCE } SetOp;
+
+static unsigned mask_op(SetOp op, unsigned a, unsigned b) {
+    switch (op) {
+    case OP_UNION:
+        return a | b;
+    case OP_INTERSECT:
+        return a & b;
+    case OP_DIFFERENCE:
+        return a & ~b;
+    case OP_SYMMETRIC_DIFFERENCE:
+        return a ^ b;
+    }
+    TEST_FAIL();
+    return 0;
+}
+
+static void apply(SetOp op, tda_HSet *self, const tda_HSet *other) {
+    switch (op) {
+    case OP_UNION:
+        TDA_TEST_OK(tda_hset_union(self, other));
+        return;
+    case OP_INTERSECT:
+        tda_hset_intersect(self, other);
+        return;
+    case OP_DIFFERENCE:
+        tda_hset_difference(self, other);
+        return;
+    case OP_SYMMETRIC_DIFFERENCE:
+        TDA_TEST_OK(tda_hset_symmetric_difference(self, other));
+        return;
+    }
+    TEST_FAIL();
+}
+
+// every pair of subsets, under a hash that spreads them and one that chains them all, so
+// keys are also dropped from the middle of a chain the op is walking
+static void check_op_everywhere(SetOp op) {
+    const tda_Hasher hashers[2] = {tda_hash_i32, hash_all_alike};
+
+    for (size_t h = 0; h < 2; ++h) {
+        for (unsigned a = 0; a < SUBSETS; ++a) {
+            for (unsigned b = 0; b < SUBSETS; ++b) {
+                tda_HSet *self = make_from_mask(hashers[h], a);
+                tda_HSet *other = make_from_mask(hashers[h], b);
+
+                apply(op, self, other);
+
+                assert_mask(self, mask_op(op, a, b));
+                assert_mask(other, b);
+
+                tda_hset_drop(other);
+                tda_hset_drop(self);
+            }
+        }
+    }
+}
+
+static void test_union_matches_the_bit_op_everywhere() {
+    check_op_everywhere(OP_UNION);
+}
+
+static void test_intersect_matches_the_bit_op_everywhere() {
+    check_op_everywhere(OP_INTERSECT);
+}
+
+static void test_difference_matches_the_bit_op_everywhere() {
+    check_op_everywhere(OP_DIFFERENCE);
+}
+
+static void test_symmetric_difference_matches_the_bit_op_everywhere() {
+    check_op_everywhere(OP_SYMMETRIC_DIFFERENCE);
+}
+
+static void test_the_predicates_match_the_bit_ops_everywhere() {
+    for (unsigned a = 0; a < SUBSETS; ++a) {
+        for (unsigned b = 0; b < SUBSETS; ++b) {
+            tda_HSet *self = make_from_mask(tda_hash_i32, a);
+            tda_HSet *other = make_from_mask(tda_hash_i32, b);
+
+            TEST_ASSERT_EQUAL((a & ~b) == 0, tda_hset_is_subset(self, other));
+            TEST_ASSERT_EQUAL((a & b) != 0, tda_hset_intersects(self, other));
+
+            tda_hset_drop(other);
+            tda_hset_drop(self);
+        }
+    }
+}
+
+// a set combined with itself: union and intersect keep it, the differences empty it
+static void test_set_ops_on_the_set_itself() {
+    constexpr unsigned mask = 0x2d;
+
+    for (SetOp op = OP_UNION; op <= OP_SYMMETRIC_DIFFERENCE; ++op) {
+        tda_HSet *s = make_from_mask(tda_hash_i32, mask);
+
+        apply(op, s, s);
+        assert_mask(s, mask_op(op, mask, mask));
+
+        tda_hset_drop(s);
+    }
+
+    tda_HSet *s = make_from_mask(tda_hash_i32, mask);
+    TEST_ASSERT_TRUE(tda_hset_is_subset(s, s));
+    TEST_ASSERT_TRUE(tda_hset_intersects(s, s));
+    tda_hset_drop(s);
+}
+
+// a refused node leaves every key 'self' had, and only keys of 'other' besides
+static void test_a_refused_union_leaves_a_set() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_HSet *self = nullptr;
+    TDA_TEST_OK(TDA_HSET_NEW_CAP(int32_t, 64, tda_hash_i32, tda_eq_i32, &al, &self));
+    put(self, 0);
+    put(self, 1);
+    tda_HSet *other = make_filled(tda_hash_i32, 8);
+
+    tda_test_probe_fail_after_next(&probe, 3);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_union(self, other));
+
+    assert_has(self, 0);
+    assert_has(self, 1);
+    TEST_ASSERT_TRUE(tda_hset_len(self) < 8);
+    TEST_ASSERT_TRUE(tda_hset_is_subset(self, other));
+    assert_walk_sees_everything(self);
+
+    tda_hset_drop(other);
+    tda_hset_drop(self);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+static void test_a_refused_symmetric_difference_leaves_a_set() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_HSet *self = nullptr;
+    TDA_TEST_OK(TDA_HSET_NEW_CAP(int32_t, 64, tda_hash_i32, tda_eq_i32, &al, &self));
+    tda_HSet *other = make_filled(tda_hash_i32, 8);
+
+    tda_test_probe_fail_after_next(&probe, 3);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_symmetric_difference(self, other));
+
+    TEST_ASSERT_TRUE(tda_hset_len(self) < 8);
+    TEST_ASSERT_TRUE(tda_hset_is_subset(self, other));
+    assert_walk_sees_everything(self);
+
+    tda_hset_drop(other);
+    tda_hset_drop(self);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
 /* ========== print ========== */
 
 // a printer writes to a stream, so a case reads one back through tmpfile, as
@@ -1116,6 +1347,8 @@ int main() {
     RUN_TEST(test_mut_walk_removes_through_the_nodes);
     RUN_TEST(test_mut_walk_of_an_empty_set_stops_at_once);
     RUN_TEST(test_remove_node_drops_the_key_it_names);
+    RUN_TEST(test_take_hands_the_stored_key_out);
+    RUN_TEST(test_take_hands_out_the_stored_key_over_the_probe);
     RUN_TEST(test_a_key_can_be_put_back_after_removal);
     RUN_TEST(test_clear_empties_and_keeps_the_buckets);
     RUN_TEST(test_clear_leaves_a_usable_set);
@@ -1156,6 +1389,15 @@ int main() {
     RUN_TEST(test_eq_of_two_empties);
     RUN_TEST(test_eq_walks_whole_chains);
     RUN_TEST(test_eq_matches_a_copy);
+
+    RUN_TEST(test_union_matches_the_bit_op_everywhere);
+    RUN_TEST(test_intersect_matches_the_bit_op_everywhere);
+    RUN_TEST(test_difference_matches_the_bit_op_everywhere);
+    RUN_TEST(test_symmetric_difference_matches_the_bit_op_everywhere);
+    RUN_TEST(test_the_predicates_match_the_bit_ops_everywhere);
+    RUN_TEST(test_set_ops_on_the_set_itself);
+    RUN_TEST(test_a_refused_union_leaves_a_set);
+    RUN_TEST(test_a_refused_symmetric_difference_leaves_a_set);
 
     RUN_TEST(test_fprint_writes_the_key);
     RUN_TEST(test_fprint_of_an_empty_set);

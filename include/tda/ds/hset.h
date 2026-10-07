@@ -292,6 +292,17 @@ bool tda_hset_remove(tda_HSet *self, const void *key);
 TDA_API
 void tda_hset_remove_node(tda_HSet *self, tda_HSetNode *node);
 
+/// drops 'key' if it is there, handing the stored key out first — what a set that owns
+/// what its keys point to needs, to free them
+/// @param self the set
+/// @param key the key to drop
+/// @param[out] out_key the stored key, which may differ from 'key' in whatever 'eq'
+///                     ignores; may be null, may be 'key' itself, written only on a hit
+/// @return whether it was there. Nothing is allocated, so nothing can fail
+/// @bigo{1} expected
+TDA_API
+bool tda_hset_take(tda_HSet *self, const void *key, void *out_key);
+
 /// drops every key, keeping the buckets
 /// @param self the set
 /// @bigo{n} plus the bucket count, every bucket being emptied
@@ -327,6 +338,65 @@ tda_Status tda_hset_shrink_to_fit(tda_HSet *self);
 /// @bigo{1}
 TDA_API
 void tda_hset_swap(tda_HSet *self, tda_HSet *other);
+
+/// @}
+
+/// @name set ops
+/// @{
+
+/// adds every key of 'other' to 'self'
+/// @param[in,out] self the set written into
+/// @param other must have the same key_size and key equality, as in tda_hset_eq — one
+///              notion of a key, or these ops mean nothing. 'self' == 'other' is allowed
+///              and changes nothing
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when a node or a wider bucket array cannot be allocated.
+///         'self' keeps every key it had and some of those of 'other': a set still, but
+///         not the union
+/// @bigo{m} expected over the m keys of 'other', plus the amortized cost of growing
+[[nodiscard]] TDA_API
+tda_Status tda_hset_union(tda_HSet *self, const tda_HSet *other);
+
+/// drops from 'self' every key that is not in 'other'
+/// @param[in,out] self the set written into
+/// @param other as in tda_hset_union. Nothing is allocated, so nothing can fail
+/// @bigo{n} expected over the n keys of 'self'
+TDA_API
+void tda_hset_intersect(tda_HSet *self, const tda_HSet *other);
+
+/// drops from 'self' every key that is in 'other'
+/// @param[in,out] self the set written into
+/// @param other as in tda_hset_union; 'self' == 'other' empties the set. Nothing is
+///              allocated, so nothing can fail
+/// @bigo{min(n, m)} expected — the smaller of the two is walked
+TDA_API
+void tda_hset_difference(tda_HSet *self, const tda_HSet *other);
+
+/// keeps in 'self' the keys that are in exactly one of the two
+/// @param[in,out] self the set written into
+/// @param other as in tda_hset_union; 'self' == 'other' empties the set
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when a node or a wider bucket array cannot be allocated.
+///         'self' is left part of the way there: a set still, but not the result
+/// @bigo{m} expected over the m keys of 'other', plus the amortized cost of growing
+[[nodiscard]] TDA_API
+tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other);
+
+/// whether every key of 'self' is in 'other'
+/// @param self the set that may be contained
+/// @param other as in tda_hset_union
+/// @return true when 'self' is empty
+/// @bigo{n} expected over the n keys of 'self', and O(1) when it is the longer one
+[[nodiscard]] TDA_API
+bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other);
+
+/// whether the two share a key
+/// @param self one set
+/// @param other as in tda_hset_union
+/// @return whether the intersection is non-empty
+/// @bigo{min(n, m)} expected — the smaller of the two is walked
+[[nodiscard]] TDA_API
+bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other);
 
 /// @}
 
@@ -424,6 +494,16 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_REMOVE(K, self, key) \
     tda_hset_remove(TDA_HSET_TYPED_(K, self), &(K){ (key) })
+
+/// tda_hset_take from a key value rather than an address, with 'out_key' made to
+/// typecheck as a K *
+/// @param K the key type; a scalar, since 'key' becomes a compound literal
+/// @param self the set
+/// @param key the key to drop
+/// @param[out] out_key the stored key, or nullptr
+/// @bigo{1} expected
+#define TDA_HSET_TAKE(K, self, key, out_key) \
+    tda_hset_take(TDA_HSET_TYPED_(K, self), &(K){ (key) }, (K *){ (out_key) })
 
 /// walks every key of the set, binding 'node' to each in turn. The order is unspecified:
 /// it follows the buckets, not the insertions

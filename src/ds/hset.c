@@ -12,6 +12,11 @@
     (assert(s),        \
      assert((s)->map))
 
+// two sets an op can combine: the same width of key and the same notion of equal keys
+#define EXPECT_SAME_KEYS(a, b)                                              \
+    (TDA_EXPECT(tda_hmap_key_size((a)->map) == tda_hmap_key_size((b)->map)), \
+     TDA_EXPECT(tda_hmap_key_eq((a)->map) == tda_hmap_key_eq((b)->map)))
+
 // A set is a map seen through a smaller keyhole: the chaining, the growth and the allocator
 // stay the map's, and what this type adds is the operations it does NOT forward.
 //
@@ -246,6 +251,14 @@ void tda_hset_remove_node(tda_HSet *self, tda_HSetNode *node) {
     tda_hmap_remove_node(self->map, node);
 }
 
+bool tda_hset_take(tda_HSet *self, const void *key, void *out_key) {
+    ASSERT_HSET(self);
+    assert(key);
+
+    // a set's map has no value side, so there is nothing to hand out but the key
+    return tda_hmap_take(self->map, key, out_key, nullptr);
+}
+
 void tda_hset_clear(tda_HSet *self) {
     ASSERT_HSET(self);
 
@@ -269,6 +282,168 @@ void tda_hset_swap(tda_HSet *self, tda_HSet *other) {
     ASSERT_HSET(other);
 
     tda_hmap_swap(self->map, other->map);
+}
+
+/* ========== set ops ========== */
+
+tda_Status tda_hset_union(tda_HSet *self, const tda_HSet *other) {
+    ASSERT_HSET(self);
+    ASSERT_HSET(other);
+    EXPECT_SAME_KEYS(self, other);
+
+    if (self == other) {
+        return TDA_STATUS_OK;
+    }
+
+    for (
+        const tda_HMapNode *node = tda_hmap_first_node(other->map);
+        node;
+        node = tda_hmap_node_next(other->map, node)
+    ) {
+        const tda_Status st = tda_hmap_insert(self->map, tda_hmap_node_key(node), nullptr, nullptr);
+        if (TDA_STATUS_IS_ERR(st)) {
+            return st;
+        }
+    }
+
+    return TDA_STATUS_OK;
+}
+
+void tda_hset_intersect(tda_HSet *self, const tda_HSet *other) {
+    ASSERT_HSET(self);
+    ASSERT_HSET(other);
+    EXPECT_SAME_KEYS(self, other);
+
+    if (self == other) {
+        return;
+    }
+
+    // the next node is taken before the current one may be freed
+    for (
+        tda_HMapNode *node = tda_hmap_first_node_mut(self->map), *next;
+        node;
+        node = next
+    ) {
+        next = tda_hmap_node_next_mut(self->map, node);
+        if (!tda_hmap_contains(other->map, tda_hmap_node_key(node))) {
+            tda_hmap_remove_node(self->map, node);
+        }
+    }
+}
+
+void tda_hset_difference(tda_HSet *self, const tda_HSet *other) {
+    ASSERT_HSET(self);
+    ASSERT_HSET(other);
+    EXPECT_SAME_KEYS(self, other);
+
+    if (self == other) {
+        tda_hmap_clear(self->map);
+        return;
+    }
+
+    // either side can drive: every key of 'other' removed from 'self', or every key of
+    // 'self' checked against 'other'. Both give the same set, so the shorter walk wins
+    if (tda_hmap_len(other->map) < tda_hmap_len(self->map)) {
+        for (
+            const tda_HMapNode *node = tda_hmap_first_node(other->map);
+            node;
+            node = tda_hmap_node_next(other->map, node)
+        ) {
+            tda_hmap_remove(self->map, tda_hmap_node_key(node));
+        }
+        return;
+    }
+
+    for (tda_HMapNode *node = tda_hmap_first_node_mut(self->map), *next; node; node = next) {
+        next = tda_hmap_node_next_mut(self->map, node);
+        if (tda_hmap_contains(other->map, tda_hmap_node_key(node))) {
+            tda_hmap_remove_node(self->map, node);
+        }
+    }
+}
+
+tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other) {
+    ASSERT_HSET(self);
+    ASSERT_HSET(other);
+    EXPECT_SAME_KEYS(self, other);
+
+    if (self == other) {
+        tda_hmap_clear(self->map);
+        return TDA_STATUS_OK;
+    }
+
+    // each key of 'other' flips: out of 'self' when it was there, in when it was not.
+    // The keys of 'other' are distinct, so none is flipped twice
+    for (
+        const tda_HMapNode *node = tda_hmap_first_node(other->map);
+        node;
+        node = tda_hmap_node_next(other->map, node)
+    ) {
+        const void *key = tda_hmap_node_key(node);
+        if (tda_hmap_remove(self->map, key)) {
+            continue;
+        }
+
+        const tda_Status st = tda_hmap_insert(self->map, key, nullptr, nullptr);
+        if (TDA_STATUS_IS_ERR(st)) {
+            return st;
+        }
+    }
+
+    return TDA_STATUS_OK;
+}
+
+bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other) {
+    ASSERT_HSET(self);
+    ASSERT_HSET(other);
+    EXPECT_SAME_KEYS(self, other);
+
+    if (self == other) {
+        return true;
+    }
+
+    // more keys than 'other' has cannot all be in it
+    if (tda_hmap_len(self->map) > tda_hmap_len(other->map)) {
+        return false;
+    }
+
+    for (
+        const tda_HMapNode *node = tda_hmap_first_node(self->map);
+        node;
+        node = tda_hmap_node_next(self->map, node)
+    ) {
+        if (!tda_hmap_contains(other->map, tda_hmap_node_key(node))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other) {
+    ASSERT_HSET(self);
+    ASSERT_HSET(other);
+    EXPECT_SAME_KEYS(self, other);
+
+    // sharing is symmetric, so the shorter set is walked and the longer one asked
+    const tda_HSet *walked = self;
+    const tda_HSet *asked = other;
+    if (tda_hmap_len(other->map) < tda_hmap_len(self->map)) {
+        walked = other;
+        asked = self;
+    }
+
+    for (
+        const tda_HMapNode *node = tda_hmap_first_node(walked->map);
+        node;
+        node = tda_hmap_node_next(walked->map, node)
+    ) {
+        if (tda_hmap_contains(asked->map, tda_hmap_node_key(node))) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /* ========== print ========== */
