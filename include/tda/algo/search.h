@@ -12,8 +12,9 @@
 /// @brief looking for something in a span, and answering where it is
 ///
 /// Two verbs: a find scans and is valid over any span, a search descends and needs the
-/// span sorted by the same cmp — so tda_span_binary_search is the only search here. The
-/// suffix says what is looked for, never from which end: backwards is _last.
+/// span sorted by the same cmp — so tda_span_binary_search is the only search here.
+/// Backwards is find_last: the direction comes first, then what is looked for —
+/// find_last_if, find_last_sub — as C++23 spells them.
 ///
 /// The boundary ops descend too but carry neither verb: they answer where, not whether.
 /// A find answers through 'out_idx' and returns whether it hit; a miss is an answer, not
@@ -48,6 +49,26 @@ bool tda_span_find(tda_Span s, const void *key, tda_Eq eq, size_t *out_idx);
 [[nodiscard]] TDA_API
 bool tda_span_find_if(tda_Span s, tda_Pred pred, void *ctx, size_t *out_idx);
 
+/// the last elem equal to 'key'
+/// @param s the span
+/// @param key the address of the value
+/// @param eq the equality
+/// @param[out] out_idx where, written only on a hit
+/// @return whether it is there
+/// @bigo{n} — from the back, so a hit near the end is found early
+[[nodiscard]] TDA_API
+bool tda_span_find_last(tda_Span s, const void *key, tda_Eq eq, size_t *out_idx);
+
+/// the last elem satisfying 'pred'
+/// @param s the span
+/// @param pred the test, asked back to front
+/// @param ctx handed to 'pred'
+/// @param[out] out_idx where, written only on a hit
+/// @return whether there is one
+/// @bigo{n}
+[[nodiscard]] TDA_API
+bool tda_span_find_last_if(tda_Span s, tda_Pred pred, void *ctx, size_t *out_idx);
+
 /// the first place 'sub' occurs in 's', elem by elem
 /// @param s the span to look in
 /// @param sub what to look for; empty occurs at 0
@@ -66,6 +87,13 @@ bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx);
 /// @return whether it occurs
 /// @bigo{n*m}
 [[nodiscard]] TDA_API
+bool tda_span_find_last_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx);
+
+/// tda_span_find_last_sub under its old name
+/// @copydetails tda_span_find_last_sub
+/// @deprecated renamed when find_last came in, so that the direction comes first; removed
+///             in 2.0
+[[nodiscard, deprecated("use tda_span_find_last_sub")]] TDA_API
 bool tda_span_find_sub_last(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx);
 
 /// the first run of 'count' elems in a row all equal to 'key'

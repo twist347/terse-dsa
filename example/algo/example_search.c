@@ -25,6 +25,10 @@ int main() {
         printf("first 1 at %zu\n", idx); // first 1 at 2
     }
 
+    if (tda_span_find_last(nums, &(int32_t){1}, tda_eq_i32, &idx)) {
+        printf("last 1 at %zu\n", idx); // last 1 at 4
+    }
+
     int32_t bound = 3;
     if (tda_span_find_if(nums, greater_than, &bound, &idx)) {
         printf("first over %" PRId32 " at %zu\n", bound, idx); // first over 3 at 0

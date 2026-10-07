@@ -40,6 +40,36 @@ bool tda_span_find_if(tda_Span s, tda_Pred pred, void *ctx, size_t *out_idx) {
     return false;
 }
 
+bool tda_span_find_last(tda_Span s, const void *key, tda_Eq eq, size_t *out_idx) {
+    TDA_SPAN_ASSERT(s);
+    assert(key);
+    assert(eq);
+    assert(out_idx);
+
+    // counts down through 0, so the loop var is the index plus one
+    for (size_t i = s.len; i > 0; --i) {
+        if (eq(tda_span_get(s, i - 1), key)) {
+            *out_idx = i - 1;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool tda_span_find_last_if(tda_Span s, tda_Pred pred, void *ctx, size_t *out_idx) {
+    TDA_SPAN_ASSERT(s);
+    assert(pred);
+    assert(out_idx);
+
+    for (size_t i = s.len; i > 0; --i) {
+        if (pred(tda_span_get(s, i - 1), ctx)) {
+            *out_idx = i - 1;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(sub);
@@ -66,7 +96,7 @@ bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx) {
     return false;
 }
 
-bool tda_span_find_sub_last(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx) {
+bool tda_span_find_last_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(sub);
     TDA_EXPECT(s.elem_size == sub.elem_size);
@@ -90,6 +120,10 @@ bool tda_span_find_sub_last(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx
         }
     }
     return false;
+}
+
+bool tda_span_find_sub_last(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx) {
+    return tda_span_find_last_sub(s, sub, eq, out_idx);
 }
 
 bool tda_span_find_run(tda_Span s, const void *key, size_t count, tda_Eq eq,

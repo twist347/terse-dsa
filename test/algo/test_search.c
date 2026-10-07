@@ -244,6 +244,89 @@ static void test_binary_search_finds_every_element() {
     }
 }
 
+/* ========== find_last ========== */
+
+// every key, present or not, over a span with repeats, against a walk from the back
+static void test_find_last_matches_a_walk_from_the_back() {
+    constexpr int32_t buf[8] = {3, 1, 2, 1, 4, 3, 1, 5};
+
+    for (size_t n = 0; n <= 8; ++n) {
+        for (int32_t key = 0; key <= 6; ++key) {
+            bool want_hit = false;
+            size_t want_idx = 0;
+            for (size_t i = n; i > 0; --i) {
+                if (buf[i - 1] == key) {
+                    want_hit = true;
+                    want_idx = i - 1;
+                    break;
+                }
+            }
+
+            size_t idx = 999;
+            TEST_ASSERT_EQUAL(want_hit, tda_span_find_last(TDA_SPAN_FROM_DATA(int32_t, buf, n), &key, tda_eq_i32, &idx));
+            TEST_ASSERT_EQUAL_size_t(want_hit ? want_idx : 999, idx);
+        }
+    }
+}
+
+static void test_find_last_at_either_end() {
+    constexpr int32_t buf[4] = {7, 1, 2, 7};
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 4);
+
+    size_t idx = 999;
+    TEST_ASSERT_TRUE(tda_span_find_last(s, &(int32_t){7}, tda_eq_i32, &idx));
+    TEST_ASSERT_EQUAL_size_t(3, idx);
+
+    TEST_ASSERT_TRUE(tda_span_find_last(tda_span_sub(s, 0, 3), &(int32_t){7}, tda_eq_i32, &idx));
+    TEST_ASSERT_EQUAL_size_t(0, idx);
+}
+
+static void test_find_last_if_reports_the_last_match() {
+    constexpr int32_t buf[6] = {2, 1, 4, 3, 6, 5};
+
+    size_t idx = 999;
+    TEST_ASSERT_TRUE(tda_span_find_last_if(TDA_SPAN_FROM_DATA(int32_t, buf, 6), is_even, nullptr, &idx));
+    TEST_ASSERT_EQUAL_size_t(4, idx);
+
+    int32_t bound = 2;
+    TEST_ASSERT_TRUE(tda_span_find_last_if(TDA_SPAN_FROM_DATA(int32_t, buf, 6), less_than, &bound, &idx));
+    TEST_ASSERT_EQUAL_size_t(1, idx);
+}
+
+static void test_find_last_if_miss_leaves_the_out_param_alone() {
+    constexpr int32_t buf[3] = {1, 3, 5};
+
+    size_t idx = 777;
+    TEST_ASSERT_FALSE(tda_span_find_last_if(TDA_SPAN_FROM_DATA(int32_t, buf, 3), is_even, nullptr, &idx));
+    TEST_ASSERT_FALSE(tda_span_find_last_if(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), is_even, nullptr, &idx));
+    TEST_ASSERT_EQUAL_size_t(777, idx);
+}
+
+static size_t asked[8];
+static size_t asked_len = 0;
+
+// writes down which elem it was asked about, and passes the value 'ctx' points at
+static bool record_and_match(const void *elem, void *ctx) {
+    asked[asked_len++] = (size_t) *(const int32_t *) elem;
+    return *(const int32_t *) elem == *(const int32_t *) ctx;
+}
+
+// back to front, and no further than the first hit
+static void test_find_last_if_asks_from_the_back_and_stops() {
+    constexpr int32_t buf[6] = {0, 1, 2, 3, 4, 5};
+    int32_t target = 3;
+
+    asked_len = 0;
+    size_t idx = 999;
+    TEST_ASSERT_TRUE(tda_span_find_last_if(TDA_SPAN_FROM_DATA(int32_t, buf, 6), record_and_match, &target, &idx));
+
+    TEST_ASSERT_EQUAL_size_t(3, idx);
+    TEST_ASSERT_EQUAL_size_t(3, asked_len);
+    TEST_ASSERT_EQUAL_size_t(5, asked[0]);
+    TEST_ASSERT_EQUAL_size_t(4, asked[1]);
+    TEST_ASSERT_EQUAL_size_t(3, asked[2]);
+}
+
 /* ========== find_if ========== */
 
 static void test_find_if_reports_the_first_match() {
@@ -550,7 +633,26 @@ static void test_minmax_elem_of_a_single_elem() {
     TEST_ASSERT_EQUAL_size_t(0, mm.max);
 }
 
-/* ========== find_sub / find_sub_last ========== */
+/* ========== find_sub / find_last_sub ========== */
+
+// the old name answers as the new one does, until 2.0 removes it
+static void test_find_sub_last_is_find_last_sub() {
+    constexpr int32_t buf[8] = {5, 1, 2, 3, 1, 2, 3, 9};
+    constexpr int32_t pat[2] = {2, 3};
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 8);
+    const tda_Span sub = TDA_SPAN_FROM_DATA(int32_t, pat, 2);
+
+    size_t old_idx = 0;
+    size_t new_idx = 0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    TEST_ASSERT_TRUE(tda_span_find_sub_last(s, sub, tda_eq_i32, &old_idx));
+#pragma GCC diagnostic pop
+    TEST_ASSERT_TRUE(tda_span_find_last_sub(s, sub, tda_eq_i32, &new_idx));
+
+    TEST_ASSERT_EQUAL_size_t(5, new_idx);
+    TEST_ASSERT_EQUAL_size_t(new_idx, old_idx);
+}
 
 static void test_find_sub_reports_the_first_occurrence() {
     constexpr int32_t buf[8] = {5, 1, 2, 3, 1, 2, 3, 9};
@@ -563,13 +665,13 @@ static void test_find_sub_reports_the_first_occurrence() {
     TEST_ASSERT_EQUAL_size_t(1, idx);
 }
 
-static void test_find_sub_last_reports_the_last_occurrence() {
+static void test_find_last_sub_reports_the_last_occurrence() {
     constexpr int32_t buf[8] = {5, 1, 2, 3, 1, 2, 3, 9};
     constexpr int32_t pat[3] = {1, 2, 3};
 
     size_t idx = 999;
     TEST_ASSERT_TRUE(
-        tda_span_find_sub_last(
+        tda_span_find_last_sub(
             TDA_SPAN_FROM_DATA(int32_t, buf, 8),
             TDA_SPAN_FROM_DATA(int32_t, pat, 3),
             tda_eq_i32,
@@ -588,7 +690,7 @@ static void test_the_two_sub_finders_agree_on_a_unique_occurrence() {
 
     size_t first = 0, last = 0;
     TEST_ASSERT_TRUE(tda_span_find_sub(s, sub, tda_eq_i32, &first));
-    TEST_ASSERT_TRUE(tda_span_find_sub_last(s, sub, tda_eq_i32, &last));
+    TEST_ASSERT_TRUE(tda_span_find_last_sub(s, sub, tda_eq_i32, &last));
     TEST_ASSERT_EQUAL_size_t(2, first);
     TEST_ASSERT_EQUAL_size_t(first, last);
 }
@@ -602,7 +704,7 @@ static void test_the_sub_finders_see_overlapping_occurrences() {
 
     size_t first = 0, last = 0;
     TEST_ASSERT_TRUE(tda_span_find_sub(s, sub, tda_eq_i32, &first));
-    TEST_ASSERT_TRUE(tda_span_find_sub_last(s, sub, tda_eq_i32, &last));
+    TEST_ASSERT_TRUE(tda_span_find_last_sub(s, sub, tda_eq_i32, &last));
     TEST_ASSERT_EQUAL_size_t(0, first);
     TEST_ASSERT_EQUAL_size_t(2, last);
 }
@@ -616,7 +718,7 @@ static void test_find_sub_does_not_settle_for_a_prefix() {
 
     size_t idx = 111;
     TEST_ASSERT_FALSE(tda_span_find_sub(s, sub, tda_eq_i32, &idx));
-    TEST_ASSERT_FALSE(tda_span_find_sub_last(s, sub, tda_eq_i32, &idx));
+    TEST_ASSERT_FALSE(tda_span_find_last_sub(s, sub, tda_eq_i32, &idx));
     TEST_ASSERT_EQUAL_size_t(111, idx);
 }
 
@@ -629,7 +731,7 @@ static void test_the_sub_finders_match_at_the_end() {
 
     size_t first = 0, last = 0;
     TEST_ASSERT_TRUE(tda_span_find_sub(s, sub, tda_eq_i32, &first));
-    TEST_ASSERT_TRUE(tda_span_find_sub_last(s, sub, tda_eq_i32, &last));
+    TEST_ASSERT_TRUE(tda_span_find_last_sub(s, sub, tda_eq_i32, &last));
     TEST_ASSERT_EQUAL_size_t(2, first);
     TEST_ASSERT_EQUAL_size_t(2, last);
 }
@@ -641,7 +743,7 @@ static void test_the_sub_finders_match_the_whole_span() {
 
     size_t first = 9, last = 9;
     TEST_ASSERT_TRUE(tda_span_find_sub(s, s, tda_eq_i32, &first));
-    TEST_ASSERT_TRUE(tda_span_find_sub_last(s, s, tda_eq_i32, &last));
+    TEST_ASSERT_TRUE(tda_span_find_last_sub(s, s, tda_eq_i32, &last));
     TEST_ASSERT_EQUAL_size_t(0, first);
     TEST_ASSERT_EQUAL_size_t(0, last);
 }
@@ -654,7 +756,7 @@ static void test_an_empty_sub_is_found_at_both_ends() {
 
     size_t first = 9, last = 9;
     TEST_ASSERT_TRUE(tda_span_find_sub(s, empty, tda_eq_i32, &first));
-    TEST_ASSERT_TRUE(tda_span_find_sub_last(s, empty, tda_eq_i32, &last));
+    TEST_ASSERT_TRUE(tda_span_find_last_sub(s, empty, tda_eq_i32, &last));
     TEST_ASSERT_EQUAL_size_t(0, first);
     TEST_ASSERT_EQUAL_size_t(3, last);
 }
@@ -670,9 +772,9 @@ static void test_the_sub_finders_miss_when_sub_does_not_fit() {
 
     size_t idx = 222;
     TEST_ASSERT_FALSE(tda_span_find_sub(s, sub, tda_eq_i32, &idx));
-    TEST_ASSERT_FALSE(tda_span_find_sub_last(s, sub, tda_eq_i32, &idx));
+    TEST_ASSERT_FALSE(tda_span_find_last_sub(s, sub, tda_eq_i32, &idx));
     TEST_ASSERT_FALSE(tda_span_find_sub(empty, sub, tda_eq_i32, &idx));
-    TEST_ASSERT_FALSE(tda_span_find_sub_last(empty, sub, tda_eq_i32, &idx));
+    TEST_ASSERT_FALSE(tda_span_find_last_sub(empty, sub, tda_eq_i32, &idx));
     TEST_ASSERT_EQUAL_size_t(222, idx);
 }
 
@@ -913,9 +1015,15 @@ int main() {
     RUN_TEST(test_find_in_an_empty_span_misses);
     RUN_TEST(test_find_matches_the_last_elem);
     RUN_TEST(test_find_index_is_relative_to_the_span);
+    RUN_TEST(test_find_last_matches_a_walk_from_the_back);
+    RUN_TEST(test_find_last_at_either_end);
+    RUN_TEST(test_find_last_if_reports_the_last_match);
+    RUN_TEST(test_find_last_if_miss_leaves_the_out_param_alone);
+    RUN_TEST(test_find_last_if_asks_from_the_back_and_stops);
 
     RUN_TEST(test_find_sub_reports_the_first_occurrence);
-    RUN_TEST(test_find_sub_last_reports_the_last_occurrence);
+    RUN_TEST(test_find_last_sub_reports_the_last_occurrence);
+    RUN_TEST(test_find_sub_last_is_find_last_sub);
     RUN_TEST(test_the_two_sub_finders_agree_on_a_unique_occurrence);
     RUN_TEST(test_the_sub_finders_see_overlapping_occurrences);
     RUN_TEST(test_find_sub_does_not_settle_for_a_prefix);

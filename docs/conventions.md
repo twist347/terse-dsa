@@ -85,6 +85,11 @@ anyone and goes unprefixed: `VEC_GROWTH_BASE`, `INSERTION_THRESHOLD`, `FNV_PRIME
 Names in `src/internal/*.h` keep it, since several `.c` see them at once, and so do the
 type-generic wrappers over functions: `TDA_ARR_NEW_LEN(T, …)`, `TDA_ALLOC(T, …)`.
 
+**A rename inside a major keeps the old name.** The new one is declared beside it, and the
+old one stays an exported function that calls it, marked `[[deprecated("use …")]]` and
+`@deprecated` with the major that removes it. A symbol never leaves the shared object
+within a major; only the next one deletes it.
+
 ## API contracts
 
 **Error model: uniform status-return.** A fallible operation *returns* `tda_Status` and
@@ -124,6 +129,7 @@ an error cannot be silently dropped.
   through `tda_<slug>_typed_`, which `TDA_EXPECT`s `sizeof(T)` against the elem size and
   hands the handle back — one evaluation, constness kept by a `_Generic` choice between a
   const and a mutable helper, so no cast drops it. The node macros (`TDA_LIST_NODE_ELEM_AS`,
-  `TDA_HMAP_NODE_KEY_AS`, `TDA_HSET_NODE_KEY_AS`) are the exception: a node has no container to ask, so their type is taken on trust.
+  `TDA_HMAP_NODE_KEY_AS`, `TDA_HSET_NODE_KEY_AS`) are the exception: a node has no
+  container to ask, so their type is taken on trust.
 - Public symbols carry `TDA_API` (see `core/export.h`); everything else stays hidden under
   the library's default-hidden visibility.
