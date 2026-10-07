@@ -88,7 +88,7 @@ uses stays the better habit.
 |---|---|
 | `alloc.h` | the `tda_Al` interface and the `tda_alloc` / `tda_calloc` / `tda_realloc` / `tda_dealloc` wrappers |
 | `default.h` | malloc and friends |
-| `arena.h` | bump allocation, freed all at once; over a parent or a buffer of your own |
+| `arena.h` | bump allocation, freed all at once or back to a mark; over a parent or a buffer of your own |
 | `pool.h` | fixed-size blocks off a free list; over a parent or a buffer of your own |
 | `aligned.h` | wraps another allocator and over-aligns every block it hands out |
 | `log.h` | wraps another allocator and writes down what it is asked |
@@ -98,7 +98,7 @@ uses stays the better habit.
 | | |
 |---|---|
 | `fn.h` | `tda_Pred`, `tda_Fold`, `tda_Gen`, `tda_UnOp`, `tda_BinOp` |
-| `search.h` | find and its kin, count, the all_of/any_of/none_of trio, min_elem and max_elem, and the binary family over a sorted span |
+| `search.h` | find and its kin from either end, count, the all_of/any_of/none_of trio, min_elem and max_elem, and the binary family over a sorted span |
 | `sort.h` | sort and sort_stable, insertion_sort, partial_sort, nth_elem and the is_sorted checks |
 | `heap.h` | make_heap, push_heap, pop_heap, sort_heap and the is_heap checks |
 | `permute.h` | reverse, rotate, swap_ranges, shuffle and shuffle_prefix, the partition family and stepping through permutations |
@@ -107,7 +107,7 @@ uses stays the better habit.
 | `fill.h` | fill, fill_zero, generate |
 | `fold.h` | fold, fold_back, partial_sum, adjacent_difference |
 | `transform.h` | transform and zip_with |
-| `compare.h` | cmp, eq, eq_by, mismatch |
+| `compare.h` | cmp, eq, eq_by, mismatch, is_permutation |
 | `merge.h` | merge and inplace_merge |
 | `set.h` | union, intersection, difference, symmetric difference and includes, over sorted spans |
 
@@ -121,7 +121,7 @@ uses stays the better habit.
 | `deque.h` | `tda_Deque` — a ring, both ends O(1) amortized |
 | `list.h` | `tda_List` — doubly linked; a position stays valid |
 | `hmap.h` | `tda_HMap` — separate chaining; an entry never moves |
-| `hset.h` | `tda_HSet` — the same table with nothing on the value side |
+| `hset.h` | `tda_HSet` — the same table with nothing on the value side, and the set ops |
 | `stack.h` | `tda_Stack` — a vec through a narrower keyhole |
 | `queue.h` | `tda_Queue` — a deque through a narrower keyhole |
 | `pqueue.h` | `tda_PQueue` — a buffer kept under a heap discipline |
@@ -167,7 +167,7 @@ With `FetchContent`:
 include(FetchContent)
 FetchContent_Declare(terse-dsa
     GIT_REPOSITORY https://github.com/twist347/terse-dsa.git
-    GIT_TAG v1.2.4
+    GIT_TAG v1.3.0
 )
 FetchContent_MakeAvailable(terse-dsa)
 
@@ -179,7 +179,7 @@ As a submodule:
 ```sh
 git submodule add https://github.com/twist347/terse-dsa.git \
     thirdparty/terse-dsa
-git -C thirdparty/terse-dsa checkout v1.2.4
+git -C thirdparty/terse-dsa checkout v1.3.0
 ```
 
 ```cmake

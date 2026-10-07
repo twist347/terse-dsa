@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.3.0 — 2026-10-08
+
+### Added
+
+- **Taking an elem out.** `pop_to` on `tda_Vec`, `tda_Stack`, `tda_Queue` and
+  `tda_PQueue`, and `pop_front_to` / `pop_back_to` on `tda_Deque`, copy the elem out
+  before dropping it, where a top + pop had to read it first. Each has a `*_POP_TO` macro
+  that typechecks where it goes.
+- `tda_vec_swap_remove` drops an elem in O(1), filling the gap with the back one.
+- `tda_vec_truncate` and `tda_deque_truncate`: `resize` that only shrinks, and so cannot
+  fail — no error branch that never runs after a `remove_if` or `unique`.
+- `tda_vec_retain` and `tda_deque_retain` keep the elems a predicate passes, in order, in
+  one pass. A deque has no span to hand to `remove_if`, so this is its only way to filter.
+- `tda_deque_extend`, `tda_deque_insert_span` and `tda_deque_remove_range`, as `tda_Vec`
+  has them: the room is taken once, and the shorter side moves once for the whole run.
+- `tda_pqueue_replace_top` writes over the greatest elem and sifts once, where a pop and a
+  push sift twice, and allocates nothing: the step of a top-k.
+- `tda_hmap_take` and `tda_hset_take` drop an entry and hand out its stored key and value,
+  for a container that owns what its entries point to and has to free it.
+- **Set ops on `tda_HSet`:** `union`, `intersect`, `difference`, `symmetric_difference`,
+  `is_subset` and `intersects`, the set `tda_BitSet` has. The two sets must agree on key
+  size and equality. A refused allocation leaves `union` and `symmetric_difference` with
+  a valid set, but not the result.
+- `tda_bitset_find_prev` and `tda_bitset_find_prev_clear`, the scans down; a start past
+  the universe begins at its last index.
+- **Scratch memory in an arena.** `tda_al_arena_mark` and `tda_al_arena_rewind` take back
+  what was handed out since the mark; marks nest. A block from before a mark that grows
+  moves rather than growing in place past it, so a rewind never cuts it short.
+- `tda_span_is_permutation`, std::is_permutation: the same elems in any order, each as
+  many times, under an equality, with nothing allocated.
+- `tda_span_find_last` and `tda_span_find_last_if`, the finds from the back.
+
+### Deprecated
+
+- `tda_span_find_sub_last` is now `tda_span_find_last_sub`, so that the direction comes
+  first, as in the new finds and in C++23. The old name stays, exported and meaning the
+  same, until 2.0 removes it; a call to it warns, which `-Werror` turns into an error.
+
+### Fixed
+
+- The typed macros' helpers no longer cast away `const`, so the headers are quiet under
+  `-Wcast-qual`; 1.2.4 gave nine warnings there, an error under `-Werror`.
+
+### Changed
+
+- `tda_stack_pop`, `tda_queue_pop` and `tda_pqueue_pop` point to their `pop_to` for
+  keeping the elem, where they told the caller to read it with `top` first.
+
 ## 1.2.4 — 2026-09-29
 
 ### Fixed
