@@ -11,14 +11,12 @@
 /// @ingroup algo
 /// @brief looking for something in a span, and answering where it is
 ///
-/// Two verbs: a find scans and is valid over any span, a search descends and needs the
-/// span sorted by the same cmp — so tda_span_binary_search is the only search here.
-/// Backwards is find_last: the direction comes first, then what is looked for —
-/// find_last_if, find_last_sub — as C++23 spells them.
+/// A find scans and works on any span; a search bisects and needs the span sorted by the
+/// same cmp, so tda_span_binary_search is the only search here. Backward finds put the
+/// direction first (find_last_if, find_last_sub), as C++23 does.
 ///
-/// The boundary ops descend too but carry neither verb: they answer where, not whether.
-/// A find answers through 'out_idx' and returns whether it hit; a miss is an answer, not
-/// an error, and leaves 'out_idx' alone.
+/// The bound ops also bisect but answer where, not whether. A find writes 'out_idx' and
+/// returns whether it hit; a miss is not an error and leaves 'out_idx' unchanged.
 ///
 /// @par Example
 /// @snippet algo/example_search.c pred
@@ -31,9 +29,9 @@
 
 /// the first elem equal to 'key'
 /// @param s the span
-/// @param key the address of the value
+/// @param key the value to look for
 /// @param eq the equality
-/// @param[out] out_idx where, written only on a hit
+/// @param[out] out_idx the index, written only on a hit
 /// @return whether it is there
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -43,7 +41,7 @@ bool tda_span_find(tda_Span s, const void *key, tda_Eq eq, size_t *out_idx);
 /// @param s the span
 /// @param pred the test
 /// @param ctx handed to 'pred'
-/// @param[out] out_idx where, written only on a hit
+/// @param[out] out_idx the index, written only on a hit
 /// @return whether there is one
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -51,19 +49,19 @@ bool tda_span_find_if(tda_Span s, tda_Pred pred, void *ctx, size_t *out_idx);
 
 /// the last elem equal to 'key'
 /// @param s the span
-/// @param key the address of the value
+/// @param key the value to look for
 /// @param eq the equality
-/// @param[out] out_idx where, written only on a hit
+/// @param[out] out_idx the index, written only on a hit
 /// @return whether it is there
-/// @bigo{n} — from the back, so a hit near the end is found early
+/// @bigo{n}; scans from the back, so a hit near the end is found early
 [[nodiscard]] TDA_API
 bool tda_span_find_last(tda_Span s, const void *key, tda_Eq eq, size_t *out_idx);
 
 /// the last elem satisfying 'pred'
 /// @param s the span
-/// @param pred the test, asked back to front
+/// @param pred the test, called back to front
 /// @param ctx handed to 'pred'
-/// @param[out] out_idx where, written only on a hit
+/// @param[out] out_idx the index, written only on a hit
 /// @return whether there is one
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -75,7 +73,7 @@ bool tda_span_find_last_if(tda_Span s, tda_Pred pred, void *ctx, size_t *out_idx
 /// @param eq the equality
 /// @param[out] out_idx where it starts, on a hit
 /// @return whether it occurs
-/// @bigo{n*m} — a plain scan, no preprocessing
+/// @bigo{n*m}; a plain scan, no preprocessing
 [[nodiscard]] TDA_API
 bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx);
 
@@ -91,15 +89,14 @@ bool tda_span_find_last_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx
 
 /// tda_span_find_last_sub under its old name
 /// @copydetails tda_span_find_last_sub
-/// @deprecated renamed when find_last came in, so that the direction comes first; removed
-///             in 2.0
+/// @deprecated renamed so the direction comes first, as in find_last; removed in 2.0
 [[nodiscard, deprecated("use tda_span_find_last_sub")]] TDA_API
 bool tda_span_find_sub_last(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx);
 
 /// the first run of 'count' elems in a row all equal to 'key'
 /// @param s the span
-/// @param key the address of the value
-/// @param count how long the run must be; 0 is found at 0
+/// @param key the value to look for
+/// @param count the run length; 0 is found at 0
 /// @param eq the equality
 /// @param[out] out_idx where the run starts, on a hit
 /// @return whether there is one
@@ -112,9 +109,9 @@ bool tda_span_find_run(tda_Span s, const void *key, size_t count, tda_Eq eq,
 /// @param s the span to look in
 /// @param set what counts as a hit; unordered, duplicates allowed
 /// @param eq the equality
-/// @param[out] out_idx where, written only on a hit
+/// @param[out] out_idx the index, written only on a hit
 /// @return whether there is one
-/// @bigo{n*k} — k is the length of 'set'
+/// @bigo{n*k}, k being set.len
 [[nodiscard]] TDA_API
 bool tda_span_find_any_of(tda_Span s, tda_Span set, tda_Eq eq, size_t *out_idx);
 
@@ -129,7 +126,7 @@ bool tda_span_find_adjacent(tda_Span s, tda_Eq eq, size_t *out_idx);
 
 /// tda_span_find without the index
 /// @param s the span
-/// @param key the address of the value
+/// @param key the value to look for
 /// @param eq the equality
 /// @return whether it is there
 /// @bigo{n}
@@ -143,7 +140,7 @@ bool tda_span_contains(tda_Span s, const void *key, tda_Eq eq);
 
 /// how many elems equal 'key'
 /// @param s the span
-/// @param key the address of the value
+/// @param key the value to look for
 /// @param eq the equality
 /// @return the count, 0 when none
 /// @bigo{n}
@@ -166,7 +163,7 @@ size_t tda_span_count_if(tda_Span s, tda_Pred pred, void *ctx);
 
 /// where 'key' would go, before any elem equal to it
 /// @param s the span, sorted by 'cmp'
-/// @param key the address of the value
+/// @param key the value to look for
 /// @param cmp the order
 /// @return the first index whose elem does not order before 'key', or s.len
 /// @bigo{log n}
@@ -175,7 +172,7 @@ size_t tda_span_lower_bound(tda_Span s, const void *key, tda_Cmp cmp);
 
 /// where 'key' would go, after any elem equal to it
 /// @param s the span, sorted by 'cmp'
-/// @param key the address of the value
+/// @param key the value to look for
 /// @param cmp the order
 /// @return the first index whose elem orders after 'key', or s.len
 /// @bigo{log n}
@@ -184,7 +181,7 @@ size_t tda_span_upper_bound(tda_Span s, const void *key, tda_Cmp cmp);
 
 /// whether 'key' is in a sorted span, and where
 /// @param s the span, sorted by 'cmp'
-/// @param key the address of the value
+/// @param key the value to look for
 /// @param cmp the order
 /// @param[out] out_idx an index holding it, on a hit; with duplicates, no particular one
 /// @return whether it is there
@@ -200,15 +197,15 @@ typedef struct {
 
 /// every elem equal to 'key', as one range
 /// @param s the span, sorted by 'cmp'
-/// @param key the address of the value
+/// @param key the value to look for
 /// @param cmp the order
 /// @return [lower_bound, upper_bound), empty when 'key' is absent
 /// @bigo{log n}
 [[nodiscard]] TDA_API
 tda_Range tda_span_equal_range(tda_Span s, const void *key, tda_Cmp cmp);
 
-/// the boundary of a span partitioned by 'pred' — tda_span_lower_bound generalized
-/// @param s the span; 'pred' must be monotonic over it, true for a prefix
+/// the boundary of a span partitioned by 'pred'; a generalized tda_span_lower_bound
+/// @param s the span; 'pred' must hold for a prefix and fail for the rest
 /// @param pred the test
 /// @param ctx handed to 'pred'
 /// @return the first index failing 'pred', or s.len
@@ -222,11 +219,11 @@ size_t tda_span_partition_point(tda_Span s, tda_Pred pred, void *ctx);
 /// @{
 
 /// whether every elem satisfies 'pred'
-/// @param s the span; an empty one is true, there being nothing to fail
+/// @param s the span; an empty one is true
 /// @param pred the test
 /// @param ctx handed to 'pred'
 /// @return whether they all do
-/// @bigo{n} — it stops early
+/// @bigo{n}; stops early
 [[nodiscard]] TDA_API
 bool tda_span_all_of(tda_Span s, tda_Pred pred, void *ctx);
 
@@ -235,7 +232,7 @@ bool tda_span_all_of(tda_Span s, tda_Pred pred, void *ctx);
 /// @param pred the test
 /// @param ctx handed to 'pred'
 /// @return whether at least one does
-/// @bigo{n} — it stops early
+/// @bigo{n}; stops early
 [[nodiscard]] TDA_API
 bool tda_span_any_of(tda_Span s, tda_Pred pred, void *ctx);
 
@@ -244,7 +241,7 @@ bool tda_span_any_of(tda_Span s, tda_Pred pred, void *ctx);
 /// @param pred the test
 /// @param ctx handed to 'pred'
 /// @return whether none does
-/// @bigo{n} — it stops early
+/// @bigo{n}; stops early
 [[nodiscard]] TDA_API
 bool tda_span_none_of(tda_Span s, tda_Pred pred, void *ctx);
 
@@ -253,7 +250,7 @@ bool tda_span_none_of(tda_Span s, tda_Pred pred, void *ctx);
 /// @param prefix what it should open with; empty is true, longer than 's' is false
 /// @param eq the equality
 /// @return whether the first prefix.len elems of 's' equal those of 'prefix'
-/// @bigo{m} — m being prefix.len; it stops at the first pair that differs
+/// @bigo{m}, m being prefix.len; stops at the first differing pair
 [[nodiscard]] TDA_API
 bool tda_span_starts_with(tda_Span s, tda_Span prefix, tda_Eq eq);
 
@@ -262,7 +259,7 @@ bool tda_span_starts_with(tda_Span s, tda_Span prefix, tda_Eq eq);
 /// @param suffix what it should close with; empty is true, longer than 's' is false
 /// @param eq the equality
 /// @return whether the last suffix.len elems of 's' equal those of 'suffix'
-/// @bigo{m} — m being suffix.len; it stops at the first pair that differs
+/// @bigo{m}, m being suffix.len; stops at the first differing pair
 [[nodiscard]] TDA_API
 bool tda_span_ends_with(tda_Span s, tda_Span suffix, tda_Eq eq);
 
@@ -272,7 +269,7 @@ bool tda_span_ends_with(tda_Span s, tda_Span suffix, tda_Eq eq);
 /// @{
 
 /// the smallest elem
-/// @param s the span; asserts it is not empty, there being no index to name
+/// @param s the span; asserts it is not empty
 /// @param cmp the order
 /// @return its index; a tie goes to the first
 /// @bigo{n}
@@ -296,8 +293,8 @@ typedef struct {
 /// both extremes, in one pass
 /// @param s the span; asserts it is not empty
 /// @param cmp the order
-/// @return the two indices, each a tie going to the first — unlike std::minmax_element,
-///         which gives the last of the largest
+/// @return the two indices; ties go to the first, unlike std::minmax_element, which
+///         gives the last of the largest
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp);

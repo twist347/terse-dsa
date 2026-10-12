@@ -160,8 +160,8 @@ static void test_copy_if_needs_room_only_for_the_matches() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, dst, 3);
 }
 
-// what lies past the returned length is the caller's business, so the
-// tail of dst must be left exactly as it was
+// the tail of dst past the returned length belongs to the caller and must
+// be left as it was
 static void test_copy_if_leaves_the_tail_of_dst_alone() {
     constexpr int32_t src[4] = {1, 2, 3, 4};
     int32_t dst[6] = {7, 7, 7, 7, 7, 7};
@@ -293,7 +293,7 @@ static void test_sample_picks_in_source_order() {
     TEST_ASSERT_TRUE(dst[2] <= 7);
 }
 
-// asking for at least as many as there are copies them all, and the tail of dst is left
+// asking for at least the source length copies it all and leaves the tail of dst alone
 static void test_sample_of_more_than_there_is_copies_the_whole_source() {
     constexpr int32_t src[3] = {4, 5, 6};
     int32_t dst[5] = {-1, -1, -1, -1, -1};
@@ -310,7 +310,8 @@ static void test_sample_of_more_than_there_is_copies_the_whole_source() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, dst, 5);
 }
 
-// nothing wanted or nothing to pick from: no write and no draw, so the rng is where it was
+// nothing wanted or nothing to pick from: no write and no draw, so the rng
+// state is unchanged
 static void test_sample_of_nothing_draws_nothing() {
     constexpr int32_t src[3] = {1, 2, 3};
     int32_t dst[2] = {-1, -1};
@@ -331,8 +332,8 @@ static void test_sample_of_nothing_draws_nothing() {
     TEST_ASSERT_EQUAL_UINT64(tda_rng_u64(&untouched), tda_rng_u64(&rng));
 }
 
-// what makes it a sample: each of the ten pairs out of five comes up equally often, and
-// nothing that is not a pair in order ever does
+// the sampling property: each of the ten in-order pairs out of five comes up equally
+// often, and nothing else ever does
 static void test_sample_reaches_every_pick_equally_often() {
     static constexpr size_t TRIALS = 100000;
     constexpr int32_t src[5] = {0, 1, 2, 3, 4};

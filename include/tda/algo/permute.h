@@ -16,9 +16,8 @@
 /// @ingroup algo
 /// @brief rearranging a span without changing what it holds
 ///
-/// All in place and allocating nothing — except the one that keeps an order, which says
-/// so by taking an allocator and returning a tda_Status. The two that draw an order
-/// rather than compute it say so by taking a tda_Rng.
+/// Everything works in place without allocating, except the stable partition, which
+/// takes an allocator and returns a tda_Status. The shuffles take a tda_Rng.
 ///
 /// @par Example
 /// @snippet algo/example_permute.c pred
@@ -38,8 +37,8 @@ void tda_span_reverse(tda_SpanMut s);
 
 /// rotates left so that the elem at 'mid' becomes the first
 /// @param s the span
-/// @param mid the new front; asserts mid <= s.len, and 0 or s.len is a no-op
-/// @bigo{n} — three reversals, no buffer
+/// @param mid the new front; asserts mid <= s.len; 0 or s.len is a no-op
+/// @bigo{n}; three reversals, no buffer
 TDA_API
 void tda_span_rotate(tda_SpanMut s, size_t mid);
 
@@ -58,8 +57,8 @@ void tda_span_swap_ranges(tda_SpanMut a, tda_SpanMut b);
 /// rearranges into the next permutation in 'cmp' order
 /// @param s the span
 /// @param cmp the order permutations are counted in
-/// @return whether there was one; on the last it wraps to the first and returns false,
-///         so a do-while over a sorted span walks them all exactly once
+/// @return whether there was one; the last wraps to the first and returns false, so a
+///         do-while from a sorted span visits each permutation once
 /// @bigo{n}
 [[nodiscard]] TDA_API
 bool tda_span_next_permutation(tda_SpanMut s, tda_Cmp cmp);
@@ -79,18 +78,18 @@ bool tda_span_prev_permutation(tda_SpanMut s, tda_Cmp cmp);
 
 /// rearranges into an order drawn from 'rng'
 /// @param s the span
-/// @param rng where the order comes from; the same seed replays the same shuffle
-/// @bigo{n} — Fisher-Yates: each position draws from the elems not placed yet, which is
-///            what makes all n! orders equally likely
+/// @param rng the source of randomness; the same seed gives the same shuffle
+/// @bigo{n}. Fisher-Yates: each position draws from the elems not placed yet, so all
+///          n! orders are equally likely
 TDA_API
 void tda_span_shuffle(tda_SpanMut s, tda_Rng *rng);
 
 /// shuffles only far enough to settle the first 'count' positions
 /// @param s the span; every elem may move, not just the first 'count'
 /// @param count how many positions to settle; asserts count <= s.len
-/// @param rng where the order comes from
-/// @bigo{count} — the same walk stopped early, so the prefix is a uniform sample of the
-///                whole span and the rest holds what is left, in no promised order
+/// @param rng the source of randomness
+/// @bigo{count}. Fisher-Yates stopped early: the prefix is a uniform sample of the whole
+///              span; the rest holds the remaining elems in no set order
 TDA_API
 void tda_span_shuffle_prefix(tda_SpanMut s, size_t count, tda_Rng *rng);
 
@@ -103,20 +102,19 @@ void tda_span_shuffle_prefix(tda_SpanMut s, size_t count, tda_Rng *rng);
 /// @param s the span
 /// @param pred the test
 /// @param ctx handed to 'pred'
-/// @return where they end — the index of the first elem that does not satisfy 'pred'
-/// @bigo{n} — it swaps, so neither side keeps the order it had
+/// @return the index of the first elem that does not satisfy 'pred'
+/// @bigo{n}; it swaps, so neither side keeps its order
 [[nodiscard]] TDA_API
 size_t tda_span_partition(tda_SpanMut s, tda_Pred pred, void *ctx);
 
-/// the same split, both sides keeping the order they had
+/// moves the elems satisfying 'pred' to the front, both sides keeping their order
 /// @param s the span
-/// @param pred the test, asked about each elem once
+/// @param pred the test, called once per elem
 /// @param ctx handed to 'pred'
-/// @param al where the scratch comes from; an order costs one span-sized, as in
-///           tda_span_sort_stable
+/// @param al for a span-sized scratch buffer
 /// @param[out] out_boundary where the front part ends, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when 'al' cannot give the buffer; 's' is untouched
+/// @retval TDA_STATUS_ERR_NO_MEM when the buffer cannot be allocated; 's' is untouched
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_Status tda_span_partition_stable(
@@ -127,7 +125,7 @@ tda_Status tda_span_partition_stable(
     size_t *out_boundary
 );
 
-/// whether the span is already split that way
+/// whether the span is already partitioned by 'pred'
 /// @param s the span
 /// @param pred the test
 /// @param ctx handed to 'pred'

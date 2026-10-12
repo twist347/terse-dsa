@@ -20,7 +20,7 @@ void setUp() {
 void tearDown() {
 }
 
-// the arena hands out nothing finer than this, so a request is charged rounded up
+// the arena's granularity: each request is charged rounded up to it
 static constexpr size_t ARENA_STEP = alignof(max_align_t);
 
 static size_t arena_charge(size_t bytes) {
@@ -86,7 +86,7 @@ static void test_new_len_sets_len_cap_and_zeroes() {
     tda_vec_drop(v);
 }
 
-// cap is room, not content: the vec is still empty
+// cap is room, not content, so the vec is still empty
 static void test_new_cap_reserves_without_length() {
     tda_Vec *v = make_vec_cap(8);
 
@@ -123,7 +123,7 @@ static void test_from_data_copies_and_detaches_the_source() {
     tda_vec_drop(v);
 }
 
-// null source is legal while len == 0 — same rule as tda_span_from_data
+// a null source is legal while len == 0, as in tda_span_from_data
 static void test_from_data_empty_has_no_buffer() {
     tda_Vec *v = nullptr;
     TDA_TEST_OK(tda_vec_from_data(nullptr, 0, sizeof(int32_t), tda_al_default(), &v));
@@ -188,7 +188,7 @@ static void test_copy_is_independent() {
     tda_vec_drop(src);
 }
 
-// the copy is sized to the content, so the source's spare capacity is not carried over
+// the copy is sized to the content; the source's spare capacity is not carried over
 static void test_copy_fits_the_len_not_the_source_capacity() {
     tda_Vec *src = make_vec_cap(8);
     push_int(src, 1);
@@ -249,7 +249,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_vec_al(src));
     TEST_ASSERT_TRUE(tda_vec_eq(src, dst));
 
-    // the source is gone and the copy still holds the elems: they were taken, not viewed
+    // the copy outlives the source, so it owns its elems
     tda_vec_drop(src);
     TEST_ASSERT_EQUAL_INT32(3, *TDA_VEC_GET_AS(int32_t, dst, 3));
 
@@ -257,7 +257,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the blocks are asked of the allocator the copy is going to, not of the source's
+// the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -288,13 +288,13 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     const size_t requests = tda_test_probe_requests(&probe);
     TDA_TEST_OK(tda_vec_move_assign(dst, src));
 
-    // nothing was asked of the allocator: the block changed hands, capacity and all
+    // no allocation: the block is handed over with its capacity
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
     TEST_ASSERT_EQUAL_size_t(3, tda_vec_len(dst));
     TEST_ASSERT_EQUAL_INT32(2, *TDA_VEC_GET_AS(int32_t, dst, 1));
 
-    // the source is left empty and usable, its block handed back
+    // the source is left empty, blockless and usable
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(src));
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_cap(src));
     TEST_ASSERT_NULL(tda_vec_data(src));
@@ -386,7 +386,7 @@ static void test_copy_assign_grows_and_shrinks_the_len() {
     tda_vec_drop(src);
 }
 
-// unlike arr, assignment never gives capacity back — that is what shrink_to_fit is for
+// unlike arr, assignment never gives capacity back; shrink_to_fit does that
 static void test_copy_assign_keeps_the_target_capacity() {
     tda_Vec *src = make_vec(2);
     tda_Vec *dst = make_vec(6);
@@ -441,7 +441,7 @@ static void test_bytes_is_len_times_elem_size() {
     tda_vec_drop(v);
 }
 
-// bytes measures the content, not the allocation — spare capacity does not count
+// bytes measures the content; spare capacity does not count
 static void test_bytes_ignores_the_spare_capacity() {
     tda_Vec *v = make_vec_cap(8);
     push_int(v, 1);
@@ -497,7 +497,7 @@ static void test_set_get_roundtrip() {
     tda_vec_drop(v);
 }
 
-// the value may be the elem it is set over — a copy onto itself is still a copy
+// the value may alias the elem it is set over
 static void test_set_from_its_own_elem() {
     tda_Vec *v = make_vec(3);
 
@@ -742,7 +742,7 @@ static void test_insert_into_an_empty_vec() {
     tda_vec_drop(v);
 }
 
-// a full vec must grow before the tail is shifted, or the shift writes past the buffer
+// a full vec must grow before the tail shifts, or the shift writes past the buffer
 static void test_insert_grows_when_full() {
     tda_Vec *v = make_vec(2); // len == cap == 2
 
@@ -880,8 +880,7 @@ static void test_extend_onto_an_empty_vec() {
     tda_vec_drop(v);
 }
 
-// an empty run is not an error and not a no-op by accident: nothing is allocated and
-// nothing moves
+// an empty run is valid: nothing is allocated and nothing moves
 static void test_extend_with_an_empty_span_changes_nothing() {
     tda_Vec *v = make_vec(3);
     const size_t cap = tda_vec_cap(v);
@@ -896,8 +895,8 @@ static void test_extend_with_an_empty_span_changes_nothing() {
     tda_vec_drop(v);
 }
 
-// the whole point of the operation: the room for the run is asked for ONCE. Eight pushes
-// onto the same empty vec would walk the growth factor up and ask four times
+// the room for the run is requested ONCE; the same pushes would request it several times
+// as the vec grows
 static void test_extend_takes_the_room_once() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -918,9 +917,7 @@ static void test_extend_takes_the_room_once() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// a run of one-elem extends must cost what a run of pushes costs — the growth factor,
-// not one allocation per call. Asking for exactly the new length every time would make
-// this 64 requests instead of a handful
+// one-elem extends must grow by the growth factor like pushes, not allocate on every call
 static void test_a_run_of_extends_stays_amortized() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -941,8 +938,8 @@ static void test_a_run_of_extends_stays_amortized() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// resize(len + 1) is how a caller grows by one elem it then fills in place, so a run of
-// them must cost what a run of pushes does, not one allocation per call
+// resize(len + 1) grows by one elem to fill in place, so a run of them must cost what
+// pushes cost, not one allocation per call
 static void test_a_run_of_resizes_stays_amortized() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -962,8 +959,8 @@ static void test_a_run_of_resizes_stays_amortized() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// alone on an arena the block is always the last one, so it grows in place: what the
-// growth costs the arena is the final capacity, not every capacity passed on the way
+// alone on an arena the block is always the last one and grows in place, so the arena is
+// charged the final capacity, not every capacity along the way
 static void test_growing_alone_on_an_arena_costs_only_the_capacity() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1 << 16);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1021,7 +1018,7 @@ static void test_insert_span_at_the_front() {
     tda_vec_drop(v);
 }
 
-// idx == len is the same operation extend performs, and extend is written as this call
+// idx == len does what extend does; extend is implemented as this call
 static void test_insert_span_at_len_is_extend() {
     tda_Vec *v = make_vec(3);
     constexpr int32_t src[2] = {8, 9};
@@ -1047,8 +1044,8 @@ static void test_insert_span_of_an_empty_span_changes_nothing() {
     tda_vec_drop(v);
 }
 
-// the tail is what a loop of insert would walk again for every elem; here it moves once,
-// and a tail longer than the run is what tells a right shift from a wrong one
+// the tail moves once, not once per elem, and a tail longer than the run catches a
+// wrong shift
 static void test_insert_span_keeps_a_long_tail_in_order() {
     tda_Vec *v = make_vec(16);
     constexpr int32_t src[2] = {100, 200};
@@ -1121,7 +1118,7 @@ static void test_remove_range_of_everything_empties_the_vec() {
     tda_vec_drop(v);
 }
 
-// dropping elems hands nothing back to the allocator, as with pop and clear
+// dropping elems frees nothing, as with pop and clear
 static void test_remove_range_leaves_the_capacity_alone() {
     tda_Vec *v = make_vec(6);
     const size_t cap = tda_vec_cap(v);
@@ -1152,7 +1149,7 @@ static void test_remove_range_moves_wide_elems_whole() {
     tda_vec_drop(v);
 }
 
-// writes each elem it is asked about into the vec at 'ctx', and passes them all
+// pushes each elem it sees onto the vec at 'ctx' and keeps them all
 static bool record(const void *elem, void *ctx) {
     TDA_TEST_OK(tda_vec_push(ctx, elem));
     return true;
@@ -1334,7 +1331,7 @@ static void test_shrink_to_fit_when_already_exact_is_a_noop() {
     tda_vec_drop(v);
 }
 
-// fitting nothing means owning nothing: the buffer is released, not resized to zero
+// shrinking an empty vec releases its buffer instead of resizing it to zero
 static void test_shrink_to_fit_of_empty_releases_the_buffer() {
     tda_Vec *v = make_vec_cap(8);
 
@@ -1389,7 +1386,7 @@ static void test_resize_down_keeps_the_head_and_the_capacity() {
     tda_vec_drop(v);
 }
 
-// growing inside the existing room must not move the buffer, only zero the new tail
+// growing within the capacity zeroes the new tail without moving the buffer
 static void test_resize_within_the_capacity_does_not_reallocate() {
     tda_Vec *v = make_vec_cap(8);
     push_int(v, 1);
@@ -1508,7 +1505,7 @@ static void test_swap_same_allocator_hands_over_buffers() {
     tda_vec_drop(a);
 }
 
-// nothing is reallocated, so the spare capacity travels with its buffer
+// nothing is reallocated, so spare capacity moves with its buffer
 static void test_swap_same_allocator_carries_the_capacity() {
     tda_Vec *a = make_vec_cap(16);
     push_int(a, 1);
@@ -1650,7 +1647,7 @@ static void test_new_len_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// a push that cannot grow reports it and leaves the vec exactly as it was
+// a push that cannot grow reports it and leaves the vec unchanged
 static void test_push_reports_an_exhausted_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1693,7 +1690,7 @@ static void test_push_falls_back_to_one_more_slot_when_doubling_fails() {
     TDA_TEST_OK(tda_vec_push(v, &(Pair){1, 2}));
     TDA_TEST_OK(tda_vec_push(v, &(Pair){3, 4}));
 
-    // room for three elems, not for the four that doubling would ask for
+    // room for three elems, not the four doubling would ask for
     tda_test_arena_leave(arena, for_three);
 
     TDA_TEST_OK(tda_vec_push(v, &(Pair){5, 6}));
@@ -1710,8 +1707,8 @@ static void test_push_falls_back_to_one_more_slot_when_doubling_fails() {
     tda_al_arena_drop(arena);
 }
 
-// a refused run must leave the vec exactly as it was: the length, the block and the
-// elems, with no part of 'src' written anywhere
+// a refused run leaves the vec's length, block and elems unchanged, with nothing of
+// 'src' written
 static void test_extend_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1735,8 +1732,7 @@ static void test_extend_reports_an_exhausted_arena_and_changes_nothing() {
     tda_al_arena_drop(arena);
 }
 
-// the same for a run going into the middle: the tail must not be shifted by a call that
-// then reports failure
+// the same for a run into the middle: a failing call must not shift the tail
 static void test_insert_span_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1771,8 +1767,7 @@ static void test_extend_reports_size_overflow() {
     tda_vec_drop(v);
 }
 
-// a run that fits in the room already there needs no allocator at all, so an exhausted
-// arena is no obstacle
+// a run that fits in the existing room never allocates, so an exhausted arena is fine
 static void test_extend_within_the_capacity_needs_no_allocator() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1831,7 +1826,7 @@ static void test_macro_push_appends_a_value() {
     tda_vec_drop(v);
 }
 
-// the value lands in a compound literal, so it must be spelled out exactly once
+// the value goes into a compound literal, so it is evaluated exactly once
 static void test_macro_push_evaluates_its_value_once() {
     tda_Vec *v = nullptr;
     TDA_TEST_OK(TDA_VEC_NEW(int32_t, tda_al_default(), &v));
@@ -1936,7 +1931,7 @@ static void test_eq_of_two_empties() {
     tda_vec_drop(one);
 }
 
-// room is not contents: the two hold the same elems in blocks of different sizes
+// the two hold the same elems in blocks of different sizes
 static void test_eq_ignores_capacity() {
     tda_Vec *a = make_vec(3);
     tda_Vec *b = make_vec_cap(64);
@@ -1983,7 +1978,7 @@ static void test_eq_by_asks_the_equality() {
 
 /* ========== print ========== */
 
-// a printer writes to a stream, so a case reads one back through tmpfile, as
+// printers write to a stream, so cases read it back through tmpfile, as
 // test/core/test_print.c does
 static void assert_prints(const char *expected, const tda_Vec *v) {
     FILE *stream = tmpfile();
@@ -2026,8 +2021,7 @@ static void test_fprint_of_an_empty_vec() {
     tda_vec_drop(v);
 }
 
-// the stdout twin takes no stream and cannot be captured portably, so a case can only
-// say that it runs and reaches the same printer
+// stdout cannot be captured portably, so this only checks that the stdout variant runs
 static void test_print_writes_to_stdout() {
     tda_Vec *v = make_vec(3);
 

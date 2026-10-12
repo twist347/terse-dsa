@@ -25,9 +25,9 @@ void tearDown() {
 
 /* ========== helpers ========== */
 
-// the contents wrap exactly when the front sits at a higher address than the back.
-// Both point into the same block, so the comparison is meaningful — and it lets a
-// test state that it really is exercising a split ring instead of assuming it
+// The contents wrap exactly when the front sits at a higher address than the back.
+// Both point into one block, so the comparison is valid, and a test can assert that its
+// ring really is split.
 [[nodiscard]]
 static bool wraps(const tda_Deque *d) {
     return (const unsigned char *) tda_deque_front(d) > (const unsigned char *) tda_deque_back(d);
@@ -61,10 +61,10 @@ static tda_Deque *make_deque(size_t len) {
     return d;
 }
 
-// {10, 20, 30, 40} in a ring of exactly four slots that is guaranteed to be split:
-// two elems are pushed off the front and the same number wrapped around onto the back
+// {10, 20, 30, 40} in a ring of exactly four slots, always split: two elems are popped
+// off the front and two more wrap around onto the back
 [[nodiscard]]
-static tda_Deque *make_wrapped(void) {
+static tda_Deque *make_wrapped() {
     tda_Deque *d = nullptr;
     TDA_TEST_OK(TDA_DEQUE_NEW_CAP(int32_t, 4, tda_al_default(), &d));
 
@@ -86,8 +86,7 @@ static tda_Deque *make_wrapped(void) {
 }
 
 // int32_t deque with room for exactly 'cap', its front at slot 'head', holding
-// 100, 101, ... 100+len-1. Walking 'head' over every slot puts the seam everywhere a
-// ring op can meet it
+// 100, 101, ... 100+len-1. Walking 'head' over every slot puts the seam everywhere.
 [[nodiscard]]
 static tda_Deque *make_at(size_t cap, size_t head, size_t len) {
     tda_Deque *d = nullptr;
@@ -181,7 +180,7 @@ static void test_push_back_appends() {
     tda_deque_drop(d);
 }
 
-// the same calls from the other end come out reversed — that is the whole difference
+// the same calls from the other end come out reversed
 static void test_push_front_prepends() {
     tda_Deque *d = make_deque(0);
 
@@ -371,7 +370,7 @@ static void test_draining_and_refilling_walks_the_ring_round() {
     tda_deque_drop(d);
 }
 
-// the value may be the elem it is set over — a copy onto itself is still a copy
+// the value may alias the elem it is set over
 static void test_set_from_its_own_elem() {
     tda_Deque *d = make_wrapped();
 
@@ -428,7 +427,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_deque_al(src));
     TEST_ASSERT_TRUE(tda_deque_eq(src, dst));
 
-    // the source is gone and the copy still holds the elems: they were taken, not viewed
+    // the copy outlives the source, so it owns its elems
     tda_deque_drop(src);
     assert_elems(dst, (int32_t[]){10, 20, 30, 40}, 4);
 
@@ -436,7 +435,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the blocks are asked of the allocator the copy is going to, not of the source's
+// the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -454,8 +453,8 @@ static void test_copy_with_reports_an_exhausted_target_arena() {
 }
 
 static void test_for_each_walks_a_split_ring_in_order() {
-    // the contents wrap, so a walk that went by the block instead of by the index would
-    // hand back the two runs the wrong way round
+    // the contents wrap, so a walk by block address instead of by index would return the
+    // two runs in the wrong order
     tda_Deque *d = make_wrapped();
     TEST_ASSERT_TRUE(wraps(d));
 
@@ -499,7 +498,7 @@ static void test_for_each_mut_writes_through_every_slot() {
 }
 
 static void test_for_each_stops_at_a_break() {
-    // two nested loops make up the walk, and a bare break would leave only the inner one
+    // the walk is two nested loops, and a bare break would leave only the inner one
     tda_Deque *d = make_wrapped();
 
     size_t n = 0;
@@ -555,7 +554,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     const size_t requests = tda_test_probe_requests(&probe);
     TDA_TEST_OK(tda_deque_move_assign(dst, src));
 
-    // nothing was asked of the allocator: the ring changed hands as it stood
+    // no allocation: the ring is handed over as is
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
     assert_elems(dst, (int32_t[]){1, 2, 3}, 3);
@@ -653,7 +652,7 @@ static void test_copy_assign_of_itself_changes_nothing() {
     tda_deque_drop(d);
 }
 
-// the point of the bridge: the split ring arrives in the span as one run, in order
+// the split ring arrives in the span as one run, in order
 static void test_copy_to_span_unwraps_the_contents() {
     tda_Deque *d = make_wrapped();
 
@@ -692,7 +691,7 @@ static void test_the_span_pair_round_trips_an_untouched_deque() {
     tda_deque_drop(d);
 }
 
-// what the pair exists for: hand the contents to algo and take the answer back
+// hand the contents to algo and take the result back
 static void test_the_span_pair_carries_the_deque_through_algo() {
     tda_Deque *d = nullptr;
     TDA_TEST_OK(TDA_DEQUE_NEW_CAP(int32_t, 4, tda_al_default(), &d));
@@ -719,8 +718,8 @@ static void test_the_span_pair_carries_the_deque_through_algo() {
 
 /* ========== to spans ========== */
 
-// every head over every length on a ring of six: the two runs, read front then back, are
-// the ring order, and the front one is the one holding the front elem
+// every head and length on a ring of six: the two runs, front then back, give the ring
+// order, and the front run holds the front elem
 static void test_to_spans_are_the_ring_order_split_at_the_seam() {
     constexpr size_t CAP = 6;
 
@@ -760,7 +759,7 @@ static void test_to_spans_of_a_fresh_deque_are_empty() {
     tda_deque_drop(d);
 }
 
-// what the mutable pair is for: an algo that works run by run, applied in place
+// the mutable pair lets an algo work run by run, in place
 static void test_to_spans_mut_write_through_to_the_ring() {
     tda_Deque *d = make_wrapped();
     TEST_ASSERT_TRUE(wraps(d));
@@ -828,7 +827,7 @@ static void test_insert_in_the_middle_shifts_either_side() {
     tda_deque_drop(front_half);
 }
 
-// a shift across the seam cannot be one memmove, so the wrapped case is its own test
+// a shift across the seam cannot be one memmove, so the wrapped case gets its own test
 static void test_insert_into_a_wrapped_ring() {
     tda_Deque *d = make_wrapped();
     tda_deque_pop_back(d); // room for one, still split
@@ -909,9 +908,8 @@ static void test_insert_then_remove_restores_the_deque() {
     tda_deque_drop(d);
 }
 
-// the header promises the SHORTER side moves, and which one moved is visible without
-// looking inside: the elems on the untouched side keep their addresses. Reserved up
-// front so no growth relocates everything and hides the answer
+// The header promises that the SHORTER side moves; the elems on the other side keep
+// their addresses. Room is reserved up front so no growth relocates everything.
 static void test_insert_shifts_the_shorter_side() {
     tda_Deque *front_half = make_deque(8);
     TDA_TEST_OK(tda_deque_reserve(front_half, 16));
@@ -971,7 +969,7 @@ static void test_extend_of_nothing_changes_nothing() {
     tda_deque_drop(d);
 }
 
-// one-elem extends grow with the same factor a push does, not by one slot each
+// one-elem extends grow by the same factor as push, not by one slot each
 static void test_a_run_of_extends_stays_amortized() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -991,8 +989,8 @@ static void test_a_run_of_extends_stays_amortized() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// every head, length, index and run size of a ring of 8, with and without the growth
-// the run forces, against the same insert on a plain array
+// every head, length, index and run size of a ring of 8, with and without growth,
+// against the same insert on a plain array
 static void test_insert_span_matches_a_plain_array_everywhere() {
     constexpr size_t cap = 8;
     const int32_t run[3] = {-1, -2, -3};
@@ -1124,13 +1122,13 @@ static void test_remove_range_shifts_the_shorter_side() {
     tda_deque_drop(front_half);
 }
 
-// writes each elem it is asked about to the back of the deque at 'ctx', and passes them all
+// pushes each elem it sees onto the deque at 'ctx' and keeps them all
 static bool record(const void *elem, void *ctx) {
     TDA_TEST_OK(tda_deque_push_back(ctx, elem));
     return true;
 }
 
-// a ring split at every slot, so kept elems are moved across the seam
+// the ring is split at every slot, so kept elems move across the seam
 static void test_retain_keeps_what_passes_in_order() {
     constexpr size_t cap = 8;
 
@@ -1268,8 +1266,8 @@ static void test_resize_grows_at_the_back_with_zeros() {
     tda_deque_drop(d);
 }
 
-// the new tail may straddle the seam, so growing inside the existing capacity is
-// a different path from growing past it
+// the new tail may straddle the seam, so growing within the capacity is a separate path
+// from growing past it
 static void test_resize_grows_inside_a_wrapped_capacity() {
     tda_Deque *d = make_wrapped();
     tda_deque_pop_back(d);
@@ -1293,8 +1291,8 @@ static void test_resize_shrinks_from_the_back() {
     tda_deque_drop(d);
 }
 
-// resize(len + 1) is how a caller grows by one elem it then fills in place, so a run of
-// them must cost what a run of pushes does, not one allocation per call
+// resize(len + 1) grows by one elem to fill in place, so a run of them must cost what
+// pushes cost, not one allocation per call
 static void test_truncate_drops_from_the_back() {
     tda_Deque *d = make_wrapped();
 
@@ -1374,7 +1372,7 @@ static void test_swap_elems_across_the_seam() {
     tda_deque_swap_elems(d, 0, 3);
     assert_elems(d, (int32_t[]){40, 20, 30, 10}, 4);
 
-    // swapping an elem with itself is a no-op, not a self-overwrite
+    // swapping an elem with itself changes nothing
     tda_deque_swap_elems(d, 2, 2);
     assert_elems(d, (int32_t[]){40, 20, 30, 10}, 4);
 
@@ -1416,7 +1414,7 @@ static void test_new_reports_a_refused_allocator() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// the struct is handed out and the buffer refused: nothing may leak
+// the struct is allocated and the buffer refused: nothing may leak
 static void test_new_cap_reports_a_refused_buffer() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1442,7 +1440,7 @@ static void test_the_pushes_report_a_refused_growth() {
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_DEQUE_PUSH_BACK(int32_t, back, 2));
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_DEQUE_PUSH_FRONT(int32_t, back, 0));
 
-    // the refusal left the deque exactly as it was
+    // the deque is unchanged
     assert_elems(back, (int32_t[]){1}, 1);
     TEST_ASSERT_EQUAL_size_t(1, tda_deque_cap(back));
 
@@ -1563,8 +1561,8 @@ static void test_eq_of_two_empties() {
     tda_deque_drop(b);
 }
 
-// two rings holding the same elems start at different slots, so what is compared is the
-// contents in ring order and never the buffers
+// the two rings hold the same elems from different slots: contents are compared in ring
+// order, not as buffers
 static void test_eq_ignores_where_the_ring_starts() {
     constexpr int32_t want[4] = {10, 20, 30, 40};
 
@@ -1616,7 +1614,7 @@ static void test_eq_by_asks_the_equality() {
 
 /* ========== print ========== */
 
-// a printer writes to a stream, so a case reads one back through tmpfile, as
+// printers write to a stream, so cases read it back through tmpfile, as
 // test/core/test_print.c does
 static void assert_prints(const char *expected, const tda_Deque *d) {
     FILE *stream = tmpfile();
@@ -1659,8 +1657,7 @@ static void test_fprint_of_an_empty_deque() {
     tda_deque_drop(d);
 }
 
-// the stdout twin takes no stream and cannot be captured portably, so a case can only
-// say that it runs and reaches the same printer
+// stdout cannot be captured portably, so this only checks that the stdout variant runs
 static void test_print_writes_to_stdout() {
     tda_Deque *d = make_deque(3);
 

@@ -19,35 +19,35 @@
 /// @ingroup ds
 /// @brief tda_HSet — an owning hash set of type-erased keys
 ///
-/// A ds/hmap whose values carry no information. C has no zero-sized type, so the zero
-/// lives one level down, where a set's node comes out as the header plus the key and not
-/// a byte more.
+/// A ds/hmap with no values. C has no zero-sized type, so the map is built internally
+/// with a value size of 0, and a set's node is just the header plus the key.
 ///
 /// The hasher and the equality are fixed at construction and travel with the keys through
-/// copy and swap, as in ds/hmap. They must agree: keys equal under 'eq' must hash alike.
+/// copy and swap, as in ds/hmap. Keys equal under 'eq' must hash alike.
 ///
-/// What this adds over the map it wraps is a NARROWER interface, not an invariant over
-/// the keys: there is no value to get, to set or to hand out. An entry is either in or out.
+/// The set narrows the map's interface and adds no invariant: there is no value to get,
+/// set or hand out, and a key is either in or out.
 ///
-/// A key never moves: growing relinks the nodes rather than moving them, so a borrowed
-/// node survives inserts, growth and the removal of other keys; it goes only with its own
-/// key — removed, cleared, assigned over or dropped with the set. The iteration order is
-/// unspecified and may change on any insert that grows, and a walk pays for every bucket
-/// as ds/hmap's does.
+/// A key never moves: growing relinks the nodes, so a borrowed node survives inserts,
+/// growth and the removal of other keys. It is invalidated only when its own key is
+/// removed, cleared, assigned over or dropped with the set. The iteration order is
+/// unspecified and may change on any insert that grows, and a walk visits every bucket,
+/// as in ds/hmap.
 ///
 /// @par Example
 /// @snippet ds/example_hset.c build
 /// @snippet ds/example_hset.c membership
 /// @snippet ds/example_hset.c walk
+/// @snippet ds/example_hset.c pred
+/// @snippet ds/example_hset.c bulk
 /// @{
 
 /// Owning hash set of type-erased keys.
-/// An opaque handle: it comes from a constructor and goes back to tda_hset_drop
+/// Opaque: made by a constructor, released by tda_hset_drop
 typedef struct tda_HSet tda_HSet;
 
 /// A position in the set.
-/// A set entry IS a map entry — the same node, seen through an API that offers no value
-/// side — so the two spell the position with one type
+/// A set entry is a map node with no value, so both share one type
 typedef tda_HMapNode tda_HSetNode;
 
 /// @name lifetime
@@ -57,7 +57,7 @@ typedef tda_HMapNode tda_HSetNode;
 /// @param key_size the size of one key, asserted greater than 0
 /// @param hasher the hash the keys are placed by, fixed for the life of the set
 /// @param eq the equality the keys are matched by; must agree with 'hasher'
-/// @param al the allocator, kept for everything after
+/// @param al used for every later allocation
 /// @param[out] out the new set, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated
@@ -78,7 +78,7 @@ tda_Status tda_hset_new(size_t key_size, tda_Hasher hasher, tda_Eq eq, tda_Al *a
 [[nodiscard]] TDA_API
 tda_Status tda_hset_new_cap(size_t cap, size_t key_size, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HSet **out);
 
-/// a set holding the keys 's' views, taking key_size from its elem_size
+/// a set holding the keys 's' views, with key_size from its elem_size
 /// @param s the keys; repeats collapse into one
 /// @param hasher the hash the keys are placed by
 /// @param eq the equality the keys are matched by
@@ -91,7 +91,7 @@ tda_Status tda_hset_new_cap(size_t cap, size_t key_size, tda_Hasher hasher, tda_
 tda_Status tda_hset_from_span(tda_Span s, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HSet **out);
 
 /// releases every node, the buckets and the set through the allocator it was built with
-/// @param self null is a no-op, so this is safe on a partly built object
+/// @param self null is a no-op
 /// @bigo{n}
 TDA_API
 void tda_hset_drop(tda_HSet *self);
@@ -112,7 +112,7 @@ tda_Status tda_hset_copy(const tda_HSet *self, tda_HSet **out);
 
 /// a new set with the same keys, hasher and equality, on 'al'
 /// @param self the set to copy
-/// @param al where the copy lives; tda_hset_copy is this one with the allocator of 'self'
+/// @param al the allocator for the copy
 /// @param[out] out the new set, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the buckets or any node cannot be allocated
@@ -120,28 +120,23 @@ tda_Status tda_hset_copy(const tda_HSet *self, tda_HSet **out);
 [[nodiscard]] TDA_API
 tda_Status tda_hset_copy_with(const tda_HSet *self, tda_Al *al, tda_HSet **out);
 
-/// overwrites the keys of 'self' with those of 'other'
-/// @param[in,out] self must have the same key_size; receives the hasher and the equality
-///                     along with the keys, overwriting its own, and keeps its own
-///                     allocator. 'self' == 'other' is a no-op
-/// @param other the set to copy from
+/// overwrites the keys, hasher and equality of 'self' with those of 'other'
+/// @param[in,out] self must have the same key_size; keeps its allocator
+/// @param other the set to copy from; may be 'self'
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated, leaving 'self' as
-///         it was
+/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated; 'self' is unchanged
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other);
 
-/// moves the keys of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same key_size; receives the hasher and the equality along
-///                     with the keys, releases what it held and keeps its own allocator. 'self' == 'other' is a no-op
-/// @param[in,out] other the set to move from; emptied on success and still usable, on
-///                      its own allocator
+/// moves the keys, hasher and equality of 'other' into 'self', leaving 'other' empty
+/// @param[in,out] self must have the same key_size; old keys released, allocator kept
+/// @param[in,out] other emptied on success and still usable; may be 'self'
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the buckets
-///         or a node cannot be allocated, leaving both as they were
-/// @bigo{1} on one allocator, n on two — a node belongs to the allocator that made it,
-///          so across two the keys are rebuilt and the borrowed nodes do not survive
+/// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and the copy cannot be
+///         allocated; both are left unchanged
+/// @bigo{1} on one allocator, n across two; there the keys are rebuilt, so borrowed
+///          nodes do not survive
 [[nodiscard]] TDA_API
 tda_Status tda_hset_move_assign(tda_HSet *self, tda_HSet *other);
 
@@ -152,7 +147,7 @@ tda_Status tda_hset_move_assign(tda_HSet *self, tda_HSet *other);
 
 /// how many keys the set holds
 /// @param self the set
-/// @return the count of entries, not of buckets
+/// @return the key count
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_hset_len(const tda_HSet *self);
@@ -164,7 +159,7 @@ size_t tda_hset_len(const tda_HSet *self);
 [[nodiscard]] TDA_API
 size_t tda_hset_bucket_count(const tda_HSet *self);
 
-/// the size of one key, as named at construction
+/// the size of one key
 /// @param self the set
 /// @return key_size
 /// @bigo{1}
@@ -180,15 +175,15 @@ tda_Al *tda_hset_al(const tda_HSet *self);
 
 /// the hash the keys are placed by
 /// @param self the set
-/// @return the hasher, as given at construction
+/// @return the hasher given at construction
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Hasher tda_hset_hasher(const tda_HSet *self);
 
 /// the equality the keys are matched by
 /// @param self the set
-/// @return the equality, as given at construction. Named key_eq because tda_hset_eq
-///         compares two whole sets
+/// @return the equality given at construction. Named key_eq because tda_hset_eq
+///         compares whole sets
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Eq tda_hset_key_eq(const tda_HSet *self);
@@ -200,11 +195,9 @@ tda_Eq tda_hset_key_eq(const tda_HSet *self);
 
 /// whether the two hold the same keys, looked up with the hasher of 'b'
 /// @param a one set
-/// @param b must have the same key_size and key equality: the check runs one way, which is
-///          both ways only when the two agree on what a key is. A differing length is just
-///          false
-/// @return whether every key of 'a' is in 'b' and the lengths agree, which is containment
-///         both ways
+/// @param b must have the same key_size and key equality, since the check runs one way
+///          only; a different length gives false
+/// @return whether the lengths match and every key of 'a' is in 'b'
 /// @bigo{n}
 [[nodiscard]] TDA_API
 bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b);
@@ -242,7 +235,7 @@ tda_HSetNode *tda_hset_find_mut(tda_HSet *self, const void *key);
 
 /// the first entry of a walk
 /// @param self the set
-/// @return a node, or null while the set is empty. The order is unspecified
+/// @return a node, or null on an empty set; the order is unspecified
 /// @bigo{n} in the bucket count
 [[nodiscard]] TDA_API
 const tda_HSetNode *tda_hset_first_node(const tda_HSet *self);
@@ -253,7 +246,7 @@ const tda_HSetNode *tda_hset_first_node(const tda_HSet *self);
 tda_HSetNode *tda_hset_first_node_mut(tda_HSet *self);
 
 /// the entry after 'node'
-/// @param self the set, needed because a chain ends long before the buckets do
+/// @param self the set, needed to step past the end of a chain into the next bucket
 /// @param node the position to step from
 /// @return the next node, or null at the end
 /// @bigo{1} amortized over a whole walk, which is n plus the bucket count
@@ -267,8 +260,7 @@ tda_HSetNode *tda_hset_node_next_mut(tda_HSet *self, tda_HSetNode *node);
 
 /// the key at 'node'
 /// @param node the position
-/// @return a read-only pointer to the key, and there is nothing beside it. Read only
-///         because a written key would belong to a bucket the set no longer chose for it
+/// @return the key, read-only: changing a key would break its bucket
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_hset_node_key(const tda_HSetNode *node);
@@ -280,12 +272,10 @@ const void *tda_hset_node_key(const tda_HSetNode *node);
 
 /// puts 'key' in the set
 /// @param self the set
-/// @param key the key to copy in; an equal one already there is left as it is
-/// @param[out] out_is_new whether the key was absent; may be null when the caller does
-///                        not care, and written only on TDA_STATUS_OK
+/// @param key the key to copy in; an equal key already there is kept as is
+/// @param[out] out_is_new whether the key was absent; may be null, set only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the node or the wider bucket array cannot be
-///         allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when a node or the bucket array cannot be allocated
 /// @bigo{1} expected, plus the amortized cost of growing
 [[nodiscard]] TDA_API
 tda_Status tda_hset_insert(tda_HSet *self, const void *key, bool *out_is_new);
@@ -294,8 +284,8 @@ tda_Status tda_hset_insert(tda_HSet *self, const void *key, bool *out_is_new);
 /// @param self the set
 /// @param src the keys, of the set's key_size
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when a node or a wider bucket array cannot be allocated.
-///         The keys before the failing one are in: a set still, but not the whole run
+/// @retval TDA_STATUS_ERR_NO_MEM when a node or the bucket array cannot be allocated;
+///         the keys before the failing one stay inserted
 /// @bigo{n} expected, plus the amortized cost of growing
 [[nodiscard]] TDA_API
 tda_Status tda_hset_extend(tda_HSet *self, tda_Span src);
@@ -303,33 +293,33 @@ tda_Status tda_hset_extend(tda_HSet *self, tda_Span src);
 /// drops 'key' if it is there
 /// @param self the set
 /// @param key the key to drop
-/// @return whether it was there. Nothing is allocated, so nothing can fail
+/// @return whether it was there
 /// @bigo{1} expected
 TDA_API
 bool tda_hset_remove(tda_HSet *self, const void *key);
 
 /// drops the entry 'node' names
 /// @param self the set
-/// @param node a position, checked to be one of this set's own; every pointer into it
-///             dies here, and no other entry is touched
+/// @param node a position in this set (checked); pointers into it become invalid, other
+///             entries are untouched
 /// @bigo{1} expected, as in tda_hmap_remove_node
 TDA_API
 void tda_hset_remove_node(tda_HSet *self, tda_HSetNode *node);
 
-/// drops 'key' if it is there, handing the stored key out first — what a set that owns
-/// what its keys point to needs, to free them
+/// drops 'key' if it is there, copying out the stored key first, so the caller can free
+/// what it owns
 /// @param self the set
 /// @param key the key to drop
-/// @param[out] out_key the stored key, which may differ from 'key' in whatever 'eq'
-///                     ignores; may be null, may be 'key' itself, written only on a hit
-/// @return whether it was there. Nothing is allocated, so nothing can fail
+/// @param[out] out_key the stored key, which may differ from 'key' in what 'eq' ignores;
+///                     may be null or 'key' itself, written only on a hit
+/// @return whether it was there
 /// @bigo{1} expected
 TDA_API
 bool tda_hset_take(tda_HSet *self, const void *key, void *out_key);
 
 /// keeps the keys 'pred' passes and drops the rest
-/// @param self the set; the kept nodes stay where they are, so pointers into them live on
-/// @param pred asked once per key, in walk order; it must not change the set
+/// @param self the set; kept nodes do not move, so pointers into them stay valid
+/// @param pred asked once per key, in walk order; must not change the set
 /// @param ctx handed to 'pred'
 /// @bigo{n} plus the bucket count
 TDA_API
@@ -337,7 +327,7 @@ void tda_hset_retain(tda_HSet *self, tda_Pred pred, void *ctx);
 
 /// drops every key, keeping the buckets
 /// @param self the set
-/// @bigo{n} plus the bucket count, every bucket being emptied
+/// @bigo{n} plus the bucket count
 TDA_API
 void tda_hset_clear(tda_HSet *self);
 
@@ -345,28 +335,25 @@ void tda_hset_clear(tda_HSet *self);
 /// @param self the set
 /// @param cap a capacity at or below the one it has is a no-op
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the bucket array cannot be allocated, leaving
-///         the set as it was
-/// @bigo{n} — the nodes are relinked, not rebuilt, so a borrowed one survives this
+/// @retval TDA_STATUS_ERR_NO_MEM when the array cannot be allocated; the set is unchanged
+/// @bigo{n}; the nodes are relinked, not rebuilt, so borrowed nodes survive
 [[nodiscard]] TDA_API
 tda_Status tda_hset_reserve(tda_HSet *self, size_t cap);
 
 /// gives back the buckets the keys no longer need
-/// @param self an empty set is left owning nothing
-/// @retval TDA_STATUS_OK on success, and when there was nothing to give back
-/// @retval TDA_STATUS_ERR_NO_MEM when the smaller bucket array cannot be allocated,
-///         leaving the set as it was
-/// @bigo{n} — the nodes are relinked, not rebuilt, so a borrowed one survives this
+/// @param self an empty set is left owning no buckets
+/// @retval TDA_STATUS_OK on success, including when there was nothing to give back
+/// @retval TDA_STATUS_ERR_NO_MEM when the smaller array is refused; the set is unchanged
+/// @bigo{n}; the nodes are relinked, not rebuilt, so borrowed nodes survive
 [[nodiscard]] TDA_API
 tda_Status tda_hset_shrink_to_fit(tda_HSet *self);
 
-/// exchanges the contents of the two, hashers and equalities included
+/// exchanges the contents of two sets, hashers and equalities included
 /// @param self one set
-/// @param other must have the same key_size and the same allocator: the nodes change set
-///              without moving, so every borrowed node stays valid — the same trade
-///              ds/hmap and ds/list make
-/// @note two allocators are a broken precondition, not a runtime state: a node belongs to
-///       the one that made it. Across two: tda_hset_copy_with, then tda_hset_move_assign
+/// @param other must have the same key_size and allocator; may be 'self'. The nodes do
+///              not move, so borrowed nodes stay valid
+/// @note a node belongs to the allocator that made it. Across allocators use
+///       tda_hset_copy_with, then tda_hset_move_assign
 /// @bigo{1}
 TDA_API
 void tda_hset_swap(tda_HSet *self, tda_HSet *other);
@@ -378,38 +365,35 @@ void tda_hset_swap(tda_HSet *self, tda_HSet *other);
 
 /// adds every key of 'other' to 'self'
 /// @param[in,out] self the set written into
-/// @param other must have the same key_size and key equality, as in tda_hset_eq — one
-///              notion of a key, or these ops mean nothing. 'self' == 'other' is allowed
-///              and changes nothing
+/// @param other must have the same key_size and key equality, as in tda_hset_eq; may be
+///              'self', which changes nothing
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when a node or a wider bucket array cannot be allocated.
-///         'self' keeps every key it had and some of those of 'other': a set still, but
-///         not the union
+/// @retval TDA_STATUS_ERR_NO_MEM when a node or the bucket array cannot be allocated;
+///         'self' keeps its keys and holds some of those of 'other'
 /// @bigo{m} expected over the m keys of 'other', plus the amortized cost of growing
 [[nodiscard]] TDA_API
 tda_Status tda_hset_union(tda_HSet *self, const tda_HSet *other);
 
 /// drops from 'self' every key that is not in 'other'
 /// @param[in,out] self the set written into
-/// @param other as in tda_hset_union. Nothing is allocated, so nothing can fail
+/// @param other as in tda_hset_union
 /// @bigo{n} expected over the n keys of 'self'
 TDA_API
 void tda_hset_intersect(tda_HSet *self, const tda_HSet *other);
 
 /// drops from 'self' every key that is in 'other'
 /// @param[in,out] self the set written into
-/// @param other as in tda_hset_union; 'self' == 'other' empties the set. Nothing is
-///              allocated, so nothing can fail
-/// @bigo{min(n, m)} expected — the smaller of the two is walked
+/// @param other as in tda_hset_union; 'self' empties the set
+/// @bigo{min(n, m)} expected; the smaller of the two is walked
 TDA_API
 void tda_hset_difference(tda_HSet *self, const tda_HSet *other);
 
 /// keeps in 'self' the keys that are in exactly one of the two
 /// @param[in,out] self the set written into
-/// @param other as in tda_hset_union; 'self' == 'other' empties the set
+/// @param other as in tda_hset_union; 'self' empties the set
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when a node or a wider bucket array cannot be allocated.
-///         'self' is left part of the way there: a set still, but not the result
+/// @retval TDA_STATUS_ERR_NO_MEM when a node or the bucket array cannot be allocated;
+///         'self' is left partly updated
 /// @bigo{m} expected over the m keys of 'other', plus the amortized cost of growing
 [[nodiscard]] TDA_API
 tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other);
@@ -418,7 +402,7 @@ tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other);
 /// @param self the set that may be contained
 /// @param other as in tda_hset_union
 /// @return true when 'self' is empty
-/// @bigo{n} expected over the n keys of 'self', and O(1) when it is the longer one
+/// @bigo{n} expected over the n keys of 'self'; O(1) when it is the longer one
 [[nodiscard]] TDA_API
 bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other);
 
@@ -426,7 +410,7 @@ bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other);
 /// @param self one set
 /// @param other as in tda_hset_union
 /// @return whether the intersection is non-empty
-/// @bigo{min(n, m)} expected — the smaller of the two is walked
+/// @bigo{min(n, m)} expected; the smaller of the two is walked
 [[nodiscard]] TDA_API
 bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other);
 
@@ -435,7 +419,7 @@ bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other);
 /// @name print
 /// @{
 
-/// writes the keys to a stream as {a, b, c}, followed by a newline, in the walk's order
+/// writes the keys as {a, b, c} and a newline, in walk order
 /// @param self the set
 /// @param stream where to write
 /// @param fprint the printer, called once per key
@@ -456,8 +440,8 @@ void tda_hset_print(const tda_HSet *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// hands 'self' back once K is checked against the key size, so a typed macro reads its
-// handle once; _Generic picks the one of the pair that keeps the handle's constness
+// returns 'self' after checking sizeof(K), so a macro evaluates its handle once;
+// _Generic keeps the handle's constness
 [[nodiscard]]
 static inline const tda_HSet *tda_hset_typed_c_(const tda_HSet *self, [[maybe_unused]] size_t size) {
     TDA_EXPECT(tda_hset_key_size(self) == size);
@@ -496,7 +480,7 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
     tda_hset_new_cap((cap), sizeof(K), (hasher), (eq), (al), (out))
 
 /// tda_hset_insert from a value rather than an address
-/// @param K the key type; a scalar, since 'key' becomes a compound literal
+/// @param K the key type; scalars only, as 'key' becomes a compound literal
 /// @param self the set
 /// @param key the value to copy in
 /// @param[out] out_is_new whether the key was absent; may be null
@@ -505,7 +489,7 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
     tda_hset_insert(TDA_HSET_TYPED_(K, self), &(K){ (key) }, (out_is_new))
 
 /// tda_hset_contains from a value rather than an address
-/// @param K the key type; a scalar, since 'key' becomes a compound literal
+/// @param K the key type; scalars only, as 'key' becomes a compound literal
 /// @param self the set
 /// @param key the value to look for
 /// @bigo{1} expected
@@ -535,9 +519,8 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
 #define TDA_HSET_REMOVE(K, self, key) \
     tda_hset_remove(TDA_HSET_TYPED_(K, self), &(K){ (key) })
 
-/// tda_hset_take from a key value rather than an address, with 'out_key' made to
-/// typecheck as a K *
-/// @param K the key type; a scalar, since 'key' becomes a compound literal
+/// tda_hset_take from a key value rather than an address, 'out_key' typechecked as K *
+/// @param K the key type; scalars only, as 'key' becomes a compound literal
 /// @param self the set
 /// @param key the key to drop
 /// @param[out] out_key the stored key, or nullptr
@@ -545,13 +528,11 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
 #define TDA_HSET_TAKE(K, self, key, out_key) \
     tda_hset_take(TDA_HSET_TYPED_(K, self), &(K){ (key) }, (K *){ (out_key) })
 
-/// walks every key of the set, binding 'node' to each in turn. The order is unspecified:
-/// it follows the buckets, not the insertions
-/// @param node the name the loop variable takes; it is a const tda_HSetNode *
+/// walks every key, binding 'node' to each in turn, in unspecified (bucket) order
+/// @param node the name of the loop variable, a const tda_HSetNode *
 /// @param self the set
-/// @warning the step to the next key happens after the body, through the node the body
-///          saw — so removing that key inside the loop steps through a freed node. To
-///          remove while walking, take the next node first:
+/// @warning the loop steps through 'node' after the body, so removing it inside the loop
+///          uses a freed node. To remove while walking, take the next node first:
 /// @code
 /// for (tda_HSetNode *node = tda_hset_first_node_mut(s), *next; node; node = next) {
 ///     next = tda_hset_node_next_mut(s, node);
@@ -565,7 +546,7 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
          node;                                                 \
          node = tda_hset_node_next((self), node))
 
-/// the same walk over positions the set can be removed through
+/// the same walk, over nodes that can be removed through
 /// @copydetails TDA_HSET_FOR_EACH
 #define TDA_HSET_FOR_EACH_MUT(node, self)                         \
     for (tda_HSetNode *node = tda_hset_first_node_mut(self);      \
@@ -575,8 +556,7 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
 /// tda_hset_node_key as a const K *
 /// @param K the key type
 /// @param node the position
-/// @warning K is taken on trust: a node does not know the size of what it holds, and
-///          without the container there is nothing to check K against
+/// @warning K is not checked: a node does not know its key size
 /// @bigo{1}
 #define TDA_HSET_NODE_KEY_AS(K, node) \
     ((const K *) tda_hset_node_key((node)))

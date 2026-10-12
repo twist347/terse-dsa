@@ -40,7 +40,7 @@ void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx
         return;
     }
 
-    // in place the first elem is already where it goes, and memcpy onto itself is undefined
+    // in place, the first elem is already there, and memcpy onto itself is UB
     if (dst.data != src.data) {
         memcpy(tda_span_get_mut(dst, 0), tda_span_get(src, 0), dst.elem_size);
     }

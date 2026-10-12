@@ -11,14 +11,13 @@
 /// Three forms per type: tda_cmp_<T> ascending, tda_cmp_desc_<T> the same with its
 /// operands swapped, tda_eq_<T> only whether the two are equal.
 ///
-/// Operands arrive as const void *, so these are what the algos take and what qsort
-/// takes. There is deliberately no value-taking form: compare two values by calling with
-/// their addresses — tda_cmp_i32(&a, &b) — which is also how a struct's comparator
-/// delegates to a field's.
+/// Operands arrive as const void *, so the same functions serve the algos and qsort.
+/// There is deliberately no by-value form: pass addresses, as in tda_cmp_i32(&a, &b),
+/// which is also how a struct's comparator delegates to a field's.
 ///
-/// Float order is total, which the naive (a > b) - (a < b) is not: NaN after every
-/// non-NaN, NaN equal to NaN, -0.0 equal to +0.0. Without that a span holding a NaN has
-/// no strict weak ordering, and sorting it is undefined behaviour.
+/// Float order is total, unlike the naive (a > b) - (a < b): NaN after every non-NaN,
+/// NaN equal to NaN, -0.0 equal to +0.0. Without that, a span holding a NaN has no
+/// strict weak ordering and sorting it is undefined behaviour.
 ///
 /// @par Example
 /// @snippet core/example_cmp.c struct
@@ -27,10 +26,10 @@
 /// @{
 
 /// A comparator: negative if lhs < rhs, zero if equal, positive if lhs > rhs. Shaped for
-/// qsort, and what every ordering algo takes.
+/// qsort; every ordering algo takes one.
 typedef int (*tda_Cmp)(const void *, const void *);
 
-/// An equality: true when the two are equal. What the hash containers take.
+/// An equality: true when the two are equal. The hash containers take one.
 typedef bool (*tda_Eq)(const void *, const void *);
 
 /// @name comparators
@@ -119,10 +118,10 @@ int tda_cmp_char(const void *lhs, const void *rhs);
 /* ========== str ========== */
 
 /// two strings, in strcmp order; a null orders before every string, two nulls are equal
-/// @param lhs the left operand — a pointer to the const char *, not the string
+/// @param lhs the left operand; a pointer to the const char *, not the string
 /// @param rhs the right operand, the same
 /// @return negative, zero or positive as lhs orders before, with, or after rhs
-/// @bigo{n} — n is the length of the shorter string
+/// @bigo{n}; n is the length of the shorter string
 [[nodiscard]] TDA_API
 int tda_cmp_cstr(const void *lhs, const void *rhs);
 
@@ -306,10 +305,10 @@ bool tda_eq_char(const void *lhs, const void *rhs);
 /* ========== str ========== */
 
 /// two strings, equal by contents; two nulls are equal, a null equals nothing else
-/// @param lhs the left operand — a pointer to the const char *, not the string
+/// @param lhs the left operand; a pointer to the const char *, not the string
 /// @param rhs the right operand, the same
 /// @return whether the two are equal
-/// @bigo{n} — n is the length of the shorter string
+/// @bigo{n}; n is the length of the shorter string
 [[nodiscard]] TDA_API
 bool tda_eq_cstr(const void *lhs, const void *rhs);
 

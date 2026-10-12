@@ -8,18 +8,17 @@
 
 /// @defgroup core_check core/check
 /// @ingroup core
-/// @brief TDA_CHECK — an assert that survives NDEBUG; TDA_EXPECT — one that does under
-/// TDA_HARDENED
+/// @brief asserts that survive NDEBUG: TDA_CHECK always, TDA_EXPECT under TDA_HARDENED
 ///
-/// For preconditions whose breach would be UB in release too. Costs a branch, so cheap
-/// checks only.
+/// For preconditions whose breach would be UB in release too. Each costs a branch, so
+/// use them for cheap checks only.
 /// @{
 
 /// @name macro
 /// @{
 
-/// aborts with the condition's text and place when it does not hold, in every build
-/// @param ... the condition; variadic, as C23 assert, so commas inside it are fine
+/// aborts with the condition's text and location if it fails, in every build
+/// @param ... the condition; variadic like C23 assert, so commas inside are fine
 #define TDA_CHECK(...)                                                     \
     ((__VA_ARGS__) ? (void) 0                                              \
                    : (fprintf(stderr, "%s:%d: %s: check failed: %s\n",     \

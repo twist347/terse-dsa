@@ -11,12 +11,12 @@
 
 int main() {
     /// [build]
-    // a node per elem, so there is no block and no capacity — every push is one
-    // allocation, and every one of them can fail
+    // a node per elem, so there is no block and no capacity: every push is one allocation
+    // and can fail
     tda_Al *al = tda_al_default();
 
     tda_List *l = nullptr;
-    tda_List *other = nullptr; // used further down, and named here so the exit can see it
+    tda_List *other = nullptr; // used below; declared here so the exit can see it
     int rc = 1;
 
     if (TDA_STATUS_IS_ERR(TDA_LIST_OF(int32_t, al, &l, 3, 1, 2))) {
@@ -33,13 +33,13 @@ int main() {
     /// [build]
 
     /// [walk]
-    // there is no index: a walk is how an elem is reached, and null is what ends it
+    // there is no index: elems are reached by walking, and null ends the walk
     TDA_LIST_FOR_EACH (node, l) {
         printf("%" PRId32 " ", *TDA_LIST_NODE_ELEM_AS(int32_t, node));
     }
     putchar('\n'); // 4 3 1 2 5
 
-    // and back the other way, which is what the second pointer in a node buys
+    // and backwards, using the node's second pointer
     for (const tda_ListNode *node = tda_list_back_node(l); node; node = tda_list_node_prev(node)) {
         printf("%" PRId32 " ", *TDA_LIST_NODE_ELEM_AS(int32_t, node));
     }
@@ -47,12 +47,11 @@ int main() {
     /// [walk]
 
     /// [positions]
-    // a position is a node, and a node never moves: this one keeps naming its elem
-    // through everything that follows
+    // a position is a node, and nodes never move: 'at' names the same elem through
+    // everything below
     tda_ListNode *at = tda_list_node_next_mut(tda_list_front_node_mut(l)); // the 3
 
-    // with a position in hand, inserting and removing cost nothing; the walk to it is
-    // what the caller pays for
+    // given a position, insert and remove are O(1); reaching it is the caller's walk
     if (TDA_STATUS_IS_ERR(TDA_LIST_INSERT_BEFORE(int32_t, l, at, 9))) {
         goto out;
     }
@@ -69,15 +68,14 @@ int main() {
     /// [positions]
 
     /// [relink]
-    // sort moves the NODES and leaves the elems where they are, so 'at' still names the
-    // same 3 afterwards. That is what sorting a copy could not give, and why a list sorts
-    // itself instead of handing the work to algo/sort
+    // sort relinks the NODES and leaves the elems where they are, so 'at' still names the
+    // same 3. A copy sorted by algo/sort could not keep that, so a list sorts itself
     tda_list_sort(l, tda_cmp_i32);
     tda_list_print(l, tda_fprint_i32); // [1, 2, 3, 5, 8]
     printf("%" PRId32 "\n", *TDA_LIST_NODE_ELEM_AS(int32_t, at)); // 3
 
-    // merging two sorted lists relinks as well: O(n + m), no allocation, and 'src' is
-    // left empty rather than dropped
+    // merging two sorted lists also relinks: O(n + m), no allocation, and 'src' is left
+    // empty, not dropped
     if (TDA_STATUS_IS_ERR(TDA_LIST_OF(int32_t, al, &other, 0, 4, 9))) {
         goto out;
     }

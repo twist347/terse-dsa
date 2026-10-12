@@ -11,13 +11,12 @@
     (assert(q),         \
      assert((q)->deque))
 
-// A queue is a deque seen through a smaller keyhole: the growth, the allocator and the copy
-// semantics stay the deque's, and what this type adds is the operations it does NOT forward.
+// The deque does all the work; this type only hides the ops a queue should not have.
 struct tda_Queue {
     tda_Deque *deque;
 };
 
-/// takes ownership of 'deque' either way: on failure it is dropped, not handed back
+/// takes ownership of 'deque'; on failure it is dropped
 [[nodiscard]]
 static tda_Status wrap(tda_Deque *deque, tda_Queue **out);
 
@@ -62,7 +61,7 @@ tda_Status tda_queue_from_data(const void *data, size_t len, size_t elem_size, t
         return st;
     }
 
-    // the deque lays them out front to back, which is arrival order already
+    // the deque keeps the order, so data[0] is the front
     return wrap(deque, out);
 }
 
@@ -122,8 +121,7 @@ tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
     ASSERT_QUEUE(other);
     TDA_EXPECT(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));
 
-    // self assignment is left to the deque, which already returns early on it: a guard
-    // repeated here would be a branch no test could tell from its absence
+    // no self-assignment guard: the deque already returns early on it
     return tda_deque_copy_assign(self->deque, other->deque);
 }
 
@@ -132,7 +130,7 @@ tda_Status tda_queue_move_assign(tda_Queue *self, tda_Queue *other) {
     ASSERT_QUEUE(other);
     TDA_EXPECT(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));
 
-    // as in copy_assign, moving a queue onto itself is the deque's early return
+    // self-move is handled by the deque, as in copy_assign
     return tda_deque_move_assign(self->deque, other->deque);
 }
 
@@ -262,7 +260,7 @@ void tda_queue_swap(tda_Queue *self, tda_Queue *other) {
     ASSERT_QUEUE(other);
     TDA_EXPECT(tda_deque_elem_size(self->deque) == tda_deque_elem_size(other->deque));
 
-    // as in copy_assign, swapping a queue with itself is the deque's early return
+    // self-swap is handled by the deque, as in copy_assign
     tda_deque_swap(self->deque, other->deque);
 }
 

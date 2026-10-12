@@ -13,12 +13,12 @@
 
 /* ========== internals ========== */
 
-// below this many elems insertion sort wins: no partitioning overhead, and the range
-// is short enough that its quadratic cost does not show
+// below this many elems insertion sort wins: no partitioning overhead, and the
+// quadratic cost does not show on so short a range
 static constexpr size_t INSERTION_THRESHOLD = 16;
 
-// the largest elem insertion sort sets aside to slide the rest in one memmove; above it
-// every step is a swap
+// the largest elem_size that insertion sort copies aside to shift the rest with one
+// memmove; above it every step is a swap
 static constexpr size_t INSERTION_HELD_MAX = 256;
 
 [[nodiscard]]
@@ -46,9 +46,9 @@ static void quicksort(tda_SpanMut s, size_t left, size_t right, size_t depth, td
 [[nodiscard]]
 static size_t depth_limit(size_t len);
 
-/// where the elem at 'idx' belongs among the sorted ones before it: past every one not
-/// greater, so equal elems keep their order. The elem is still in place while this looks,
-/// so the comparator is only ever handed pointers into the span, aligned as its elems are
+/// where the elem at 'idx' belongs among the sorted ones before it: after every one not
+/// greater, so equal elems keep their order. The elem stays in place during the search,
+/// so the comparator only gets pointers into the span, aligned as its elems are
 [[nodiscard]]
 static size_t insertion_slot(tda_Span s, size_t idx, tda_Cmp cmp);
 
@@ -156,10 +156,10 @@ void tda_span_partial_sort(tda_SpanMut s, size_t count, tda_Cmp cmp) {
         return;
     }
 
-    // place element that would be at position count in sorted order
+    // put the elem that belongs at 'count' in sorted order there
     tda_span_nth_elem(s, count, cmp);
 
-    // now the first count elems are the count smallest (order unspecified) -> sort them
+    // the first 'count' elems are now the smallest, in no order; sort them
     tda_span_sort(tda_span_sub_mut(s, 0, count), cmp);
 }
 
@@ -175,11 +175,10 @@ void tda_span_nth_elem(tda_SpanMut s, size_t nth, tda_Cmp cmp) {
     size_t left = 0, right = s.len - 1;
     size_t depth = depth_limit(s.len);
 
-    // left <= nth <= right holds every round, which is what keeps lt - 1 and gt + 1
-    // inside the range below
+    // left <= nth <= right holds every round, which keeps lt - 1 and gt + 1 in range
     while (left < right) {
-        // the ceiling sort has, for the same reason: past it the pivots have gone bad.
-        // Sorting what is left settles nth along with the rest, O(n log n) whatever the data
+        // the same depth ceiling as in sort: past it the pivots have gone bad.
+        // Sorting the rest settles nth too, in O(n log n) whatever the data
         if (depth == 0) {
             tda_span_sort(tda_span_sub_mut(s, left, right - left + 1), cmp);
             return;
@@ -249,7 +248,7 @@ static size_t ninther(tda_Span s, size_t left, size_t right, tda_Cmp cmp) {
     const size_t mid = left + len / 2;
 
     // on a range shorter than 8 the step is 0, every triple collapses to a single elem
-    // and this degenerates into a plain median of left, mid and right — still valid,
+    // and this degenerates into a plain median of left, mid and right: still valid,
     // just less well sampled. nth_elem reaches those short ranges; quicksort does not.
     const size_t step = len / 8;
 
@@ -273,8 +272,8 @@ static Split partition3(tda_SpanMut s, size_t left, size_t right, size_t pivot_i
 
     // invariant: [left, lo-1] < pivot, [lo, i-1] == pivot, [i, hi] untouched,
     // [hi+1, right] > pivot. The equal run always holds at least the pivot elem, so
-    // s[lo] is a copy of the pivot value and can be read instead of buffering it —
-    // which matters here, where the elem size is only known at runtime.
+    // s[lo] is a copy of the pivot value and can be read instead of buffering it.
+    // That matters here, where the elem size is only known at runtime.
     while (i <= hi) {
         const int c = cmp(tda_span_get(v, i), tda_span_get(v, lo));
 
@@ -318,8 +317,8 @@ static void quicksort(tda_SpanMut s, size_t left, size_t right, size_t depth, td
             return;
         }
 
-        // deeper than balanced partitions would ever go, so the pivots have gone bad;
-        // heapsort is O(n log n) whatever the data, which puts a ceiling on the worst case
+        // deeper than balanced partitions would ever go, so the pivots have gone
+        // bad; heapsort is O(n log n) whatever the data, which caps the worst case
         if (depth == 0) {
             const tda_SpanMut range = tda_span_sub_mut(s, left, right - left + 1);
             tda_span_make_heap(range, cmp);

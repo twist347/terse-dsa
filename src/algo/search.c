@@ -6,10 +6,10 @@
 
 /* ========== private decls ========== */
 
-/// whether 'sub' sits in 's' starting at 'at'. The caller guarantees the room
+/// whether 'sub' occurs in 's' at 'at'; the caller guarantees it fits
 static bool matches_at(tda_Span s, tda_Span sub, size_t at, tda_Eq eq);
 
-/// the first index whose elem orders after 'key' — or not before it, when not 'upper'
+/// the first index whose elem orders after 'key' ('upper') or not before it (otherwise)
 [[nodiscard]]
 static size_t bound(tda_Span s, const void *key, tda_Cmp cmp, bool upper);
 
@@ -89,8 +89,8 @@ bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx) {
         return false;
     }
 
-    // s.len - sub.len is the last start that still leaves room for the whole sub,
-    // and cannot wrap: the case sub.len > s.len is already out
+    // s.len - sub.len is the last start with room for all of 'sub'; it cannot wrap,
+    // since sub.len > s.len was handled above
     for (size_t i = 0; i + sub.len <= s.len; ++i) {
         if (matches_at(s, sub, i, eq)) {
             *out_idx = i;
@@ -115,8 +115,8 @@ bool tda_span_find_last_sub(tda_Span s, tda_Span sub, tda_Eq eq, size_t *out_idx
         return false;
     }
 
-    // counts down through 0, so the loop var is the start plus one — a size_t
-    // running below zero wraps instead of ending the loop
+    // counts down through 0, so the loop var is the start plus one; a size_t going
+    // below zero would wrap instead of ending the loop
     for (size_t start = s.len - sub.len + 1; start > 0; --start) {
         if (matches_at(s, sub, start - 1, eq)) {
             *out_idx = start - 1;
@@ -179,8 +179,7 @@ bool tda_span_find_adjacent(tda_Span s, tda_Eq eq, size_t *out_idx) {
     assert(eq);
     assert(out_idx);
 
-    // starts at 1 so that an empty span has nothing to compare rather than
-    // s.len - 1 wrapping around
+    // starts at 1 so an empty span compares nothing instead of s.len - 1 wrapping
     for (size_t i = 1; i < s.len; ++i) {
         if (eq(tda_span_get(s, i - 1), tda_span_get(s, i))) {
             *out_idx = i - 1;

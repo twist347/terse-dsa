@@ -26,7 +26,7 @@ static inline size_t tda_emit_rest(tda_SpanMut dst, size_t out, tda_Span src, si
         return out;
     }
 
-    // tda_span_get_mut vouches only for the first slot; the run has to fit as a whole
+    // tda_span_get_mut checks only the first slot; the whole run must fit
     const size_t n = src.len - from;
     void *to = tda_span_get_mut(dst, out);
     TDA_EXPECT(n <= dst.len - out);

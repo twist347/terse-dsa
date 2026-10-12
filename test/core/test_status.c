@@ -12,16 +12,15 @@ void tearDown() {
 }
 
 // the enum has a fixed underlying type, so a value no enumerator names is an ordinary
-// int32_t and casting one back is defined — that is the only reason the fallback below
-// is reachable from valid code at all
+// int32_t and casting it back is defined; only that makes the fallback below reachable
+// from valid code
 static_assert(sizeof(tda_Status) == sizeof(int32_t));
 
 // zero is success: it is what a calloc'd struct holds and what TDA_STATUS_IS_OK reads
 static_assert(TDA_STATUS_OK == 0);
 
-// spelled out by hand on purpose. deriving the names from the enum the way status.c does
-// (TDA_STRINGIFY over the same list) would make the test agree with any mutation of it —
-// the point is to say each name twice, in two places
+// spelled out by hand on purpose: deriving the names the way status.c does (TDA_STRINGIFY
+// over the same list) would make the test agree with any mutation of that list
 static const struct {
     tda_Status st;
     const char *name;
@@ -50,7 +49,7 @@ static void test_status_to_str_spells_every_status() {
     }
 }
 
-// what the function is for: telling two statuses apart in a message
+// distinct statuses get distinct names, so a message can tell them apart
 static void test_status_to_str_gives_each_status_its_own_name() {
     for (size_t i = 0; i < NAMED_LEN; ++i) {
         for (size_t j = i + 1; j < NAMED_LEN; ++j) {
@@ -62,9 +61,9 @@ static void test_status_to_str_gives_each_status_its_own_name() {
     }
 }
 
-// a name has to still read the same after the next call, or two of them cannot share one
-// printf. pointer identity is deliberately not asserted: any storage outliving the call
-// satisfies the contract, a shared buffer does not
+// a name must read the same after the next call, or two cannot share one printf. Pointer
+// identity is not asserted: any storage outliving the call satisfies the contract, a
+// shared buffer does not.
 static void test_status_to_str_does_not_hand_out_a_shared_buffer() {
     const char *first = tda_status_to_str(TDA_STATUS_OK);
     const char *second = tda_status_to_str(TDA_STATUS_ERR_NO_MEM);
@@ -81,9 +80,8 @@ static void test_status_to_str_falls_back_outside_the_enum() {
     }
 }
 
-// a guard, not a case about the value: add a status after TDA_STATUS_UNSUPPORTED and this
-// fails, which is what sends you back to NAMED. -Wswitch does the same job for status.c,
-// nothing does it for the table above
+// a guard: adding a status after TDA_STATUS_UNSUPPORTED fails this and sends you back to
+// NAMED. -Wswitch does the same for status.c; nothing does it for the table above.
 static void test_status_to_str_notices_a_status_added_to_the_end() {
     constexpr tda_Status past_the_end = (tda_Status) (TDA_STATUS_ERR_NO_MEM + 1);
 
@@ -102,7 +100,7 @@ static void test_status_macros_split_ok_from_everything_else() {
     }
 }
 
-// nothing in the tree produces one, but a caller holding a status from an older build can
+// nothing in the tree produces one, but a caller may hold a status from an older build
 static void test_status_macros_read_an_unknown_value_as_an_error() {
     for (size_t i = 0; i < UNKNOWN_LEN; ++i) {
         TEST_ASSERT_FALSE(TDA_STATUS_IS_OK(UNKNOWN[i]));
@@ -117,9 +115,9 @@ static tda_Status counted(tda_Status st) {
     return st;
 }
 
-// if (TDA_STATUS_IS_ERR(tda_vec_push(&v, &x))) is the form these macros exist for, and
-// evaluating the argument twice there would push twice. every call site in the tree today
-// passes a variable, so this case is the only thing holding that line
+// the macros are meant for if (TDA_STATUS_IS_ERR(tda_vec_push(&v, &x))), where evaluating
+// the argument twice would push twice. Every call site in the tree passes a variable, so
+// only this case guards against it.
 static void test_status_macros_evaluate_their_argument_once() {
     arg_evals = 0;
     TEST_ASSERT_TRUE(TDA_STATUS_IS_OK(counted(TDA_STATUS_OK)));

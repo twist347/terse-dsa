@@ -11,7 +11,7 @@
 
 /// [gen]
 // a tda_Gen that draws its elem instead of computing it. The generator rides in 'ctx',
-// which is why algo needs no random fill of its own — this is it.
+// so algo needs no separate random fill
 static void gen_roll(void *dst, size_t idx, void *ctx) {
     (void) idx;
 
@@ -21,18 +21,18 @@ static void gen_roll(void *dst, size_t idx, void *ctx) {
 
 int main() {
     /// [seed]
-    // a generator is a value: no allocator, no status, nothing to drop. The seed is the
-    // whole state, so this run can be replayed exactly by passing the same one.
+    // a generator is a plain value: no allocator, no status, nothing to drop. The seed is
+    // the whole state, so the same seed replays this run exactly
     tda_Rng rng = tda_rng_from_seed(2026);
 
-    // two draws, two statements: the order a call's arguments are evaluated in is unspecified
+    // two draws, two statements: argument evaluation order is unspecified
     const int32_t first = tda_rng_i32_range(&rng, 1, 6);
     const int32_t second = tda_rng_i32_range(&rng, 1, 6);
     printf("%d %d\n", first, second); // 3 4
     /// [seed]
 
     /// [draw]
-    // uniform over what each one names, with no modulo bias anywhere
+    // uniform over each range, with no modulo bias
     const size_t idx = tda_rng_idx(&rng, 10);      // an index into ten elems
     const double unit = tda_rng_f64(&rng);         // [0.0, 1.0)
     const double angle = tda_rng_f64_range(&rng, 0.0, 6.283185307179586);
@@ -45,16 +45,15 @@ int main() {
     int32_t rolls[12];
     const tda_SpanMut all = TDA_SPAN_FROM_DATA_MUT(int32_t, rolls, 12);
 
-    // filling and shuffling are algo's, and each takes the generator the way sort takes
-    // a comparator
+    // filling and shuffling are in algo, taking the generator as sort takes a cmp
     tda_span_generate(all, gen_roll, &rng);
     tda_span_shuffle(all, &rng);
 
-    // dealing three: only the front is settled, and it is a uniform sample of all twelve
+    // dealing three: only the front is settled, a uniform sample of all twelve
     tda_span_shuffle_prefix(all, 3, &rng);
     tda_span_fprint(tda_span_sub(tda_span_mut_to_span(all), 0, 3), stdout, tda_fprint_i32); // [2, 6, 6]
 
-    // one random elem needs no call of its own: an index and a get
+    // a random elem is just a random index and a get
     const tda_Span rolled = tda_span_mut_to_span(all);
     printf("%d\n", *(const int32_t *) tda_span_get(rolled, tda_rng_idx(&rng, 12))); // 5
     /// [span]

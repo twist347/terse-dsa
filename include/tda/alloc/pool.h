@@ -33,7 +33,7 @@
 /// @{
 
 /// a pool of 'block_count' blocks of 'block_size' bytes, taken from 'parent'
-/// @param parent where the block comes from, borrowed and not owned
+/// @param parent where the block comes from; borrowed
 /// @param block_size a floor, greater than 0: it is rounded up to the alignment and to
 ///                   what the free list needs, and tda_al_pool_stats reports the result
 /// @param block_count how many blocks, greater than 0
@@ -44,8 +44,8 @@ tda_Al *tda_al_pool_new(tda_Al *parent, size_t block_size, size_t block_count);
 
 /// a pool inside 'buf', with no parent: its own header takes the front, aligned, and as
 /// many blocks as fit the rest
-/// @param buf the memory, borrowed and not owned — an array, static or on the stack, or a
-///            block from anywhere; any alignment
+/// @param buf the memory, borrowed: a static or stack array, or a block from anywhere;
+///            any alignment
 /// @param size its bytes, greater than 0
 /// @param block_size a floor, greater than 0, rounded up as in tda_al_pool_new;
 ///                   tda_al_pool_stats reports it and the block count

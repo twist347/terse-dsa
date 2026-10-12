@@ -6,7 +6,6 @@
 
 #include <unity.h>
 
-#include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -112,7 +111,7 @@ static void test_blocks_do_not_overlap() {
 }
 
 // the parent is asked for the padding and the word before the block, and gets the
-// same number back on the way out — that identity is what keeps the sized dealloc honest
+// same size back on free, so the sized dealloc stays correct
 static void test_the_parent_sees_the_padded_size_both_ways() {
     tda_Al parent = probe_al();
 
@@ -188,8 +187,8 @@ static void test_dealloc_null_is_noop() {
 
 /* ========== calloc and realloc ========== */
 
-// no calloc of its own, so tda_calloc must build one on top of this alloc — never
-// on the parent's, which would align the block to the parent instead
+// no calloc of its own, so tda_calloc must build one on this alloc, not on the
+// parent's, which would align the block to the parent instead
 static void test_calloc_zeroes_an_aligned_block_without_the_parents_calloc() {
     tda_Al parent = probe_al();
 

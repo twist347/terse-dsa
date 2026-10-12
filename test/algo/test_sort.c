@@ -16,13 +16,13 @@ void setUp() {
 void tearDown() {
 }
 
-// sorts a copy with the libc qsort — an oracle that shares no code with what is tested
+// sorts a copy with libc qsort, an oracle that shares no code with what is tested
 static void sorted_copy(int32_t *dst, const int32_t *src, size_t n) {
     memcpy(dst, src, n * sizeof(int32_t));
     qsort(dst, n, sizeof(int32_t), tda_cmp_i32);
 }
 
-// true when both hold the same elems, order aside — a reordering algorithm must never
+// true when both hold the same elems in any order; a reordering algorithm must never
 // invent, drop or duplicate one
 static bool same_elems(const int32_t *a, const int32_t *b, size_t n) {
     int32_t x[64];
@@ -57,7 +57,7 @@ static void test_insertion_sort_already_sorted_is_unchanged() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 4);
 }
 
-// the worst case for insertion sort — every element travels the whole way
+// the worst case for insertion sort: every element travels the whole way
 static void test_insertion_sort_reversed_span() {
     int32_t buf[5] = {5, 4, 3, 2, 1};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
@@ -88,7 +88,7 @@ static void test_insertion_sort_empty_and_single_are_noop() {
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
 }
 
-// the comparator defines the order — the algorithm must not assume ascending
+// the comparator defines the order; the algorithm must not assume ascending
 static void test_insertion_sort_follows_the_comparator() {
     int32_t buf[5] = {2, 5, 1, 4, 3};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
@@ -135,7 +135,7 @@ typedef struct {
 } Wide;
 
 // addresses, not pointers: ordering a pointer outside the array against one inside it
-// is itself undefined, and outside is exactly the case being looked for
+// is itself undefined, and outside is the case being looked for
 static uintptr_t wide_first = 0;
 static uintptr_t wide_end = 0;
 static size_t wide_strays = 0;
@@ -149,9 +149,9 @@ static int cmp_wide_in_place(const void *lhs, const void *rhs) {
     return (a->key > b->key) - (a->key < b->key);
 }
 
-// the comparator reads elems as their own type, so it may only ever be handed pointers
-// into the span: a copy set aside on the stack is aligned for max_align_t at best, which
-// an elem like this one outgrows
+// the comparator reads elems as their own type, so it may only get pointers into the
+// span: a copy set aside on the stack is aligned for max_align_t at best, which this
+// elem outgrows
 static void test_insertion_sort_compares_elems_where_they_lie() {
     Wide buf[12];
     for (size_t i = 0; i < 12; ++i) {
@@ -244,7 +244,7 @@ static void test_sort_stays_within_the_subspan() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);
 }
 
-// long enough to exercise the real partitioning rather than a base case
+// long enough to exercise real partitioning, not just a base case
 static void test_sort_orders_a_long_span() {
     int32_t buf[64];
     for (size_t i = 0; i < 64; ++i) {
@@ -291,7 +291,7 @@ static void test_sort_stable_orders_a_shuffled_span() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 6);
 }
 
-// the reason this variant exists: equal keys must keep their original order
+// equal keys must keep their original order; this variant exists for that
 static void test_sort_stable_keeps_equal_elems_in_order() {
     Tagged buf[6] = {
         {2, 0}, {1, 0}, {2, 1}, {1, 1}, {2, 2}, {1, 2},
@@ -363,7 +363,7 @@ static void test_sort_stable_works_through_an_arena() {
     tda_al_arena_drop(arena);
 }
 
-// the scratch buffer cannot be had: reported, and the span is left alone
+// the scratch buffer cannot be had: the error is reported and the span left alone
 static void test_sort_stable_reports_an_exhausted_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 16);
     TEST_ASSERT_NOT_NULL(arena);
@@ -381,7 +381,7 @@ static void test_sort_stable_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// nothing to merge means nothing to allocate — an allocator with no room must still do
+// nothing to merge means nothing to allocate, so an allocator with no room must do
 static void test_sort_stable_of_empty_and_single_needs_no_scratch() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 16);
     TEST_ASSERT_NOT_NULL(arena);
@@ -482,8 +482,7 @@ static void test_nth_elem_places_every_position() {
     }
 }
 
-// the point of the operation: the span is split around nth, even though neither side
-// is ordered within itself
+// the span is split around nth, even though neither side is ordered within itself
 static void test_nth_elem_partitions_around_the_nth() {
     int32_t buf[9] = {9, 1, 8, 2, 7, 3, 6, 4, 5};
     constexpr size_t nth = 4;
@@ -537,11 +536,11 @@ static void test_nth_elem_stays_within_the_subspan() {
 /* ========== scaling ==========
  *
  * A bad pivot choice still produces the right answer, just after far too many
- * comparisons — no assertion about the output can see it. These count the comparisons
+ * comparisons, so no assertion about the output can see it. These count the comparisons
  * instead. 65536 is 2^16, so n * log2(n) is exact and needs no math.h.
  *
  * The size is not arbitrary. Sampling the pivot only at the ends degrades to about
- * n^1.5, which at n = 4096 is still within 4x of n*log n and hides; measured against
+ * n^1.5, which at n = 4096 is still within 4x of n*log n and hides. Measured against
  * this implementation it is 4.0x at 4096, 6.6x at 16384 and 11.3x at 65536, against
  * 1.0x here. The counts are fully deterministic, so the margin is real, not statistical.
  */
@@ -607,10 +606,10 @@ static void test_nth_elem_stays_linear() {
     TEST_ASSERT_LESS_THAN_size_t(8 * SCALE_N, cmp_calls);
 }
 
-// McIlroy, "A Killer Adversary for Quicksort" (1999). A value is settled only when the
-// sort first compares it, and always so that the pivot just picked turns out as bad as
-// it can be. Every quicksort that picks its pivot deterministically goes quadratic
-// against it, ninther included; only the depth cap and its heapsort fallback save one
+// McIlroy, "A Killer Adversary for Quicksort" (1999). A value is fixed only when the
+// sort first compares it, always so that the pivot just picked is as bad as possible.
+// Every quicksort that picks its pivot deterministically goes quadratic against it,
+// ninther included; only the depth cap and its heapsort fallback save one
 static int32_t *adversary_val = nullptr;
 static int32_t adversary_gas = 0;
 static int32_t adversary_solid = 0;
@@ -713,7 +712,7 @@ static void test_is_sorted_allows_equal_neighbours() {
     TEST_ASSERT_TRUE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 4), tda_cmp_i32));
 }
 
-// the break of order is in the last pair — the walk must reach it
+// the break in order is in the last pair; the walk must reach it
 static void test_is_sorted_rejects_a_late_inversion() {
     constexpr int32_t buf[4] = {1, 2, 3, 0};
 
@@ -744,8 +743,8 @@ static void test_is_sorted_until_points_at_the_first_break() {
     TEST_ASSERT_EQUAL_size_t(3, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, buf, 6), tda_cmp_i32));
 }
 
-// a sorted span answers with its own length, which is what makes
-// is_sorted a one-liner over it
+// a sorted span answers with its own length, which makes is_sorted
+// a one-liner over it
 static void test_is_sorted_until_of_a_sorted_span_is_its_length() {
     constexpr int32_t buf[4] = {1, 2, 3, 4};
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 4);

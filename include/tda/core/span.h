@@ -15,16 +15,16 @@
 /// @ingroup core
 /// @brief tda_Span and tda_SpanMut — non-owning views over contiguous elems
 ///
-/// Three fields — where the elems are, how many, how big one is — passed by value. A view
-/// borrows: it never allocates, never frees, never extends the life of what it points at.
+/// Three fields (where the elems are, how many, how big one is), passed by value. A view
+/// borrows: it never allocates, frees or extends the life of what it points at.
 ///
 /// The struct is transparent, so 's.len' is a field and a compound literal is already a
-/// view. There are two of them because a const struct would not make its pointee const:
-/// tda_Span reads, tda_SpanMut writes, tda_span_mut_to_span converts one way only.
+/// view. There are two types because a const struct would not make its pointee const:
+/// tda_Span reads, tda_SpanMut writes, and tda_span_mut_to_span converts one way only.
 ///
-/// The seam between ds and algo. Nothing here allocates, so nothing returns a tda_Status,
-/// and an index out of range asserts. A view must not outlive what it views, nor survive
-/// an op that moves the source block — nothing checks that.
+/// Spans are the seam between ds and algo. Nothing here allocates, so nothing returns a
+/// tda_Status, and out-of-range indices assert. A view must not outlive what it views,
+/// nor survive an op that moves the source block; nothing checks that.
 ///
 /// The typed macros write 'const T', so an elem type already spelled with const needs a
 /// typedef of its own.
@@ -106,7 +106,7 @@ static inline tda_SpanMut tda_span_from_data_mut(void *data, size_t len, size_t 
 /// @{
 
 /// the same elems, seen read-only
-/// @param s the view to give up the write rights of
+/// @param s the view to make read-only
 /// @return the read-only view; there is no way back
 /// @bigo{1}
 [[nodiscard]]
@@ -127,9 +127,9 @@ static inline tda_Span tda_span_mut_to_span(tda_SpanMut s) {
 
 /// a view over 'count' elems of 'self', starting at 'idx'
 /// @param self the view to narrow
-/// @param idx where it begins; asserts idx <= self.len, == gives an empty view
+/// @param idx the start; asserts idx <= self.len, and idx == len gives an empty view
 /// @param count elems it spans; asserts count <= self.len - idx
-/// @return the narrower view, over the same memory — nothing is copied
+/// @return the narrower view over the same memory; nothing is copied
 /// @bigo{1}
 [[nodiscard]]
 static inline tda_Span tda_span_sub(tda_Span self, size_t idx, size_t count) {
@@ -146,9 +146,9 @@ static inline tda_Span tda_span_sub(tda_Span self, size_t idx, size_t count) {
 
 /// tda_span_sub, writable
 /// @param self the view to narrow
-/// @param idx where it begins; asserts idx <= self.len, == gives an empty view
+/// @param idx the start; asserts idx <= self.len, and idx == len gives an empty view
 /// @param count elems it spans; asserts count <= self.len - idx
-/// @return the narrower view, over the same memory — nothing is copied
+/// @return the narrower view over the same memory; nothing is copied
 /// @bigo{1}
 [[nodiscard]]
 static inline tda_SpanMut tda_span_sub_mut(tda_SpanMut self, size_t idx, size_t count) {
@@ -197,7 +197,7 @@ static inline const void *tda_span_get(tda_Span self, size_t idx) {
     return (const unsigned char *) self.data + idx * self.elem_size;
 }
 
-/// tda_span_get, to write through
+/// tda_span_get, writable
 /// @param self the view
 /// @param idx the index; asserts idx < self.len
 /// @return a pointer to the elem
@@ -210,7 +210,7 @@ static inline void *tda_span_get_mut(tda_SpanMut self, size_t idx) {
     return (unsigned char *) self.data + idx * self.elem_size;
 }
 
-/// writes one elem over the elem at 'idx', in the borrowed memory itself
+/// copies one elem over the elem at 'idx', in the viewed memory
 /// @param self the view
 /// @param idx the index; asserts idx < self.len
 /// @param val the address of the value; elem_size bytes are read from it
@@ -228,8 +228,8 @@ static inline void tda_span_set(tda_SpanMut self, size_t idx, const void *val) {
 
 /// exchanges two elems in place
 /// @param self the view
-/// @param i one index; asserts it is in range
-/// @param j the other index; asserts it is in range; i == j is a no-op
+/// @param i one index, asserted in range
+/// @param j the other index, asserted in range; may equal 'i'
 /// @bigo{1}
 static inline void tda_span_swap_elems(tda_SpanMut self, size_t i, size_t j) {
     TDA_SPAN_ASSERT(self);
@@ -313,8 +313,8 @@ static inline void tda_span_mut_print(tda_SpanMut self, tda_FPrint fprint) {
 /// @{
 
 /// @cond
-// hand the view back once T is checked against its elem size, so a typed macro reads it
-// once and still checks it
+// return the view after checking its elem_size against sizeof(T), so a typed macro
+// evaluates it once and still checks it
 
 [[nodiscard]]
 static inline tda_Span tda_span_typed_(tda_Span s, [[maybe_unused]] size_t size) {
@@ -331,7 +331,7 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] si
 
 /// tda_span_from_data with sizeof(T) for the elem size
 /// @param T the elem type
-/// @param data the first elem, made to typecheck as a const T *
+/// @param data the first elem, typechecked as a const T *
 /// @param len elems in the view
 /// @bigo{1}
 #define TDA_SPAN_FROM_DATA(T, data, len) \
@@ -339,7 +339,7 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] si
 
 /// tda_span_from_data_mut with sizeof(T)
 /// @param T the elem type
-/// @param data the first elem, made to typecheck as a T *
+/// @param data the first elem, typechecked as a T *
 /// @param len elems in the view
 /// @bigo{1}
 #define TDA_SPAN_FROM_DATA_MUT(T, data, len) \
@@ -387,10 +387,10 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] si
 // end is formed only when there are elems to step over
 
 /// walks the span front to back, binding 'elem' to each elem in turn
-/// @param T the elem type: a span carries sizes, not types, so the walk has to be told
-/// @param elem the name the loop variable takes; it is a const T *
-/// @param s the view, evaluated once — tda_vec_to_span(v) and its kin belong here
-/// @bigo{n} over the whole walk
+/// @param T the elem type; a span carries sizes, not types
+/// @param elem the name of the loop variable, a const T *
+/// @param s the view, evaluated once, so tda_vec_to_span(v) and the like are fine here
+/// @bigo{n} for the whole walk
 #define TDA_SPAN_FOR_EACH_AS(T, elem, s)                                              \
     for (tda_Span span_ = tda_span_typed_((s), sizeof(T)), *once_ = &span_;           \
          once_;                                                                       \
@@ -410,7 +410,7 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] si
              ++elem)
 
 /// tda_span_set from a value rather than its address
-/// @param T the elem type — scalars only, (T){ val } takes nothing else
+/// @param T the elem type; scalars only, since (T){ val } takes nothing else
 /// @param s the view
 /// @param idx the index
 /// @param val the value to copy in

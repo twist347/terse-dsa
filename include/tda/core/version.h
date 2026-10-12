@@ -8,13 +8,13 @@
 /// @ingroup core
 /// @brief the version of these headers
 ///
-/// The one place the version is written: CMakeLists.txt reads it from here.
+/// The only place the version is written; CMakeLists.txt reads it from here.
 /// @{
 
 /// @name macro
 /// @{
 
-/// bumped by a change that breaks a caller
+/// bumped by a breaking change
 #define TDA_VERSION_MAJOR 1
 
 /// bumped by an addition

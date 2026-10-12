@@ -89,7 +89,7 @@ static void test_from_data_is_detached_from_the_source() {
     tda_arr_drop(a);
 }
 
-// null source is legal while len == 0 — same rule as tda_span_from_data
+// a null source is legal while len == 0, as in tda_span_from_data
 static void test_from_data_empty_has_no_buffer() {
     tda_Arr *a = nullptr;
     TDA_TEST_OK(tda_arr_from_data(nullptr, 0, sizeof(int32_t), tda_al_default(), &a));
@@ -171,7 +171,7 @@ static void test_copy_assign_grow_shrink_empty() {
     TEST_ASSERT_EQUAL_size_t(3, tda_arr_len(dst));
     TEST_ASSERT_EQUAL_INT32_ARRAY(tda_arr_data(small), tda_arr_data(dst), 3);
 
-    // shrink to empty: buffer must be released, not kept
+    // shrink to empty: the buffer is released
     tda_Arr *empty = make_arr(0);
     TDA_TEST_OK(tda_arr_copy_assign(dst, empty));
     TEST_ASSERT_EQUAL_size_t(0, tda_arr_len(dst));
@@ -449,7 +449,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_arr_al(src));
     TEST_ASSERT_TRUE(tda_arr_eq(src, dst));
 
-    // the source is gone and the copy still holds the elems: they were taken, not viewed
+    // the copy outlives the source, so it owns its elems
     tda_arr_drop(src);
     TEST_ASSERT_EQUAL_INT32(3, *TDA_ARR_GET_AS(int32_t, dst, 3));
 
@@ -457,7 +457,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the blocks are asked of the allocator the copy is going to, not of the source's
+// the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -488,13 +488,13 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     const size_t requests = tda_test_probe_requests(&probe);
     TDA_TEST_OK(tda_arr_move_assign(dst, src));
 
-    // nothing was asked of the allocator: the block changed hands as it stood
+    // no allocation: the block itself is handed over
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
     TEST_ASSERT_EQUAL_size_t(3, tda_arr_len(dst));
     TEST_ASSERT_EQUAL_INT32(2, *TDA_ARR_GET_AS(int32_t, dst, 1));
 
-    // the source is left empty and usable, not dangling
+    // the source is left empty and usable
     TEST_ASSERT_EQUAL_size_t(0, tda_arr_len(src));
     TEST_ASSERT_NULL(tda_arr_data(src));
 
@@ -626,8 +626,7 @@ static void test_from_data_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// a copy asks the SOURCE's allocator for both blocks, so an exhausted arena under the
-// source is what refuses it
+// a copy takes both blocks from the SOURCE's allocator, so exhausting that arena fails it
 static void test_copy_reports_an_exhausted_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
     TEST_ASSERT_NOT_NULL(arena);
@@ -645,7 +644,7 @@ static void test_copy_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// the header alone is refused: the buffer is never asked for, and 'out' stays untouched
+// the header is refused, so the buffer is never requested and 'out' stays untouched
 static void test_copy_of_empty_reports_an_exhausted_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 128);
     TEST_ASSERT_NOT_NULL(arena);
@@ -662,9 +661,8 @@ static void test_copy_of_empty_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// A copy_assign that changes the length has to resize the TARGET's buffer, which is the
-// only allocation this operation makes. When it is refused the target must be left whole
-// — the old length, the old block and the old elems — rather than half converted
+// A copy_assign that changes the length resizes the TARGET's buffer, its only allocation.
+// When that is refused the target keeps its old length, block and elems.
 static void test_copy_assign_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
     TEST_ASSERT_NOT_NULL(arena);
@@ -688,8 +686,8 @@ static void test_copy_assign_reports_an_exhausted_arena_and_changes_nothing() {
     tda_al_arena_drop(arena);
 }
 
-// equal lengths need no new room, so the elems are written over the block the target
-// already has. The probe is what makes "no allocation" checkable at all
+// equal lengths need no new room, so the elems overwrite the target's own block;
+// the probe makes "no allocation" checkable
 static void test_copy_assign_of_the_same_length_never_allocates() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -715,9 +713,9 @@ static void test_copy_assign_of_the_same_length_never_allocates() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// The arr is built in two allocations, the header first and then the buffer. When the
-// second is refused the first must not be stranded: the probe counts what is still live,
-// and an arena would hide the leak because it frees everything at once
+// The arr is built in two allocations, header then buffer. When the second is refused
+// the first must be freed. The probe counts live blocks; an arena would hide the leak
+// because it frees everything at once.
 static void test_a_refused_buffer_frees_the_header() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -732,8 +730,7 @@ static void test_a_refused_buffer_frees_the_header() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// the same for the filled constructor, which takes its buffer with tda_alloc rather than
-// tda_calloc — a different call, the same rule
+// the same for the filled constructor, which takes its buffer with tda_alloc, not calloc
 static void test_a_refused_buffer_frees_the_header_of_from_data() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -748,8 +745,8 @@ static void test_a_refused_buffer_frees_the_header_of_from_data() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// two blocks go into a filled arr and drop must hand back both. The default allocator
-// would say nothing about it, so the count comes from a probe
+// drop must free both blocks of a filled arr; the default allocator cannot show that,
+// so a probe counts them
 static void test_drop_hands_back_everything_it_took() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -886,7 +883,7 @@ static void test_eq_parts_one_differing_elem() {
     tda_arr_drop(b);
 }
 
-// a prefix of the other, so nothing but the length tells the two apart
+// one is a prefix of the other, so only the length tells them apart
 static void test_eq_parts_different_lengths() {
     tda_Arr *a = make_arr(4);
     tda_Arr *shorter = make_arr(3);
@@ -914,7 +911,7 @@ static void test_eq_of_two_empties() {
     tda_arr_drop(one);
 }
 
-// the equality decides, and it can see less than the bytes do: these Pairs agree in the
+// the caller's equality decides even where the bytes differ: these Pairs agree in the
 // first field and differ in the second
 static void test_eq_by_asks_the_equality() {
     constexpr Pair lhs[2] = {{1, 10}, {2, 20}};
@@ -934,7 +931,7 @@ static void test_eq_by_asks_the_equality() {
 
 /* ========== print ========== */
 
-// a printer writes to a stream, so a case reads one back through tmpfile, as
+// printers write to a stream, so cases read it back through tmpfile, as
 // test/core/test_print.c does
 static void assert_prints(const char *expected, const tda_Arr *a) {
     FILE *stream = tmpfile();
@@ -977,8 +974,7 @@ static void test_fprint_of_an_empty_arr() {
     tda_arr_drop(a);
 }
 
-// the stdout twin takes no stream and cannot be captured portably, so a case can only
-// say that it runs and reaches the same printer
+// stdout cannot be captured portably, so this only checks that the stdout variant runs
 static void test_print_writes_to_stdout() {
     tda_Arr *a = make_arr(3);
 

@@ -14,8 +14,8 @@ void setUp() {
 void tearDown() {
 }
 
-// a NaN with a chosen payload — every one of them is equal to every other under
-// tda_eq_f64, so every one of them has to hash the same
+// a NaN with a chosen payload. All NaNs are equal under tda_eq_f64, so they must all
+// hash alike
 static double nan_with_bits(uint64_t bits) {
     double val;
     memcpy(&val, &bits, sizeof(val));
@@ -32,8 +32,8 @@ static float nan_with_bits_f32(uint32_t bits) {
 
 /* ========== the invariant ========== */
 
-// the contract of a hash: equal keys agree. "Equal" is tda_eq_<T>, not memcmp, which is
-// what makes the float cases below interesting rather than obvious.
+// the contract of a hash: equal keys agree. "Equal" means tda_eq_<T>, not memcmp, which
+// is what makes the float cases below non-trivial.
 static void test_hash_agrees_with_equality() {
     constexpr int32_t a = 42;
     constexpr int32_t b = 42;
@@ -202,7 +202,7 @@ static void test_hash_cstr_keeps_null_apart_from_empty() {
     TEST_ASSERT_NOT_EQUAL_UINT64(tda_hash_cstr(&null_str), tda_hash_cstr(&empty));
 }
 
-// a one character difference must not survive to the result — FNV-1a mixes each byte in
+// a one-character difference must change the result: FNV-1a mixes each byte in
 static void test_hash_cstr_separates_neighbours() {
     const char *strs[4] = {"ab", "ba", "abc", "abd"};
     tda_Hash hashes[4];
@@ -220,8 +220,8 @@ static void test_hash_cstr_separates_neighbours() {
 
 /* ========== combine ========== */
 
-// the point of combining rather than xoring: a struct whose fields are swapped is a
-// different struct, and must be a different hash
+// why combine and not xor: a struct with its fields swapped is a different struct, and
+// must hash differently
 static void test_hash_combine_depends_on_order() {
     TEST_ASSERT_NOT_EQUAL_UINT64(tda_hash_combine(1, 2), tda_hash_combine(2, 1));
 }
@@ -232,7 +232,7 @@ static void test_hash_combine_does_not_leave_zero_at_zero() {
     TEST_ASSERT_NOT_EQUAL_UINT64(0, tda_hash_combine(0, 0));
 }
 
-// what combine exists for, spelled out: the hash of a struct is its fields' hashes folded
+// the intended use of combine: the hash of a struct is its fields' hashes folded
 // together, exactly as its comparator delegates to its fields' comparators
 typedef struct {
     int32_t id;
@@ -262,8 +262,8 @@ static void test_hash_combine_builds_a_struct_hasher() {
 
 /* ========== through the type ========== */
 
-// every one of these exists to be handed over as a tda_Hasher, which is also the check
-// that the signatures agree with the typedef
+// each of these is meant to be passed as a tda_Hasher; passing them here also checks
+// that the signatures match the typedef
 static void test_hashers_travel_as_the_typedef() {
     const tda_Hasher hashers[3] = {tda_hash_i32, tda_hash_f64, tda_hash_cstr};
 

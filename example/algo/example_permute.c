@@ -39,8 +39,8 @@ int main() {
     tda_span_shuffle(deck, &rng);
     tda_span_mut_print(deck, tda_fprint_i32); // [8, 2, 3, 1, 6, 7, 5, 4]
 
-    // dealing a hand: only the first three positions are settled, and they are a uniform
-    // sample of the whole span rather than of its front
+    // dealing a hand: only the first three positions are settled, a uniform sample of
+    // the whole span, not just its front
     tda_span_shuffle_prefix(deck, 3, &rng);
     tda_span_mut_print(tda_span_sub_mut(deck, 0, 3), tda_fprint_i32); // [4, 5, 6]
     /// [shuffle]
@@ -48,12 +48,12 @@ int main() {
     /// [partition]
     const tda_SpanMut t = TDA_SPAN_OF_MUT(int32_t, 1, 2, 3, 4, 5, 6);
 
-    // the fast split: it swaps, so neither side keeps the order it had
+    // the fast split swaps elems, so neither side keeps its original order
     const size_t at = tda_span_partition(t, is_even, nullptr);
     printf("%zu even, ", at);
     tda_span_mut_print(t, tda_fprint_i32); // 3 even, [2, 4, 6, 1, 5, 3]
 
-    // keeping both orders costs a buffer, so that one takes an allocator and can fail
+    // the stable split needs a buffer, so it takes an allocator and can fail
     const tda_SpanMut u = TDA_SPAN_OF_MUT(int32_t, 1, 2, 3, 4, 5, 6);
     size_t boundary;
     if (TDA_STATUS_IS_ERR(tda_span_partition_stable(u, is_even, nullptr, tda_al_default(), &boundary))) {

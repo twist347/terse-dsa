@@ -15,20 +15,20 @@
 [[nodiscard]]
 static void *arena_alloc(void *ctx, size_t size);
 
-/// grows or shrinks the last block where it stands, since nothing lies past it; any
-/// other block moves, and the old one stays behind like every block the arena has lent
+/// resizes the last block in place, since nothing lies past it; any other block moves,
+/// and its old slot stays used like every block the arena has lent
 [[nodiscard]]
 static void *arena_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size);
 
 static void arena_dealloc(void *ctx, void *ptr, size_t size);
 
 typedef struct {
-    tda_Al *parent_al; // null when the arena lives in a buffer of the caller's
+    tda_Al *parent_al; // null when the arena lives in a caller's buffer
     void *data;
     size_t cap;
     size_t offset;
-    // where the latest live mark stands. A last block that starts below it moves to grow
-    // rather than growing in place, so a rewind to the mark never cuts it short
+    // offset of the latest live mark. A last block starting below it moves to grow, so
+    // a rewind to the mark never cuts it short
     size_t floor;
 } ArenaCtx;
 
@@ -40,8 +40,8 @@ typedef struct {
 
 static void arena_init(tda_Al *obj, ArenaCtx *arena_ctx, tda_Al *parent, void *data, size_t cap);
 
-/// whether the block at 'ptr', 'size' bytes when it was handed out, is the last one: the
-/// only block with nothing but the free tail after it
+/// whether the block at 'ptr', handed out as 'size' bytes, is the last one, with only
+/// the free tail after it
 [[nodiscard]]
 static bool is_last_block(const ArenaCtx *arena_ctx, const void *ptr, size_t size);
 
@@ -60,8 +60,8 @@ tda_Al *tda_al_arena_new(tda_Al *parent, size_t cap) {
     assert(parent);
     assert(cap > 0);
 
-    // every request is rounded up to the alignment, so a block that is not a multiple of
-    // it would end in a tail no request can reach
+    // every request is rounded up to the alignment, so a tail past the last multiple of
+    // it could never be handed out
     size_t block_size;
     if (tda_ckd_align_up(&block_size, cap, TDA_DEFAULT_ALIGNMENT)) {
         return nullptr;
@@ -102,7 +102,7 @@ tda_Al *tda_al_arena_from_buf(void *buf, size_t size) {
         return nullptr;
     }
 
-    // cut down to whole slots, as tda_al_arena_new rounds up: a shorter tail is no use
+    // cut down to whole slots, as tda_al_arena_new rounds up; a partial tail is unusable
     ArenaHead *head = head_ptr;
     arena_init(&head->al, &head->ctx, nullptr, data, tda_align_down(rest, TDA_DEFAULT_ALIGNMENT));
 
@@ -119,7 +119,7 @@ void tda_al_arena_drop(tda_Al *self) {
     ArenaCtx *arena_ctx = self->ctx;
     tda_Al *parent_al = arena_ctx->parent_al;
     if (!parent_al) {
-        // from_buf: header and block are the caller's buffer, and nothing was taken
+        // from_buf: header and block live in the caller's buffer
         return;
     }
 
@@ -159,9 +159,9 @@ void tda_al_arena_rewind(tda_Al *self, tda_AlArenaMark mark) {
 
     ArenaCtx *arena_ctx = self->ctx;
     TDA_EXPECT(mark.arena == arena_ctx);
-    // nothing but a rewind or a reset takes the offset below a live mark: a block from
-    // under the floor never shrinks it, and one from above stays above. So a mark past
-    // the offset is one already rewound past
+    // only a rewind or a reset moves the offset below a live mark: a block from under
+    // the floor never shrinks it, and one from above stays above. So a mark past the
+    // offset has already been rewound past
     TDA_EXPECT(mark.offset <= arena_ctx->offset);
     assert(mark.floor <= mark.offset);
 
@@ -218,8 +218,8 @@ static void *arena_realloc(void *ctx, void *ptr, size_t old_size, size_t new_siz
         return arena_alloc(ctx, new_size);
     }
 
-    // the last block resizes where it stands, unless it starts under the floor: grown in
-    // place it would reach past a mark, and the rewind would hand its tail out again
+    // the last block resizes in place unless it starts under the floor: grown in place
+    // it would reach past a mark, and the rewind would hand its tail out again
     if (is_last_block(arena_ctx, ptr, old_size) && block_start(arena_ctx, ptr) >= arena_ctx->floor) {
         const size_t start = arena_ctx->offset - tda_align_up(old_size, TDA_DEFAULT_ALIGNMENT);
         size_t aligned_size;
@@ -234,8 +234,8 @@ static void *arena_realloc(void *ctx, void *ptr, size_t old_size, size_t new_siz
         return ptr;
     }
 
-    // any other block shrinks where it stands: the arena takes nothing back per block, so
-    // the tail is lost either way, and a move would only spend more and could fail
+    // any other block shrinks in place: the arena frees nothing per block, so the tail
+    // is lost either way, and a move would cost more and could fail
     if (new_size <= old_size) {
         return ptr;
     }
@@ -270,7 +270,7 @@ static size_t block_start(const ArenaCtx *arena_ctx, const void *ptr) {
 }
 
 static void arena_dealloc(void *ctx, void *ptr, size_t size) {
-    // arena doesn't free individual allocations
+    // the arena frees nothing per block
 
     TDA_UNUSED(ctx);
     TDA_UNUSED(ptr);

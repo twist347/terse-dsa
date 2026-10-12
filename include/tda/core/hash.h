@@ -16,10 +16,10 @@
 ///
 /// Three values would break that law if hashed as raw bytes, so they are canonicalized:
 /// -0.0 hashes as +0.0, every NaN hashes as one quiet NaN, and a null string hashes as a
-/// value of its own rather than as "" — the three distinctions core/cmp keeps.
+/// value of its own rather than as "". These are the three distinctions core/cmp keeps.
 ///
-/// tda_hash_bytes and tda_hash_combine are the two that are not tda_Hasher, and what a
-/// hasher for your own struct is built out of.
+/// tda_hash_bytes and tda_hash_combine are the two that are not tda_Hasher; a hasher for
+/// your own struct is built out of them.
 ///
 /// @par Example
 /// @snippet core/example_hash.c struct
@@ -36,24 +36,24 @@ typedef tda_Hash (*tda_Hasher)(const void *);
 /// @name int
 /// @{
 
-/// a int8_t
+/// an int8_t
 /// @param val the address of the value
 /// @return its hash
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Hash tda_hash_i8(const void *val);
 
-/// a int16_t
+/// an int16_t
 /// @copydetails tda_hash_i8
 [[nodiscard]] TDA_API
 tda_Hash tda_hash_i16(const void *val);
 
-/// a int32_t
+/// an int32_t
 /// @copydetails tda_hash_i8
 [[nodiscard]] TDA_API
 tda_Hash tda_hash_i32(const void *val);
 
-/// a int64_t
+/// an int64_t
 /// @copydetails tda_hash_i8
 [[nodiscard]] TDA_API
 tda_Hash tda_hash_i64(const void *val);
@@ -138,7 +138,7 @@ tda_Hash tda_hash_char(const void *val);
 /// @name bytes
 /// @{
 
-/// 'len' bytes at 'data' — not a tda_Hasher, since it takes a length
+/// 'len' bytes at 'data'; not a tda_Hasher, since it takes a length
 /// @param data the bytes; may be null only when 'len' is 0
 /// @param len how many bytes to read
 /// @return their hash
@@ -155,9 +155,9 @@ tda_Hash tda_hash_bytes(const void *data, size_t len);
 /// @{
 
 /// a string, by its contents; a null pointer hashes as a value of its own, not as ""
-/// @param val the address of the value — a pointer to the const char *, not the string
+/// @param val the address of the value; a pointer to the const char *, not the string
 /// @return its hash
-/// @bigo{n} — n is the length of the string
+/// @bigo{n}; n is the length of the string
 [[nodiscard]] TDA_API
 tda_Hash tda_hash_cstr(const void *val);
 

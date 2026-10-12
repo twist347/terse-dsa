@@ -20,9 +20,8 @@ void tearDown() {
 
 /* ========== helpers ========== */
 
-// The word is 64 bits wide, so every trap in this module lives at a seam: the last word
-// of a universe that does not end on one, the shift by a whole word, the bits above nbits
-// that no operation may ever show. These are the sizes that put one there.
+// Words are 64 bits wide, so the traps sit at seams: a partial last word, a shift by a
+// whole word, the bits above nbits that no operation may show. These sizes hit each one.
 static constexpr size_t SEAMS[] = {0, 1, 63, 64, 65, 127, 128, 129, 200};
 
 [[nodiscard]]
@@ -44,11 +43,10 @@ static tda_BitSet *make_full(size_t nbits) {
     return b;
 }
 
-// The whole set, read every way the type offers: bit by bit, as a count, as the three
-// summaries and as a walk. A bit that leaked above nbits cannot be seen through test,
-// which never looks there — it shows up in count, in all, or in the scan, which is why
-// this asks all four rather than trusting one.
-// 'want' is written in ascending order.
+// Checks the set every way the type offers: bit by bit, as a count, through the
+// summaries and as a walk. A bit leaked above nbits is invisible to test, which never
+// looks there; it shows up only in count, all or the scan, so all of them are asked.
+// 'want' is in ascending order.
 static void assert_members(const tda_BitSet *b, size_t nbits, const size_t *want, size_t n) {
     TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_len(b));
     TEST_ASSERT_EQUAL_size_t(n, tda_bitset_count(b));
@@ -73,7 +71,7 @@ static void assert_members(const tda_BitSet *b, size_t nbits, const size_t *want
     }
     TEST_ASSERT_EQUAL_size_t(n, seen);
 
-    // and the same walk the other way, from past the universe down
+    // the same walk backwards, from past the universe down
     seen = 0;
     for (size_t from = SIZE_MAX; tda_bitset_find_prev(b, from, &idx); from = idx - 1) {
         TEST_ASSERT_TRUE_MESSAGE(seen < n, "the scan runs past the members");
@@ -86,7 +84,7 @@ static void assert_members(const tda_BitSet *b, size_t nbits, const size_t *want
     TEST_ASSERT_EQUAL_size_t(n, seen);
 }
 
-// a printer writes to a stream, so a case reads one back through tmpfile, as
+// printers write to a stream, so cases read it back through tmpfile, as
 // test/core/test_print.c does
 static void assert_prints(const char *expected, const tda_BitSet *b) {
     FILE *stream = tmpfile();
@@ -125,7 +123,7 @@ static void test_new_starts_with_nothing_in_it() {
     }
 }
 
-// a universe of nothing is a real set: it holds nothing, and it holds all of nothing
+// an empty universe is a valid set: it is both empty and full
 static void test_an_empty_universe_is_full_and_empty_at_once() {
     tda_BitSet *b = make_bitset(0, nullptr, 0);
 
@@ -223,7 +221,7 @@ static void test_set_to_writes_both_ways() {
     tda_bitset_drop(b);
 }
 
-// the whole point of a word is that its neighbours share it
+// neighbouring bits share a word and must not disturb each other
 static void test_one_bit_leaves_the_rest_of_its_word_alone() {
     tda_BitSet *b = make_bitset(200, nullptr, 0);
 
@@ -248,7 +246,7 @@ static void test_the_bits_at_the_word_seams() {
 
     assert_members(b, 129, want, 3);
 
-    // and the last index of the universe, which is the one the tail mask guards
+    // and the last index, the one the tail mask guards
     constexpr size_t seam[] = {63, 64, 65, 128};
     tda_bitset_set(b, 128);
     assert_members(b, 129, seam, 4);
@@ -264,7 +262,7 @@ static void test_set_all_fills_the_universe() {
 
         tda_BitSet *b = make_full(nbits);
 
-        // the count is the whole test: a tail left dirty makes it bigger than the universe
+        // a dirty tail would make the count exceed the universe
         TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_count(b));
         TEST_ASSERT_TRUE(tda_bitset_all(b));
         TEST_ASSERT_EQUAL_INT(nbits > 0, tda_bitset_any(b));
@@ -300,8 +298,7 @@ static void test_flip_all_is_the_complement() {
 
         tda_bitset_flip_all(b);
 
-        // the complement of a set of 'was' members in a universe of 'nbits' has the rest
-        // and nothing above them
+        // the complement holds the other 'nbits' - 'was' bits and nothing above them
         TEST_ASSERT_EQUAL_size_t(nbits - was, tda_bitset_count(b));
         for (size_t i = 0; i < nbits; ++i) {
             TEST_ASSERT_EQUAL_INT(i % 2 != 0, tda_bitset_test(b, i));
@@ -344,7 +341,7 @@ static void test_find_next_walks_the_members() {
 
     assert_members(b, 200, want, 7); // the walk is checked in there against every bit
 
-    // and from a start that is not a member, the answer is the next one that is
+    // from a start that is not a member, the next member is found
     size_t idx;
     TEST_ASSERT_TRUE(tda_bitset_find_next(b, 2, &idx));
     TEST_ASSERT_EQUAL_size_t(63, idx);
@@ -392,8 +389,7 @@ static void test_find_next_clear_walks_the_gaps() {
     tda_bitset_drop(b);
 }
 
-// the complement of a full last word is a word of ones above nbits, and not one of them
-// is an index of this set
+// the complement of a full last word has ones above nbits, and none of them is an index
 static void test_find_next_clear_misses_on_a_full_set() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         tda_BitSet *b = make_full(SEAMS[s]);
@@ -424,8 +420,7 @@ static void test_find_next_clear_on_an_empty_set_answers_the_start() {
     tda_bitset_drop(b);
 }
 
-// a single member at the far end of every universe: the scans have to cross whole empty
-// words to reach it
+// one member at the far end of each universe, so the scans cross whole empty words
 static void test_the_scans_cross_whole_words() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
@@ -448,8 +443,8 @@ static void test_the_scans_cross_whole_words() {
     }
 }
 
-// find_prev and find_prev_clear from every start, against a brute-force walk down
-// through test. Each seam, with members laid out so every word is empty, full or mixed
+// find_prev and find_prev_clear from every start against a brute-force walk with test,
+// at each seam, with words that are empty, full or mixed
 static void test_find_prev_matches_a_walk_down_everywhere() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
@@ -495,7 +490,7 @@ static void test_find_prev_matches_a_walk_down_everywhere() {
     }
 }
 
-// no bit above the universe is a member, nor a gap: complemented, they are all ones
+// bits above the universe are not gaps, though they are ones once complemented
 static void test_find_prev_clear_misses_on_a_full_set() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         tda_BitSet *b = make_full(SEAMS[s]);
@@ -543,7 +538,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_bitset_al(src));
     TEST_ASSERT_TRUE(tda_bitset_eq(src, dst));
 
-    // the source is gone and the copy still holds the members: the words are its own
+    // the copy outlives the source, so it owns its words
     tda_bitset_drop(src);
     assert_members(dst, 129, want, 3);
 
@@ -551,7 +546,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the words are asked of the allocator the copy is going to, not of the source's
+// the words come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -586,7 +581,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     const size_t requests = tda_test_probe_requests(&probe);
     TDA_TEST_OK(tda_bitset_move_assign(dst, src));
 
-    // nothing was asked of the allocator: the words changed hands, universe and all
+    // no allocation: the words and the universe are handed over
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
     assert_members(dst, 129, (const size_t[]){0, 128}, 2);
@@ -655,7 +650,7 @@ static void test_move_assign_of_itself_changes_nothing() {
 }
 
 static void test_for_each_walks_the_members_in_order() {
-    // members on both sides of a word seam: the walk has to cross it
+    // members on both sides of a word seam, so the walk crosses it
     constexpr size_t want[] = {0, 63, 64, 128};
     tda_BitSet *b = make_bitset(129, want, 4);
 
@@ -702,10 +697,10 @@ static void test_swap_exchanges_the_contents() {
     const size_t requests = tda_test_probe_requests(&probe);
     tda_bitset_swap(a, b);
 
-    // the words change hands where they lie: nothing is asked of the allocator
+    // the words are swapped in place, with no allocation
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
-    // the universe travels with the words, so the two swap lengths as well as members
+    // the lengths swap along with the members
     assert_members(a, 8, (const size_t[]){3}, 1);
     assert_members(b, 129, (const size_t[]){128}, 1);
 
@@ -760,7 +755,7 @@ static void test_copy_assign_grow_shrink_empty() {
     assert_members(dst, 129, want, 3);
     tda_bitset_drop(dst);
 
-    // down to an empty universe: the words are handed back, not kept
+    // down to an empty universe: the words are freed
     tda_BitSet *empty = make_bitset(0, nullptr, 0);
     dst = make_full(129);
     TDA_TEST_OK(tda_bitset_copy_assign(dst, empty));
@@ -823,7 +818,7 @@ static void test_eq_matches_the_same_members() {
     tda_bitset_drop(b);
 }
 
-// a different universe is simply not equal, and that is not an assert
+// a different universe compares unequal; it is not asserted
 static void test_eq_parts_different_universes() {
     tda_BitSet *a = make_bitset(64, nullptr, 0);
     tda_BitSet *b = make_bitset(65, nullptr, 0);
@@ -903,7 +898,7 @@ static void test_symmetric_difference_keeps_what_exactly_one_holds() {
     tda_bitset_drop(b);
 }
 
-// every pairwise op takes the same set on both sides, and each has to mean what it says
+// every pairwise op with the same set on both sides gives the expected result
 static void test_the_pairwise_ops_on_one_set() {
     constexpr size_t want[] = {0, 64, 128};
 
@@ -925,8 +920,7 @@ static void test_the_pairwise_ops_on_one_set() {
     tda_bitset_drop(b);
 }
 
-// the pairwise ops cannot dirty the tail, whatever the operands: this is the case that
-// would catch it if one ever did
+// no pairwise op may dirty the tail, whatever the operands
 static void test_the_pairwise_ops_keep_the_tail_clear() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
@@ -1043,8 +1037,7 @@ static void test_fprint_shows_no_bit_above_the_universe() {
     tda_bitset_drop(b);
 }
 
-// the stdout twin takes no stream and cannot be captured portably, so a case can only
-// say that it runs and reaches the same printer
+// stdout cannot be captured portably, so this only checks that the stdout variant runs
 static void test_print_writes_to_stdout() {
     constexpr size_t members[] = {0, 3};
     tda_BitSet *b = make_bitset(8, members, 2);
@@ -1073,7 +1066,7 @@ static void test_refused_words_free_the_header() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
-    tda_test_probe_fail_after_next(&probe, 1); // the header goes through, the words do not
+    tda_test_probe_fail_after_next(&probe, 1); // the header passes, the words are refused
 
     tda_BitSet *b = nullptr;
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_new(200, &al, &b));
@@ -1095,7 +1088,7 @@ static void test_copy_reports_an_exhausted_arena() {
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy(src, &copy));
     TEST_ASSERT_NULL(copy);
 
-    // the source is untouched by the failure
+    // the source is unchanged
     constexpr size_t want[] = {7};
     assert_members(src, 200, want, 1);
 
@@ -1115,7 +1108,7 @@ static void test_copy_assign_leaves_the_target_untouched_on_failure() {
 
     tda_BitSet *src = make_bitset(200, nullptr, 0);
 
-    // the resize is the only request copy_assign makes, so refusing the next one hits it
+    // the resize is copy_assign's only request, so the next refusal hits it
     tda_test_probe_fail_after_next(&probe, 0);
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy_assign(dst, src));
 
@@ -1126,7 +1119,7 @@ static void test_copy_assign_leaves_the_target_untouched_on_failure() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// a target that already has the right number of words needs no allocator at all
+// a target that already has the right number of words never allocates
 static void test_copy_assign_of_the_same_universe_never_allocates() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);

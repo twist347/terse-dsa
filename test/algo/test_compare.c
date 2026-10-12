@@ -43,7 +43,7 @@ static void test_eq_differs_in_the_last_elem() {
     TEST_ASSERT_FALSE(tda_span_eq(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3)));
 }
 
-// length is compared before contents — a prefix is not equal to the whole
+// length is compared before contents: a prefix does not equal the whole
 static void test_eq_different_lengths() {
     constexpr int32_t a[3] = {1, 2, 3};
 
@@ -95,7 +95,7 @@ static void test_eq_by_different_lengths() {
     TEST_ASSERT_FALSE(tda_span_eq_by(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, a, 2), tda_eq_i32));
 }
 
-// the same buffer short-circuits: the predicate must not be consulted at all
+// the same buffer short-circuits: the predicate must not be called
 static void test_eq_by_same_buffer_skips_the_predicate() {
     constexpr int32_t a[3] = {1, 2, 3};
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, a, 3);
@@ -105,7 +105,7 @@ static void test_eq_by_same_buffer_skips_the_predicate() {
     TEST_ASSERT_EQUAL_size_t(0, eq_calls);
 }
 
-// a mismatch stops the walk — later elements are never examined
+// a mismatch stops the walk; later elems are never examined
 static void test_eq_by_stops_at_the_first_mismatch() {
     constexpr int32_t a[4] = {1, 9, 3, 4};
     constexpr int32_t b[4] = {1, 0, 3, 4};
@@ -140,8 +140,7 @@ static void test_mismatch_reports_the_first_disagreement() {
     TEST_ASSERT_EQUAL_size_t(2, idx);
 }
 
-// index 0 is the case a "found something" flag can hide: a truthy index
-// happens to double as the flag everywhere else
+// index 0 is the case a "found" flag can hide, since every other index is truthy
 static void test_mismatch_at_the_very_first_elem() {
     constexpr int32_t a[3] = {9, 2, 3};
     constexpr int32_t b[3] = {1, 2, 3};
@@ -164,8 +163,8 @@ static void test_mismatch_of_equal_spans_leaves_the_out_param_alone() {
     TEST_ASSERT_EQUAL_size_t(777, idx);
 }
 
-// only the common prefix is compared: a length difference is not a
-// disagreeing elem, and eq/cmp are what answer that question
+// only the common prefix is compared: a length difference is not a mismatch, and
+// eq/cmp answer that question
 static void test_mismatch_looks_at_the_common_prefix_only() {
     constexpr int32_t shorter[2] = {1, 2};
     constexpr int32_t longer[4] = {1, 2, 3, 4};
@@ -232,8 +231,8 @@ static void test_mismatch_honours_the_callback() {
 
 /* ========== is_permutation ========== */
 
-// how many times 'key' is in 'arr': the oracle counts with plain ==, sharing no code with
-// what is tested
+// how many times 'key' is in 'arr', counted with plain == so the oracle shares no code
+// with what is tested
 static size_t occurrences(const int32_t *arr, size_t n, int32_t key) {
     size_t c = 0;
     for (size_t i = 0; i < n; ++i) {
@@ -250,8 +249,8 @@ static void nth_array(int32_t *dst, size_t n, size_t idx) {
     }
 }
 
-// every pair of arrays of up to five elems over three values, against the counts: equal
-// counts of every value is what a permutation is. Few values, so repeats are everywhere
+// every pair of arrays of up to five elems over three values, against the counts: a
+// permutation has equal counts of every value. Few values make repeats common
 static void test_is_permutation_matches_the_counts_everywhere() {
     for (size_t n = 0; n <= 5; ++n) {
         size_t arrays = 1;
@@ -282,7 +281,7 @@ static void test_is_permutation_matches_the_counts_everywhere() {
     }
 }
 
-// the trap of asking only whether each elem of one is somewhere in the other
+// catches checking only that each elem of one occurs somewhere in the other
 static void test_is_permutation_counts_the_repeats() {
     const tda_Span a = TDA_SPAN_OF(int32_t, 1, 1, 2);
     const tda_Span b = TDA_SPAN_OF(int32_t, 1, 2, 2);
@@ -416,7 +415,7 @@ static void test_cmp_follows_the_comparator() {
     );
 }
 
-// the two agree: cmp says zero exactly when eq says true
+// cmp and eq agree: cmp is zero exactly when eq is true
 static void test_cmp_and_eq_agree() {
     constexpr int32_t a[3] = {1, 2, 3};
     constexpr int32_t b[3] = {1, 2, 3};

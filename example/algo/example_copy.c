@@ -2,6 +2,7 @@
 
 #include "tda/algo/copy.h"
 #include "tda/core/print.h"
+#include "tda/core/rng.h"
 #include "tda/core/span.h"
 #include "tda/core/util.h"
 
@@ -27,18 +28,28 @@ int main() {
     tda_span_copy(dst, src);
     tda_span_mut_print(dst, tda_fprint_i32); // [1, 2, 3, 4, 5]
 
-    // copy_if packs what passes to the front and says how many that was; the tail of
-    // 'dst' keeps whatever it held
+    // copy_if packs the passing elems to the front and returns their count; the rest of
+    // 'dst' keeps its old contents
     const size_t kept = tda_span_copy_if(dst, src, is_even, nullptr);
     printf("%zu kept\n", kept); // 2 kept
     tda_span_mut_print(tda_span_sub_mut(dst, 0, kept), tda_fprint_i32); // [2, 4]
 
-    // the two spans overlap here, so it is copy_overlapping or nothing: plain copy reads what
-    // it has already written
+    // overlapping spans need copy_overlapping: plain copy reads what it already wrote
     const tda_SpanMut all = TDA_SPAN_OF_MUT(int32_t, 1, 2, 3, 4, 5);
     tda_span_copy_overlapping(tda_span_sub_mut(all, 1, 4), tda_span_sub(tda_span_mut_to_span(all), 0, 4));
     tda_span_mut_print(all, tda_fprint_i32); // [1, 1, 2, 3, 4]
     /// [copy]
+
+    /// [sample]
+    // picks as many as 'dst' holds, none twice, in source order; the same seed replays
+    // the same pick
+    tda_Rng rng = tda_rng_from_seed(7);
+
+    int32_t pick[3];
+    const tda_SpanMut picked = TDA_SPAN_FROM_DATA_MUT(int32_t, pick, 3);
+    const size_t n = tda_span_sample(picked, src, &rng);
+    tda_span_mut_print(tda_span_sub_mut(picked, 0, n), tda_fprint_i32); // [1, 2, 4]
+    /// [sample]
 
     return 0;
 }

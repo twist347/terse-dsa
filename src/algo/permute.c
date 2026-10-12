@@ -9,9 +9,9 @@
 
 /* ========== internals ========== */
 
-/// whether v[i] comes strictly before v[j] in the order being walked — asked only as
-/// "less than", with the operands swapped for a descending walk, so a comparator that
-/// never answers "greater" (a < b ? -1 : 0) still counts permutations right
+/// whether v[i] comes strictly before v[j] in the walk order. Only "less than" is
+/// asked, with the operands swapped for a descending walk, so a comparator that never
+/// answers "greater" (a < b ? -1 : 0) still works
 [[nodiscard]]
 static bool goes_before(tda_Span v, tda_Cmp cmp, bool asc, size_t i, size_t j);
 
@@ -112,8 +112,8 @@ tda_Status tda_span_partition_stable(
     assert(al);
     assert(out_boundary);
 
-    // nothing to move and nothing to ask, so nothing to allocate either: an
-    // allocator with no room left must still be able to partition an empty span
+    // nothing to allocate for an empty span, so it works even on an exhausted
+    // allocator
     if (s.len == 0) {
         *out_boundary = 0;
         return TDA_STATUS_OK;
@@ -121,9 +121,9 @@ tda_Status tda_span_partition_stable(
 
     const size_t bytes = s.len * s.elem_size;
 
-    // room for the whole span, though only the rejected elems are ever put there:
-    // how many those are is not known before pred has seen them all, and asking it
-    // twice to find out would be a second, differently timed set of answers
+    // room for the whole span, though only rejected elems go there: their count is
+    // unknown until pred has seen every elem, and calling pred twice to count could
+    // give different answers
     void *buf = tda_alloc(al, bytes);
     if (!buf) {
         return TDA_STATUS_ERR_NO_MEM;
@@ -138,8 +138,7 @@ tda_Status tda_span_partition_stable(
         const void *elem = tda_span_get(view, i);
 
         if (pred(elem, ctx)) {
-            // kept never runs ahead of i, so this only ever overwrites an elem
-            // that has already been read
+            // kept never runs ahead of i, so this only overwrites elems already read
             if (kept != i) {
                 tda_span_set(s, kept, elem);
             }
@@ -150,8 +149,8 @@ tda_Status tda_span_partition_stable(
         }
     }
 
-    // the front holds the kept ones in order, the rest of the span is free for the
-    // rejected ones — also in order, since they were appended as they were met
+    // the kept elems are at the front in order; the rejected ones, also in order,
+    // go after them
     tda_span_copy(
         tda_span_sub_mut(s, kept, dropped),
         tda_span_sub(tda_span_mut_to_span(rejected), 0, dropped)
@@ -182,9 +181,9 @@ void tda_span_shuffle(tda_SpanMut s, tda_Rng *rng) {
     TDA_SPAN_ASSERT(s);
     assert(rng);
 
-    // walking down: each step settles position i - 1 by drawing from [0, i), the elems
-    // not placed yet. Drawing from the whole span every step instead is the classic bug
-    // — it looks the same and skews the result.
+    // walking down, each step settles position i - 1 by drawing from [0, i), the elems
+    // not placed yet. Drawing from the whole span each step is the classic bug: it
+    // looks the same but skews the result.
     for (size_t i = s.len; i > 1; --i) {
         tda_span_swap_elems(s, i - 1, tda_rng_idx(rng, i));
     }
@@ -196,7 +195,7 @@ void tda_span_shuffle_prefix(tda_SpanMut s, size_t count, tda_Rng *rng) {
     assert(rng);
 
     // the same walk from the other end, so stopping early leaves the settled positions
-    // at the front rather than the back
+    // at the front
     for (size_t i = 0; i < count; ++i) {
         tda_span_swap_elems(s, i, i + tda_rng_idx(rng, s.len - i));
     }
@@ -229,9 +228,8 @@ static bool permute_step(tda_SpanMut s, tda_Cmp cmp, bool asc) {
     }
     --pivot;
 
-    // the search asks the question that just stopped the one above, so it is answered by
-    // pivot + 1 at the latest; the bound is for a comparator that answers it differently
-    // the second time
+    // this asks the question that stopped the loop above, so pivot + 1 answers it at the
+    // latest; the bound guards against a comparator that answers differently twice
     size_t mate = s.len - 1;
     while (mate > pivot + 1 && !goes_before(v, cmp, asc, pivot, mate)) {
         --mate;

@@ -13,21 +13,21 @@
     (assert(s),        \
      assert((s)->map))
 
-// two sets an op can combine: the same width of key and the same notion of equal keys
+// two sets an op can combine: the same key size and the same key equality
 #define EXPECT_SAME_KEYS(a, b)                                              \
     (TDA_EXPECT(tda_hmap_key_size((a)->map) == tda_hmap_key_size((b)->map)), \
      TDA_EXPECT(tda_hmap_key_eq((a)->map) == tda_hmap_key_eq((b)->map)))
 
-// A set is a map seen through a smaller keyhole: the chaining, the growth and the allocator
-// stay the map's, and what this type adds is the operations it does NOT forward.
+// A set wraps a map: chaining, growth and the allocator are the map's, and the set only
+// limits which operations are forwarded.
 //
-// The map is built through internal/hmap_impl.h with val_size 0, which is the whole point of
-// that door: nothing follows the key in a node, so nothing pads it either.
+// The map is built through internal/hmap_impl.h with val_size 0, so nothing follows the
+// key in a node and nothing pads it.
 struct tda_HSet {
     tda_HMap *map;
 };
 
-/// takes ownership of 'map' either way: on failure it is dropped, not handed back
+/// takes ownership of 'map'; on failure it is dropped
 [[nodiscard]]
 static tda_Status wrap(tda_HMap *map, tda_HSet **out);
 
@@ -129,8 +129,7 @@ tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
 
-    // self assignment is left to the map, which already returns early on it: a guard
-    // repeated here would be a branch no test could tell from its absence
+    // the map handles self assignment; a guard here would be untestable
     return tda_hmap_copy_assign(self->map, other->map);
 }
 
@@ -138,8 +137,7 @@ tda_Status tda_hset_move_assign(tda_HSet *self, tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
 
-    // self assignment is left to the map, which already returns early on it: a guard
-    // repeated here would be a branch no test could tell from its absence
+    // the map handles self assignment; a guard here would be untestable
     return tda_hmap_move_assign(self->map, other->map);
 }
 
@@ -197,8 +195,8 @@ bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b) {
         return false;
     }
 
-    // not tda_hmap_eq: the map under a set carries val_size 0, so it has no value side to
-    // compare and node_val would point one past the key
+    // not tda_hmap_eq: the map has val_size 0, so there are no values to compare and
+    // node_val would point one past the key
     TDA_HMAP_FOR_EACH(node, a->map) {
         if (!tda_hmap_contains(b->map, tda_hmap_node_key(node))) {
             return false;
@@ -271,7 +269,7 @@ tda_Status tda_hset_insert(tda_HSet *self, const void *key, bool *out_is_new) {
     ASSERT_HSET(self);
     assert(key);
 
-    // no value to hand over: the map's val_size is 0, so it asks for none
+    // no value: the map's val_size is 0
     return tda_hmap_insert(self->map, key, nullptr, out_is_new);
 }
 
@@ -308,7 +306,7 @@ bool tda_hset_take(tda_HSet *self, const void *key, void *out_key) {
     ASSERT_HSET(self);
     assert(key);
 
-    // a set's map has no value side, so there is nothing to hand out but the key
+    // the map has no values, so only the key is copied out
     return tda_hmap_take(self->map, key, out_key, nullptr);
 }
 
@@ -387,8 +385,8 @@ void tda_hset_difference(tda_HSet *self, const tda_HSet *other) {
         return;
     }
 
-    // either side can drive: every key of 'other' removed from 'self', or every key of
-    // 'self' checked against 'other'. Both give the same set, so the shorter walk wins
+    // either side can drive: remove each key of 'other' from 'self', or check each key of
+    // 'self' against 'other'. Both give the same set, so walk the shorter one
     if (tda_hmap_len(other->map) < tda_hmap_len(self->map)) {
         TDA_HMAP_FOR_EACH(node, other->map) {
             tda_hmap_remove(self->map, tda_hmap_node_key(node));
@@ -409,8 +407,8 @@ tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other) 
         return TDA_STATUS_OK;
     }
 
-    // each key of 'other' flips: out of 'self' when it was there, in when it was not.
-    // The keys of 'other' are distinct, so none is flipped twice
+    // each key of 'other' flips: removed from 'self' if there, inserted if not. The keys
+    // of 'other' are distinct, so none flips twice
     TDA_HMAP_FOR_EACH(node, other->map) {
         const void *key = tda_hmap_node_key(node);
         if (tda_hmap_remove(self->map, key)) {
@@ -435,7 +433,7 @@ bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other) {
         return true;
     }
 
-    // more keys than 'other' has cannot all be in it
+    // a larger set cannot be contained in a smaller one
     if (tda_hmap_len(self->map) > tda_hmap_len(other->map)) {
         return false;
     }
@@ -454,7 +452,7 @@ bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(other);
     EXPECT_SAME_KEYS(self, other);
 
-    // sharing is symmetric, so the shorter set is walked and the longer one asked
+    // intersection is symmetric, so walk the shorter set and look up in the longer
     const tda_HSet *walked = self;
     const tda_HSet *asked = other;
     if (tda_hmap_len(other->map) < tda_hmap_len(self->map)) {

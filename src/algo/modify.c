@@ -5,8 +5,8 @@
 
 /* ========== internals ========== */
 
-// lets the key-taking forms reuse the predicate-taking ones: the key and
-// its equality travel together as the predicate's ctx
+// lets the key forms reuse the predicate forms: the key and its equality are
+// passed as the predicate's ctx
 typedef struct {
     const void *key;
     tda_Eq eq;
@@ -35,9 +35,8 @@ size_t tda_span_unique(tda_SpanMut s, tda_Eq eq) {
     for (size_t read = 1; read < s.len; ++read) {
         const void *cur = tda_span_get(view, read);
 
-        // compared against the last elem KEPT, not the previous one read —
-        // otherwise a run whose head was dropped would compare against a
-        // value that is no longer there
+        // compare against the last elem KEPT, not the previous one read: its
+        // slot may already hold a different value
         if (!eq(tda_span_get(view, write - 1), cur)) {
             if (write != read) {
                 memcpy(tda_span_get_mut(s, write), cur, s.elem_size);

@@ -15,7 +15,7 @@ void setUp() {
 void tearDown() {
 }
 
-// a predicate parameterized through ctx — the whole point of carrying one
+// a predicate parameterized through ctx
 static bool less_than(const void *elem, void *ctx) {
     return *(const int32_t *) elem < *(const int32_t *) ctx;
 }
@@ -31,7 +31,7 @@ static void test_find_reports_the_first_match() {
     TEST_ASSERT_EQUAL_size_t(1, idx);
 }
 
-// on a miss the out param is left untouched — the caller's value must survive
+// on a miss the out param is left untouched, so the caller's value survives
 static void test_find_miss_leaves_the_out_param_alone() {
     constexpr int32_t buf[3] = {1, 2, 3};
     constexpr int32_t key = 9;
@@ -194,7 +194,7 @@ static void test_binary_search_miss_leaves_the_out_param_alone() {
     TEST_ASSERT_EQUAL_size_t(333, idx);
 }
 
-// a key past the end drives lower_bound to len — that must not read out of range
+// a key past the end drives lower_bound to len, which must not read out of range
 static void test_binary_search_key_past_the_end_misses() {
     constexpr int32_t buf[3] = {1, 2, 3};
     constexpr int32_t key = 9;
@@ -521,7 +521,7 @@ static void test_starts_and_ends_with_compare_under_eq() {
 }
 
 // every span over {0, 1} up to four long against every run up to five long, checked
-// against comparing the matching end elem by elem
+// by comparing the matching end elem by elem
 static void test_starts_and_ends_with_agree_with_a_plain_comparison() {
     for (size_t len = 0; len <= 4; ++len) {
         for (size_t bits = 0; bits < (1u << len); ++bits) {
@@ -623,8 +623,8 @@ static void test_equal_range_at_the_ends_and_on_empty() {
     TEST_ASSERT_EQUAL_size_t(0, r.hi);
 }
 
-// the second descent is over the tail after the lower bound, not over the
-// whole span again — invisible in the answer, visible in the comparisons
+// the second descent covers the tail after the lower bound, not the whole
+// span again: invisible in the answer, visible in the comparison count
 static void test_equal_range_does_not_search_the_whole_span_twice() {
     constexpr int32_t buf[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
     constexpr int32_t key = 14;
@@ -701,7 +701,7 @@ static void test_minmax_elem_agrees_with_min_and_max() {
     TEST_ASSERT_EQUAL_size_t(tda_span_max_elem(s, tda_cmp_i32), mm.max);
 }
 
-// ties go to the FIRST elem on both sides, unlike std::minmax_element
+// ties go to the first elem on both sides, unlike std::minmax_element
 static void test_minmax_elem_breaks_ties_towards_the_front() {
     constexpr int32_t buf[4] = {2, 2, 2, 2};
 
@@ -809,7 +809,7 @@ static void test_find_sub_does_not_settle_for_a_prefix() {
     TEST_ASSERT_EQUAL_size_t(111, idx);
 }
 
-// a sub that runs to the very end still fits — the loop must not stop one short
+// a sub that runs to the very end still fits: the loop must not stop one short
 static void test_the_sub_finders_match_at_the_end() {
     constexpr int32_t buf[4] = {1, 2, 3, 4};
     constexpr int32_t pat[2] = {3, 4};
@@ -848,8 +848,8 @@ static void test_an_empty_sub_is_found_at_both_ends() {
     TEST_ASSERT_EQUAL_size_t(3, last);
 }
 
-// a sub longer than the span cannot fit — and the length check must come before
-// any indexing, hence the empty span too
+// a sub longer than the span cannot fit, and the length check must come before any
+// indexing, hence the empty span too
 static void test_the_sub_finders_miss_when_sub_does_not_fit() {
     constexpr int32_t buf[2] = {1, 2};
     constexpr int32_t pat[3] = {1, 2, 3};
@@ -895,7 +895,7 @@ static void test_find_run_reports_the_start_of_the_first_long_enough_run() {
     TEST_ASSERT_EQUAL_size_t(5, idx);
 }
 
-// a shorter demand is met earlier — the run of two comes before the run of three
+// a shorter demand is met earlier: the run of two comes before the run of three
 static void test_find_run_of_two_stops_at_the_earlier_run() {
     constexpr int32_t buf[9] = {1, 0, 1, 1, 0, 1, 1, 1, 0};
     constexpr int32_t key = 1;
@@ -928,7 +928,7 @@ static void test_find_run_of_one_agrees_with_find() {
     TEST_ASSERT_EQUAL_size_t(by_find, by_run);
 }
 
-// a run of zero is demanded of nothing, so it is found at once — even on an empty span
+// a run of zero is found at once, even on an empty span
 static void test_find_run_of_zero_is_found_at_the_front() {
     constexpr int32_t buf[3] = {1, 2, 3};
     constexpr int32_t key = 9;
@@ -990,7 +990,7 @@ static void test_find_any_of_reports_the_first_elem_from_the_set() {
     TEST_ASSERT_EQUAL_size_t(2, idx);
 }
 
-// position in the set says nothing: the earliest elem of the SPAN wins
+// position in the set does not matter: the earliest elem of the span wins
 static void test_find_any_of_scans_the_span_not_the_set() {
     constexpr int32_t buf[4] = {5, 6, 7, 8};
     constexpr int32_t set[3] = {8, 7, 6};
@@ -1072,7 +1072,7 @@ static void test_find_adjacent_on_the_short_spans() {
     TEST_ASSERT_EQUAL_size_t(0, idx);
 }
 
-// a pair at the very end must be seen — the scan must not stop one short
+// a pair at the very end must be seen: the scan must not stop one short
 static void test_find_adjacent_sees_a_pair_at_the_end() {
     constexpr int32_t buf[4] = {1, 2, 3, 3};
 

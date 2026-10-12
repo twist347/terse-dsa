@@ -8,9 +8,9 @@
 /// @ingroup algo
 /// @brief the function-pointer types algo is customized through
 ///
-/// The only knobs algo has. Each takes its elems by address and a 'ctx' the caller owns
-/// and the algo never reads — parameterizing an algo without a global. Ordering and
-/// equality live apart in core/cmp, which has ready-made values where these cannot.
+/// Each takes its elems by address plus a 'ctx' that the caller owns and algo never
+/// reads, so no globals are needed. Ordering and equality live in core/cmp, which also
+/// has ready-made comparators.
 ///
 /// @{
 
@@ -18,7 +18,7 @@
 typedef bool (*tda_Pred)(const void *elem, void *ctx);
 
 /// Folds one elem into the accumulator. 'acc' belongs to the caller and may be of any
-/// type — that is what lets a span of int32_t fold into an int64_t.
+/// type, so a span of int32_t can fold into an int64_t.
 typedef void (*tda_Fold)(void *acc, const void *elem, void *ctx);
 
 /// Produces the elem for position 'idx', writing it to 'dst'.

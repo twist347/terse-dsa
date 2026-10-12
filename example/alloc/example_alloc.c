@@ -8,9 +8,9 @@
 #include <stdio.h>
 
 /// [custom]
-// a table must fill in alloc and dealloc, and may leave calloc and realloc null — the
-// wrappers build those two out of the other two. ctx is whatever the implementation
-// keeps, and it comes back to every callback
+// a table must fill in alloc and dealloc; calloc and realloc may be null, and the
+// wrappers then build them from the other two. ctx is the implementation's state,
+// passed to every callback
 typedef struct {
     tda_Al *parent;
     size_t live;
@@ -40,8 +40,8 @@ int main() {
     /// [use]
     tda_Al *al = tda_al_default();
 
-    // the macros carry sizeof(T) and check the multiplication, so a count that would
-    // overflow gives null rather than a wrapped-around request
+    // the macros apply sizeof(T) and check the multiplication, so a count that would
+    // overflow gives null instead of a wrapped size
     int32_t *xs = TDA_ALLOC(int32_t, al, 4);
     if (!xs) {
         return 1;
@@ -54,7 +54,7 @@ int main() {
     /// [use]
 
     /// [wrap]
-    // an allocator built over another borrows it: the default one outlives this, and
+    // an allocator built over another borrows it: the default one outlives this and
     // nothing here owns it
     CountingCtx ctx = {.parent = tda_al_default(), .live = 0};
     tda_Al counting = {
@@ -63,7 +63,7 @@ int main() {
         .dealloc = counting_dealloc,
     };
 
-    // calloc is null in that table, so this is alloc and memset done by the wrapper
+    // calloc is null in that table, so the wrapper does alloc plus memset
     int32_t *zeros = TDA_CALLOC(int32_t, &counting, 4);
     if (!zeros) {
         return 1;

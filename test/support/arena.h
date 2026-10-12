@@ -8,8 +8,8 @@
 
 /* ========== mods ========== */
 
-/// burns the arena down to exactly 'want' free bytes, so the next
-/// allocation over that size fails without a probe allocator
+/// leaves exactly 'want' free bytes in the arena, so a larger allocation fails
+/// without a probe allocator
 static inline void tda_test_arena_leave(tda_Al *arena, size_t want) {
     const size_t available = tda_al_arena_stats(arena).available;
     TEST_ASSERT_TRUE(available >= want);

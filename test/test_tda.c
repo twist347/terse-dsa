@@ -12,8 +12,8 @@ void setUp() {
 void tearDown() {
 }
 
-// the umbrella is one include, and it has to reach every module: a header left out of it
-// shows up here as a build error rather than in someone else's project
+// the umbrella header must reach every module: one left out of it fails the build here,
+// not in someone else's project
 static void test_the_umbrella_reaches_every_module() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024); // alloc
     TEST_ASSERT_NOT_NULL(arena);

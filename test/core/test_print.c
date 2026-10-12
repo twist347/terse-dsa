@@ -12,9 +12,8 @@ void setUp() {
 void tearDown() {
 }
 
-// A printer writes to a stream, so a case has to read one back. tmpfile is the only
-// portable in-memory-ish stream there is — fmemopen is POSIX, and the library builds with
-// extensions off.
+// A printer writes to a stream, so a case reads one back. tmpfile is the only portable
+// choice: fmemopen is POSIX, and the library builds with extensions off.
 static void capture(char *buf, size_t cap, tda_FPrint fprint, const void *x) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
@@ -80,8 +79,8 @@ static void test_float_prints_through_g() {
     assert_prints("0", tda_fprint_f64, &(double){0.0});
 }
 
-// %g is the documented trade: readable, and not a round trip. The case exists so that
-// changing the format has to be a decision rather than an accident.
+// %g is documented as readable but not round-trip; this case makes any change of format
+// a deliberate one
 static void test_float_does_not_round_trip() {
     assert_prints("0.1", tda_fprint_f64, &(double){0.1});
     assert_prints("1.23457e+06", tda_fprint_f64, &(double){1234567.0});
@@ -111,8 +110,7 @@ static void test_float_prints_negative_zero() {
 
 /* ========== bool ========== */
 
-// words, not digits: an entry that printed 1 and 0 would be tda_fprint_u8 under another
-// name, and there would be no reason for it to exist
+// words, not digits: printing 1 and 0 would make it tda_fprint_u8 under another name
 static void test_bool_prints_words() {
     assert_prints("true", tda_fprint_bool, &(bool){true});
     assert_prints("false", tda_fprint_bool, &(bool){false});
@@ -133,7 +131,7 @@ static void test_char_escapes_the_unprintable() {
 }
 
 // char may be signed, and isprint on a negative int is undefined: the printer casts to
-// unsigned char first, so a high byte comes out as an escape rather than as chaos
+// unsigned char first, so a high byte comes out as an escape
 static void test_char_escapes_a_high_byte() {
     assert_prints("\\xff", tda_fprint_char, &(char){(char) 0xff});
 }
@@ -151,8 +149,8 @@ static void test_cstr_quotes_keep_a_comma_inside() {
     assert_prints("\"a, b\"", tda_fprint_cstr, &(const char *){"a, b"});
 }
 
-// null is a value of its own rather than the empty string, as in tda_eq_cstr and
-// tda_hash_cstr, so it prints unquoted and cannot be confused with ""
+// null is a value of its own, not the empty string, as in tda_eq_cstr and tda_hash_cstr,
+// so it prints unquoted and cannot be confused with ""
 static void test_cstr_prints_null_unquoted() {
     assert_prints("null", tda_fprint_cstr, &(const char *){nullptr});
 }

@@ -35,7 +35,7 @@ static void test_merge_interleaves_both_sides() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, dst, 6);
 }
 
-// no interleaving at all — the whole tail must still be drained
+// no interleaving at all: the whole tail must still be drained
 static void test_merge_disjoint_ranges() {
     constexpr int32_t a[3] = {1, 2, 3};
     constexpr int32_t b[3] = {7, 8, 9};
@@ -96,7 +96,7 @@ static void test_merge_with_an_empty_side() {
     );
     TEST_ASSERT_EQUAL_INT32_ARRAY(a, dst, 3);
 
-    // and the mirror case — the empty side leading
+    // and the mirror case, with the empty side leading
     int32_t dst2[3] = {0};
     tda_span_merge(
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst2, 3),
@@ -179,8 +179,8 @@ static void test_merge_writes_only_into_the_destination_view() {
 
 /* ========== inplace merge ========== */
 
-// the oracle is the libc qsort over a copy: a merge of two sorted runs is exactly the
-// sort of their concatenation, and qsort shares no code with what is tested
+// the oracle is libc qsort over a copy: merging two sorted runs equals sorting their
+// concatenation, and qsort shares no code with what is tested
 static void assert_merges_in_place(const int32_t *src, size_t len, size_t mid, tda_Al *al) {
     int32_t buf[16];
     int32_t want[16];
@@ -197,8 +197,8 @@ static void assert_merges_in_place(const int32_t *src, size_t len, size_t mid, t
     }
 }
 
-// there are two implementations behind one name, and a case that exercises only one of
-// them tests half the function
+// two implementations sit behind one name, and a case that exercises only one of them
+// tests half the function
 static void assert_merges_both_ways(const int32_t *src, size_t len, size_t mid) {
     assert_merges_in_place(src, len, mid, tda_al_default());
     assert_merges_in_place(src, len, mid, nullptr);
@@ -259,8 +259,8 @@ static void test_inplace_merge_of_short_spans() {
 }
 
 // stability: equal keys keep the run they came from, and the left run comes first.
-// On plain int32_t this is invisible — equal elems are indistinguishable — so the tag is
-// the witness, the same way it is for tda_span_merge above
+// Equal plain int32_t elems are indistinguishable, so the tag is the witness, as for
+// tda_span_merge above
 static void test_inplace_merge_is_stable_on_ties() {
     Tagged buf[6] = {
         {1, 100}, {2, 101}, {2, 102},
@@ -280,16 +280,15 @@ static void test_inplace_merge_is_stable_on_ties() {
 
 /*
  * Every pair of sorted runs over a three-symbol alphabet, both runs up to length four, at
- * every split — 5625 spans in all. Small on purpose: the recursion cuts the longer run in
- * half and searches the other, so anything it can get wrong on a long input it can already
- * get wrong on a short one, and here every arrangement is reachable.
+ * every split: 5625 spans in all. Small on purpose: the recursion halves the longer run
+ * and searches the other, so whatever it can get wrong on a long input it can already get
+ * wrong on a short one, and here every arrangement is reachable.
  *
- * Every elem carries its starting position as a tag, which turns stability into something
- * checkable on every one of those spans: equal keys must come out with rising tags,
- * because the left run's elems all started before the right run's. A single hand-written
- * stable case does NOT pin this down — with three equal keys against three there is only
- * one branch of the recursion to walk, and swapping lower_bound for upper_bound produces
- * the very same answer on it.
+ * Every elem carries its starting position as a tag, which makes stability checkable on
+ * every span: equal keys must come out with rising tags, because the left run's elems all
+ * started before the right run's. A single hand-written stable case does not pin this
+ * down: with three equal keys against three there is only one branch of the recursion to
+ * walk, and swapping lower_bound for upper_bound gives the same answer on it.
  */
 #define ALPHA 3
 #define RUNLEN 4
@@ -313,7 +312,7 @@ static void check_sweep(size_t left_len, size_t right_len, tda_Al *al) {
     for (size_t i = 0; i < len; ++i) {
         TEST_ASSERT_EQUAL_INT32_MESSAGE(want_keys[i], buf[i].key, "not the sorted order");
 
-        // rising tags within a run of equal keys IS stability: the left run's elems
+        // rising tags within a run of equal keys mean stability: the left run's elems
         // started at the lower positions
         if (i > 0 && buf[i - 1].key == buf[i].key) {
             TEST_ASSERT_TRUE_MESSAGE(buf[i - 1].tag < buf[i].tag, "equal keys changed places");
@@ -354,8 +353,8 @@ static void test_inplace_merge_sorts_and_stays_stable_on_every_pair_of_runs() {
     }
 }
 
-// the same sweep down the other path: both must give the same answer, and both must be
-// stable. Without this the fallback would be covered by a handful of cases at most
+// the same sweep down the other path: both must give the same answer and both must be
+// stable. Without it the fallback would get a handful of cases at most
 static void test_inplace_merge_without_an_allocator_agrees_on_every_pair_of_runs() {
     sweep_al = nullptr;
     for (size_t left_len = 0; left_len <= RUNLEN; ++left_len) {
@@ -365,9 +364,9 @@ static void test_inplace_merge_without_an_allocator_agrees_on_every_pair_of_runs
 
 /* ========== inplace merge: the buffer ========== */
 
-// the point of the buffered path is that it parks the SHORTER run, so the buffer is never
-// more than half the span. A version that copied the left run whatever its length would
-// pass every test above and still ask for twice the memory on a lopsided split
+// the buffered path parks the shorter run, so the buffer is never more than half the
+// span. A version that always copied the left run would pass every test above and still
+// ask for twice the memory on a lopsided split
 static void test_inplace_merge_asks_only_for_the_shorter_run() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -400,7 +399,7 @@ static void test_inplace_merge_gives_the_buffer_back() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// a refused buffer is not an error here, only the slower way to the same answer
+// a refused buffer is not an error here, just the slower path to the same answer
 static void test_inplace_merge_falls_back_when_the_buffer_is_refused() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -416,7 +415,7 @@ static void test_inplace_merge_falls_back_when_the_buffer_is_refused() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// an empty run on either side is answered without touching the allocator at all
+// an empty run on either side returns without touching the allocator
 static void test_inplace_merge_at_the_edges_asks_for_nothing() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);

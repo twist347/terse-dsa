@@ -15,9 +15,9 @@ void setUp() {
 void tearDown() {
 }
 
-// "within one" is deliberately NOT transitive: 1~2 and 2~3, but 1 !~ 3.
-// That is what tells apart comparing against the last KEPT elem and
-// comparing against the previous one read
+// "within one" is deliberately not transitive: 1~2 and 2~3, but 1 !~ 3.
+// That tells comparing against the last kept elem apart from comparing
+// against the previous one read
 static bool eq_within_one(const void *a, const void *b) {
     const int32_t x = *(const int32_t *) a;
     const int32_t y = *(const int32_t *) b;
@@ -38,7 +38,7 @@ static void test_unique_collapses_runs() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 4);
 }
 
-// only ADJACENT elems are compared, so a value coming back later survives
+// only adjacent elems are compared, so a value coming back later survives
 static void test_unique_keeps_non_adjacent_repeats() {
     int32_t buf[4] = {1, 1, 2, 1};
 
@@ -81,9 +81,8 @@ static void test_unique_honours_the_callback() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 3);
 }
 
-// sorting first is what turns unique into "make a set"
 // with a non-transitive equality the two readings diverge: against the last
-// kept elem {1,2,3} collapses to {1,3}, against the previous read one to {1}
+// kept elem {1,2,3} collapses to {1,3}, against the previous one read to {1}
 static void test_unique_compares_against_the_last_kept_elem() {
     int32_t buf[3] = {1, 2, 3};
 
@@ -94,6 +93,7 @@ static void test_unique_compares_against_the_last_kept_elem() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 2);
 }
 
+// sorting first turns unique into "make a set"
 static void test_sort_then_unique_yields_a_set() {
     int32_t buf[8] = {3, 1, 2, 3, 1, 2, 1, 3};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8);

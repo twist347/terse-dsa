@@ -10,7 +10,7 @@
 /* ========== internals ========== */
 
 // One body per type, differing only in the cast and the conversion. The format stays a
-// literal at the call site, so the compiler still checks it against the argument.
+// literal at the call site so the compiler still checks it against the argument.
 #define DEFINE_FPRINT(name, T, fmt)                         \
     void tda_fprint_##name(FILE *stream, const void *val) { \
         assert(stream);                                     \
@@ -35,10 +35,10 @@ DEFINE_FPRINT(ptrdiff, ptrdiff_t, "%td")
 
 /* ========== float ========== */
 
-// %g leaves the specials to the C library: an infinity may come out as "inf" or
+// %g leaves the specials to the C library: an infinity may print as "inf" or
 // "infinity", a NaN with a sign and a tail ("-nan(ind)" in the UCRT). They are spelled
-// out here instead, and a NaN without its sign, which says nothing — 0.0 / 0.0 sets it on
-// x86 and not on ARM.
+// out here instead, and a NaN without its sign, which means nothing: 0.0 / 0.0 sets it
+// on x86 and not on ARM.
 static void fprint_double(FILE *stream, double val) {
     if (isnan(val)) {
         fputs("nan", stream);
@@ -66,8 +66,8 @@ void tda_fprint_f64(FILE *stream, const void *val) {
 
 /* ========== bool ========== */
 
-// the one entry core/cmp and core/hash do without: for them u8 carries a bool whole, but
-// the readable form of a bool is a word, not a digit
+// the one entry core/cmp and core/hash lack: for them u8 covers a bool, but a bool reads
+// better as a word than as a digit
 void tda_fprint_bool(FILE *stream, const void *val) {
     assert(stream);
     assert(val);
@@ -83,8 +83,8 @@ void tda_fprint_char(FILE *stream, const void *val) {
 
     const char c = *(const char *) val;
 
-    // isprint takes an int that has to be representable as unsigned char, and char may be
-    // signed: the cast is what keeps a negative one out of undefined behaviour
+    // isprint takes an int that must be representable as unsigned char, and char may be
+    // signed: the cast keeps a negative char out of undefined behaviour
     if (isprint((unsigned char) c)) {
         fputc(c, stream);
     } else {

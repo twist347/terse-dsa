@@ -8,15 +8,15 @@
 
 /// @defgroup core_print core/print
 /// @ingroup core
-/// @brief tda_FPrint — how a container is told to show one elem
+/// @brief tda_FPrint — how a container prints one elem
 ///
-/// A printer writes one elem, handed by address, and nothing around it: the brackets and
-/// the commas belong to the container printing through it.
+/// A printer writes one elem, passed by address, and nothing around it: brackets and
+/// commas are the container's job.
 ///
-/// The type set is core/cmp's — a printer sees a width and a signedness, not a type
-/// identity, so long long is served by tda_fprint_i64, while char, size and ptrdiff have
-/// entries of their own because their widths are not fixed. bool is the one entry only
-/// here, reading as a word rather than a digit.
+/// The types are those of core/cmp. A printer cares about width and signedness, not type
+/// identity, so long long goes through tda_fprint_i64, while char, size and ptrdiff get
+/// their own entries because their widths are not fixed. bool exists only here, printed
+/// as a word rather than a digit.
 ///
 /// The formats are for a human, not for a parser reading them back.
 ///
@@ -26,8 +26,7 @@
 /// @snippet core/example_print.c use
 /// @{
 
-/// The printer a container is handed to show itself: one call per elem, the elem by
-/// address.
+/// Prints one elem, passed by address; a container calls it once per elem.
 typedef void (*tda_FPrint)(FILE *, const void *);
 
 /// @name int
@@ -118,8 +117,8 @@ void tda_fprint_ptrdiff(FILE *stream, const void *val);
 /// @name float
 /// @{
 
-/// a float through %g — readable, and deliberately not round-trip. The specials are
-/// spelled the same everywhere: inf, -inf, and nan whatever its sign bit
+/// a float through %g: readable, deliberately not round-trip. The specials print the
+/// same on every platform: inf, -inf, and nan whatever its sign bit
 /// @param stream where to write
 /// @param val the address of the elem
 /// @bigo{1}
@@ -150,7 +149,7 @@ void tda_fprint_bool(FILE *stream, const void *val);
 /// @name char
 /// @{
 
-/// the character when printable, \\xNN when not, so nothing unprintable reaches the stream.
+/// the character if printable, else \\xNN, so nothing unprintable reaches the stream.
 /// Not quoted: a ',' or ' ' elem prints as itself and reads as a separator
 /// @param stream where to write
 /// @param val the address of the elem
@@ -163,12 +162,12 @@ void tda_fprint_char(FILE *stream, const void *val);
 /// @name cstr
 /// @{
 
-/// the string, quoted, so one holding a comma cannot read as two elems; a null pointer
-/// prints as an unquoted null, a value of its own rather than "". Nothing inside is
-/// escaped, so a string holding a quote still breaks the reading
+/// the string, quoted so one holding a comma does not read as two elems; a null pointer
+/// prints as an unquoted null, distinct from "". Nothing inside is escaped, so a string
+/// holding a quote still breaks the reading
 /// @param stream where to write
-/// @param val the address of the elem — a pointer to the const char *, not the string
-/// @bigo{n} — n is the length of the string
+/// @param val the address of the elem; a pointer to the const char *, not the string
+/// @bigo{n}; n is the length of the string
 TDA_API
 void tda_fprint_cstr(FILE *stream, const void *val);
 

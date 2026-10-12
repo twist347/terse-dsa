@@ -11,8 +11,8 @@
 #include <stdio.h>
 
 /// [struct]
-// a comparator for a struct delegates to the one for its field, by address — which is
-// the only form these come in, and the reason there is no value-taking one
+// a struct comparator delegates to the one for its field, by address; comparators
+// only take pointers, so there is no by-value form
 typedef struct {
     const char *name;
     int32_t age;
@@ -42,8 +42,8 @@ int main() {
     tda_span_sort(nums, tda_cmp_desc_i32);
     tda_span_mut_print(nums, tda_fprint_i32); // [5, 4, 3, 2, 1]
 
-    // equality is the other half: it says only whether two are the same, and it is what
-    // the hash containers and the searches take
+    // equality is the other half: it only says whether two match, and it is what the
+    // hash containers and searches take
     size_t idx;
     if (tda_span_find(tda_span_mut_to_span(nums), &(int32_t){4}, tda_eq_i32, &idx)) {
         printf("4 is at %zu\n", idx); // 4 is at 1

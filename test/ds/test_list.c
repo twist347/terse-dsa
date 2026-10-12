@@ -39,8 +39,8 @@ static tda_List *make_list(size_t len) {
     return l;
 }
 
-// the whole contents, checked in BOTH directions: a broken next/prev pair
-// leaves one of the two walks intact, so a one-way check misses half the bugs
+// checks the contents in BOTH directions: a broken next/prev pair leaves one of the
+// two walks intact, so a one-way check misses half the bugs
 static void assert_elems(const tda_List *l, const int32_t *want, size_t n) {
     TEST_ASSERT_EQUAL_size_t(n, tda_list_len(l));
 
@@ -79,8 +79,7 @@ static tda_ListNode *node_at(tda_List *l, size_t idx) {
     return node;
 }
 
-// the node addresses, front to back — what a relinking operation must preserve and a
-// copying one cannot
+// the node addresses, front to back: a relinking op preserves them, a copying one cannot
 static void collect_nodes(const tda_List *l, const tda_ListNode **dst, size_t n) {
     TEST_ASSERT_EQUAL_size_t(n, tda_list_len(l));
 
@@ -232,7 +231,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_list_al(src));
     TEST_ASSERT_TRUE(tda_list_eq(src, dst));
 
-    // the source is gone and the copy still holds the elems: every node is its own
+    // the copy outlives the source, so every node is its own
     tda_list_drop(src);
     assert_elems(dst, (int32_t[]){0, 1, 2, 3}, 4);
 
@@ -240,7 +239,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the nodes are asked of the allocator the copy is going to, not of the source's
+// the nodes come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -268,8 +267,8 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_List *dst = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &dst, 9));
 
-    // a position borrowed from the source before the move: on one allocator the nodes are
-    // relinked where they lie, so it must still be good afterwards — and belong to 'dst'
+    // on one allocator the nodes are relinked in place, so a position taken from the
+    // source before the move stays valid and then belongs to 'dst'
     const tda_ListNode *node = tda_list_front_node(src);
 
     const size_t requests = tda_test_probe_requests(&probe);
@@ -430,8 +429,8 @@ static void test_copy_assign_keeps_the_target_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the shared prefix keeps its nodes, so assignment costs allocations
-// only for the elems the target had no node for
+// the shared prefix keeps its nodes, so assignment allocates only for elems the target
+// had no node for
 static void test_copy_assign_reuses_the_target_nodes() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -552,7 +551,7 @@ static void test_the_ends_are_the_same_node_on_a_single_elem() {
     tda_list_drop(l);
 }
 
-// the backward walk has a mutable twin: one pass from the back writes through every elem
+// the mutable backward walk writes through every elem in one pass from the back
 static void test_node_prev_mut_writes_through_the_backward_walk() {
     tda_List *l = make_list(4);
 
@@ -622,7 +621,7 @@ static void test_push_front_prepends() {
     tda_list_drop(l);
 }
 
-// both ends grow at once: the two chains must stay consistent
+// growing both ends at once keeps the two chains consistent
 static void test_push_front_and_back_interleave() {
     tda_List *l = make_list(0);
 
@@ -723,7 +722,7 @@ static void test_insert_after_the_tail_moves_the_tail() {
     tda_list_drop(l);
 }
 
-// the header promises where the new node lands
+// the new node lands where the header says
 static void test_the_new_node_is_reachable_from_the_anchor() {
     tda_List *l = make_list(3);
     tda_ListNode *mid = tda_list_node_next_mut(tda_list_front_node_mut(l));
@@ -843,7 +842,7 @@ static void test_clear_frees_every_node() {
 
 /* ========== retain ========== */
 
-// every subset of six elems, checked for the order kept and for the very nodes kept
+// every subset of six elems: the kept elems stay in order and keep their nodes
 static void test_retain_keeps_exactly_the_passing_nodes_in_order() {
     for (uint32_t mask = 0; mask < 64; ++mask) {
         tda_List *l = make_list(6);
@@ -986,8 +985,8 @@ static void test_splice_from_an_empty_list_is_noop() {
     tda_list_drop(dst);
 }
 
-// sharing an allocator makes splice a pointer rewire: no allocation,
-// and the very same nodes end up in the target
+// on a shared allocator splice only relinks: no allocation, and the same nodes end up in
+// the target
 static void test_splice_moves_the_nodes_without_allocating() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1012,8 +1011,8 @@ static void test_splice_moves_the_nodes_without_allocating() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// across allocators the nodes cannot travel, so the elems are copied
-// into the target's allocator and the source is emptied all the same
+// across allocators the nodes cannot move, so the elems are copied into the target's
+// allocator and the source is still emptied
 static void test_splice_across_allocators_copies_the_elems() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1043,7 +1042,7 @@ static void test_find_returns_the_first_node_holding_the_elem() {
     const tda_ListNode *node = TDA_LIST_FIND(int32_t, l, 2, tda_eq_i32);
     TEST_ASSERT_NOT_NULL(node);
 
-    // the first of the two, not just any: the one whose next holds 3
+    // the first match: the one whose next holds 3
     TEST_ASSERT_EQUAL_INT32(3, *TDA_LIST_NODE_ELEM_AS(int32_t, tda_list_node_next(node)));
 
     tda_list_drop(l);
@@ -1065,7 +1064,7 @@ static void test_find_of_an_empty_list_is_null() {
     tda_list_drop(l);
 }
 
-// what the mut door is for: the position it hands back is what insert and remove take
+// the position find_mut returns is what insert and remove take
 static void test_find_mut_gives_a_position_to_write_through() {
     tda_List *l = make_list(4);
 
@@ -1083,7 +1082,7 @@ static void test_find_mut_gives_a_position_to_write_through() {
     tda_list_drop(l);
 }
 
-// the equality is the caller's, so find answers by whatever it means by equal
+// find matches by the caller's equality
 static void test_find_asks_the_equality_it_is_given() {
     tda_List *l = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 1, -2, 3));
@@ -1149,8 +1148,7 @@ static void test_swap_exchanges_the_contents() {
     tda_list_drop(a);
 }
 
-// the nodes do not move, they only change list — that is what makes
-// swap O(1) and every borrowed node still valid afterwards
+// the nodes stay put and only change list, so swap is O(1) and borrowed nodes stay valid
 static void test_swap_keeps_the_nodes_alive() {
     tda_List *a = make_list(2);
     tda_List *b = make_list(1);
@@ -1213,8 +1211,7 @@ static void test_splice_node_moves_one_node_between_lists() {
     tda_list_drop(b);
 }
 
-// the whole reason the operation exists: the node itself changes lists, so a pointer
-// held before the move still names the same node afterwards
+// the node itself changes lists, so a pointer held before the move still names it
 static void test_splice_node_keeps_the_node_address() {
     tda_List *a = make_list(3);
     tda_List *b = make_list(1);
@@ -1245,8 +1242,8 @@ static void test_splice_node_at_null_appends_to_the_back() {
     tda_list_drop(b);
 }
 
-// one list on both sides: the node is unlinked before its new neighbour is read, which
-// is what keeps a move inside one list from landing next to itself
+// within one list the node is unlinked before its new neighbour is read, so it cannot
+// land next to itself
 static void test_splice_node_within_one_list_moves_the_elem() {
     tda_List *l = make_list(4); // 0, 1, 2, 3
 
@@ -1269,8 +1266,8 @@ static void test_splice_node_to_the_front_of_the_same_list() {
     tda_list_drop(l);
 }
 
-// a move one step forward inside one list: the naive order — read the neighbour, then
-// unlink — puts the node back where it started
+// a move one step forward inside one list: reading the neighbour before unlinking would
+// put the node back where it started
 static void test_splice_node_one_step_forward() {
     tda_List *l = make_list(3); // 0, 1, 2
 
@@ -1296,8 +1293,8 @@ static void test_splice_node_of_the_only_node_empties_the_source() {
     tda_list_drop(b);
 }
 
-// two allocators: a node cannot change owner, so the elem is copied and the address does
-// not survive — the same rule splice_front follows
+// across allocators a node cannot change owner, so the elem is copied to a new address,
+// as in splice_front
 static void test_splice_node_across_allocators_copies_the_elem() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1346,7 +1343,7 @@ static void test_reverse_of_empty_and_single_changes_nothing() {
     tda_list_drop(one);
 }
 
-// relinking, not rebuilding: the same nodes come back in the other order
+// the same nodes come back in the other order
 static void test_reverse_keeps_every_node_address() {
     tda_List *l = make_list(4);
 
@@ -1425,14 +1422,14 @@ static void test_sort_takes_a_descending_comparator() {
     tda_list_drop(l);
 }
 
-// every length up to 17 exercises a different split in the merge sort, and an odd one
-// tells a half computed as len/2 from one computed as (len + 1)/2
+// each length up to 17 gives a different merge sort split, and odd lengths tell len/2
+// from (len + 1)/2
 static void test_sort_works_at_every_length() {
     for (size_t n = 0; n <= 17; ++n) {
         tda_List *l = nullptr;
         TDA_TEST_OK(TDA_LIST_NEW(int32_t, tda_al_default(), &l));
 
-        // a descending run: the worst input for a sort that assumes anything
+        // a descending run, the worst case for a sort that assumes an order
         for (size_t i = 0; i < n; ++i) {
             push_int(l, (int32_t) (n - i));
         }
@@ -1456,7 +1453,7 @@ static void test_sort_works_at_every_length() {
     }
 }
 
-// equal keys must keep the order they were pushed in — the second field is what shows it
+// equal keys keep their push order, which the second field shows
 static void test_sort_is_stable() {
     tda_List *l = nullptr;
     TDA_TEST_OK(TDA_LIST_NEW(Pair, tda_al_default(), &l));
@@ -1481,8 +1478,8 @@ static void test_sort_is_stable() {
     tda_list_drop(l);
 }
 
-// the difference from sorting a copy: the nodes move, the elems stay in the node they
-// were pushed into, so a pointer taken before the sort still names the same elem
+// the nodes move and each elem stays in its node, so a pointer taken before the sort
+// still names the same elem
 static void test_sort_keeps_every_node_and_its_elem() {
     tda_List *l = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 5, 1, 9, 3));
@@ -1500,7 +1497,7 @@ static void test_sort_keeps_every_node_and_its_elem() {
     tda_list_drop(l);
 }
 
-// relinking asks the allocator for nothing at all
+// relinking never allocates
 static void test_sort_never_allocates() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1567,7 +1564,7 @@ static void test_merge_into_an_empty_list_takes_everything() {
     tda_list_drop(b);
 }
 
-// equal elems of 'self' come before those of 'src', the same rule algo/merge follows
+// equal elems of 'self' come before those of 'src', as in algo/merge
 static void test_merge_keeps_equal_elems_of_self_first() {
     tda_List *a = nullptr;
     tda_List *b = nullptr;
@@ -1620,7 +1617,7 @@ static void test_merge_on_one_allocator_never_allocates() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// two allocators: the elems are copied into nodes of 'self' and 'src' is emptied anyway
+// across allocators the elems are copied into nodes of 'self' and 'src' is still emptied
 static void test_merge_across_allocators_copies_the_elems() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1681,8 +1678,8 @@ static void test_copy_from_span_overwrites_every_elem() {
     tda_list_drop(l);
 }
 
-// the pair writes through the nodes rather than rebuilding them, so nothing is allocated
-// and every borrowed node still points at its own list
+// the pair writes through the existing nodes, so nothing is allocated and every
+// borrowed node stays in its list
 static void test_copy_from_span_keeps_the_nodes() {
     tda_List *l = make_list(3);
 
@@ -1698,8 +1695,8 @@ static void test_copy_from_span_keeps_the_nodes() {
     tda_list_drop(l);
 }
 
-// the round trip the bridge exists for — and the contrast with tda_list_sort: here the
-// elems move between nodes, so the node that held 9 now holds something else
+// unlike tda_list_sort, the round trip moves elems between nodes, so the node that held
+// 9 now holds something else
 static void test_the_copy_reaches_algo_and_comes_back() {
     tda_List *l = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 5, 1, 9, 3));
@@ -1782,8 +1779,8 @@ static void test_insert_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// a from_data that dies halfway must not leak the nodes it already built;
-// the arena cannot show that (its dealloc is a no-op), the probe can
+// a from_data that fails halfway must not leak the nodes it built; an arena cannot show
+// that (its dealloc is a no-op), a probe can
 static void test_from_data_rolls_back_the_partial_list() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1820,8 +1817,8 @@ static void test_copy_rolls_back_the_partial_clone() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// the target only allocates for the elems it has no node for, so the
-// failing case is a target SHORTER than the source
+// the target allocates only for elems it has no node for, so the failing case is a
+// target SHORTER than the source
 static void test_copy_assign_leaves_the_target_untouched_on_failure() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1865,7 +1862,7 @@ static void test_splice_across_allocators_reports_failure() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// the copy path is the one that can fail: an arena with nothing left refuses the node
+// only the copy path can fail: an exhausted arena refuses the node
 static void test_splice_node_across_allocators_reports_failure() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
     TEST_ASSERT_NOT_NULL(arena);
@@ -2010,8 +2007,7 @@ static void test_eq_of_two_empties() {
     tda_list_drop(one);
 }
 
-// the same elems in the other order are other contents, so the walk has to run front to
-// back and not just count what it meets
+// the same elems in another order are different contents, so the walk compares in order
 static void test_eq_is_order_sensitive() {
     tda_List *a = make_list(4);
     tda_List *b = make_list(4);
@@ -2044,7 +2040,7 @@ static void test_eq_by_asks_the_equality() {
 
 /* ========== print ========== */
 
-// a printer writes to a stream, so a case reads one back through tmpfile, as
+// printers write to a stream, so cases read it back through tmpfile, as
 // test/core/test_print.c does
 static void assert_prints(const char *expected, const tda_List *l) {
     FILE *stream = tmpfile();
@@ -2087,8 +2083,7 @@ static void test_fprint_of_an_empty_list() {
     tda_list_drop(l);
 }
 
-// the stdout twin takes no stream and cannot be captured portably, so a case can only
-// say that it runs and reaches the same printer
+// stdout cannot be captured portably, so this only checks that the stdout variant runs
 static void test_print_writes_to_stdout() {
     tda_List *l = make_list(3);
 

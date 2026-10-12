@@ -8,7 +8,7 @@
 
 /* ========== internals ========== */
 
-/// walks 'idx' towards the root while it outranks its parent
+/// moves 'idx' towards the root while it is greater than its parent
 static void sift_up(tda_SpanMut s, size_t idx, tda_Cmp cmp);
 
 /* ========== build ========== */
@@ -17,7 +17,7 @@ void tda_span_make_heap(tda_SpanMut s, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
 
-    // leaves are heaps already, so the work starts at the last elem that has a child
+    // leaves are already heaps, so start at the last elem that has a child
     for (size_t i = s.len / 2; i > 0; --i) {
         tda_heap_sift_down(s, i - 1, s.len, cmp);
     }
@@ -52,7 +52,7 @@ void tda_span_sort_heap(tda_SpanMut s, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
 
-    // each pop parks one more largest elem behind a heap one shorter
+    // each pop moves the largest to the end and shrinks the heap by one
     for (size_t len = s.len; len > 1; --len) {
         tda_span_pop_heap(tda_span_sub_mut(s, 0, len), cmp);
     }
@@ -71,8 +71,8 @@ size_t tda_span_is_heap_until(tda_Span s, tda_Cmp cmp) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
 
-    // every elem but the root is somebody's child, so checking each child against its
-    // parent covers every edge of the tree exactly once
+    // every elem but the root is a child, so checking each against its parent covers
+    // every edge once
     for (size_t child = 1; child < s.len; ++child) {
         const size_t parent = (child - 1) / 2;
 

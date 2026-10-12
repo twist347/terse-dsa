@@ -26,11 +26,10 @@
 static constexpr size_t HMAP_BUCKETS_BASE = 8;
 static constexpr size_t HMAP_GROWTH_FACTOR = 2;
 
-// The key and the value share one flexible array so an entry is one allocation rather
-// than two: the key sits at 0 and the value at 'val_offset', which is 'key_size' rounded
-// up to the widest alignment the platform has. The hash is kept because it pays twice —
-// growing relinks without asking the hasher again, and a lookup rejects on a number
-// before it ever calls 'eq'.
+// The key and the value share one flexible array, so an entry is one allocation: the key
+// sits at 0 and the value at 'val_offset', which is 'key_size' rounded up to
+// max_align_t. The hash is cached so growing relinks without rehashing, and a lookup
+// rejects most mismatches before calling 'eq'.
 struct tda_HMapNode {
     tda_HMapNode *next;
     tda_Hash hash;
@@ -66,17 +65,16 @@ static tda_Status node_new(const tda_HMap *self, const void *key, const void *va
 
 static void node_drop(const tda_HMap *self, tda_HMapNode *node);
 
-/// which bucket a hash belongs to. The count is a power of two, so this is a mask and not
-/// a division — affordable only because the mixer in core/hash gives every bit avalanche
+/// which bucket a hash belongs to. The count is a power of two, so this is a mask, which
+/// is safe only because the mixer in core/hash avalanches every bit
 [[nodiscard]]
 static size_t bucket_of(const tda_HMap *self, tda_Hash hash);
 
 [[nodiscard]]
 static tda_HMapNode *find_node(const tda_HMap *self, const void *key, tda_Hash hash);
 
-/// builds the entry for a key the caller has already found to be absent and links it into
-/// its bucket. Shared by insert and get_or_insert, which differ only in what they do when
-/// the key IS there
+/// builds the entry for a key known to be absent and links it into its bucket. Shared by
+/// insert and get_or_insert, which differ only when the key is present
 [[nodiscard]]
 static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda_Hash hash, tda_HMapNode **out);
 
@@ -85,8 +83,7 @@ static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda
 static size_t round_up_pow2(size_t want);
 
 /// moves every node into a fresh bucket array of 'new_count'. Only the array is
-/// allocated: the nodes are relinked where they lie, which is what keeps a borrowed node
-/// valid across a growth
+/// allocated; the nodes are relinked, so borrowed nodes stay valid
 [[nodiscard]]
 static tda_Status rehash(tda_HMap *self, size_t new_count);
 
@@ -100,11 +97,11 @@ static tda_HMapNode *first_from(const tda_HMap *self, size_t idx);
 
 static void clear_nodes(tda_HMap *self);
 
-/// frees the nodes and the bucket array both, leaving a map that owns nothing: what
-/// every other container is left as once its elems have been moved out
+/// frees the nodes and the bucket array, leaving a map that owns nothing, like any
+/// container after a move
 static void release_buckets(tda_HMap *self);
 
-/// the walk both compare doors take, with 'val_eq' null standing for the bytes
+/// shared by eq and eq_by; a null 'val_eq' compares bytes
 [[nodiscard]]
 static bool eq_impl(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq);
 
@@ -167,8 +164,7 @@ tda_Status tda_hmap_new_raw_(
     assert(al);
     assert(out);
 
-    // with no value to follow the key there is nothing to align it to, so a set's node is
-    // the header plus the key and not a byte more
+    // with no value there is nothing to align, so a set's node is just the header and key
     size_t val_offset = key_size;
     if (val_size > 0 && tda_ckd_align_up(&val_offset, key_size, alignof(max_align_t))) {
         return TDA_STATUS_ERR_NO_MEM;
@@ -265,8 +261,7 @@ tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
         return TDA_STATUS_OK;
     }
 
-    // the whole clone is built before anything of 'self' is touched, so a refusal
-    // halfway through leaves the target exactly as it was
+    // build the clone first, so a refusal leaves 'self' unchanged
     tda_HMap *clone;
     const tda_Status st = tda_hmap_copy_with(other, self->al, &clone);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -291,9 +286,9 @@ tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the buckets are handed over, nodes and all. What 'self' held ends up in 'other' and is released
-    // there, through the very allocator that made it. The swap would hand 'other' the old hasher and equality of
-    // 'self' too, so its own go back: emptied, it stays the map it was, as it does across two allocators
+    // one allocator: swap the buckets, then release what 'self' held from 'other'. The
+    // swap also gives 'other' the hasher and equality of 'self', so restore its own, as
+    // the two-allocator path leaves them
     if (self->al == other->al) {
         const tda_Hasher other_hasher = other->hasher;
         const tda_Eq other_eq = other->eq;
@@ -310,8 +305,7 @@ tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
         return TDA_STATUS_OK;
     }
 
-    // two allocators: the whole copy is built on the target's before anything of it is
-    // touched, so a refusal leaves both as they were
+    // two allocators: build the copy first, so a refusal changes nothing
     tda_HMap *obj;
     const tda_Status st = tda_hmap_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -497,14 +491,14 @@ void *tda_hmap_node_val_mut(const tda_HMap *self, tda_HMapNode *node) {
 tda_Status tda_hmap_insert(tda_HMap *self, const void *key, const void *val, bool *out_is_new) {
     ASSERT_HMAP(self);
     assert(key);
-    assert(val || self->val_size == 0); // a value pointer is wanted exactly when there is a value
+    assert(val || self->val_size == 0); // a value pointer is needed only when there is a value
 
     const tda_Hash hash = self->hasher(key);
 
     tda_HMapNode *found = find_node(self, key, hash);
     if (found) {
         if (self->val_size > 0) {
-            // memmove: 'val' may be the very value being overwritten
+            // memmove: 'val' may alias the value being overwritten
             memmove(node_val_mut(self, found), val, self->val_size);
         }
 
@@ -557,7 +551,7 @@ tda_Status tda_hmap_get_or_insert(
     assert(val_if_absent || self->val_size == 0);
     assert(out_node);
 
-    // one hash for both halves of the question, and one walk of the bucket it names
+    // one hash and one bucket walk serve both the lookup and the insert
     const tda_Hash hash = self->hasher(key);
 
     tda_HMapNode *found = find_node(self, key, hash);
@@ -586,15 +580,15 @@ bool tda_hmap_take(tda_HMap *self, const void *key, void *out_key, void *out_val
 
     const tda_Hash hash = self->hasher(key);
 
-    // walking the links themselves rather than the nodes: the chain is singly linked, and
-    // this is what stands in for the previous node
+    // walk the links, not the nodes: the chain is singly linked, so the link stands in
+    // for the previous node
     tda_HMapNode **link = &self->buckets[bucket_of(self, hash)];
     while (*link) {
         if ((*link)->hash == hash && self->eq(node_key(*link), key)) {
             tda_HMapNode *dead = *link;
             *link = dead->next;
 
-            // memmove: 'out_key' may be 'key' itself, and memcpy onto itself is undefined
+            // memmove: 'out_key' may alias 'key'
             if (out_key) {
                 memmove(out_key, node_key(dead), self->key_size);
             }
@@ -624,8 +618,8 @@ void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node) {
         link = &(*link)->next;
     }
 
-    // a node of another map would splice that map's chain into this one; the walk has
-    // already been paid for, so the check is free
+    // a node of another map would splice its chain into this one; the walk is already
+    // done, so the check is free
     TDA_EXPECT(*link == node);
 
     *link = node->next;
@@ -675,8 +669,8 @@ tda_Status tda_hmap_reserve(tda_HMap *self, size_t cap) {
         return TDA_STATUS_OK;
     }
 
-    // round_up_pow2 never returns less than the base, so a small 'cap' still gets a
-    // sensible bucket array rather than one or two buckets
+    // round_up_pow2 never returns less than the base, so a small 'cap' does not get one
+    // or two buckets
     const size_t want = round_up_pow2(cap);
     if (want == 0) {
         return TDA_STATUS_ERR_NO_MEM;
@@ -689,7 +683,7 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
     ASSERT_HMAP(self);
 
     if (self->len == 0) {
-        // nothing left to hold: the map goes back to owning no buckets at all
+        // empty: the map goes back to owning no buckets
         release_buckets(self);
 
         ASSERT_HMAP(self);
@@ -802,8 +796,7 @@ static tda_HMapNode *find_node(const tda_HMap *self, const void *key, tda_Hash h
     }
 
     for (tda_HMapNode *node = self->buckets[bucket_of(self, hash)]; node; node = node->next) {
-        // the hash is compared first because it is a word: 'eq' is only asked about keys
-        // that already agree on every mixed bit
+        // compare the cheap hash first, so 'eq' runs only on keys whose hashes match
         if (node->hash == hash && self->eq(node_key(node), key)) {
             return node;
         }
@@ -813,8 +806,7 @@ static tda_HMapNode *find_node(const tda_HMap *self, const void *key, tda_Hash h
 }
 
 static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda_Hash hash, tda_HMapNode **out) {
-    // the room is taken first: growing relinks the buckets, so the one this node belongs
-    // to is only known afterwards
+    // reserve first: growing may change which bucket the node belongs to
     tda_Status st = reserve_one(self);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
@@ -935,9 +927,8 @@ static bool eq_impl(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq) {
         return false;
     }
 
-    // equal lengths plus every key of 'a' found in 'b' is containment both ways, so there
-    // is no second pass — which holds only because the two share one equality. 'b' answers
-    // with its own hasher: the keys are being looked up in it
+    // equal lengths plus every key of 'a' in 'b' means containment both ways, since
+    // the two share one equality, so one pass is enough. 'b' uses its own hasher
     for (size_t i = 0; i < a->bucket_count; ++i) {
         for (const tda_HMapNode *node = a->buckets[i]; node; node = node->next) {
             const void *key = node_key(node);

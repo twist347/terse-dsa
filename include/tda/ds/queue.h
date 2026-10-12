@@ -17,21 +17,18 @@
 /// @ingroup ds
 /// @brief tda_Queue — an owning first in first out queue
 ///
-/// Elems join at the back and leave from the front, both in O(1) amortized. A ds/deque
-/// holds them: it is the container whose two ends are equally cheap, where over a vec the
-/// same type would be O(n) per pop.
+/// Push at the back and pop from the front, in O(1) amortized. A ds/deque holds the
+/// elems, since both its ends are cheap; over a vec each pop would be O(n).
 ///
-/// What this adds over the deque it wraps is a NARROWER interface, not an invariant over
-/// the elems: no get by index, no insert, no remove, no push_front, no pop_back.
+/// A narrower deque: no get by index, no insert, no remove, no push_front or pop_back.
 ///
-/// The order of the elems IS the queue's meaning, so the bridge to algo runs one way
-/// only: tda_queue_copy_to_span hands out a copy to read, and there is no copy_from_span
-/// to write one back. There is no to_span either — the elems may wrap the ring, so there
-/// is no run of bytes to view.
+/// The order of the elems is the queue's meaning, so algo gets only a copy through
+/// tda_queue_copy_to_span; there is no copy_from_span. There is no to_span either, as
+/// the elems may wrap around the ring.
 ///
-/// The pointers are not stable: an op that may reallocate — push, reserve, shrink_to_fit,
-/// copy_assign, move_assign, swap — moves every elem, and a pop ends the one it takes.
-/// That is what ds/list is for.
+/// Pointers are not stable. An op that may reallocate (push, reserve, shrink_to_fit,
+/// copy_assign, move_assign, swap) moves every elem, and a pop ends the one it takes.
+/// For stable positions use ds/list.
 ///
 /// @par Example
 /// @snippet ds/example_queue.c build
@@ -41,7 +38,7 @@
 /// @{
 
 /// Owning first in first out queue.
-/// An opaque handle: it comes from a constructor and goes back to tda_queue_drop
+/// Opaque: made by a constructor, released by tda_queue_drop
 typedef struct tda_Queue tda_Queue;
 
 /// @name lifetime
@@ -49,7 +46,7 @@ typedef struct tda_Queue tda_Queue;
 
 /// an empty queue that owns no block yet
 /// @param elem_size the size of one elem, asserted greater than 0
-/// @param al the allocator, kept for everything after
+/// @param al used for every later allocation
 /// @param[out] out the new queue, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the deque cannot be allocated
@@ -69,9 +66,8 @@ tda_Status tda_queue_new(size_t elem_size, tda_Al *al, tda_Queue **out);
 [[nodiscard]] TDA_API
 tda_Status tda_queue_new_cap(size_t cap, size_t elem_size, tda_Al *al, tda_Queue **out);
 
-/// a queue holding a copy of 'len' elems read from 'data', joined in the order given
-/// @param data the elems to copy in; 'data[0]' is the one served first. May be null only
-///             when len is 0
+/// a queue holding a copy of 'len' elems read from 'data', pushed in order
+/// @param data 'data[0]' is served first; may be null only when len is 0
 /// @param len how many elems to read
 /// @param elem_size the size of one elem, asserted greater than 0
 /// @param al the allocator
@@ -83,7 +79,7 @@ tda_Status tda_queue_new_cap(size_t cap, size_t elem_size, tda_Al *al, tda_Queue
 [[nodiscard]] TDA_API
 tda_Status tda_queue_from_data(const void *data, size_t len, size_t elem_size, tda_Al *al, tda_Queue **out);
 
-/// a queue holding a copy of what 's' views, taking its elem_size
+/// a queue holding a copy of the elems 's' views
 /// @param s the view to copy; its first elem is served first
 /// @param al the allocator
 /// @param[out] out the new queue, written only on success
@@ -94,16 +90,15 @@ tda_Status tda_queue_from_data(const void *data, size_t len, size_t elem_size, t
 tda_Status tda_queue_from_span(tda_Span s, tda_Al *al, tda_Queue **out);
 
 /// releases the elems and the queue through the allocator it was built with
-/// @param self null is a no-op, so this is safe on a partly built object
+/// @param self null is a no-op
 /// @bigo{1}
 TDA_API
 void tda_queue_drop(tda_Queue *self);
 
-/// hands the elems over to the deque that held them and releases the queue around it
-/// @param self consumed: its header goes back to the allocator, and the handle must not
-///             be used again. Null is not allowed — there would be nothing to hand back
-/// @return the deque, holding the elems front to back with the capacity and the allocator
-///         they already had. Nothing is copied, so nothing can fail
+/// releases the queue and returns the deque that held its elems
+/// @param self consumed and must not be used again; not null
+/// @return the deque, elems front to back, with the same capacity and allocator; nothing
+///         is copied, so this cannot fail
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Deque *tda_queue_into_deque(tda_Queue *self);
@@ -124,7 +119,7 @@ tda_Status tda_queue_copy(const tda_Queue *self, tda_Queue **out);
 
 /// a new queue with the same elems in the same order, on 'al'
 /// @param self the queue to copy
-/// @param al where the copy lives; tda_queue_copy is this one with the allocator of 'self'
+/// @param al the allocator for the copy
 /// @param[out] out the new queue, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated
@@ -132,10 +127,9 @@ tda_Status tda_queue_copy(const tda_Queue *self, tda_Queue **out);
 [[nodiscard]] TDA_API
 tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue **out);
 
-/// overwrites the elems of 'self' with those of 'other', growing its block when it must
-/// @param[in,out] self must have the same elem_size; keeps its own allocator, and
-///                     'self' == 'other' is a no-op
-/// @param other the queue to copy from
+/// overwrites the elems of 'self' with those of 'other', growing the block if needed
+/// @param[in,out] self must have the same elem_size; keeps its allocator
+/// @param other the queue to copy from; may be 'self'
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, leaving 'self' as it was
 /// @bigo{n}
@@ -143,19 +137,17 @@ tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue **ou
 tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other);
 
 /// moves the elems of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same elem_size; releases what it held and keeps
-///                     its own allocator. 'self' == 'other' is a no-op
-/// @param[in,out] other the queue to move from; emptied on success and still usable, on
-///                      its own allocator
+/// @param[in,out] self must have the same elem_size; its old elems are released, its
+///                     allocator kept
+/// @param[in,out] other emptied on success and still usable; may be 'self'
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the block cannot be taken,
-///         leaving both as they were
-/// @bigo{1} on one allocator, n on two — the block belongs to the allocator that made it
+/// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and the copy cannot be
+///         allocated; both are left unchanged
+/// @bigo{1} on one allocator, n across two
 [[nodiscard]] TDA_API
 tda_Status tda_queue_move_assign(tda_Queue *self, tda_Queue *other);
 
-/// writes every elem into 'dst' front to back. The whole bridge to algo, and read only by
-/// design — see the note on the type
+/// copies every elem into 'dst' front to back; the only way to hand the elems to algo
 /// @param self the queue
 /// @param dst must have the same elem_size and be exactly as long as the queue
 /// @bigo{n}
@@ -169,8 +161,7 @@ void tda_queue_copy_to_span(const tda_Queue *self, tda_SpanMut dst);
 
 /// whether the two hold the same elems in queue order, byte for byte
 /// @param a one queue
-/// @param b must have the same elem_size — a mismatch there is a programmer error, not a
-///          false; a differing length is just false
+/// @param b must have the same elem_size (asserted); a different length gives false
 /// @return whether the lengths match and the bytes do
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -178,8 +169,8 @@ bool tda_queue_eq(const tda_Queue *a, const tda_Queue *b);
 
 /// whether the two hold equal elems under 'eq'
 /// @param a one queue
-/// @param b must have the same elem_size as 'a'
-/// @param eq asked of every pair until one says no
+/// @param b must have the same elem_size
+/// @param eq asked of each pair until one fails
 /// @return whether the lengths match and every pair does
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -192,7 +183,7 @@ bool tda_queue_eq_by(const tda_Queue *a, const tda_Queue *b, tda_Eq eq);
 
 /// how many elems are waiting
 /// @param self the queue
-/// @return the length, never above the capacity
+/// @return the length
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_queue_len(const tda_Queue *self);
@@ -204,7 +195,7 @@ size_t tda_queue_len(const tda_Queue *self);
 [[nodiscard]] TDA_API
 size_t tda_queue_cap(const tda_Queue *self);
 
-/// the size of one elem, as named at construction
+/// the size of one elem
 /// @param self the queue
 /// @return elem_size
 /// @bigo{1}
@@ -223,23 +214,21 @@ tda_Al *tda_queue_al(const tda_Queue *self);
 /// @name access
 /// @{
 
-/// the elem to be served next. Named front rather than first because a queue names roles,
-/// not places in a sequence
+/// the elem to be served next
 /// @param self asserts the queue is not empty
-/// @return a pointer into the block, good until the queue next changes
+/// @return valid until the queue next changes
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_queue_front(const tda_Queue *self);
 
-/// the front elem, to write through — what makes a queue a queue is where elems enter and
-/// leave, not what they hold
+/// the front elem, to write through; writing an elem does not break the queue order
 /// @copydetails tda_queue_front
 [[nodiscard]] TDA_API
 void *tda_queue_front_mut(tda_Queue *self);
 
-/// the elem that arrived most recently
+/// the elem pushed most recently
 /// @param self asserts the queue is not empty
-/// @return a pointer into the block, good until the queue next changes
+/// @return valid until the queue next changes
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_queue_back(const tda_Queue *self);
@@ -254,10 +243,9 @@ void *tda_queue_back_mut(tda_Queue *self);
 /// @name mods
 /// @{
 
-/// joins a copy of 'val' to the back
+/// pushes a copy of 'val' at the back
 /// @param self the queue
-/// @param val must not point into the queue's own elems: a push that grows moves them out
-///            from under it
+/// @param val must not point into this queue: growing would move it
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized
@@ -265,13 +253,12 @@ void *tda_queue_back_mut(tda_Queue *self);
 tda_Status tda_queue_push(tda_Queue *self, const void *val);
 
 /// drops the front elem, keeping the capacity
-/// @param self asserts the queue is not empty. To keep the elem, take it with
-///             tda_queue_pop_to instead
+/// @param self asserts the queue is not empty; tda_queue_pop_to keeps a copy
 /// @bigo{1}
 TDA_API
 void tda_queue_pop(tda_Queue *self);
 
-/// copies the front elem to 'out', then drops it as tda_queue_pop does
+/// copies the front elem to 'out', then drops it
 /// @param self asserts the queue is not empty
 /// @param[out] out where the elem goes
 /// @bigo{1}
@@ -295,21 +282,18 @@ void tda_queue_clear(tda_Queue *self);
 tda_Status tda_queue_reserve(tda_Queue *self, size_t new_cap);
 
 /// gives back the room above the length
-/// @param self a length of 0 releases the block outright
-/// @retval TDA_STATUS_OK on success, and when there was nothing to give back
-/// @retval TDA_STATUS_ERR_NO_MEM when the allocator refuses the smaller block, leaving
-///         the queue as it was
+/// @param self a length of 0 releases the block
+/// @retval TDA_STATUS_OK on success, including when there was nothing to give back
+/// @retval TDA_STATUS_ERR_NO_MEM when the smaller block is refused; nothing changes
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_Status tda_queue_shrink_to_fit(tda_Queue *self);
 
-/// exchanges the contents of the two
+/// exchanges the contents of two queues
 /// @param[in,out] self one queue
-/// @param[in,out] other must have the same elem_size and the same allocator: the deques
-///                      underneath change hands where they lie, so nothing is copied and
-///                      nothing can fail. 'self' == 'other' is a no-op
-/// @note two allocators are a broken precondition, not a runtime state: a block belongs to
-///       the one that made it. Across two: tda_queue_copy_with, then tda_queue_move_assign
+/// @param[in,out] other must have the same elem_size and allocator; may be 'self'
+/// @note a block belongs to the allocator that made it. Across allocators use
+///       tda_queue_copy_with, then tda_queue_move_assign
 /// @bigo{1}
 TDA_API
 void tda_queue_swap(tda_Queue *self, tda_Queue *other);
@@ -319,7 +303,7 @@ void tda_queue_swap(tda_Queue *self, tda_Queue *other);
 /// @name print
 /// @{
 
-/// writes the elems to a stream front to back as [a, b, c], followed by a newline
+/// writes the elems front to back as [a, b, c] and a newline
 /// @param self the queue
 /// @param stream where to write
 /// @param fprint the printer, called once per elem
@@ -340,8 +324,8 @@ void tda_queue_print(const tda_Queue *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// hands 'self' back once T is checked against the elem size, so a typed macro reads its
-// handle once; _Generic picks the one of the pair that keeps the handle's constness
+// returns 'self' after checking sizeof(T), so a macro evaluates its handle once;
+// _Generic keeps the handle's constness
 [[nodiscard]]
 static inline const tda_Queue *tda_queue_typed_c_(const tda_Queue *self, [[maybe_unused]] size_t size) {
     TDA_EXPECT(tda_queue_elem_size(self) == size);
@@ -377,8 +361,8 @@ static inline tda_Queue *tda_queue_typed_(tda_Queue *self, [[maybe_unused]] size
 
 /// tda_queue_from_data with sizeof(T)
 /// @param T the elem type
-/// @param data the elems to copy in, made to typecheck as a const T *
-/// @param len how many elems to read from 'data'
+/// @param data the elems, typechecked as const T *
+/// @param len how many to read
 /// @param al the allocator
 /// @param[out] out where the new queue is written
 /// @bigo{n}
@@ -420,14 +404,14 @@ static inline tda_Queue *tda_queue_typed_(tda_Queue *self, [[maybe_unused]] size
     ((T *) tda_queue_back_mut(TDA_QUEUE_TYPED_(T, self)))
 
 /// tda_queue_push from a value rather than an address
-/// @param T the elem type; a scalar, since 'val' becomes a compound literal
+/// @param T the elem type; scalars only, as 'val' becomes a compound literal
 /// @param self the queue
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_QUEUE_PUSH(T, self, val) \
     tda_queue_push(TDA_QUEUE_TYPED_(T, self), &(T){ (val) })
 
-/// tda_queue_pop_to with 'out' made to typecheck as a T *
+/// tda_queue_pop_to with 'out' typechecked as T *
 /// @param T the elem type
 /// @param self the queue
 /// @param[out] out where the elem goes

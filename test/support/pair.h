@@ -7,9 +7,9 @@
 
 /* ========== type ========== */
 
-/// an elem wider than a word, to keep elem_size honest. Deliberately spelled without the
-/// tda_test_ prefix of the rest of this layer: it is written as a type argument
-/// (TDA_SPAN_FROM_DATA_MUT(Pair, buf, 2)) in every test that has one, where a prefix is noise.
+/// an elem wider than a word, to keep elem_size honest. It has no tda_test_ prefix
+/// because tests write it as a type argument (TDA_SPAN_FROM_DATA_MUT(Pair, buf, 2)),
+/// where a prefix is noise.
 typedef struct {
     int64_t a;
     int64_t b;
@@ -24,8 +24,8 @@ static inline bool tda_test_pair_a_is_positive(const void *elem, void *ctx) {
     return ((const Pair *) elem)->a > 0;
 }
 
-/// the negation is its own predicate rather than an inversion of the one above —
-/// the same reason tda_span_find_if_not does not exist
+/// the negation is a separate predicate, for the same reason tda_span_find_if_not
+/// does not exist
 static inline bool tda_test_pair_a_is_negative(const void *elem, void *ctx) {
     TDA_UNUSED(ctx);
 
@@ -34,8 +34,8 @@ static inline bool tda_test_pair_a_is_negative(const void *elem, void *ctx) {
 
 /* ========== equalities ========== */
 
-/// tda_Eq over Pair, reading the first field alone. Two Pairs equal under it can still
-/// differ byte for byte, which is exactly what parts an _eq_by from an _eq
+/// tda_Eq over Pair, reading the first field alone. Pairs equal under it can still differ
+/// byte for byte, which tells an _eq_by from an _eq
 static inline bool tda_test_pair_eq_a(const void *lhs, const void *rhs) {
     return ((const Pair *) lhs)->a == ((const Pair *) rhs)->a;
 }

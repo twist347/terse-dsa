@@ -13,15 +13,14 @@
 /// @ingroup algo
 /// @brief changing what a span holds, in place
 ///
-/// A span cannot resize itself, so the ops that drop elems return the new length instead:
-/// the kept elems are packed to the front, and everything from there to s.len is left in
-/// an unspecified state. The caller shortens its own container:
+/// A span cannot resize itself, so the ops that drop elems return the new length. The
+/// kept elems are packed to the front and the rest, up to s.len, is left unspecified.
+/// The caller shortens its own container:
 ///
 ///     const size_t kept = tda_span_unique(tda_vec_to_span_mut(v), tda_eq_i32);
 ///     tda_vec_truncate(v, kept);
 ///
-/// [[nodiscard]] makes dropping that length a warning the compiler raises unasked, and an
-/// error under -Werror.
+/// [[nodiscard]] makes ignoring that length a warning (an error under -Werror).
 ///
 /// @par Example
 /// @snippet algo/example_modify.c drop
@@ -30,11 +29,11 @@
 /// @name unique
 /// @{
 
-/// drops every elem equal to the one before it, so a run collapses to its first
+/// drops every elem equal to the one before it, so each run keeps only its first
 /// @param s the span
 /// @param eq the equality
-/// @return the new length. Only neighbours are compared, so this leaves a set over a
-///         sorted span and merely collapses runs over any other
+/// @return the new length. Only neighbours are compared, so only a sorted span ends up
+///         free of duplicates
 /// @bigo{n}
 [[nodiscard]] TDA_API
 size_t tda_span_unique(tda_SpanMut s, tda_Eq eq);
@@ -46,8 +45,8 @@ size_t tda_span_unique(tda_SpanMut s, tda_Eq eq);
 
 /// drops every elem equal to 'key'
 /// @param s the span
-/// @param key the address of the value to drop; must not point into 's': the elems move
-///            under it, and it would be compared as whatever lands there next
+/// @param key must not point into 's': elems move during the pass, and 'key' would
+///            then read whatever lands there
 /// @param eq the equality
 /// @return the new length
 /// @bigo{n}
@@ -70,10 +69,8 @@ size_t tda_span_remove_if(tda_SpanMut s, tda_Pred pred, void *ctx);
 
 /// overwrites every elem equal to 'key' with 'val'
 /// @param s the span
-/// @param key the address of the value to look for; must not point into 's', as in
-///            tda_span_remove — the first match overwrites it
-/// @param val the address of the value to write; the length never changes, so there is
-///            nothing to return
+/// @param key must not point into 's': the first match would overwrite it
+/// @param val the value to write
 /// @param eq the equality
 /// @bigo{n}
 TDA_API
@@ -83,7 +80,7 @@ void tda_span_replace(tda_SpanMut s, const void *key, const void *val, tda_Eq eq
 /// @param s the span
 /// @param pred the test
 /// @param ctx handed to 'pred'
-/// @param val the address of the value to write
+/// @param val the value to write
 /// @bigo{n}
 TDA_API
 void tda_span_replace_if(tda_SpanMut s, tda_Pred pred, void *ctx, const void *val);

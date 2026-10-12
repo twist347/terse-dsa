@@ -21,7 +21,7 @@ void setUp() {
 void tearDown() {
 }
 
-// the same question as tda_test_i32_is_even, but it keeps a tally in ctx: how many
+// the same question as tda_test_i32_is_even, but it tallies calls in ctx: how many
 // times a partition asks about an elem is part of its contract
 static bool is_even_counting(const void *elem, void *ctx) {
     ++*(size_t *) ctx;
@@ -208,7 +208,7 @@ static void test_swap_ranges_empty_is_noop() {
     TEST_ASSERT_EQUAL_INT32(2, b[0]);
 }
 
-// the same view on both sides would swap every elem with itself — short-circuited
+// the same view on both sides would swap every elem with itself, so it short-circuits
 static void test_swap_ranges_of_one_view_with_itself_is_noop() {
     int32_t buf[3] = {1, 2, 3};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
@@ -259,7 +259,7 @@ static void test_next_permutation_walks_the_whole_order() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(ALL_3[0], buf, 3);
 }
 
-// equal elements do not produce equal permutations twice: {1,1,2} has three, not six
+// equal elements do not yield the same permutation twice: {1,1,2} has three, not six
 static void test_next_permutation_skips_duplicate_arrangements() {
     int32_t buf[3] = {1, 1, 2};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
@@ -342,7 +342,7 @@ static void test_prev_permutation_walks_the_order_backwards() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(ALL_3[5], buf, 3);
 }
 
-// the two are inverses of each other on every step that is not an end
+// the two are inverses on every step that is not an end
 static void test_prev_permutation_undoes_next_permutation() {
     for (size_t i = 0; i < 5; ++i) {
         int32_t buf[3];
@@ -477,8 +477,8 @@ static void test_partition_stable_keeps_the_order_on_both_sides() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 6);
 }
 
-// the two partitions disagree about the order inside each side, never about where
-// the sides meet — same span, same pred, same boundary
+// the two partitions may disagree about the order inside each side, never about where
+// the sides meet: same span, same pred, same boundary
 static void test_partition_stable_agrees_with_partition_on_the_boundary() {
     int32_t stable_buf[7] = {4, 1, 6, 3, 8, 5, 2};
     int32_t plain_buf[7] = {4, 1, 6, 3, 8, 5, 2};
@@ -504,8 +504,8 @@ static void test_partition_stable_agrees_with_partition_on_the_boundary() {
     assert_same_elems(stable_buf, plain_buf, 7);
 }
 
-// the whole point: elems the pred cannot tell apart come out in the order they went in.
-// The tag in b witnesses it — nothing else here can
+// elems the pred cannot tell apart come out in the order they went in. Only the tag
+// in b can show it
 static void test_partition_stable_keeps_equal_elems_in_order() {
     Pair buf[6] = {{1, 0}, {-1, 1}, {1, 2}, {-1, 3}, {-1, 4}, {1, 5}};
 
@@ -626,8 +626,8 @@ static void test_partition_stable_of_a_subspan_leaves_the_neighbours_alone() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 6);
 }
 
-// asking twice would be a second, differently timed set of answers — the contract
-// says once per elem, so count them
+// the contract says one call per elem, since asking twice could give different
+// answers, so count them
 static void test_partition_stable_asks_the_pred_once_per_elem() {
     int32_t buf[6] = {1, 2, 3, 4, 5, 6};
 
@@ -744,7 +744,7 @@ static void test_is_partitioned_on_uniform_and_empty_spans() {
 /* ========== shuffle ========== */
 
 // the one property a shuffle must never break: it rearranges, it does not invent. Sorting
-// both and comparing is the cheapest way to say "same multiset".
+// both and comparing is the cheapest check for "same multiset".
 static void test_shuffle_keeps_every_elem() {
     int32_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     int32_t sorted[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -769,7 +769,7 @@ static void test_shuffle_of_a_short_span_is_a_no_op() {
     TEST_ASSERT_EQUAL_INT32(42, one[0]);
 }
 
-// the test that catches the Fisher-Yates written wrong: drawing from the whole span each
+// catches a Fisher-Yates written wrong: drawing from the whole span each
 // step gives n^n equally likely paths over n! orders, which cannot come out flat. Over
 // three elems the six permutations have to land within a couple of percent of each other.
 static void test_shuffle_reaches_every_order_equally_often() {
@@ -848,8 +848,7 @@ static void test_shuffle_prefix_of_nothing_leaves_the_span_alone() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(untouched, data, 4);
 }
 
-// what the prefix is for: it has to be a uniform sample of the whole span, not of the
-// front of it
+// the prefix has to be a uniform sample of the whole span, not of its front
 static void test_shuffle_prefix_draws_from_the_whole_span() {
     static constexpr size_t TRIALS = 100000;
 

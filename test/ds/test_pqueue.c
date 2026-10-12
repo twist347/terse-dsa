@@ -42,7 +42,7 @@ static tda_PQueue *make_queue(const int32_t *src, size_t n) {
     return q;
 }
 
-// the same elems, heapified in one go instead
+// the same elems, heapified at once
 static tda_PQueue *make_queue_from(const int32_t *src, size_t n) {
     tda_PQueue *q = nullptr;
     TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(int32_t, src, n, tda_cmp_i32, tda_al_default(), &q));
@@ -50,16 +50,16 @@ static tda_PQueue *make_queue_from(const int32_t *src, size_t n) {
     return q;
 }
 
-// what the queue must hand back: a copy sorted greatest first by the libc qsort, an
-// oracle that shares no code with what is tested. tda_Cmp is qsort compatible by design
+// the expected output: a copy sorted greatest first by libc qsort, an oracle sharing no
+// code with what is tested. tda_Cmp is qsort compatible by design
 static void expected_order(int32_t *dst, const int32_t *src, size_t n, tda_Cmp cmp) {
     memcpy(dst, src, n * sizeof(int32_t));
     qsort(dst, n, sizeof(int32_t), cmp);
 }
 
-// empties the queue through top + pop, checking at every step that what is left is still
-// a heap and one elem shorter. The invariant is checked here rather than in a test of its
-// own because it must hold after EVERY pop, not just the last one
+// empties the queue through top + pop, checking after every step that the rest is still
+// a heap and one elem shorter. Checked here because it must hold after every pop, not
+// just the last
 static void assert_drains(tda_PQueue *q, const int32_t *want, size_t n) {
     TEST_ASSERT_EQUAL_size_t(n, tda_pqueue_len(q));
 
@@ -80,9 +80,8 @@ static void assert_drains_sorted(tda_PQueue *q, const int32_t *src, size_t n, td
     assert_drains(q, want, n);
 }
 
-// walks every permutation of {1..n} and hands each to 'check'. next_permutation is a data
-// generator here, not an oracle: were it broken the sweep would visit fewer inputs, which
-// cannot turn a failing case into a passing one
+// calls 'check' on every permutation of {1..n}. next_permutation only generates data:
+// if it were broken the sweep would visit fewer inputs, which cannot hide a failure
 static void for_every_permutation(size_t n, void (*check)(const int32_t *, size_t)) {
     int32_t buf[8];
     TEST_ASSERT_TRUE(n <= 8);
@@ -104,7 +103,7 @@ static void for_every_permutation(size_t n, void (*check)(const int32_t *, size_
     TEST_ASSERT_EQUAL_size_t(want, seen);
 }
 
-// a spread out input with duplicates: nothing here is sorted, reversed or unique
+// a spread out input with duplicates: not sorted, reversed or unique
 static constexpr int32_t SPREAD[] = {5, 1, 9, 9, 3, 7, 2, 8, 3, 6, 0, 4, 9, 1};
 static constexpr size_t SPREAD_LEN = sizeof(SPREAD) / sizeof(SPREAD[0]);
 
@@ -168,7 +167,7 @@ static void test_from_span_copies_the_view() {
     tda_pqueue_drop(q);
 }
 
-// an elem wider than a word, to catch a copy that moves bytes by the wrong stride
+// an elem wider than a word, to catch a copy with the wrong stride
 static void test_from_data_copies_whole_elems() {
     constexpr Pair src[] = {{.a = 1, .b = 10}, {.a = 3, .b = 30}, {.a = 2, .b = 20}};
     tda_PQueue *q = nullptr;
@@ -197,7 +196,7 @@ static void test_pushes_drain_greatest_first() {
     tda_pqueue_drop(q);
 }
 
-// every length up to the spread, so growing across a reallocation is covered too
+// every length up to the spread, so growth across a reallocation is covered
 static void test_pushes_drain_greatest_first_at_every_length() {
     for (size_t n = 0; n <= SPREAD_LEN; ++n) {
         tda_PQueue *q = make_queue(SPREAD, n);
@@ -211,7 +210,7 @@ static void check_drains_in_order(const int32_t *src, size_t n) {
     assert_drains_sorted(pushed, src, n, tda_cmp_desc_i32);
     tda_pqueue_drop(pushed);
 
-    // the two ways in must agree: heapifying is an optimisation, not another order
+    // both paths must agree: heapifying is an optimisation, not another order
     tda_PQueue *heapified = make_queue_from(src, n);
     assert_drains_sorted(heapified, src, n, tda_cmp_desc_i32);
     tda_pqueue_drop(heapified);
@@ -222,7 +221,7 @@ static void test_every_permutation_drains_in_order() {
     for_every_permutation(5, check_drains_in_order);
 }
 
-// there is no min-queue type: a descending comparator is the whole difference
+// there is no min-queue type: a descending comparator is enough
 static void test_a_descending_comparator_gives_a_min_queue() {
     tda_PQueue *q = nullptr;
     TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, tda_al_default(), &q, 5, 3, 9, 1, 7));
@@ -249,7 +248,7 @@ static void test_top_is_the_greatest_after_every_push() {
     tda_pqueue_drop(q);
 }
 
-// popping to empty and refilling: the queue must not be a one-shot
+// popping to empty and refilling: the queue must be reusable
 static void test_pushes_after_a_full_drain_are_ordered_again() {
     tda_PQueue *q = make_queue(SPREAD, SPREAD_LEN);
 
@@ -267,7 +266,7 @@ static void test_pushes_after_a_full_drain_are_ordered_again() {
     tda_pqueue_drop(q);
 }
 
-// SPREAD holds 9 three times and 1 and 3 twice: a duplicate is an elem, not a set member
+// SPREAD holds 9 three times and 1 and 3 twice: duplicates are kept, not merged
 static void test_duplicates_all_come_back() {
     tda_PQueue *q = make_queue_from(SPREAD, SPREAD_LEN);
 
@@ -282,8 +281,8 @@ static void test_duplicates_all_come_back() {
     tda_pqueue_drop(q);
 }
 
-// On equal keys nothing is promised about the order, but every payload must survive
-// exactly once. Distinct int32_t elems cannot witness this: with equal keys the elems are
+// Equal keys come out in no promised order, but every payload must survive exactly
+// once. Distinct int32_t elems cannot show this: with equal keys the elems are
 // indistinguishable, so a shuffle, a loss and a duplicate all look the same
 static void test_equal_keys_keep_every_payload() {
     constexpr Pair src[] = {
@@ -306,7 +305,7 @@ static void test_equal_keys_keep_every_payload() {
     tda_pqueue_drop(q);
 }
 
-// pop_to hands out what top + pop would have read, and leaves a heap after every one
+// pop_to hands out what top + pop would have read, and leaves a heap after each one
 static void test_pop_to_drains_greatest_first() {
     tda_PQueue *q = make_queue(SPREAD, SPREAD_LEN);
 
@@ -343,7 +342,7 @@ static void test_pop_to_macro_moves_whole_elems() {
 }
 
 // replacing the top must leave what dropping it and pushing 'val' would: the same
-// multiset, as a heap. Every value from below the least to above the greatest
+// multiset, as a heap. 'val' ranges from below the least to above the greatest
 static void check_replace_top(const int32_t *src, size_t n) {
     for (int32_t val = 0; val <= (int32_t) n + 1; ++val) {
         tda_PQueue *q = make_queue_from(src, n);
@@ -372,7 +371,7 @@ static void test_replace_top_matches_a_pop_and_a_push() {
     }
 }
 
-// one sift and a write over the root: the queue never asks for room
+// one sift and a write over the root: the queue never allocates
 static void test_replace_top_allocates_nothing() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -404,7 +403,7 @@ static void test_replace_top_with_the_top_itself_changes_nothing() {
     tda_pqueue_drop(q);
 }
 
-// the k greatest of a stream, kept in a min-queue of k: what replace_top is for
+// the k greatest of a stream, kept in a min-queue of k: the use case for replace_top
 static void test_replace_top_keeps_the_k_greatest() {
     constexpr size_t k = 4;
 
@@ -455,7 +454,7 @@ static void test_len_follows_push_and_pop() {
     tda_pqueue_drop(q);
 }
 
-// a pop frees no memory, exactly as it does not in the vec underneath
+// a pop frees no memory, just as in the vec underneath
 static void test_pop_leaves_the_capacity_alone() {
     tda_PQueue *q = make_queue(SPREAD, SPREAD_LEN);
     const size_t cap = tda_pqueue_cap(q);
@@ -572,7 +571,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the blocks are asked of the allocator the copy is going to, not of the source's
+// the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -603,7 +602,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     const size_t requests = tda_test_probe_requests(&probe);
     TDA_TEST_OK(tda_pqueue_move_assign(dst, src));
 
-    // nothing was asked of the allocator: the vec's block changed hands
+    // nothing was allocated: the vec's block changed hands
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
     TEST_ASSERT_EQUAL_size_t(3, tda_pqueue_len(dst));
@@ -697,8 +696,8 @@ static void test_copy_of_empty_stays_empty() {
     tda_pqueue_drop(dst);
 }
 
-// the comparator is part of the value: a heap means nothing without the order it was
-// built under, so the target's own comparator is replaced rather than kept
+// the comparator is part of the value: a heap means nothing without its order, so the
+// target's own comparator is replaced
 static void test_copy_assign_hands_over_the_comparator_too() {
     tda_PQueue *src = nullptr;
     TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, tda_al_default(), &src, 5, 1, 3));
@@ -741,7 +740,7 @@ static void test_swap_exchanges_the_elems_and_the_comparators() {
     TEST_ASSERT_EQUAL_INT32(10, *TDA_PQUEUE_TOP_AS(int32_t, a));
     TEST_ASSERT_EQUAL_INT32(3, *TDA_PQUEUE_TOP_AS(int32_t, b));
 
-    // each side is still a heap under the order that arrived with the elems
+    // each side is still a heap under the order that came with its elems
     TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(a), tda_pqueue_cmp(a)));
     TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(b), tda_pqueue_cmp(b)));
 
@@ -761,7 +760,7 @@ static void test_swap_self_is_noop() {
 
 /* ========== to span ========== */
 
-// heap order is weaker than sorted order: only the first elem is where it will end up.
+// heap order is weaker than sorted order: only the first elem is in its final place.
 // The span is the buffer as it stands, not a sorted run and not a copy
 static void test_to_span_shows_the_heap_not_a_sorted_run() {
     tda_PQueue *q = make_queue_from(SPREAD, SPREAD_LEN);
@@ -809,7 +808,7 @@ static void test_from_data_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// a refused push must leave the queue exactly as it was — not a heap with a hole in it
+// a refused push must leave the queue exactly as it was, not a heap with a hole in it
 static void test_push_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
     TEST_ASSERT_NOT_NULL(arena);
@@ -860,9 +859,9 @@ static void test_reserve_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// The queue is built in two allocations, the buffer and then the header. When the second
-// one is refused the first must not be stranded: the probe counts what is still live, and
-// an arena would hide the leak because it frees everything at once
+// The queue is built in two allocations, the buffer and then the header. If the second
+// is refused the first must not be stranded: the probe counts what is still live, where
+// an arena would hide the leak by freeing everything at once
 static void test_a_refused_header_frees_the_buffer() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -894,8 +893,8 @@ static void test_a_refused_header_frees_a_filled_buffer() {
 
 /* ========== into ========== */
 
-// the vec was there all along: taking it copies nothing and hands the elems over in heap
-// order, which is not sorted order
+// the vec was there all along: taking it copies nothing and hands the elems over in
+// heap order, which is not sorted order
 static void test_into_vec_hands_the_elems_over() {
     constexpr int32_t src[6] = {3, 1, 4, 1, 5, 9};
     tda_PQueue *q = make_queue_from(src, 6);
@@ -917,8 +916,7 @@ static void test_into_vec_hands_the_elems_over() {
     tda_vec_drop(v);
 }
 
-// the whole point of handing the vec over: sort_heap finishes the job in place, which is
-// heapsort's second half
+// why hand the vec over: sort_heap finishes in place, as heapsort's second half
 static void test_into_vec_then_sort_heap() {
     constexpr int32_t src[6] = {3, 1, 4, 1, 5, 9};
     constexpr int32_t want[6] = {1, 1, 3, 4, 5, 9};
@@ -943,7 +941,7 @@ static void test_into_vec_of_an_empty_queue() {
     tda_vec_drop(v);
 }
 
-// only the adapter's own header goes back; the comparator does not travel with the elems
+// only the adapter's own header is freed; the comparator does not travel with the elems
 static void test_into_vec_releases_the_header_alone() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -952,8 +950,8 @@ static void test_into_vec_releases_the_header_alone() {
     tda_PQueue *q = nullptr;
     TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, &al, &q));
 
-    // the last block the constructor took is the adapter's own header, so this is what
-    // into has to hand back, and with the size it was taken as
+    // the constructor's last block is the adapter's header, so into must free that, with
+    // the size it was taken with
     const size_t header = probe.last_alloc_size;
 
     TDA_TEST_OK(TDA_PQUEUE_PUSH(int32_t, q, 1));
@@ -970,8 +968,7 @@ static void test_into_vec_releases_the_header_alone() {
 
 /* ========== print ========== */
 
-// a printer writes to a stream, so a case reads one back through tmpfile, as
-// test/core/test_print.c does
+// printers write to a stream; cases read it back via tmpfile, like test/core/test_print.c
 static void assert_prints(const char *expected, const tda_PQueue *q) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
@@ -996,8 +993,8 @@ static void test_fprint_writes_the_elem() {
     tda_pqueue_drop(q);
 }
 
-// with more than one elem the order is the heap's, which the header calls unspecified —
-// so a case may say what is printed only where there is nothing to order
+// with more than one elem the order is the heap's, which is unspecified, so a case
+// states the output only where there is nothing to order
 static void test_fprint_of_an_empty_pqueue() {
     tda_PQueue *q = make_queue(nullptr, 0);
 
@@ -1006,8 +1003,8 @@ static void test_fprint_of_an_empty_pqueue() {
     tda_pqueue_drop(q);
 }
 
-// the stdout twin takes no stream and cannot be captured portably, so a case can only
-// say that it runs and reaches the same printer
+// the stdout twin cannot be captured portably, so a case only checks that it runs and
+// reaches the same printer
 static void test_print_writes_to_stdout() {
     constexpr int32_t src[3] = {1, 2, 3};
     tda_PQueue *q = make_queue(src, 3);

@@ -18,8 +18,8 @@ static inline bool tda_test_i32_greater_than(const void *elem, void *ctx) {
     return *(const int32_t *) elem > *(const int32_t *) ctx;
 }
 
-/// tda_Pred over int32_t: whether the elem's bit is set in the uint32_t mask 'ctx' points
-/// to — every subset of a small range, one mask each
+/// tda_Pred over int32_t: whether the elem's bit is set in the uint32_t mask at 'ctx';
+/// one mask per subset of a small range
 static inline bool tda_test_i32_in_mask(const void *elem, void *ctx) {
     return *(const uint32_t *) ctx >> *(const int32_t *) elem & 1;
 }

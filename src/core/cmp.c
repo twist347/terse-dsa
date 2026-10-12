@@ -8,9 +8,9 @@
 
 /* ========== internals ========== */
 
-// The value forms. They are the whole implementation, but they are not exported: a
-// comparator is what the algorithms take, and one form per meaning is enough. A caller
-// who wants to compare two values calls the comparator with their addresses.
+// The value forms hold the whole implementation but are not exported: the algorithms
+// take comparators, and one form per meaning is enough. To compare two values, call the
+// comparator with their addresses.
 
 #define DEFINE_CMP_INT(name, T)       \
     static int cmp_##name(T a, T b) { \
@@ -42,8 +42,8 @@
         return cmp_##name(*(const T *) lhs, *(const T *) rhs); \
     }
 
-// no T: swapping the operands of the ascending comparator needs no type at all, which is
-// also why cstr can use this one despite its pointer-to-pointer operands
+// no T: swapping the operands of the ascending comparator needs no type, so cstr can use
+// this one despite its pointer-to-pointer operands
 #define DEFINE_CMP_DESC(name)                                   \
     int tda_cmp_desc_##name(const void *lhs, const void *rhs) { \
         return tda_cmp_##name(rhs, lhs);                        \
@@ -85,8 +85,8 @@ DEFINE_INT_ALL(u64, uint64_t)
 DEFINE_INT_ALL(size, size_t)
 DEFINE_INT_ALL(ptrdiff, ptrdiff_t)
 
-// char is a third type, distinct from both signed and unsigned char, and its signedness
-// is the target's business: (a > b) - (a < b) resolves to whichever one that is
+// char is a third type, distinct from signed and unsigned char, and its signedness is
+// up to the target; (a > b) - (a < b) is right either way
 DEFINE_INT_ALL(char, char)
 
 DEFINE_FLOAT_ALL(f32, float)
@@ -113,7 +113,7 @@ static int cmp_cstr(const char *a, const char *b) {
 DEFINE_EQ(cstr, const char *)
 
 // the operand is a pointer to a pointer, so the cast needs a star that DEFINE_CMP
-// cannot spell — the remaining two forms come from the shared macros
+// cannot spell; the other two forms come from the shared macros
 int tda_cmp_cstr(const void *lhs, const void *rhs) {
     assert(lhs);
     assert(rhs);

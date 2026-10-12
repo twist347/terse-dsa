@@ -4,11 +4,10 @@
 
 /// @defgroup core_util core/util
 /// @ingroup core
-/// @brief the few macros that exist because a function cannot do the job
+/// @brief macros that exist because a function cannot do the job
 ///
-/// A macro earns a place here only when a function cannot take its place: working on the
-/// type itself through typeof, keeping lvalue semantics, or reaching the token rather
-/// than the value.
+/// A macro belongs here only when a function cannot replace it: it works on the type
+/// through typeof, keeps lvalue semantics, or needs the tokens rather than the value.
 ///
 /// @par Example
 /// @snippet core/example_util.c swap
@@ -19,7 +18,7 @@
 /// @name macro
 /// @{
 
-/// the inner step of TDA_STRINGIFY, and what makes the argument arrive expanded
+/// the inner step of TDA_STRINGIFY; the extra level makes the argument expand first
 /// @param x the tokens to spell
 #define TDA_STRINGIFY_(x)   #x
 
@@ -28,18 +27,16 @@
 /// @param x the tokens to spell
 #define TDA_STRINGIFY(x)    TDA_STRINGIFY_(x)
 
-/// evaluates 'val' and throws the result away, to say on purpose that a parameter or a
-/// result is unused
+/// evaluates 'val' and discards it, to mark a parameter or result as unused on purpose
 /// @param val what to evaluate and discard
 #define TDA_UNUSED(val)    ((void) (val))
 
 /// exchanges two lvalues of one type
-/// @param a one lvalue; both operands are typed from this one, so a mismatch is a
-///          compile error rather than a silent truncation
+/// @param a one lvalue; both are typed from it, so a mismatch is a compile error, not a
+///          silent truncation
 /// @param b the other lvalue
-/// @warning it cannot tell TDA_SWAP(self, other) from TDA_SWAP(*self, *other) — both
-///          typecheck, and the first one exchanges the local pointers and leaves the
-///          objects alone
+/// @warning TDA_SWAP(self, other) and TDA_SWAP(*self, *other) both typecheck; the first
+///          swaps the local pointers and leaves the objects alone
 #define TDA_SWAP(a, b)                                        \
     do {                                                      \
         typeof_unqual(a) *tda_swap_pa_ = &(a);                \

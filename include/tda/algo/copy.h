@@ -11,29 +11,30 @@
 
 /// @defgroup algo_copy algo/copy
 /// @ingroup algo
-/// @brief moving elems from one span to another, as the bytes they are
+/// @brief copying elems from one span to another as raw bytes
 ///
-/// Both spans must have the same elem_size: this copies, it does not convert. Changing
-/// the elem type on the way is algo/transform.
+/// Both spans must have the same elem_size; nothing is converted. To change the elem
+/// type, use algo/transform.
 ///
 /// @par Example
 /// @snippet algo/example_copy.c pred
 /// @snippet algo/example_copy.c copy
+/// @snippet algo/example_copy.c sample
 /// @{
 
 /// @name copy
 /// @{
 
 /// copies 'src' over 'dst'
-/// @param dst where they go; asserts the same len and elem_size as 'src'
-/// @param src where they come from; no overlap with 'dst' unless it is exactly 'dst'
+/// @param dst asserts the same len and elem_size as 'src'
+/// @param src must not overlap 'dst' unless it is exactly 'dst'
 /// @bigo{n}
 TDA_API
 void tda_span_copy(tda_SpanMut dst, tda_Span src);
 
 /// copies the elems of 'src' that satisfy 'pred', packed to the front of 'dst'
-/// @param dst where they go; asserts room for the ones that pass
-/// @param src where they come from
+/// @param dst asserts room for the elems that pass
+/// @param src the source
 /// @param pred the test
 /// @param ctx handed to 'pred'
 /// @return how many were written; the rest of 'dst' is untouched
@@ -42,9 +43,9 @@ void tda_span_copy(tda_SpanMut dst, tda_Span src);
 size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx);
 
 /// tda_span_copy where the two may overlap
-/// @param dst where they go; asserts the same len and elem_size as 'src'
-/// @param src where they come from, overlapping 'dst' however it likes
-/// @bigo{n} — the same copy through memmove instead of memcpy
+/// @param dst asserts the same len and elem_size as 'src'
+/// @param src may overlap 'dst' in any way
+/// @bigo{n}; memmove instead of memcpy
 TDA_API
 void tda_span_copy_overlapping(tda_SpanMut dst, tda_Span src);
 
@@ -53,16 +54,16 @@ void tda_span_copy_overlapping(tda_SpanMut dst, tda_Span src);
 /// @name sample
 /// @{
 
-/// copies a random pick of the elems of 'src' into 'dst', none twice, in the order 'src'
-/// holds them
-/// @param dst where they go; its len is how many to pick
-/// @param src where they come from, left as it was; no overlap with 'dst'
-/// @param rng where the pick comes from; the same seed replays the same pick
-/// @return how many were written — dst.len, or src.len when 'src' has fewer, then copied
-///         whole; the rest of 'dst' is untouched
-/// @bigo{n} — selection sampling: each elem is taken with odds "still wanted / still
-///            left", which makes every pick of that size equally likely. When 'src' may
-///            change, tda_span_shuffle_prefix does it in O(count), at the cost of the order
+/// copies a random selection of the elems of 'src' into 'dst', none twice, keeping
+/// their order in 'src'
+/// @param dst its len is how many to pick
+/// @param src left unchanged; must not overlap 'dst'
+/// @param rng the source of randomness; the same seed gives the same pick
+/// @return how many were written: dst.len, or src.len when 'src' is shorter (then all
+///         of it is copied); the rest of 'dst' is untouched
+/// @bigo{n}. Selection sampling: each elem is taken with odds "still wanted / still
+///          left", so every pick of that size is equally likely. If 'src' may be
+///          changed, tda_span_shuffle_prefix takes O(count) but loses the order
 [[nodiscard]] TDA_API
 size_t tda_span_sample(tda_SpanMut dst, tda_Span src, tda_Rng *rng);
 

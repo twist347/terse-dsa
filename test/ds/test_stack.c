@@ -43,7 +43,7 @@ static tda_Stack *make_stack(const int32_t *src, size_t n) {
     return s;
 }
 
-// the same elems handed over in one go instead
+// the same elems handed over at once
 [[nodiscard]]
 static tda_Stack *make_stack_from(const int32_t *src, size_t n) {
     tda_Stack *s = nullptr;
@@ -52,8 +52,7 @@ static tda_Stack *make_stack_from(const int32_t *src, size_t n) {
     return s;
 }
 
-// 'want' is written bottom to top, the order the elems were pushed in, which is the
-// order the span shows them in
+// 'want' is bottom to top: push order, which is also the span's order
 static void assert_elems(const tda_Stack *s, const int32_t *want, size_t n) {
     TEST_ASSERT_EQUAL_size_t(n, tda_stack_len(s));
 
@@ -66,10 +65,9 @@ static void assert_elems(const tda_Stack *s, const int32_t *want, size_t n) {
     }
 }
 
-// empties the stack through top + pop, checking at every step that the newest elem is
-// the one on offer and that exactly one left. The order is checked here rather than in a
-// test of its own because it must hold after EVERY pop, not just the last one. 'want' is
-// bottom to top, so the drain walks it backwards
+// empties the stack through top + pop, checking after every step that the newest elem
+// is on offer and exactly one left. Checked here because the order must hold after every
+// pop, not just the last. 'want' is bottom to top, so the drain walks it backwards
 static void assert_drains(tda_Stack *s, const int32_t *want, size_t n) {
     TEST_ASSERT_EQUAL_size_t(n, tda_stack_len(s));
 
@@ -104,8 +102,7 @@ static void test_new_cap_reserves_without_length() {
     tda_stack_drop(s);
 }
 
-// the elems are taken in the order they are written, so the one written last is the one
-// that comes off first
+// the elems are pushed in the order written, so the last written comes off first
 static void test_from_data_puts_the_last_elem_on_top() {
     tda_Stack *s = make_stack_from(SPREAD, SPREAD_LEN);
 
@@ -136,7 +133,7 @@ static void test_from_span_copies_the_view() {
     tda_stack_drop(s);
 }
 
-// an elem wider than a word must travel whole, not by its first field
+// an elem wider than a word must travel whole, not just its first field
 static void test_from_data_copies_whole_elems() {
     constexpr Pair src[3] = {{1, 10}, {2, 20}, {3, 30}};
 
@@ -154,9 +151,9 @@ static void test_drop_null_is_noop() {
     tda_stack_drop(nullptr);
 }
 
-// three blocks go into a filled stack — the vec, its buffer, and the header that hides
-// the vec — and drop must hand back all three. The default allocator would say nothing
-// about it, so the count comes from a probe
+// a filled stack holds three blocks (the vec, its buffer, and the header hiding the
+// vec) and drop must free all three. The default allocator would not notice a leak, so
+// a probe counts
 static void test_drop_hands_back_everything_it_took() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -182,8 +179,8 @@ static void test_pushes_leave_newest_first() {
     tda_stack_drop(s);
 }
 
-// growth relocates every elem, so the order has to survive a move of the whole buffer —
-// this stack outgrows its first block several times over
+// growth relocates every elem, so the order must survive a move of the whole buffer;
+// this stack outgrows its first block several times
 static void test_order_survives_growth() {
     int32_t want[64];
     for (int32_t i = 0; i < 64; ++i) {
@@ -198,8 +195,7 @@ static void test_order_survives_growth() {
     tda_stack_drop(s);
 }
 
-// pushing and popping in step keeps the stack short while far more elems than it holds
-// pass through
+// pushing and popping in step keeps the stack short while many more elems pass through
 static void test_pushing_and_popping_in_step_stays_in_order() {
     tda_Stack *s = nullptr;
     TDA_TEST_OK(TDA_STACK_NEW(int32_t, tda_al_default(), &s));
@@ -231,7 +227,7 @@ static void test_pushes_after_a_full_drain_are_ordered_again() {
     tda_stack_drop(s);
 }
 
-// equal elems are not one elem: every copy pushed must come back
+// equal elems are distinct: every copy pushed must come back
 static void test_duplicates_all_come_back() {
     constexpr int32_t src[6] = {7, 7, 7, 7, 7, 7};
 
@@ -242,7 +238,7 @@ static void test_duplicates_all_come_back() {
     tda_stack_drop(s);
 }
 
-// what a pop uncovers is the elem pushed just before the one it removed
+// a pop uncovers the elem pushed just before the one it removed
 static void test_a_pop_uncovers_the_elem_below() {
     tda_Stack *s = nullptr;
     TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_al_default(), &s, 1, 2, 3));
@@ -313,8 +309,8 @@ static void test_top_follows_the_last_push() {
     tda_stack_drop(s);
 }
 
-// there is no order over the elems to break, so writing through the top is legal —
-// the stack only rules where they enter and leave
+// the elems have no order to break, so writing through the top is legal; the stack
+// only rules where they enter and leave
 static void test_the_top_is_writable() {
     tda_Stack *s = nullptr;
     TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_al_default(), &s, 1, 2, 3));
@@ -327,7 +323,7 @@ static void test_the_top_is_writable() {
     tda_stack_drop(s);
 }
 
-// on a stack of one the top is also the bottom, which is where the span starts
+// on a stack of one the top is also the bottom, where the span starts
 static void test_the_top_of_a_single_elem_stack_is_where_the_span_starts() {
     tda_Stack *s = make_stack_from(SPREAD, 1);
 
@@ -356,7 +352,7 @@ static void test_len_follows_push_and_pop() {
     tda_stack_drop(s);
 }
 
-// popping hands nothing back to the allocator: the room stays for the next push
+// popping frees nothing: the room stays for the next push
 static void test_pop_leaves_the_capacity_alone() {
     tda_Stack *s = make_stack_from(SPREAD, SPREAD_LEN);
     const size_t cap = tda_stack_cap(s);
@@ -482,7 +478,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_stack_al(src));
     TEST_ASSERT_TRUE(tda_stack_eq(src, dst));
 
-    // the header goes to the same allocator as the elems, so the copy outlives the source
+    // the header uses the same allocator as the elems, so the copy outlives the source
     tda_stack_drop(src);
     TEST_ASSERT_EQUAL_INT32(SPREAD[SPREAD_LEN - 1], *TDA_STACK_TOP_AS(int32_t, dst));
 
@@ -490,7 +486,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the blocks are asked of the allocator the copy is going to, not of the source's
+// the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
@@ -521,7 +517,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     const size_t requests = tda_test_probe_requests(&probe);
     TDA_TEST_OK(tda_stack_move_assign(dst, src));
 
-    // nothing was asked of the allocator: the vec's block changed hands
+    // nothing was allocated: the vec's block changed hands
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
     TEST_ASSERT_EQUAL_size_t(3, tda_stack_len(dst));
@@ -640,8 +636,7 @@ static void test_copy_assign_self_is_noop() {
 
 /* ========== to span ========== */
 
-// the span runs bottom to top, which is push order — the reverse of the order the elems
-// will come off in
+// the span runs bottom to top, in push order, the reverse of the order elems come off
 static void test_to_span_shows_bottom_to_top() {
     tda_Stack *s = make_stack(SPREAD, SPREAD_LEN);
     const tda_Span sp = tda_stack_to_span(s);
@@ -653,8 +648,7 @@ static void test_to_span_shows_bottom_to_top() {
     tda_stack_drop(s);
 }
 
-// the top is the LAST elem of the span, not the first — that is the whole difference
-// between this and a queue
+// the top is the last elem of the span, not the first: the difference from a queue
 static void test_to_span_ends_at_the_top() {
     tda_Stack *s = make_stack_from(SPREAD, SPREAD_LEN);
     const tda_Span sp = tda_stack_to_span(s);
@@ -687,8 +681,8 @@ static void test_to_span_of_empty_has_no_elems() {
     tda_stack_drop(s);
 }
 
-// the point of the one way bridge: algo reads the span, and the arrival order that gives
-// the stack its meaning is not something algo can rearrange — there is no mutable view
+// why the bridge is one way: algo reads the span, but cannot rearrange the arrival order
+// that gives the stack its meaning, since there is no mutable view
 static void test_the_span_reaches_algo_and_the_stack_is_untouched() {
     tda_Stack *s = make_stack_from(SPREAD, SPREAD_LEN);
     const tda_Span sp = tda_stack_to_span(s);
@@ -757,8 +751,7 @@ static void test_from_data_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// a refused push must leave the stack exactly as it was — not one elem taller with a
-// hole on top
+// a refused push must leave the stack as it was, not one elem taller with a hole on top
 static void test_push_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
     TEST_ASSERT_NOT_NULL(arena);
@@ -811,9 +804,9 @@ static void test_reserve_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// The stack is built in two steps, the vec and then the header that hides it. When the
-// second one is refused the first must not be stranded: the probe counts what is still
-// live, and an arena would hide the leak because it frees everything at once
+// The stack is built in two steps, the vec and then the header hiding it. If the second
+// is refused the first must not be stranded: the probe counts what is still live, where
+// an arena would hide the leak by freeing everything at once
 static void test_a_refused_header_frees_the_vec() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -903,7 +896,7 @@ static void test_eq_of_two_empties() {
     tda_stack_drop(one);
 }
 
-// a popped elem is gone even though its bytes are still in the vec underneath
+// a popped elem is gone even though its bytes remain in the vec underneath
 static void test_eq_forgets_a_popped_elem() {
     constexpr int32_t lhs[2] = {7, 8};
     constexpr int32_t rhs[3] = {7, 8, 9};
@@ -937,8 +930,8 @@ static void test_eq_by_asks_the_equality() {
 
 /* ========== into ========== */
 
-// the vec was there all along: taking it copies nothing and leaves the elems where they
-// were, bottom to top
+// the vec was there all along: taking it copies nothing and leaves the elems in place,
+// bottom to top
 static void test_into_vec_hands_the_elems_over() {
     constexpr int32_t src[3] = {7, 8, 9};
     tda_Stack *s = make_stack(src, 3);
@@ -971,7 +964,7 @@ static void test_into_vec_of_an_empty_stack() {
     tda_vec_drop(v);
 }
 
-// only the adapter's own header goes back; dropping the vec afterwards squares the books
+// only the adapter's own header is freed; dropping the vec afterwards balances the count
 static void test_into_vec_releases_the_header_alone() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -980,8 +973,8 @@ static void test_into_vec_releases_the_header_alone() {
     tda_Stack *s = nullptr;
     TDA_TEST_OK(TDA_STACK_NEW(int32_t, &al, &s));
 
-    // the last block the constructor took is the adapter's own header, so this is what
-    // into has to hand back, and with the size it was taken as
+    // the constructor's last block is the adapter's header, so into must free that, with
+    // the size it was taken with
     const size_t header = probe.last_alloc_size;
 
     TDA_TEST_OK(TDA_STACK_PUSH(int32_t, s, 1));
@@ -998,8 +991,7 @@ static void test_into_vec_releases_the_header_alone() {
 
 /* ========== print ========== */
 
-// a printer writes to a stream, so a case reads one back through tmpfile, as
-// test/core/test_print.c does
+// printers write to a stream; cases read it back via tmpfile, like test/core/test_print.c
 static void assert_prints(const char *expected, const tda_Stack *s) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
@@ -1041,8 +1033,8 @@ static void test_fprint_of_an_empty_stack() {
     tda_stack_drop(s);
 }
 
-// the stdout twin takes no stream and cannot be captured portably, so a case can only
-// say that it runs and reaches the same printer
+// the stdout twin cannot be captured portably, so a case only checks that it runs and
+// reaches the same printer
 static void test_print_writes_to_stdout() {
     constexpr int32_t src[3] = {1, 2, 3};
     tda_Stack *s = make_stack(src, 3);

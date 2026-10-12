@@ -39,7 +39,7 @@ static tda_Status new_impl(bool zeroed, size_t len, size_t cap, size_t elem_size
 
 static void set_fields(tda_Deque *obj, void *data, size_t len, size_t cap, size_t elem_size, tda_Al *al);
 
-/// hands the block back and leaves an empty deque on the same allocator
+/// frees the block, leaving an empty deque on the same allocator
 static void release_data(tda_Deque *self);
 
 [[nodiscard]]
@@ -48,13 +48,12 @@ static size_t next_cap(const tda_Deque *self);
 [[nodiscard]]
 static tda_Status grow(tda_Deque *self);
 
-/// room for one more elem, growing the ring when it is full
+/// room for one more elem
 [[nodiscard]]
 static tda_Status reserve_one(tda_Deque *self);
 
-/// room for 'new_len' elems, asked for with the growth factor when that is the bigger of
-/// the two so a run of resizes keeps the amortized cost a run of pushes has. Falls back
-/// to the exact length when the eager request is refused
+/// room for 'new_len' elems: grows by the growth factor when that is more, so repeated
+/// resizes stay amortized, and falls back to the exact size if that is refused
 [[nodiscard]]
 static tda_Status reserve_for(tda_Deque *self, size_t new_len);
 
@@ -81,7 +80,7 @@ static const unsigned char *elem_at(const tda_Deque *self, size_t idx);
 [[nodiscard]]
 static unsigned char *elem_at_mut(tda_Deque *self, size_t idx);
 
-/// how many elems sit between head and the end of the buffer — the length of the first
+/// how many elems sit between head and the end of the buffer: the length of the first
 /// of the at most two runs the contents form
 [[nodiscard]]
 static size_t first_run(const tda_Deque *self);
@@ -188,7 +187,8 @@ tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque **ou
         return st;
     }
 
-    // the copy is sized to the content, so it comes out unwrapped whatever self looks like
+    // the copy is sized to the content, so it comes out unwrapped whatever
+    // self looks like
     copy_out(self, copy->data);
 
     *out = copy;
@@ -205,8 +205,8 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
         return TDA_STATUS_OK;
     }
 
-    // a new block rather than tda_deque_reserve, which would carry over the elems about to
-    // be overwritten; the old one goes only once the new one is in hand, so a failure
+    // a new block rather than tda_deque_reserve, which would carry over the elems about
+    // to be overwritten; the old one goes only once the new one is in hand, so a failure
     // leaves 'self' as it was. 'other' holds this many, so the product fits
     if (other->len > self->cap) {
         void *data = tda_alloc(self->al, other->len * self->elem_size);
@@ -238,8 +238,7 @@ tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the block is handed over, ring and all. What 'self' held ends up in 'other' and is released
-    // there, through the very allocator that made it
+    // one allocator: swap the blocks, then release what 'self' held from 'other'
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
         release_data(other);
@@ -250,8 +249,7 @@ tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
         return TDA_STATUS_OK;
     }
 
-    // two allocators: the whole copy is built on the target's before anything of it is
-    // touched, so a refusal leaves both as they were
+    // two allocators: build the copy first, so a refusal changes nothing
     tda_Deque *obj;
     const tda_Status st = tda_deque_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -438,7 +436,7 @@ void tda_deque_set(tda_Deque *self, size_t idx, const void *val) {
     assert(val);
     TDA_EXPECT(idx < self->len);
 
-    // memmove: 'val' may be the very elem being set, and memcpy onto itself is undefined
+    // memmove: 'val' may alias the elem being set
     memmove(elem_at_mut(self, idx), val, self->elem_size);
 }
 
@@ -496,8 +494,7 @@ void tda_deque_pop_front_to(tda_Deque *self, void *out) {
     assert(out);
     TDA_EXPECT(self->len > 0);
 
-    // memmove: 'out' may be the very slot about to be dropped, and memcpy onto itself is
-    // undefined
+    // memmove: 'out' may alias the slot being dropped
     memmove(out, elem_at(self, 0), self->elem_size);
     tda_deque_pop_front(self);
 }
@@ -812,8 +809,8 @@ void tda_deque_fprint(const tda_Deque *self, FILE *stream, tda_FPrint fprint) {
     assert(stream);
     assert(fprint);
 
-    // spelled out rather than delegated to tda_span_fprint: the ring is two spans at
-    // most, and one bracket has to hold both. The format is the same one on purpose
+    // not delegated to tda_span_fprint: the ring is up to two spans, and one bracket must
+    // hold both. The format matches it on purpose
     fputc('[', stream);
     for (size_t i = 0; i < self->len; ++i) {
         if (i > 0) {

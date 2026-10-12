@@ -8,9 +8,9 @@
 #include <stdio.h>
 
 /// [struct]
-// a hasher and an equality travel as a pair, and the pair has one law: what the equality
-// calls equal must hash alike. Build both out of the fields', never out of the bytes —
-// tda_hash_bytes would read the padding between them
+// a hasher and an equality go together under one rule: what the equality calls equal
+// must hash alike. Build both from the fields, never the bytes: tda_hash_bytes would
+// read the padding between them
 typedef struct {
     int32_t x;
     int32_t y;

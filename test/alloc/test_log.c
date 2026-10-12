@@ -107,7 +107,7 @@ static void test_drop_null_is_noop() {
 
 /* ========== forwarding ========== */
 
-// logging is a side effect — the memory itself must come from the wrapped allocator
+// logging is only a side effect; the memory must come from the wrapped allocator
 static void test_alloc_is_forwarded_and_usable() {
     tda_Al parent = probe_al();
     tda_Al *log = tda_al_log_new(&parent, log_stream);

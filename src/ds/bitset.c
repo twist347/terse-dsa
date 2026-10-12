@@ -15,8 +15,8 @@ static constexpr size_t WORD_BITS = 64;
 
 // The bits above the last live one are not part of the set, and every read here counts on
 // them being clear: count sums whole words, any tests whole words, find_next trusts the
-// first one bit it sees. Only the ops that touch a whole word at once can dirty them —
-// set_all and flip_all — and both end with clear_tail. The pairwise ops cannot: | & ^ and
+// first one bit it sees. Only the ops that touch a whole word at once can dirty them,
+// set_all and flip_all, and both end with clear_tail. The pairwise ops cannot: | & ^ and
 // &~ of two clear tails is a clear tail.
 #define ASSERT_BITSET(b)                                                                     \
     (assert(b),                                                                              \
@@ -40,7 +40,7 @@ static size_t words_for(size_t nbits);
 [[nodiscard]]
 static size_t words_bytes(const tda_BitSet *self);
 
-/// hands the words back and leaves an empty universe on the same allocator
+/// frees the words, leaving an empty universe on the same allocator
 static void release_words(tda_BitSet *self);
 
 [[nodiscard]]
@@ -49,7 +49,7 @@ static size_t word_of(size_t idx);
 [[nodiscard]]
 static uint64_t bit_of(size_t idx);
 
-/// the live bits of the last word — all of them when nbits lands on a word boundary
+/// the live bits of the last word; all of them when nbits lands on a word boundary
 [[nodiscard]]
 static uint64_t tail_mask(size_t nbits);
 
@@ -72,7 +72,7 @@ static uint64_t word_upto(uint64_t word, size_t upto);
 static size_t idx_of_last_one(size_t w, uint64_t word);
 
 /// find_prev over 'self' or its complement. Starting inside the universe and walking
-/// down, it never meets the bits above it — the ones a complement would make of them
+/// down, it never meets the bits above it, which a complement would turn to ones
 [[nodiscard]]
 static bool find_prev_impl(const tda_BitSet *self, bool clear, size_t from, size_t *out_idx);
 
@@ -193,8 +193,7 @@ tda_Status tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the words are handed over, universe and all. What 'self' held ends up in 'other' and is released
-    // there, through the very allocator that made it
+    // one allocator: swap the words, then release what 'self' held from 'other'
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
         release_words(other);
@@ -205,8 +204,7 @@ tda_Status tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other) {
         return TDA_STATUS_OK;
     }
 
-    // two allocators: the whole copy is built on the target's before anything of it is
-    // touched, so a refusal leaves both as they were
+    // two allocators: build the copy first, so a refusal changes nothing
     tda_BitSet *obj;
     const tda_Status st = tda_bitset_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {

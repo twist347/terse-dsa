@@ -23,7 +23,7 @@ static inline size_t tda_bit_count(uint64_t word) {
 #endif
 }
 
-// index of the lowest set bit; a word with no bits at all has none
+// index of the lowest set bit; asserts 'word' is not 0
 [[nodiscard]]
 static inline size_t tda_bit_ctz(uint64_t word) {
     assert(word != 0);
@@ -35,7 +35,7 @@ static inline size_t tda_bit_ctz(uint64_t word) {
 #endif
 }
 
-// zero bits above the highest set bit; a word with no bits at all has none
+// zero bits above the highest set bit; asserts 'word' is not 0
 [[nodiscard]]
 static inline size_t tda_bit_clz(uint64_t word) {
     assert(word != 0);

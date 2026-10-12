@@ -32,8 +32,8 @@ size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) 
             out = tda_emit(dst, out, r);
             ++j;
         } else {
-            // one copy of the pair, taken from 'a'; a run left over on either side is
-            // picked up by the turns that follow, which is what makes the count max(m, n)
+            // one copy of the pair, taken from 'a'; any leftover run on either side is
+            // emitted on later turns, which makes the count max(m, n)
             out = tda_emit(dst, out, l);
             ++i;
             ++j;
@@ -68,8 +68,8 @@ size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cm
         } else if (c > 0) {
             ++j;
         } else {
-            // the copy handed out is 'a's: equal by 'cmp' does not mean identical, so
-            // which side an elem comes from is observable and has to be a decision
+            // the copy comes from 'a': equal by 'cmp' does not mean identical, so the
+            // side an elem comes from is observable and must be fixed
             out = tda_emit(dst, out, l);
             ++i;
             ++j;
@@ -102,13 +102,13 @@ size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp 
         } else if (c > 0) {
             ++j;
         } else {
-            // one copy of 'a' spent against one copy of 'b'
+            // one copy in 'a' cancels one copy in 'b'
             ++i;
             ++j;
         }
     }
 
-    // whatever is left in 'b' cancels nothing: it has no counterpart left in 'a'
+    // what is left in 'b' has nothing in 'a' to cancel
     return tda_emit_rest(dst, out, a, i);
 }
 
@@ -136,8 +136,8 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
             out = tda_emit(dst, out, r);
             ++j;
         } else {
-            // the pair cancels; a longer run on one side survives by this same rule on
-            // the turns that follow, which is what makes the count |m - n|
+            // the pair cancels; the excess of a longer run is emitted on later turns,
+            // which makes the count |m - n|
             ++i;
             ++j;
         }
@@ -162,8 +162,8 @@ bool tda_span_includes(tda_Span sup, tda_Span sub, tda_Cmp cmp) {
     for (size_t j = 0; j < sub.len; ++j) {
         const void *want = tda_span_get(sub, j);
 
-        // walk 'sup' up to the elem being accounted for; running out of it, or stepping
-        // past the value, both mean this copy has no match left
+        // advance 'sup' to the elem being matched; running out or stepping past the
+        // value means this copy has no match
         while (i < sup.len && cmp(tda_span_get(sup, i), want) < 0) {
             ++i;
         }
@@ -172,7 +172,7 @@ bool tda_span_includes(tda_Span sup, tda_Span sub, tda_Cmp cmp) {
             return false;
         }
 
-        // matched: that copy of it is spent, so duplicates need duplicates
+        // matched: that copy is used up, so duplicates need duplicates
         ++i;
     }
 

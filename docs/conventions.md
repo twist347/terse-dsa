@@ -31,10 +31,12 @@ Rule of thumb: **owned object → `tda_<slug>_verb(self, ...)`; interface →
 `tda_verb(iface, ...)`.**
 
 **Function-pointer typedefs** are types, so they follow the type rule and nothing else:
-`tda_Cmp`, `tda_Eq`, `tda_Pred`, `tda_Fold`, `tda_Gen`, `tda_UnOp`, `tda_BinOp`. No `Fn`
-suffix, no `_cb`: they are called synchronously as part of the operation's own definition
-— a comparator is what gives `sort` its meaning — not registered to fire later, and a
-suffix that distinguishes nothing is noise.
+`tda_Cmp`, `tda_Eq`, `tda_Hasher`, `tda_FPrint`, `tda_Pred`, `tda_EntryPred`, `tda_Fold`,
+`tda_Gen`, `tda_UnOp`, `tda_BinOp`. No `Fn` suffix, no `_cb`: they are called
+synchronously as part of the operation's own definition — a comparator is what gives
+`sort` its meaning — not registered to fire later, and a suffix that distinguishes nothing
+is noise. A typedef lives with what it serves: `tda_Pred` and kin in `algo/fn.h`,
+`tda_EntryPred` in `ds/hmap.h`, the one place a test sees a key and a value at once.
 
 **Ready-made values** of such a type are `tda_<slug>_<T>`, the slug being the interface
 they implement: `tda_cmp_i32`, `tda_cmp_desc_f64`, `tda_eq_cstr`. There is deliberately no

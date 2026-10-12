@@ -45,7 +45,7 @@ static void add_i32(void *dst, const void *a, const void *b, void *ctx) {
     *(int32_t *) dst = *(const int32_t *) a + *(const int32_t *) b;
 }
 
-// deliberately NOT symmetric: min would pass even with the operands swapped
+// deliberately not symmetric: min would pass even with the operands swapped
 static void sub_i32(void *dst, const void *a, const void *b, void *ctx) {
     TDA_UNUSED(ctx);
 

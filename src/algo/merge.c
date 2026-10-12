@@ -13,7 +13,7 @@
 
 static void merge_in_place(tda_SpanMut s, size_t mid, tda_Cmp cmp);
 
-/// merges over 's' with the shorter run parked in 'buf', in one linear pass
+/// merges in one linear pass, with the shorter run copied into 'buf'
 static void merge_buffered(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *buf);
 
 /* ========== merge ========== */
@@ -34,8 +34,8 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
         const void *l = tda_span_get(a, i);
         const void *r = tda_span_get(b, j);
 
-        // '<=' takes from 'a' on a tie, which keeps equal elems in the order they
-        // arrived and is what makes tda_span_sort_stable stable through this
+        // '<=' takes from 'a' on a tie, keeping equal elems in order; this is what
+        // makes tda_span_sort_stable stable
         if (cmp(l, r) <= 0) {
             out = tda_emit(dst, out, l);
             ++i;
@@ -45,7 +45,7 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
         }
     }
 
-    // only one of the two has anything left, but which one is not known here
+    // at most one of the two has elems left; either may be the one
     out = tda_emit_rest(dst, out, a, i);
     out = tda_emit_rest(dst, out, b, j);
 
@@ -66,7 +66,7 @@ void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, tda_Al *al) 
         return;
     }
 
-    // the buffer holds the shorter run, so it is never more than half the span
+    // the buffer holds the shorter run, so at most half the span
     const size_t buf_len = left_len < right_len ? left_len : right_len;
     void *buf = al ? tda_alloc(al, buf_len * s.elem_size) : nullptr;
 
@@ -83,16 +83,16 @@ void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, tda_Al *al) 
 
 /*
  * The buffer-free merge, by the standard recursion. Take the middle elem of the longer
- * run and binary search for its place in the other one; that pair of cuts splits the
- * problem into two smaller merges whose results do not interleave. One rotate brings the
- * two inner pieces past each other, and the halves are merged the same way.
+ * run and binary search for its place in the other one. The two cuts split the problem
+ * into two smaller merges whose results do not interleave. One rotate swaps the two
+ * inner pieces, and each half is merged the same way.
  *
- * Which run gets cut in the middle is what keeps it stable: cutting the left one searches
- * the right with lower_bound, so equal elems on the right land after, and cutting the
- * right one searches the left with upper_bound, so equal elems on the left stay before.
+ * The choice of search keeps it stable. Cutting the left run searches the right with
+ * lower_bound, so equal elems on the right land after; cutting the right run searches
+ * the left with upper_bound, so equal elems on the left stay before.
  *
- * Depth is logarithmic — each call halves the longer run — so the recursion needs no
- * unrolling into an explicit stack.
+ * Each call halves the longer run, so the depth is logarithmic and plain recursion is
+ * fine without an explicit stack.
  */
 static void merge_in_place(tda_SpanMut s, size_t mid, tda_Cmp cmp) {
     const size_t left_len = mid;
@@ -127,8 +127,7 @@ static void merge_in_place(tda_SpanMut s, size_t mid, tda_Cmp cmp) {
         );
     }
 
-    // the two inner pieces trade places, and the boundary between what is already
-    // settled on the left and what is settled on the right lands here
+    // swap the two inner pieces; new_mid is the boundary between the two sub-merges
     tda_span_rotate(tda_span_sub_mut(s, left_cut, right_cut - left_cut), mid - left_cut);
     const size_t new_mid = left_cut + (right_cut - mid);
 
@@ -138,14 +137,13 @@ static void merge_in_place(tda_SpanMut s, size_t mid, tda_Cmp cmp) {
 
 
 /*
- * The linear path. Whichever run is shorter goes into 'buf', and the merge then runs over
- * the span itself in the direction that keeps the write position from overtaking the read
- * one: forward when the LEFT run was parked, backward when it was the right one.
+ * The linear path. The shorter run goes into 'buf', and the merge runs over the span in
+ * the direction where the write position cannot overtake the read one: forward when the
+ * LEFT run was copied out, backward when it was the right one.
  *
- * Either way the loop stops as soon as the buffer runs dry, because what is left of the
- * other run is already sitting where it belongs — the tail of the span is not touched at
- * all. Inside the loop the write position and the read position are never equal, so no
- * elem is ever copied onto itself.
+ * Either way the loop stops once the buffer is empty, because the rest of the other run
+ * is already in place and is not touched. Inside the loop the write and read positions
+ * never coincide, so no elem is copied onto itself.
  */
 static void merge_buffered(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *buf) {
     const size_t tsz = s.elem_size;
@@ -162,7 +160,7 @@ static void merge_buffered(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *buf) {
         size_t r = mid;
 
         while (b < left_len && r < s.len) {
-            // '<' keeps the parked left run ahead of an equal elem on the right
+            // '<' keeps the buffered left run ahead of an equal elem on the right
             const bool take_right = cmp(tda_span_get(cs, r), tda_span_get(parked, b)) < 0;
 
             memcpy(tda_span_get_mut(s, w), take_right ? tda_span_get(cs, r) : tda_span_get(parked, b), tsz);
@@ -187,8 +185,8 @@ static void merge_buffered(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *buf) {
     size_t b = right_len;
 
     while (l > 0 && b > 0) {
-        // '>' takes the left elem only when it is strictly greater, so on a tie the
-        // parked right elem is placed later and the left run keeps its lead
+        // '>' takes the left elem only when strictly greater, so on a tie the buffered
+        // right elem is placed later and the left run stays first
         const bool take_left = cmp(tda_span_get(cs, l - 1), tda_span_get(parked, b - 1)) > 0;
 
         --w;

@@ -20,9 +20,9 @@ static constexpr size_t TRIALS = 200000;
 /* ========== the sequence itself ========== */
 
 // the known-answer test: the first draws of a seed, taken from the reference
-// xoshiro256++ of Blackman and Vigna seeded through their SplitMix64. This is what says
-// the implementation is the algorithm it claims and not merely something that looks
-// random — a rotate off by one bit would still pass every distribution test below.
+// xoshiro256++ of Blackman and Vigna seeded through their SplitMix64. Only this shows the
+// implementation is that algorithm and not just something random-looking: a rotate off
+// by one bit would still pass every distribution test below.
 static void test_rng_matches_the_reference_stream() {
     static constexpr uint64_t seed_0[] = {
         UINT64_C(0x53175d61490b23df),
@@ -50,8 +50,7 @@ static void test_rng_matches_the_reference_stream() {
     }
 }
 
-// what the whole module is for: a failure that only happens on the 4000th draw can be
-// replayed
+// the point of a seeded generator: a failure on the 4000th draw can be replayed
 static void test_rng_replays_the_same_seed() {
     tda_Rng a = tda_rng_from_seed(12345);
     tda_Rng b = tda_rng_from_seed(12345);
@@ -61,8 +60,7 @@ static void test_rng_replays_the_same_seed() {
     }
 }
 
-// seed 0 is the one a hand-rolled xorshift would sit on forever; SplitMix64 is what makes
-// it as good a seed as any
+// a plain xorshift seeded with 0 is stuck at 0; SplitMix64 makes 0 as good a seed as any
 static void test_rng_takes_zero_as_a_seed() {
     tda_Rng zero = tda_rng_from_seed(0);
     tda_Rng one = tda_rng_from_seed(1);
@@ -80,7 +78,7 @@ static void test_rng_takes_zero_as_a_seed() {
     TEST_ASSERT_EQUAL_size_t(0, agreements);
 }
 
-// the struct is transparent, so a copy is a fork of the stream — both halves replay
+// the struct is transparent, so a copy forks the stream and both copies replay it
 static void test_rng_copies_as_a_value() {
     tda_Rng rng = tda_rng_from_seed(7);
     for (size_t i = 0; i < 10; ++i) {
@@ -93,8 +91,8 @@ static void test_rng_copies_as_a_value() {
     }
 }
 
-// u32 is the top half of a whole draw, so it must both replay and advance the generator
-// exactly as u64 does — and it must not be the low half, which is the weaker one here
+// u32 is the top half of a whole draw: it must replay and advance the generator exactly
+// as u64 does, and must not be the low half, the weaker one here
 static void test_rng_u32_is_the_top_half_of_a_draw() {
     tda_Rng a = tda_rng_from_seed(12345);
     tda_Rng b = tda_rng_from_seed(12345);
@@ -152,14 +150,14 @@ static void test_rng_u32_max_stays_in_range() {
     }
 }
 
-// three does not divide 2^64, so one of the three slots has a draw more than the others
-// to give away — the slot Lemire's rejection is there to hold back. A product taken from
-// the wrong half, or a threshold off by one, shows up here as a lopsided bucket.
+// three does not divide 2^64, so one of the three slots gets one draw more than the
+// others; Lemire's rejection holds it back. A product taken from the wrong half, or a
+// threshold off by one, shows up here as a lopsided bucket.
 //
 // What this cannot see is the modulo bias itself: over a 64-bit draw and a bound this
 // small it is one part in 2^62, far under what any bucket count could resolve. The
-// rejection earns its keep at bounds near the top of the range, where the same skew is
-// the difference between uniform and twice as likely.
+// rejection matters at bounds near the top of the range, where the same skew is the
+// difference between uniform and twice as likely.
 static void test_rng_u64_max_is_flat_over_a_bound_that_does_not_divide_the_width() {
     tda_Rng rng = tda_rng_from_seed(4);
 
@@ -230,7 +228,7 @@ static void test_rng_i32_range_holds_its_ends() {
         saw_hi = saw_hi || val == 2;
     }
 
-    // inclusive at both ends, which is the half of the contract an off-by-one hides in
+    // inclusive at both ends, where an off-by-one would hide
     TEST_ASSERT_TRUE(saw_lo);
     TEST_ASSERT_TRUE(saw_hi);
 }
@@ -289,7 +287,7 @@ static void test_rng_f64_stays_below_one() {
         highest = val > highest ? val : highest;
     }
 
-    // and it does reach for both ends rather than hovering in the middle
+    // and it reaches both ends, not only the middle
     TEST_ASSERT_TRUE(lowest < 0.001);
     TEST_ASSERT_TRUE(highest > 0.999);
 }
@@ -379,8 +377,8 @@ static void test_rng_bool_is_a_fair_coin() {
     const double expected = (double) TRIALS / 2.0;
     TEST_ASSERT_DOUBLE_WITHIN(expected * 0.02, expected, (double) heads);
 
-    // a run of 40 in 200000 flips is beyond astronomical, and a stuck top bit would show
-    // up here rather than in the count
+    // a run of 40 in 200000 flips is practically impossible, and a stuck top bit would
+    // show up here rather than in the count
     TEST_ASSERT_TRUE(longest_run < 40);
 }
 

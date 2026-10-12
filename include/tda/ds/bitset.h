@@ -14,11 +14,11 @@
 /// @brief tda_BitSet — a fixed set of indices, one bit each
 ///
 /// The universe is named once: a bitset over 'nbits' holds a subset of 0 .. nbits - 1 and
-/// never grows, the line ds/arr draws against ds/vec.
+/// never grows, like ds/arr.
 ///
 /// Membership is a bit, so there is no elem size, no comparator and no hasher: an index
-/// is its own key. That is what this buys over ds/hset — a word holds 64 members, and the
-/// union of two sets is a loop over words rather than over members.
+/// is its own key. Compared with ds/hset, a word holds 64 members, and the union of two
+/// sets is a loop over words rather than over members.
 ///
 /// Only the constructors allocate, so nothing else can fail, and an index out of range
 /// asserts. The bits above nbits are kept clear, so count, all and the scans never see
@@ -32,7 +32,7 @@
 /// @{
 
 /// A fixed set of indices, one bit each.
-/// An opaque handle: it comes from a constructor and goes back to tda_bitset_drop
+/// Opaque: made by a constructor, released by tda_bitset_drop
 typedef struct tda_BitSet tda_BitSet;
 
 /// @name lifetime
@@ -40,7 +40,7 @@ typedef struct tda_BitSet tda_BitSet;
 
 /// a new bitset over 0 .. nbits - 1 with nothing in it
 /// @param nbits the size of the universe; 0 owns no words and holds nothing
-/// @param al the allocator, kept for everything after
+/// @param al used for every later allocation
 /// @param[out] out the new bitset, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the words cannot be allocated
@@ -49,7 +49,7 @@ typedef struct tda_BitSet tda_BitSet;
 tda_Status tda_bitset_new(size_t nbits, tda_Al *al, tda_BitSet **out);
 
 /// releases the words and the bitset through the allocator it was built with
-/// @param self null is a no-op, so this is safe on a partly built object
+/// @param self null is a no-op
 /// @bigo{1}
 TDA_API
 void tda_bitset_drop(tda_BitSet *self);
@@ -70,7 +70,7 @@ tda_Status tda_bitset_copy(const tda_BitSet *self, tda_BitSet **out);
 
 /// a new bitset with the same universe and members, on 'al'
 /// @param self the bitset to copy
-/// @param al where the copy lives; tda_bitset_copy is this one with the allocator of 'self'
+/// @param al the allocator for the copy
 /// @param[out] out the new bitset, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the words cannot be allocated
@@ -79,35 +79,30 @@ tda_Status tda_bitset_copy(const tda_BitSet *self, tda_BitSet **out);
 tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al *al, tda_BitSet **out);
 
 /// overwrites 'self' with 'other', resizing its words when the universes differ
-/// @param[in,out] self keeps its own allocator; 'self' == 'other' is a no-op
-/// @param other the bitset to copy from
+/// @param[in,out] self keeps its allocator
+/// @param other the bitset to copy from; may be 'self'
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the words cannot be resized, leaving 'self' as
-///         it was
+/// @retval TDA_STATUS_ERR_NO_MEM when the words cannot be resized; 'self' is unchanged
 /// @bigo{n/64}
 [[nodiscard]] TDA_API
 tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other);
 
 /// moves the members of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self receives the universe along with the members, releases what it held and keeps
-///                     its own allocator. 'self' == 'other' is a no-op
-/// @param[in,out] other the bitset to move from; emptied on success and still usable, on
-///                      its own allocator
+/// @param[in,out] self receives the universe along with the members; its old words are
+///                     released, its allocator kept
+/// @param[in,out] other emptied on success and still usable; may be 'self'
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the words cannot be taken,
-///         leaving both as they were
-/// @bigo{1} on one allocator, n/64 on two — the words belong to the allocator that
-///          made them
+/// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and the copy cannot be
+///         allocated; both are left unchanged
+/// @bigo{1} on one allocator, n/64 across two
 [[nodiscard]] TDA_API
 tda_Status tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other);
 
-/// exchanges the two bitsets whole, universes and all
+/// exchanges the contents of two bitsets, universes included
 /// @param[in,out] self one bitset
-/// @param[in,out] other must have the same allocator: the words change hands where they
-///                      lie, so nothing is copied and nothing can fail. 'self' == 'other'
-///                      is a no-op
-/// @note two allocators are a broken precondition, not a runtime state: the words belong to
-///       the one that made them. Across two: tda_bitset_copy_with, then tda_bitset_move_assign
+/// @param[in,out] other must have the same allocator; may be 'self'
+/// @note the words belong to the allocator that made them. Across allocators use
+///       tda_bitset_copy_with, then tda_bitset_move_assign
 /// @bigo{1}
 TDA_API
 void tda_bitset_swap(tda_BitSet *self, tda_BitSet *other);
@@ -119,7 +114,7 @@ void tda_bitset_swap(tda_BitSet *self, tda_BitSet *other);
 
 /// whether 'idx' is in the set
 /// @param self the bitset
-/// @param idx asserts idx < len — out of range is a programmer error, not a status
+/// @param idx asserts idx < len
 /// @return whether the bit is set
 /// @bigo{1}
 [[nodiscard]] TDA_API
@@ -206,10 +201,9 @@ bool tda_bitset_all(const tda_BitSet *self);
 [[nodiscard]] TDA_API
 bool tda_bitset_none(const tda_BitSet *self);
 
-/// the size of the universe, as named at construction
+/// the size of the universe
 /// @param self the bitset
-/// @return nbits — moved only by tda_bitset_copy_assign, tda_bitset_move_assign and
-///         tda_bitset_swap
+/// @return nbits; changed only by copy_assign, move_assign and swap
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_bitset_len(const tda_BitSet *self);
@@ -271,7 +265,7 @@ bool tda_bitset_find_prev_clear(const tda_BitSet *self, size_t from, size_t *out
 
 /// whether the two name the same universe and hold the same members
 /// @param a one bitset
-/// @param b a different len is simply not equal, not an assert
+/// @param b a different len gives false, not an assert
 /// @return whether they are equal
 /// @bigo{n/64}
 [[nodiscard]] TDA_API
@@ -279,8 +273,7 @@ bool tda_bitset_eq(const tda_BitSet *a, const tda_BitSet *b);
 
 /// adds every member of 'other' to 'self'
 /// @param[in,out] self the bitset written into
-/// @param other asserts the same len — one universe, or these ops mean nothing.
-///              'self' == 'other' is allowed and changes nothing
+/// @param other asserts the same len, as these ops need one universe; may be 'self'
 /// @bigo{n/64}
 TDA_API
 void tda_bitset_union(tda_BitSet *self, const tda_BitSet *other);
@@ -325,7 +318,7 @@ bool tda_bitset_intersects(const tda_BitSet *self, const tda_BitSet *other);
 /// @name print
 /// @{
 
-/// writes the members as {0, 3, 7} and a newline — the indices, not a row of bits
+/// writes the members as {0, 3, 7} and a newline: the indices, not a row of bits
 /// @param self the bitset
 /// @param stream where to write
 /// @bigo{n}
@@ -344,7 +337,7 @@ void tda_bitset_print(const tda_BitSet *self);
 /// @{
 
 /// walks the indices in the set, smallest first, binding 'idx' to each in turn
-/// @param idx the name the loop variable takes; it is a size_t
+/// @param idx the name of the loop variable, a size_t
 /// @param self the bitset
 /// @note the step past the current index happens after the body, so clearing that index
 ///       inside the loop is safe, while setting a smaller one no longer changes the walk

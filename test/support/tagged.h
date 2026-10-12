@@ -6,8 +6,8 @@
 
 /* ========== type ========== */
 
-/// ordered by key only, so tag can witness which of the equal elems went where. Spelled
-/// without the tda_test_ prefix for the reason Pair is
+/// ordered by key only, so tag shows where each of the equal elems went. No tda_test_
+/// prefix, for the same reason as Pair
 typedef struct {
     int32_t key;
     int32_t tag;

@@ -31,7 +31,7 @@ static tda_Status new_impl(bool zeroed, size_t len, size_t elem_size, tda_Al *al
 
 static void set_fields(tda_Arr *obj, void *data, size_t len, size_t elem_size, tda_Al *al);
 
-/// hands the block back and leaves an empty arr on the same allocator
+/// frees the block, leaving an empty arr on the same allocator
 static void release_data(tda_Arr *self);
 
 [[nodiscard]]
@@ -149,8 +149,7 @@ tda_Status tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the block is handed over as it is. What 'self' held ends up in 'other' and is released
-    // there, through the very allocator that made it
+    // one allocator: swap the blocks, then release what 'self' held from 'other'
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
         release_data(other);
@@ -161,8 +160,7 @@ tda_Status tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
         return TDA_STATUS_OK;
     }
 
-    // two allocators: the whole copy is built on the target's before anything of it is
-    // touched, so a refusal leaves both as they were
+    // two allocators: build the copy first, so a refusal changes nothing
     tda_Arr *obj;
     const tda_Status st = tda_arr_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {

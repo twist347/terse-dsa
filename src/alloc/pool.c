@@ -18,7 +18,7 @@ struct PoolNode {
 };
 
 typedef struct {
-    tda_Al *parent_al; // null when the pool lives in a buffer of the caller's
+    tda_Al *parent_al; // null when the pool lives in a caller's buffer
     unsigned char *data;
     PoolNode *free_head;
     size_t block_size;
@@ -141,7 +141,7 @@ void tda_al_pool_drop(tda_Al *self) {
     PoolCtx *pool_ctx = self->ctx;
     tda_Al *parent_al = pool_ctx->parent_al;
     if (!parent_al) {
-        // from_buf: header and blocks are the caller's buffer, and nothing was taken
+        // from_buf: header and blocks live in the caller's buffer
         return;
     }
 
@@ -208,7 +208,7 @@ static void pool_dealloc(void *ctx, void *ptr, size_t size) {
 
     // a foreign block would be threaded into the free list and handed out as the pool's
     // own, so a hardened build keeps these. A block freed twice is caught only when it is
-    // still the head of the list or would take 'used' below zero — one freed twice with
+    // still the head of the list or would take 'used' below zero; one freed twice with
     // other frees in between needs a walk of the list, which is not O(1)
     TDA_EXPECT(pool_owns(pool_ctx, ptr));
     TDA_EXPECT(pool_ctx->used > 0);
@@ -282,8 +282,8 @@ static void pool_build_free_list(PoolCtx *ctx) {
 }
 
 static bool pool_owns(const PoolCtx *ctx, const void *ptr) {
-    // addresses, not pointers: ordering a pointer from outside the pool against the pool's
-    // own is undefined, and one from outside is exactly what this is here to catch
+    // addresses, not pointers: ordering a pointer from outside the pool against the
+    // pool's own is undefined, and one from outside is exactly what this is here to catch
     const uintptr_t addr = (uintptr_t) ptr;
     const uintptr_t begin = (uintptr_t) ctx->data;
     const uintptr_t end = begin + ctx->block_size * ctx->block_count;

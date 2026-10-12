@@ -11,11 +11,11 @@
 /// @ingroup alloc
 /// @brief an allocator that writes down what another one is asked to do
 ///
-/// Every call goes through to the wrapped allocator and is printed on the way, and
-/// nothing else happens: put it under a container to see when the container grows.
+/// Every call is printed and passed to the wrapped allocator unchanged. Put it under a
+/// container to see when the container grows.
 ///
-/// Its own two blocks come from the wrapped allocator and go back to it on drop, so that
-/// one has to outlive the log.
+/// Its own two blocks come from the wrapped allocator and go back to it on drop, so the
+/// wrapped allocator must outlive the log.
 ///
 /// @par Example
 /// @snippet alloc/example_log.c wrap
@@ -25,8 +25,8 @@
 /// @{
 
 /// a log over 'wrapped', writing to 'stream'
-/// @param wrapped the allocator to pass everything through to, borrowed and not owned
-/// @param stream where the lines go; not owned either, and outlives the log too
+/// @param wrapped the allocator to pass every call to; borrowed
+/// @param stream where the lines go; borrowed, must outlive the log
 /// @return the allocator, or null if 'wrapped' could not give it its own two blocks
 /// @bigo{1}
 [[nodiscard]] TDA_API

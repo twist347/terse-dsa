@@ -10,10 +10,10 @@
 /// @ingroup algo
 /// @brief a max-heap laid out in the span itself
 ///
-/// A max-heap by 'cmp': no elem compares greater than its parent, so the largest sits at
-/// index 0. A min-heap is these same functions with a descending comparator — there is
-/// deliberately no second set. The shape is the usual implicit tree, the children of i at
-/// 2i+1 and 2i+2, so nothing is stored but the elems, in place and allocating nothing.
+/// A max-heap by 'cmp': no elem compares greater than its parent, so the largest is at
+/// index 0. For a min-heap, pass a descending comparator; there is no second set. The
+/// shape is the usual implicit tree with the children of i at 2i+1 and 2i+2, so only
+/// the elems are stored and nothing is allocated.
 ///
 /// @par Example
 /// @snippet algo/example_heap.c build
@@ -26,7 +26,7 @@
 /// rearranges the whole span into a heap
 /// @param s the span
 /// @param cmp the order the heap is by
-/// @bigo{n} — bottom-up, not n insertions
+/// @bigo{n}; built bottom-up, not by n insertions
 TDA_API
 void tda_span_make_heap(tda_SpanMut s, tda_Cmp cmp);
 
@@ -35,18 +35,17 @@ void tda_span_make_heap(tda_SpanMut s, tda_Cmp cmp);
 /// @name push / pop
 /// @{
 
-/// sifts the last elem up into place, everything before it being a heap already
+/// sifts the last elem up into place
 /// @param s the span; all but its last elem must be a heap by 'cmp'
 /// @param cmp the order the heap is by
-/// @bigo{log n} — pairs with tda_vec_push: append the elem, then this over the vec
+/// @bigo{log n}. With a vec: tda_vec_push, then this
 TDA_API
 void tda_span_push_heap(tda_SpanMut s, tda_Cmp cmp);
 
-/// moves the largest to the last position and closes the heap over what precedes it —
-/// the span is then no longer a heap, but its head is
+/// moves the largest to the end and restores the heap over the elems before it
 /// @param s the span; must be a heap by 'cmp'
 /// @param cmp the order the heap is by
-/// @bigo{log n} — pairs with tda_vec_pop: this first, then drop the tail
+/// @bigo{log n}. With a vec: this, then tda_vec_pop
 TDA_API
 void tda_span_pop_heap(tda_SpanMut s, tda_Cmp cmp);
 
@@ -55,10 +54,10 @@ void tda_span_pop_heap(tda_SpanMut s, tda_Cmp cmp);
 /// @name sort
 /// @{
 
-/// turns a heap into an ascending run, by repeated pop
+/// turns a heap into an ascending run by repeated pop
 /// @param s the span; must be a heap by 'cmp'
 /// @param cmp the order the heap is by
-/// @bigo{n log n} — heapsort is make_heap and then this, so it needs no name
+/// @bigo{n log n}; heapsort is make_heap followed by this
 TDA_API
 void tda_span_sort_heap(tda_SpanMut s, tda_Cmp cmp);
 
@@ -78,8 +77,8 @@ bool tda_span_is_heap(tda_Span s, tda_Cmp cmp);
 /// how far the span is a heap
 /// @param s the span
 /// @param cmp the order in question
-/// @return the index of the first elem that breaks it, or s.len when none does; the
-///         prefix before the answer is always a heap
+/// @return the index of the first elem that breaks it, or s.len; the prefix before it
+///         is a heap
 /// @bigo{n}
 [[nodiscard]] TDA_API
 size_t tda_span_is_heap_until(tda_Span s, tda_Cmp cmp);

@@ -8,7 +8,7 @@
 
 int main() {
     /// [build]
-    // the block comes from the parent once, and is handed out in pieces from there on
+    // the block comes from the parent once and is handed out in pieces
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     if (!arena) {
         return 1;
@@ -27,18 +27,18 @@ int main() {
     /// [build]
 
     /// [reset]
-    // giving one piece back does nothing at all: an arena has no per-block free
+    // a dealloc does nothing: an arena has no per-block free
     TDA_DEALLOC(int32_t, arena, a, 4);
     printf("%zu used after a dealloc\n", tda_al_arena_stats(arena).used); // 32
 
-    // this is how the memory comes back — all of it at once, and 'a' and 'b' are dead
+    // this is how memory comes back: all at once, and 'a' and 'b' are now dead
     tda_al_arena_reset(arena);
     printf("%zu used after the reset\n", tda_al_arena_stats(arena).used); // 0
     /// [reset]
 
     /// [mark]
-    // scratch inside a phase: what the phase keeps comes first, the mark goes after it,
-    // and the rewind takes back the scratch alone
+    // scratch inside a phase: allocate what the phase keeps, then take a mark; the rewind
+    // frees only the scratch
     int32_t *kept = TDA_ALLOC(int32_t, arena, 4);
     const tda_AlArenaMark mark = tda_al_arena_mark(arena);
 
@@ -68,7 +68,7 @@ drop:
     printf("%s, %zu left\n", c ? "taken from the array" : "no room",
            tda_al_arena_stats(local).available); // taken from the array, 144 left — the header took the front
 
-    tda_al_arena_drop(local); // takes nothing back: the array was never borrowed from anyone
+    tda_al_arena_drop(local); // returns nothing: the array was not borrowed
     /// [buf]
 
     return rc;

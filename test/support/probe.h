@@ -9,8 +9,8 @@
 /* ========== type ========== */
 
 /// counting allocator over malloc that can be told to fail on demand.
-/// Every instance carries its own state — pass it as the al's ctx, so
-/// two probes in one test never see each other's counters.
+/// Each instance carries its own state; pass it as the al's ctx, so two
+/// probes in one test never share counters.
 typedef struct {
     size_t alloc_calls;
     size_t calloc_calls;
@@ -24,7 +24,7 @@ typedef struct {
 
 /* ========== info ========== */
 
-/// every request that may hand out memory, in one number
+/// count of every request that may hand out memory
 [[nodiscard]]
 static inline size_t tda_test_probe_requests(const tda_TestProbe *self) {
     assert(self);
@@ -101,7 +101,7 @@ static inline void *tda_test_probe_realloc_(void *ctx, void *ptr, size_t old_siz
 
     void *new_ptr = realloc(ptr, new_size);
     if (new_ptr && !ptr) {
-        ++self->live; // grew out of nothing, so it is a new block
+        ++self->live; // grown from nullptr, so it is a new block
     }
     return new_ptr;
 }
@@ -119,7 +119,7 @@ static inline void tda_test_probe_dealloc_(void *ctx, void *ptr, size_t size) {
 
 /* ========== allocators ========== */
 
-/// no calloc, no realloc — tda_calloc/tda_realloc must synthesize them
+/// no calloc or realloc: tda_calloc/tda_realloc must synthesize them
 [[nodiscard]]
 static inline tda_Al tda_test_probe_bare(tda_TestProbe *self) {
     assert(self);
@@ -133,7 +133,7 @@ static inline tda_Al tda_test_probe_bare(tda_TestProbe *self) {
     };
 }
 
-/// all four hooks — the wrappers must prefer these over their fallbacks
+/// all four hooks: the wrappers must prefer these over their fallbacks
 [[nodiscard]]
 static inline tda_Al tda_test_probe_full(tda_TestProbe *self) {
     assert(self);

@@ -11,13 +11,12 @@
     (assert(s),         \
      assert((s)->vec))
 
-// A stack is a vec seen through a smaller keyhole: the growth, the allocator and the copy
-// semantics stay the vec's, and what this type adds is the operations it does NOT forward.
+// A stack is a vec with fewer ops. Growth, allocator and copy semantics are the vec's.
 struct tda_Stack {
     tda_Vec *vec;
 };
 
-/// takes ownership of 'vec' either way: on failure it is dropped, not handed back
+/// takes ownership of 'vec'; on failure it is dropped
 [[nodiscard]]
 static tda_Status wrap(tda_Vec *vec, tda_Stack **out);
 
@@ -62,7 +61,7 @@ tda_Status tda_stack_from_data(const void *data, size_t len, size_t elem_size, t
         return st;
     }
 
-    // the vec lays them out in order, so the last one is the one on top
+    // the vec keeps the order, so the last elem is the top
     return wrap(vec, out);
 }
 
@@ -122,8 +121,7 @@ tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
     ASSERT_STACK(other);
     TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
 
-    // self assignment is left to the vec, which already returns early on it: a guard
-    // repeated here would be a branch no test could tell from its absence
+    // no self-assignment guard: the vec already returns early on it
     return tda_vec_copy_assign(self->vec, other->vec);
 }
 
@@ -132,7 +130,7 @@ tda_Status tda_stack_move_assign(tda_Stack *self, tda_Stack *other) {
     ASSERT_STACK(other);
     TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
 
-    // as in copy_assign, moving a stack onto itself is the vec's early return
+    // self-move is handled by the vec, as in copy_assign
     return tda_vec_move_assign(self->vec, other->vec);
 }
 
@@ -241,7 +239,7 @@ void tda_stack_swap(tda_Stack *self, tda_Stack *other) {
     ASSERT_STACK(other);
     TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
 
-    // as in copy_assign, swapping a stack with itself is the vec's early return
+    // self-swap is handled by the vec, as in copy_assign
     tda_vec_swap(self->vec, other->vec);
 }
 

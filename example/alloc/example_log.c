@@ -8,8 +8,8 @@
 
 int main() {
     /// [wrap]
-    // allocators compose: the log passes everything through and writes a line about it,
-    // and its own two blocks come from the allocator it wraps
+    // allocators compose: the log forwards every call and prints a line for it; its own
+    // blocks come from the allocator it wraps
     tda_Al *log = tda_al_log_new(tda_al_default(), stdout);
     if (!log) {
         return 1;
@@ -20,8 +20,8 @@ int main() {
         TDA_DEALLOC(int32_t, log, xs, 4);      // [TDA] dealloc 0x... size = 16
     }
 
-    // the wrapped allocator outlives the log, which is what lets the drop give the two
-    // blocks back to it
+    // the wrapped allocator must outlive the log, since the drop gives the log's blocks
+    // back to it
     tda_al_log_drop(log);
     /// [wrap]
 

@@ -26,8 +26,8 @@ static inline void tda_heap_sift_down(tda_SpanMut s, size_t idx, size_t len, tda
             break;
         }
 
-        // on a tie the left child wins, which is what keeps pop_heap from
-        // reshuffling equal elems for no reason
+        // on a tie the left child wins, so pop_heap does not reshuffle equal elems
+        // for no reason
         size_t best = left;
         const size_t right = left + 1;
         if (right < len && cmp(tda_span_get(cs, left), tda_span_get(cs, right)) < 0) {

@@ -11,17 +11,17 @@
 #include <inttypes.h>
 #include <stdio.h>
 
-// the recipe tda_vec_swap points at. Two vecs on different allocators cannot be exchanged
-// in place — a block belongs to the allocator that made it — so each side is copied onto
-// the other's allocator and the copies are handed over
+// the recipe tda_vec_swap points to. A block belongs to the allocator that made it, so
+// vecs on different allocators cannot swap in place: each side is copied onto the
+// other's allocator and the copies are handed over
 /// [allocators]
 [[nodiscard]]
 static tda_Status exchange(tda_Vec *a, tda_Vec *b) {
     tda_Vec *for_a = nullptr;
     tda_Vec *for_b = nullptr;
 
-    // both copies are made before either vec is touched, so a refusal here leaves the
-    // pair exactly as it was
+    // both copies are made before either vec changes, so a failure here leaves the pair
+    // as it was
     tda_Status st = tda_vec_copy_with(b, tda_vec_al(a), &for_a);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
@@ -32,8 +32,8 @@ static tda_Status exchange(tda_Vec *a, tda_Vec *b) {
         goto out;
     }
 
-    // from here every move stays inside one allocator: the block changes hands, and the
-    // status is still checked because the operation as such can fail, not this call
+    // from here each move stays on one allocator and just hands the block over; the
+    // status is still checked since move_assign can fail in general, just not here
     st = tda_vec_move_assign(a, for_a);
     if (TDA_STATUS_IS_ERR(st)) {
         goto out;
@@ -41,7 +41,7 @@ static tda_Status exchange(tda_Vec *a, tda_Vec *b) {
     st = tda_vec_move_assign(b, for_b);
 
 out:
-    // each copy is left empty by its move and is dropped either way
+    // each copy is emptied by its move and is dropped either way
     tda_vec_drop(for_a);
     tda_vec_drop(for_b);
 
@@ -49,7 +49,7 @@ out:
 }
 /// [allocators]
 
-// the pair the recipe is shown on: one vec on the default allocator, one in an arena
+// the demo pair: one vec on the default allocator, one in an arena
 static int show_exchange() {
     tda_Al *al = tda_al_default();
 
@@ -90,7 +90,7 @@ int main() {
     }
 
     /// [build]
-    // the handle comes back through 'out', and the status cannot be ignored
+    // the handle comes back through 'out', and the status must be checked
     tda_Al *al = tda_al_default();
 
     tda_Vec *v = nullptr;
@@ -102,9 +102,9 @@ int main() {
     /// [build]
 
     /// [grow]
-    // the block doubles when it fills, so a run of pushes costs O(1) amortized per elem.
-    // Every op that may reallocate returns a status, and C has no defer: once the vec is
-    // held, the failure path jumps to a common exit instead of returning early
+    // the block doubles when full, so pushes cost O(1) amortized. Every op that may
+    // reallocate returns a status, and C has no defer: once the vec is held, failures
+    // jump to a common exit instead of returning early
     int rc = 1;
 
     if (TDA_STATUS_IS_ERR(TDA_VEC_PUSH(int32_t, v, 4))) {
@@ -112,11 +112,11 @@ int main() {
     }
     printf("%zu of %zu\n", tda_vec_len(v), tda_vec_cap(v)); // 4 of 6
 
-    // a pop moves the length and leaves the room alone
+    // pop shortens the length and keeps the capacity
     tda_vec_pop(v);
     printf("%zu of %zu\n", tda_vec_len(v), tda_vec_cap(v)); // 3 of 6
 
-    // shrink_to_fit is how the room goes back, and it can fail like any other resize
+    // shrink_to_fit gives the room back, and can fail like any resize
     if (TDA_STATUS_IS_ERR(tda_vec_shrink_to_fit(v))) {
         goto out;
     }
@@ -124,8 +124,8 @@ int main() {
     /// [grow]
 
     /// [bulk]
-    // extend takes the room once for the whole run rather than once per elem, and
-    // insert_span moves the tail once where a loop of insert would move it per elem
+    // extend reserves once for the whole run instead of per elem, and insert_span moves
+    // the tail once instead of once per elem
     if (TDA_STATUS_IS_ERR(TDA_VEC_EXTEND(int32_t, v, 4, 2))) {
         goto out;
     }
@@ -142,13 +142,13 @@ int main() {
     /// [bulk]
 
     /// [algo]
-    // the bridge to algo runs both ways. Out: a writable view, and algo rearranges the
-    // elems in place — a vec keeps no order of its own to protect
+    // the bridge to algo works both ways. Out: a writable view; algo rearranges the elems
+    // in place, since a vec has no order to protect
     tda_span_sort(tda_vec_to_span_mut(v), tda_cmp_i32);
     tda_vec_print(v, tda_fprint_i32); // [1, 2, 3, 4, 5]
 
     // back: an algorithm that drops elems packs the kept ones to the front and returns
-    // how many there are, and the vec adopts that length
+    // the count, and the vec adopts that length
     const size_t kept = tda_span_remove(tda_vec_to_span_mut(v), &(int32_t){3}, tda_eq_i32);
     tda_vec_truncate(v, kept);
     tda_vec_print(v, tda_fprint_i32); // [1, 2, 4, 5]

@@ -14,17 +14,17 @@ static tda_Status two_arrs(tda_Al *al, tda_Arr **out) {
     tda_Arr *a = nullptr;
     tda_Status st = TDA_ARR_OF(int32_t, al, &a, 5, 3, 1);
     if (TDA_STATUS_IS_ERR(st)) {
-        return st; // nothing is held yet, so the error goes straight back
+        return st; // nothing is held yet, so return the error directly
     }
 
     tda_Arr *b = nullptr;
     st = tda_arr_copy(a, &b);
     if (TDA_STATUS_IS_ERR(st)) {
-        goto drop_a; // 'a' is held, and C has no defer: the failure path is a goto
+        goto drop_a; // 'a' is held and C has no defer, so fail through a goto
     }
     tda_arr_drop(b);
 
-    *out = a; // 'out' is written on the one path that succeeded, and only there
+    *out = a; // 'out' is written only on success
     return TDA_STATUS_OK;
 
 drop_a:

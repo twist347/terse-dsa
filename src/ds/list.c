@@ -58,8 +58,7 @@ static void splice_nodes(tda_List *self, tda_List *src, bool front);
 
 static void swap_contents(tda_List *a, tda_List *b);
 
-/// the walk both find doors take. The node comes back mutable and the const door hands it
-/// out as const: the walk is the same either way
+/// the walk shared by find and find_mut; the const one hands the node out as const
 [[nodiscard]]
 static tda_ListNode *find_node(const tda_List *self, const void *key, tda_Eq eq);
 
@@ -69,8 +68,8 @@ static void clear_nodes(tda_List *self);
 static bool owns_node(const tda_List *self, const tda_ListNode *node);
 
 /// merges two chains linked through 'next' alone and returns the head of the result.
-/// Equal elems keep 'a' before 'b', which is what makes the sort stable. 'prev' is left
-/// wrong on purpose: relink_prev repairs it once, at the end, instead of on every step
+/// Equal elems keep 'a' before 'b', which makes the sort stable. 'prev' is left stale on
+/// purpose: relink_prev repairs it once at the end, not on every step
 [[nodiscard]]
 static tda_ListNode *merge_chains(tda_ListNode *a, tda_ListNode *b, tda_Cmp cmp);
 
@@ -203,8 +202,8 @@ tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other) {
         dst = dst->next;
     }
 
-    // 'src' is the first elem the target has no node for; those nodes are
-    // allocated up front, so the only failure happens before any mutation
+    // 'src' is the first elem with no node in the target; those nodes are allocated up
+    // front, so a failure happens before any mutation
     tda_List spare = {
         .head = nullptr,
         .tail = nullptr,
@@ -249,8 +248,7 @@ tda_Status tda_list_move_assign(tda_List *self, tda_List *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the nodes change list without moving. What 'self' held ends up in 'other' and is released
-    // there, through the very allocator that made it
+    // one allocator: swap (no node moves), then release what 'self' held from 'other'
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
         clear_nodes(other);
@@ -261,8 +259,7 @@ tda_Status tda_list_move_assign(tda_List *self, tda_List *other) {
         return TDA_STATUS_OK;
     }
 
-    // two allocators: the whole copy is built on the target's before anything of it is
-    // touched, so a refusal leaves both as they were
+    // two allocators: build the copy first, so a refusal changes nothing
     tda_List *obj;
     const tda_Status st = tda_list_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -626,8 +623,8 @@ tda_Status tda_list_splice_node(tda_List *self, tda_ListNode *at, tda_List *src,
     TDA_EXPECT(at != node);
 
     if (self->al != src->al) {
-        // a node belongs to the allocator that made it, so it cannot change lists: the
-        // elem is copied into a node of 'self' and the old one goes
+        // a node belongs to the allocator that made it, so copy the elem into a new node
+        // of 'self' and release the old one
         tda_ListNode *prev = at ? at->prev : self->tail;
         const tda_Status st = insert_between(self, prev, at, node->elem);
         if (TDA_STATUS_IS_ERR(st)) {
@@ -642,8 +639,8 @@ tda_Status tda_list_splice_node(tda_List *self, tda_ListNode *at, tda_List *src,
         return TDA_STATUS_OK;
     }
 
-    // unlinking first is what makes 'self == src' work: 'at->prev' is read from a list
-    // that no longer holds 'node', so moving a node one step forward lands where it must
+    // unlink first so 'self == src' works: 'at->prev' is then read from a list without
+    // 'node', so moving a node one step forward lands in the right place
     unlink_node(src, node);
     link_node(self, node, at ? at->prev : self->tail, at);
 
@@ -823,9 +820,8 @@ static void link_node(tda_List *self, tda_ListNode *node, tda_ListNode *prev, td
     ++self->len;
 }
 
-// the whole of push_front/push_back/insert_before/insert_after: the four differ only in
-// which pair of neighbours they hand over, and link_node already reads a null neighbour
-// as "this end of the list"
+// backs push_front/push_back/insert_before/insert_after, which differ only in the
+// neighbours they pass; link_node reads a null neighbour as that end of the list
 static tda_Status insert_between(tda_List *self, tda_ListNode *prev, tda_ListNode *next, const void *val) {
     tda_ListNode *node;
     const tda_Status st = node_new(self->al, self->elem_size, val, &node);
@@ -956,7 +952,7 @@ static tda_ListNode *sort_chain(tda_ListNode *head, size_t len, tda_Cmp cmp) {
 
     const size_t half = len / 2;
 
-    // walk to the LAST node of the left half, so the chain can be cut behind it
+    // walk to the last node of the left half, so the chain can be cut after it
     tda_ListNode *left_tail = head;
     for (size_t i = 1; i < half; ++i) {
         left_tail = left_tail->next;

@@ -26,7 +26,7 @@ typedef struct {
     FILE *stream;
 } LogCtx;
 
-/// one line to the log, flushed at once so that a crash right after it leaves it behind
+/// writes one line and flushes it, so a crash right after still leaves it in the log
 static void log_line(const LogCtx *log_ctx, const char *fmt, ...);
 
 #define ASSERT_LOG(al)                 \
@@ -113,8 +113,8 @@ static void *log_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size)
     const LogCtx *log_ctx = ctx;
     assert(log_ctx->stream);
 
-    // a moved block leaves 'ptr' indeterminate, and even reading it is undefined; the
-    // address is kept as an integer while it is still valid
+    // after a move 'ptr' is indeterminate and even reading it is undefined, so the
+    // address is saved as an integer beforehand
     const uintptr_t old_addr = (uintptr_t) ptr;
     void *p = tda_realloc(log_ctx->wrapped, ptr, old_size, new_size);
     log_line(

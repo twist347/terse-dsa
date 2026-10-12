@@ -24,8 +24,8 @@ static tda_Span span_of(const int32_t *v, size_t n) {
     return tda_span_from_data(v, n, sizeof(int32_t));
 }
 
-// runs 'op' into a dst prefilled with UNTOUCHED and checks three things at once: the
-// elems, the returned count, and that nothing was written past that count
+// runs 'op' into a dst prefilled with UNTOUCHED and checks the elems, the returned
+// count, and that nothing was written past that count
 static void assert_writes(
     size_t (*op)(tda_SpanMut, tda_Span, tda_Span, tda_Cmp),
     const int32_t *a, size_t an,
@@ -49,8 +49,8 @@ static void assert_writes(
 
     TEST_ASSERT_EQUAL_size_t(wn, got);
 
-    // Unity refuses to compare arrays of length zero, and an empty result is a case
-    // these ops hit often — the count above is the whole assertion then
+    // Unity refuses to compare zero-length arrays, and these ops often give an empty
+    // result; the count above is then the whole assertion
     if (wn > 0) {
         TEST_ASSERT_EQUAL_INT32_ARRAY(want, dst, wn);
     }
@@ -59,7 +59,7 @@ static void assert_writes(
         TEST_ASSERT_EQUAL_INT32_MESSAGE(UNTOUCHED, dst[i], "wrote past the count it reported");
     }
 
-    // the result is sorted, which is what lets these compose without a sort in between
+    // the result is sorted, which lets these compose without a sort in between
     TEST_ASSERT_TRUE(tda_span_is_sorted(span_of(dst, got), tda_cmp_i32));
 }
 
@@ -117,9 +117,9 @@ static void test_intersection_with_an_empty_span_is_empty() {
     assert_writes(tda_span_set_intersection, nullptr, 0, a, 3, nullptr, 0, 0);
 }
 
-// Equal by 'cmp' is not identical, so WHICH side an elem comes from is observable and is
-// a decision, not an accident. On plain int32_t both choices look the same — the payload
-// is the witness, the same way it is for equal keys in a heap
+// Equal by 'cmp' is not identical, so which side an elem comes from is observable and
+// deliberate. On plain int32_t both choices look the same, so the payload is the
+// witness, as for equal keys in a heap
 static void test_intersection_takes_its_elems_from_the_first_span() {
     constexpr Pair a[] = {{.a = 1, .b = 10}, {.a = 2, .b = 20}};
     constexpr Pair b[] = {{.a = 1, .b = 99}, {.a = 2, .b = 98}};
@@ -147,8 +147,8 @@ static void test_difference_spends_one_copy_per_copy() {
     assert_writes(tda_span_set_difference, a, 5, b, 3, want, 3, 5);
 }
 
-// elems that only 'b' has cancel nothing — the result is never longer than 'a', but what
-// is left over in 'b' must not shorten it either
+// elems only 'b' has cancel nothing: the result is never longer than 'a', and what is
+// left over in 'b' must not shorten it either
 static void test_difference_ignores_what_only_the_second_span_has() {
     constexpr int32_t a[] = {1, 2};
     constexpr int32_t b[] = {3, 4, 5, 6};
@@ -219,7 +219,7 @@ static void test_includes_rejects_a_missing_elem() {
     TEST_ASSERT_FALSE(tda_span_includes(span_of(sup, 3), span_of(sub, 2), tda_cmp_i32));
 }
 
-// a duplicate needs a duplicate: two copies are not accounted for by one
+// a duplicate needs a duplicate: one copy cannot account for two
 static void test_includes_counts_duplicates() {
     constexpr int32_t sup[] = {1, 2, 2, 3};
     constexpr int32_t two[] = {2, 2};
@@ -253,13 +253,13 @@ static void test_includes_rejects_a_sub_that_runs_past_the_end() {
 /* ========== exhaustive ========== */
 
 /*
- * Every one of the five against a reference that shares no code with them: multisets are
- * counted per value, and the answer is built from the counts by the rule in set.h. The
- * sweep visits every pair of sorted multisets over a four-symbol alphabet up to length
- * four, both sides — 24500 checks in all.
+ * Each op against a reference that shares no code with it: multisets are counted per
+ * value, and the answer is built from the counts by the rule in set.h. The sweep visits
+ * every pair of sorted multisets over a four-symbol alphabet up to length four, on both
+ * sides: 24500 checks in all.
  *
- * Small on purpose: a two-pointer walk has nothing to say about long inputs that it does
- * not already say about short ones, and every arrangement of a short one is reachable.
+ * Small on purpose: a two-pointer walk fails on long inputs only where it already fails
+ * on short ones, and every arrangement of a short one is reachable.
  */
 
 #define ALPHA 4

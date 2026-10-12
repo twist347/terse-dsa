@@ -4,16 +4,27 @@
 #include "tda/core/cmp.h"
 #include "tda/core/hash.h"
 #include "tda/core/print.h"
+#include "tda/core/util.h"
 #include "tda/ds/hmap.h"
 
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 
+/// [pred]
+// a test of one entry, key and value together; this one asks only the value
+static bool seen_more_than(const void *key, const void *val, void *ctx) {
+    TDA_UNUSED(key);
+
+    return *(const int32_t *) val > *(const int32_t *) ctx;
+}
+
+/// [pred]
+
 int main() {
     /// [build]
-    // the hasher and the equality are fixed here and travel with the entries from now on.
-    // They must agree: keys equal under 'eq' have to hash alike
+    // the hasher and the equality are fixed here for every entry. They must agree: keys
+    // equal under 'eq' must hash alike
     tda_Al *al = tda_al_default();
 
     tda_HMap *m = nullptr;
@@ -28,7 +39,7 @@ int main() {
     }
     printf("%d\n", is_new); // 1
 
-    // an insert under a key already there overwrites the value and says so
+    // inserting an existing key overwrites the value and reports it
     if (TDA_STATUS_IS_ERR(TDA_HMAP_INSERT(int32_t, int32_t, m, 1, 11, &is_new))) {
         goto out;
     }
@@ -36,14 +47,14 @@ int main() {
     /// [build]
 
     /// [lookup]
-    // a miss is null, not an error: it has exactly one cause, so it needs no status
+    // a miss is null, not an error: it has one cause, so it needs no status
     printf("%d\n", TDA_HMAP_GET_AS(int32_t, int32_t, m, 99) == nullptr); // 1
 
-    // the value is the map's to hand over for writing; the key is not
+    // the value can be written through; the key cannot
     *TDA_HMAP_GET_MUT_AS(int32_t, int32_t, m, 1) = 12;
     printf("%" PRId32 "\n", *TDA_HMAP_GET_AS(int32_t, int32_t, m, 1)); // 12
 
-    // a position reaches the key and the value together, and removes without hashing again
+    // a position reaches the key and value together, and removes without hashing again
     tda_HMapNode *node = tda_hmap_find_mut(m, &(int32_t){1});
     printf(
         "%" PRId32 " -> %" PRId32 "\n", *TDA_HMAP_NODE_KEY_AS(int32_t, node),
@@ -55,9 +66,8 @@ int main() {
     /// [lookup]
 
     /// [count]
-    // the counter idiom: get_or_insert hashes once and walks the bucket once whether the
-    // key is there or not, where a get followed by an insert would do both twice on every
-    // key it meets for the first time
+    // the counter idiom: get_or_insert hashes and walks the bucket once whether or not
+    // the key is there; a get then an insert would do both twice for each new key
     constexpr int32_t data[] = {3, 1, 3, 3, 1};
 
     for (size_t i = 0; i < sizeof(data) / sizeof(data[0]); ++i) {
@@ -75,13 +85,17 @@ int main() {
     /// [count]
 
     /// [walk]
-    // the walk needs the map as well as the node, because a chain ends long before the
-    // buckets do. The order is unspecified: it follows the buckets
+    // the walk needs the map as well as the node, since a chain ends before the buckets
+    // do. The order follows the buckets and is unspecified
     int32_t total = 0;
     TDA_HMAP_FOR_EACH (at, m) {
         total += *TDA_HMAP_NODE_VAL_AS(int32_t, m, at);
     }
     printf("%zu keys, %" PRId32 " counted\n", tda_hmap_len(m), total); // 2 keys, 5 counted
+
+    // retain keeps the entries that pass and drops the rest in one walk
+    tda_hmap_retain(m, seen_more_than, &(int32_t){2});
+    printf("%zu key left\n", tda_hmap_len(m)); // 1 key left
 
     rc = 0;
 out:

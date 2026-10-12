@@ -16,22 +16,22 @@
 /// @ingroup ds
 /// @brief tda_Arr — an owning array whose length is set when it is built
 ///
-/// The elems live in one block, allocated once, and no operation changes how many there
-/// are. This is ds/vec minus the growth.
+/// One block, allocated once; no op changes the length of a live arr. This is ds/vec
+/// without growth.
 ///
-/// The length moves only when the whole arr is replaced: tda_arr_copy_assign and
-/// tda_arr_move_assign overwrite one, tda_arr_swap exchanges two. Those are also the only
-/// ops that move the block, and so the only ones that invalidate what tda_arr_get_mut,
-/// tda_arr_data and tda_arr_to_span_mut handed out.
+/// The length changes only when the whole arr is replaced: copy_assign and move_assign
+/// overwrite one, swap exchanges two. These are also the only ops that move the block, so
+/// only they invalidate pointers from get_mut and data and views from to_span_mut.
 ///
-/// The view is writable, so algo sorts and fills in place through it. An index out of
-/// range asserts; the ops that return a tda_Status are the ones that allocate.
+/// algo sorts and fills the elems in place through tda_arr_to_span_mut.
 ///
-/// An elem is bytes: the arr copies them in and frees them with the block. Whatever an
-/// elem points to is the caller's to release.
+/// Out-of-range indices assert. Only the ops that allocate return a tda_Status.
 ///
-/// The typed macros write 'const T', so an elem type already spelled with const needs a
-/// typedef of its own.
+/// Elems are copied in as bytes and freed with the block. Whatever an elem points to is
+/// the caller's to release.
+///
+/// The typed macros write 'const T', so an elem type already declared const needs its
+/// own typedef.
 ///
 /// @par Example
 /// @snippet ds/example_arr.c build
@@ -42,21 +42,21 @@
 /// @{
 
 /// Owning array whose length is set when it is built.
-/// An opaque handle: it comes from one of the constructors and goes back to tda_arr_drop
+/// Opaque: made by a constructor, released by tda_arr_drop
 typedef struct tda_Arr tda_Arr;
 
 /// @name lifetime
 /// @{
 
 /// a new arr of 'len' zeroed elems
-/// @param len how many elems the arr will hold; 0 gives an arr that owns no block
+/// @param len how many elems; 0 gives an arr with no block
 /// @param elem_size the size of one elem, asserted greater than 0
-/// @param al the allocator, kept for everything after
+/// @param al used for every later allocation
 /// @param[out] out the new arr, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated, or
 ///         len * elem_size overflows
-/// @bigo{n} — the block is zeroed
+/// @bigo{n}, for zeroing the block
 [[nodiscard]] TDA_API
 tda_Status tda_arr_new_len(size_t len, size_t elem_size, tda_Al *al, tda_Arr **out);
 
@@ -73,9 +73,9 @@ tda_Status tda_arr_new_len(size_t len, size_t elem_size, tda_Al *al, tda_Arr **o
 [[nodiscard]] TDA_API
 tda_Status tda_arr_from_data(const void *data, size_t len, size_t elem_size, tda_Al *al, tda_Arr **out);
 
-/// a new arr holding a copy of what 's' views, taking its len and elem_size
+/// a new arr holding a copy of the elems 's' views
 /// @param s the view to copy
-/// @param al the allocator; unrelated to where 's' points, the elems are copied out of it
+/// @param al the allocator; need not be the one 's' points into
 /// @param[out] out the new arr, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated
@@ -84,8 +84,7 @@ tda_Status tda_arr_from_data(const void *data, size_t len, size_t elem_size, tda
 tda_Status tda_arr_from_span(tda_Span s, tda_Al *al, tda_Arr **out);
 
 /// releases the block and the arr through the allocator it was built with
-/// @param self null is a no-op, so this is safe on a partly built object; what the elems
-///             point to is not released
+/// @param self null is a no-op; what the elems point to is not released
 /// @bigo{1}
 TDA_API
 void tda_arr_drop(tda_Arr *self);
@@ -106,7 +105,7 @@ tda_Status tda_arr_copy(const tda_Arr *self, tda_Arr **out);
 
 /// a new arr with the same elems, on 'al'
 /// @param self the arr to copy
-/// @param al where the copy lives; tda_arr_copy is this one with the allocator of 'self'
+/// @param al the allocator for the copy
 /// @param[out] out the new arr, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated
@@ -114,27 +113,24 @@ tda_Status tda_arr_copy(const tda_Arr *self, tda_Arr **out);
 [[nodiscard]] TDA_API
 tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr **out);
 
-/// overwrites the elems of 'self' with those of 'other', resizing its block when the two
+/// overwrites the elems of 'self' with those of 'other', resizing the block if the
 /// lengths differ
-/// @param[in,out] self must have the same elem_size; keeps its own allocator, and
-///                     'self' == 'other' is a no-op
-/// @param other the arr to copy from
+/// @param[in,out] self must have the same elem_size; keeps its allocator
+/// @param other the arr to copy from; may be 'self'
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be resized, leaving 'self' as
-///         it was
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be resized; 'self' is unchanged
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other);
 
 /// moves the elems of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same elem_size; releases what it held and keeps
-///                     its own allocator. 'self' == 'other' is a no-op
-/// @param[in,out] other the arr to move from; emptied on success and still usable, on
-///                      its own allocator
+/// @param[in,out] self must have the same elem_size; its old elems are released, its
+///                     allocator kept
+/// @param[in,out] other emptied on success and still usable; may be 'self'
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the block cannot be taken,
-///         leaving both as they were
-/// @bigo{1} on one allocator, n on two — the block belongs to the allocator that made it
+/// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and the copy cannot be
+///         allocated; both are left unchanged
+/// @bigo{1} on one allocator, n across two
 [[nodiscard]] TDA_API
 tda_Status tda_arr_move_assign(tda_Arr *self, tda_Arr *other);
 
@@ -145,18 +141,17 @@ tda_Status tda_arr_move_assign(tda_Arr *self, tda_Arr *other);
 
 /// whether the two hold the same elems, byte for byte
 /// @param a one arr
-/// @param b must have the same elem_size — a mismatch there is a programmer error, not a
-///          false; a differing length is just false
-/// @return whether the lengths match and the bytes do; being memcmp, it parts -0.0 from
-///         +0.0 and counts a struct's padding
+/// @param b must have the same elem_size (asserted); a different length gives false
+/// @return whether the lengths match and the bytes do; as memcmp, it tells -0.0 from
+///         +0.0 and compares struct padding
 /// @bigo{n}
 [[nodiscard]] TDA_API
 bool tda_arr_eq(const tda_Arr *a, const tda_Arr *b);
 
 /// whether the two hold equal elems under 'eq'
 /// @param a one arr
-/// @param b must have the same elem_size as 'a'
-/// @param eq asked of every pair until one says no
+/// @param b must have the same elem_size
+/// @param eq asked of each pair until one fails
 /// @return whether the lengths match and every pair does
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -167,15 +162,14 @@ bool tda_arr_eq_by(const tda_Arr *a, const tda_Arr *b, tda_Eq eq);
 /// @name info
 /// @{
 
-/// how many elems the arr holds — moved only by tda_arr_copy_assign, tda_arr_move_assign
-/// and tda_arr_swap
+/// how many elems the arr holds; changed only by copy_assign, move_assign and swap
 /// @param self the arr
 /// @return the length
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_arr_len(const tda_Arr *self);
 
-/// the size of one elem, as named at construction
+/// the size of one elem
 /// @param self the arr
 /// @return elem_size
 /// @bigo{1}
@@ -203,8 +197,7 @@ tda_Al *tda_arr_al(const tda_Arr *self);
 
 /// the front elem
 /// @param self asserts the arr is not empty
-/// @return a pointer into the block, good until the arr is dropped, swapped or
-///         copy-assigned into
+/// @return valid until the arr is dropped, swapped or assigned to
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_arr_front(const tda_Arr *self);
@@ -226,9 +219,8 @@ void *tda_arr_back_mut(tda_Arr *self);
 
 /// the elem at 'idx'
 /// @param self the arr
-/// @param idx asserts idx < len — out of range is a programmer error, not a status
-/// @return a pointer into the block, good until the arr is dropped, swapped or
-///         copy-assigned into
+/// @param idx asserts idx < len
+/// @return valid until the arr is dropped, swapped or assigned to
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_arr_get(const tda_Arr *self, size_t idx);
@@ -248,8 +240,8 @@ void tda_arr_set(tda_Arr *self, size_t idx, const void *val);
 
 /// the block itself
 /// @param self the arr
-/// @return the block, or null while the arr is empty; good until the arr is dropped,
-///         swapped or copy-assigned into
+/// @return the first elem, or null while the arr is empty; valid until the arr is
+///         dropped, swapped or assigned to
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_arr_data(const tda_Arr *self);
@@ -264,13 +256,11 @@ void *tda_arr_data_mut(tda_Arr *self);
 /// @name mods
 /// @{
 
-/// exchanges the two arrs whole, lengths and all
+/// exchanges the contents of two arrs
 /// @param[in,out] self one arr
-/// @param[in,out] other must have the same elem_size and the same allocator: the blocks
-///                      change hands where they lie, so nothing is copied and nothing can
-///                      fail. 'self' == 'other' is a no-op
-/// @note two allocators are a broken precondition, not a runtime state: a block belongs to
-///       the one that made it. Across two: tda_arr_copy_with, then tda_arr_move_assign
+/// @param[in,out] other must have the same elem_size and allocator; may be 'self'
+/// @note a block belongs to the allocator that made it. Across allocators use
+///       tda_arr_copy_with, then tda_arr_move_assign
 /// @bigo{1}
 TDA_API
 void tda_arr_swap(tda_Arr *self, tda_Arr *other);
@@ -288,9 +278,9 @@ void tda_arr_swap_elems(tda_Arr *self, size_t i, size_t j);
 /// @name to span
 /// @{
 
-/// a writable view of the elems, the way in to algo
+/// a writable view of the elems, for algo
 /// @param self the arr
-/// @return a view good until the arr is dropped, swapped or copy-assigned into
+/// @return valid until the arr is dropped, swapped or assigned to
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_SpanMut tda_arr_to_span_mut(tda_Arr *self);
@@ -305,7 +295,7 @@ tda_Span tda_arr_to_span(const tda_Arr *self);
 /// @name print
 /// @{
 
-/// writes the elems to a stream as [a, b, c], followed by a newline
+/// writes the elems as [a, b, c] and a newline
 /// @param self the arr
 /// @param stream where to write
 /// @param fprint the printer, called once per elem
@@ -326,8 +316,8 @@ void tda_arr_print(const tda_Arr *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// hands 'self' back once T is checked against the elem size, so a typed macro reads its
-// handle once; _Generic picks the one of the pair that keeps the handle's constness
+// returns 'self' after checking sizeof(T), so a macro evaluates its handle once;
+// _Generic keeps the handle's constness
 [[nodiscard]]
 static inline const tda_Arr *tda_arr_typed_c_(const tda_Arr *self, [[maybe_unused]] size_t size) {
     TDA_EXPECT(tda_arr_elem_size(self) == size);
@@ -355,8 +345,8 @@ static inline tda_Arr *tda_arr_typed_(tda_Arr *self, [[maybe_unused]] size_t siz
 
 /// tda_arr_from_data with sizeof(T)
 /// @param T the elem type
-/// @param data the elems to copy in, made to typecheck as a const T *
-/// @param len how many elems to read from 'data'
+/// @param data the elems, typechecked as const T *
+/// @param len how many to read
 /// @param al the allocator
 /// @param[out] out where the new arr is written
 /// @bigo{n}
@@ -411,7 +401,7 @@ static inline tda_Arr *tda_arr_typed_(tda_Arr *self, [[maybe_unused]] size_t siz
     ((T *) tda_arr_get_mut(TDA_ARR_TYPED_(T, self), (idx)))
 
 /// tda_arr_set from a value rather than an address
-/// @param T the elem type; a scalar, since 'val' becomes a compound literal
+/// @param T the elem type; scalars only, as 'val' becomes a compound literal
 /// @param self the arr
 /// @param idx the index
 /// @param val the value to copy in

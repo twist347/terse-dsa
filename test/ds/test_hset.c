@@ -25,7 +25,7 @@ void tearDown() {
 
 /* ========== helpers ========== */
 
-// every key in one bucket, so the chain is walked instead of hit at its head
+// every key in one bucket, so the chain is walked, not hit at its head
 static tda_Hash hash_all_alike(const void *x) {
     TDA_UNUSED(x);
 
@@ -81,7 +81,7 @@ static void assert_missing(const tda_HSet *s, int32_t key) {
     TEST_ASSERT_NULL(TDA_HSET_FIND(int32_t, s, key));
 }
 
-// the walk reaches exactly 'len' keys and every one of them is in the set
+// the walk reaches exactly 'len' keys and each of them is in the set
 static void assert_walk_sees_everything(const tda_HSet *s) {
     size_t seen = 0;
     TDA_HSET_FOR_EACH(node, s) {
@@ -93,9 +93,9 @@ static void assert_walk_sees_everything(const tda_HSet *s) {
 
 /* ========== the node layout ========== */
 
-// the whole reason ds/hset goes through internal/hmap_impl.h rather than storing a dummy
-// byte: with no value behind the key there is nothing to pad the key to, so a set's node
-// is a map's node minus the value AND minus the padding that would have aligned it
+// why ds/hset uses internal/hmap_impl.h instead of storing a dummy byte: with no value
+// after the key there is nothing to pad it to, so a set node is a map node minus the
+// value and minus the padding that would have aligned it
 static void test_a_set_node_is_a_map_node_without_the_value() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -104,7 +104,7 @@ static void test_a_set_node_is_a_map_node_without_the_value() {
     tda_HSet *s = nullptr;
     TDA_TEST_OK(TDA_HSET_NEW(int32_t, tda_hash_i32, tda_eq_i32, &al, &s));
     TDA_TEST_OK(TDA_HSET_INSERT(int32_t, s, 1, nullptr));
-    const size_t set_node = probe.last_alloc_size; // the node is the last block a first insert takes
+    const size_t set_node = probe.last_alloc_size; // a first insert ends with the node
 
     tda_HMap *m = nullptr;
     TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, tda_hash_i32, tda_eq_i32, &al, &m));
@@ -150,8 +150,8 @@ static void test_drop_null_is_noop() {
     tda_hset_drop(nullptr);
 }
 
-// three blocks go into a filled set — the set header, the map behind it, and the buckets —
-// plus one per key, and drop must hand back all of them
+// a filled set holds three blocks (the set header, the map behind it, the buckets) plus
+// one per key, and drop must free all of them
 static void test_drop_hands_back_everything() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -168,7 +168,7 @@ static void test_drop_hands_back_everything() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// the set header is taken after the map, and a refusal of it must not strand the map
+// the set header is taken after the map; a refusal of it must not strand the map
 static void test_a_refused_header_frees_the_map() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -361,7 +361,7 @@ static void test_remove_from_the_middle_of_a_chain() {
     tda_hset_drop(s);
 }
 
-// a set node carries no value, so the mutable walk is there to remove through: one pass
+// a set node has no value, so the mutable walk is there to remove through: one pass
 // takes out every even key and leaves the rest
 static void test_mut_walk_removes_through_the_nodes() {
     tda_HSet *s = make_filled(tda_hash_i32, 6);
@@ -430,8 +430,8 @@ static void test_take_hands_the_stored_key_out() {
     tda_hset_drop(s);
 }
 
-// keys equal modulo 100: the stored key comes out, not the probe, and the probe's own
-// storage may take it, being read before it is written
+// keys equal modulo 100: the stored key comes out, not the probe, and may land in the
+// probe's own storage, which is read before it is written
 static tda_Hash hash_mod_100(const void *x) {
     return tda_hash_i32(&(int32_t){ *(const int32_t *) x % 100 });
 }
@@ -558,7 +558,7 @@ static void test_shrink_to_fit_of_an_empty_set_owns_nothing() {
     TDA_TEST_OK(tda_hset_shrink_to_fit(s));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_hset_bucket_count(s));
-    TEST_ASSERT_EQUAL_size_t(2, probe.live); // the set header and the map behind it
+    TEST_ASSERT_EQUAL_size_t(2, probe.live); // the set header and its map
 
     put(s, 1); // still a set: the next key takes buckets again
     assert_has(s, 1);
@@ -567,7 +567,7 @@ static void test_shrink_to_fit_of_an_empty_set_owns_nothing() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// shrinking relinks the nodes where they lie, so a borrowed one comes through it
+// shrinking relinks the nodes in place, so a borrowed one survives
 static void test_shrink_to_fit_keeps_borrowed_nodes() {
     tda_HSet *s = make_filled(tda_hash_i32, 200);
 
@@ -625,9 +625,9 @@ static void test_copy_carries_the_hasher_and_the_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// a copy of a valueless map goes through the same private door the set was built with,
-// so the clone keeps the small node too. The copy's own last block is the set header, so
-// the size is read from the next key put into the clone instead
+// a copy of a valueless map goes through the same private path the set uses, so the
+// clone keeps the small node too. The copy's last block is the set header, so the node
+// size is read from the next key put into the clone
 static void test_a_copy_keeps_the_smaller_node() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -642,7 +642,7 @@ static void test_a_copy_keeps_the_smaller_node() {
     TDA_TEST_OK(tda_hset_copy(src, &dst));
     assert_has(dst, 1);
 
-    TDA_TEST_OK(TDA_HSET_INSERT(int32_t, dst, 2, nullptr)); // fits the buckets already there
+    TDA_TEST_OK(TDA_HSET_INSERT(int32_t, dst, 2, nullptr)); // fits existing buckets
     TEST_ASSERT_EQUAL_size_t(node, probe.last_alloc_size);
 
     tda_hset_drop(src);
@@ -673,7 +673,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the buckets and the nodes are asked of the allocator the copy is going to
+// the buckets and nodes come from the copy's allocator
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 4096);
     TEST_ASSERT_NOT_NULL(arena);
@@ -714,11 +714,11 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     assert_has(dst, 2);
     TEST_ASSERT_EQUAL_PTR(hash_all_alike, tda_hset_hasher(dst));
 
-    // the source gives back everything, its buckets included, as every container does
+    // the source gives back everything, buckets included, like every container
     TEST_ASSERT_EQUAL_size_t(0, tda_hset_len(src));
     TEST_ASSERT_EQUAL_size_t(0, tda_hset_bucket_count(src));
 
-    // and is still a set: the first insert makes its buckets anew
+    // and is still a set: the first insert makes new buckets
     put(src, 5);
     assert_has(src, 5);
 
@@ -878,8 +878,8 @@ static void test_swap_self_is_noop() {
 
 /* ========== retain ========== */
 
-// every subset of {0..5}, on spread buckets and on one long chain, where a removal has to
-// relink a neighbour rather than empty a bucket
+// every subset of {0..5}, on spread buckets and on one long chain, where a removal
+// relinks a neighbour instead of emptying a bucket
 static void test_retain_keeps_exactly_the_passing_keys() {
     const tda_Hasher hashers[2] = {tda_hash_i32, hash_all_alike};
 
@@ -983,7 +983,7 @@ static void test_extend_adds_to_the_keys_already_there() {
     tda_hset_drop(s);
 }
 
-// a refusal at any step of the build leaves nothing behind and no set handed out
+// a refusal at any step of the build leaves nothing behind and hands out no set
 static void test_from_span_fails_at_every_step_without_a_leak() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1008,7 +1008,7 @@ static void test_from_span_fails_at_every_step_without_a_leak() {
     }
 }
 
-// what a refused extend keeps is the run up to the failing key, not a scattering of it
+// a refused extend keeps the run up to the failing key, not a scattering of it
 static void test_extend_that_fails_keeps_a_prefix_of_the_run() {
     constexpr int32_t keys[8] = {10, 11, 12, 13, 14, 15, 16, 17};
 
@@ -1065,8 +1065,7 @@ static void test_insert_reports_an_exhausted_arena_and_changes_nothing() {
     tda_al_arena_drop(arena);
 }
 
-// putting a key that is already there needs no memory, so an exhausted arena is no
-// obstacle to it
+// putting a key already there needs no memory, so an exhausted arena does not stop it
 static void test_a_repeat_insert_needs_no_allocator() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 512);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1156,7 +1155,7 @@ static void test_eq_ignores_insertion_order_and_bucket_count() {
     tda_hset_drop(b);
 }
 
-// the keys of 'a' are looked up in 'b', so the hasher that answers is the one of 'b'
+// the keys of 'a' are looked up in 'b', so the hasher of 'b' answers
 static void test_eq_looks_the_keys_up_with_the_hasher_of_the_other() {
     tda_HSet *a = make_filled(tda_hash_i32, 12);
     tda_HSet *b = make_filled(hash_all_alike, 12);
@@ -1239,7 +1238,7 @@ static void test_eq_matches_a_copy() {
 /* ========== set ops ========== */
 
 // the keys of a small universe as the bits of a mask, so every pair of subsets can be
-// built, and every result read back and compared with the bit op it should equal
+// built and each result compared with the matching bit op
 static constexpr int32_t UNIVERSE = 6;
 static constexpr unsigned SUBSETS = 1u << UNIVERSE;
 
@@ -1303,8 +1302,8 @@ static void apply(SetOp op, tda_HSet *self, const tda_HSet *other) {
     TEST_FAIL();
 }
 
-// every pair of subsets, under a hash that spreads them and one that chains them all, so
-// keys are also dropped from the middle of a chain the op is walking
+// every pair of subsets, under a hash that spreads them and one that chains them all,
+// so keys are also dropped from the middle of a chain the op is walking
 static void check_op_everywhere(SetOp op) {
     const tda_Hasher hashers[2] = {tda_hash_i32, hash_all_alike};
 
@@ -1376,7 +1375,7 @@ static void test_set_ops_on_the_set_itself() {
     tda_hset_drop(s);
 }
 
-// a refused node leaves every key 'self' had, and only keys of 'other' besides
+// a refused node leaves every key 'self' had, plus only keys of 'other'
 static void test_a_refused_union_leaves_a_set() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1425,8 +1424,7 @@ static void test_a_refused_symmetric_difference_leaves_a_set() {
 
 /* ========== print ========== */
 
-// a printer writes to a stream, so a case reads one back through tmpfile, as
-// test/core/test_print.c does
+// printers write to a stream; cases read it back via tmpfile, like test/core/test_print.c
 static void assert_prints(const char *expected, const tda_HSet *s) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
@@ -1451,8 +1449,8 @@ static void test_fprint_writes_the_key() {
     tda_hset_drop(s);
 }
 
-// with more than one key the order is the buckets', which the header calls unspecified —
-// so a case may say what is printed only where there is nothing to order
+// with more than one key the order is the buckets', which is unspecified, so a case
+// states the output only where there is nothing to order
 static void test_fprint_of_an_empty_set() {
     tda_HSet *s = make_set(tda_hash_i32);
 
@@ -1461,8 +1459,8 @@ static void test_fprint_of_an_empty_set() {
     tda_hset_drop(s);
 }
 
-// the stdout twin takes no stream and cannot be captured portably, so a case can only
-// say that it runs and reaches the same printer
+// the stdout twin cannot be captured portably, so a case only checks that it runs and
+// reaches the same printer
 static void test_print_writes_to_stdout() {
     tda_HSet *s = make_set(tda_hash_i32);
     put(s, 1);

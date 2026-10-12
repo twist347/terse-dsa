@@ -13,8 +13,7 @@
 
 int main() {
     /// [build]
-    // the elems are pushed in the order given, so the FIRST is at the bottom and the last
-    // is on top
+    // pushed in the order given: the FIRST ends up at the bottom, the last on top
     tda_Al *al = tda_al_default();
 
     tda_Stack *s = nullptr;
@@ -27,24 +26,22 @@ int main() {
     /// [build]
 
     /// [lifo]
-    // one end, and only one: there is no get by index, no insert, no remove and no way to
-    // reach the bottom. That narrowing is the whole type — the vec underneath could do all
-    // of it
+    // one end only: no indexed get, no insert, no remove, no way to reach the bottom. The
+    // vec underneath could do all of it
     int rc = 1;
-    tda_Vec *v = nullptr; // taken from the stack further down, and named here so the exit sees it
+    tda_Vec *v = nullptr; // taken from the stack below; declared here for the exit
 
     if (TDA_STATUS_IS_ERR(TDA_STACK_PUSH(int32_t, s, 4))) {
         goto out;
     }
     printf("%" PRId32 "\n", *TDA_STACK_TOP_AS(int32_t, s)); // 4
 
-    // the top is writable: what makes a stack a stack is where elems enter and leave, not
-    // what they hold
+    // the top is writable; a stack limits where elems go in and out, not their values
     *TDA_STACK_TOP_MUT_AS(int32_t, s) = 9;
     tda_stack_print(s, tda_fprint_i32); // [1, 2, 3, 9]
 
-    // read the elem before dropping it — a pop that returned it would have nowhere to put
-    // the bytes
+    // read the elem before popping: a pop that returned it would have nowhere to put the
+    // bytes
     while (tda_stack_len(s) > 0) {
         printf("%" PRId32 " ", *TDA_STACK_TOP_AS(int32_t, s));
         tda_stack_pop(s);
@@ -53,8 +50,8 @@ int main() {
     /// [lifo]
 
     /// [read]
-    // the arrival order is the stack's to keep, so the bridge to algo is read only: a
-    // view to search, count or fold, and no mutable one to sort through
+    // the stack keeps its arrival order, so the bridge to algo is read only: a view to
+    // search, count or fold, but none to sort through
     if (TDA_STATUS_IS_ERR(TDA_STACK_PUSH(int32_t, s, 7))) {
         goto out;
     }
@@ -77,14 +74,13 @@ int main() {
     /// [read]
 
     /// [into]
-    // the vec was under the stack all along, so taking it costs nothing: the same block,
-    // the same capacity, the same allocator, not one elem copied. It CONSUMES the stack —
-    // the header goes back to the allocator and the handle must not be used again
+    // the vec was under the stack all along, so taking it is free: same block, capacity
+    // and allocator, nothing copied. It CONSUMES the stack: the header is freed and the
+    // handle must not be used again
     v = tda_stack_into_vec(s);
     s = nullptr;
 
-    // and the narrow interface goes with it: an index was refused while the stack existed,
-    // and the stack no longer does
+    // the narrow interface is gone too: the vec allows the indexing the stack refused
     tda_vec_print(v, tda_fprint_i32); // [7, 8, 5]
     printf("%" PRId32 "\n", *TDA_VEC_GET_AS(int32_t, v, 0)); // 7
 

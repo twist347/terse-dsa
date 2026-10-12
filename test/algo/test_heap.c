@@ -18,7 +18,7 @@ void tearDown() {
 
 /* ========== helpers ========== */
 
-// sorts a copy with the libc qsort — an oracle that shares no code with what is tested
+// sorts a copy with libc qsort, an oracle that shares no code with what is tested
 static void sorted_copy(int32_t *dst, const int32_t *src, size_t n) {
     memcpy(dst, src, n * sizeof(int32_t));
     qsort(dst, n, sizeof(int32_t), tda_cmp_i32);
@@ -36,9 +36,9 @@ static bool same_elems(const int32_t *a, const int32_t *b, size_t n) {
     return memcmp(x, y, n * sizeof(int32_t)) == 0;
 }
 
-// walks every permutation of {1..n} and hands each to 'check'. next_permutation is a
-// data generator here, not an oracle: were it broken the sweep would visit fewer inputs,
-// which cannot turn a failing case into a passing one
+// walks every permutation of {1..n} and hands each to 'check'. next_permutation only
+// generates data here: if it were broken the sweep would visit fewer inputs, which
+// cannot make a failing case pass
 static void for_every_permutation(size_t n, void (*check)(const int32_t *, size_t)) {
     int32_t buf[8];
     TEST_ASSERT_TRUE(n <= 8);
@@ -174,7 +174,7 @@ static void test_pop_heap_parks_the_largest_at_the_end() {
     TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, 5), tda_cmp_i32));
 }
 
-// the whole span is no longer a heap afterwards — only the part before the parked elem
+// afterwards only the part before the parked elem is a heap, not the whole span
 static void test_pop_heap_drains_in_descending_order() {
     constexpr int32_t src[7] = {3, 1, 4, 1, 5, 9, 2};
     int32_t buf[7];
@@ -261,7 +261,7 @@ static void test_is_heap_until_points_at_the_first_offender() {
     TEST_ASSERT_EQUAL_size_t(3, tda_span_is_heap_until(TDA_SPAN_FROM_DATA(int32_t, buf, 6), tda_cmp_i32));
 }
 
-// the documented property: whatever the answer, the prefix before it is itself a heap
+// the documented property: whatever the answer, the prefix before it is a heap
 static void test_is_heap_until_returns_a_heap_prefix() {
     constexpr int32_t buf[7] = {9, 8, 5, 7, 1, 99, 2};
 
@@ -285,7 +285,7 @@ static void test_is_heap_accepts_empty_and_single() {
 
 /* ========== through the comparator ========== */
 
-// there is no min_heap family: a descending comparator is the whole mechanism
+// there is no min_heap family: a descending comparator does that job
 static void test_descending_comparator_gives_a_min_heap() {
     constexpr int32_t src[7] = {3, 1, 4, 1, 5, 9, 2};
     int32_t buf[7];
@@ -306,9 +306,9 @@ static void test_descending_comparator_gives_a_min_heap() {
 
 /* ========== wide elems ========== */
 
-// A span of equal keys is already a heap at every edge, so a correct sift_down stops on
-// the first comparison and nothing moves. Equal keys alone cannot witness that — the
-// array would read the same either way — so the payload carries the evidence.
+// A span of equal keys is already a heap at every edge, so a correct sift_down stops at
+// the first comparison and moves nothing. Equal keys alone cannot show that, since the
+// array reads the same either way, so the payload carries the evidence.
 static void test_make_heap_leaves_equal_elems_where_they_are() {
     Pair buf[6] = {{7, 1}, {7, 2}, {7, 3}, {7, 4}, {7, 5}, {7, 6}};
 
@@ -349,14 +349,14 @@ static int cmp_i32_counting(const void *a, const void *b) {
     return tda_cmp_i32(a, b);
 }
 
-// make_heap is the linear one — that is the whole reason it exists next to a loop of
-// push_heap, which costs n log n for the same result.
+// make_heap is the linear one, which is why it exists next to a loop of push_heap that
+// costs n log n for the same result.
 //
-// The input has to be ASCENDING for this to mean anything. Measured at this size:
+// The input has to be ascending for this to mean anything. Measured at this size,
 // scattered input costs 1.76n by Floyd and 3.36n by a push_heap loop, so a 4n bound
-// would pass both and prove nothing; ascending costs 2.00n against 14.00n, because there
-// every newcomer is the new largest and has to climb the whole tree. Descending is worse
-// still as a witness — 1.00n either way.
+// would pass both and prove nothing. Ascending costs 2.00n against 14.00n, because
+// every newcomer is the new largest and climbs the whole tree. Descending is a worse
+// witness still: 1.00n either way.
 static void test_make_heap_stays_linear() {
     static int32_t buf[SCALE_N];
     for (size_t i = 0; i < SCALE_N; ++i) {

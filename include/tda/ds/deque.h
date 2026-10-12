@@ -24,15 +24,14 @@
 /// of bytes. Two things follow, both absent on purpose.
 ///
 /// There is no tda_deque_data: there is no single block to point at. There is no
-/// tda_deque_to_span either, and no linearize to earn one — making the ring contiguous
-/// would be a mutation the next push_front undoes. What algo gets instead is
-/// tda_deque_to_spans, the two runs as they lie, for whatever works run by run, and the
-/// pair tda_deque_copy_to_span / tda_deque_copy_from_span for whatever needs one run.
+/// tda_deque_to_span either, and no linearize to provide one: making the ring contiguous
+/// would be a mutation the next push_front undoes. Instead algo gets tda_deque_to_spans,
+/// the two runs as they lie, for whatever works run by run, and the pair
+/// tda_deque_copy_to_span / tda_deque_copy_from_span for whatever needs one run.
 ///
-/// The pointers are not stable: growing moves every elem. That is what ds/list is for.
+/// Pointers are not stable: growing moves every elem. For stable positions use ds/list.
 ///
-/// An index out of range asserts; the ops that return a tda_Status are the ones that
-/// allocate.
+/// Out-of-range indices assert. Only the ops that allocate return a tda_Status.
 ///
 /// @par Example
 /// @snippet ds/example_deque.c build
@@ -42,7 +41,7 @@
 /// @{
 
 /// Owning queue with two cheap ends.
-/// An opaque handle: it comes from a constructor and goes back to tda_deque_drop
+/// Opaque: made by a constructor, released by tda_deque_drop
 typedef struct tda_Deque tda_Deque;
 
 /// @name lifetime
@@ -50,7 +49,7 @@ typedef struct tda_Deque tda_Deque;
 
 /// an empty deque that owns no block yet
 /// @param elem_size the size of one elem, asserted greater than 0
-/// @param al the allocator, kept for everything after
+/// @param al used for every later allocation
 /// @param[out] out the new deque, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated
@@ -95,7 +94,7 @@ tda_Status tda_deque_new_cap(size_t cap, size_t elem_size, tda_Al *al, tda_Deque
 [[nodiscard]] TDA_API
 tda_Status tda_deque_from_data(const void *data, size_t len, size_t elem_size, tda_Al *al, tda_Deque **out);
 
-/// a deque holding a copy of what 's' views, taking its elem_size
+/// a deque holding a copy of the elems 's' views
 /// @param s the view to copy
 /// @param al the allocator
 /// @param[out] out the new deque, written only on success
@@ -106,7 +105,7 @@ tda_Status tda_deque_from_data(const void *data, size_t len, size_t elem_size, t
 tda_Status tda_deque_from_span(tda_Span s, tda_Al *al, tda_Deque **out);
 
 /// releases the block and the deque through the allocator it was built with
-/// @param self null is a no-op, so this is safe on a partly built object
+/// @param self null is a no-op
 /// @bigo{1}
 TDA_API
 void tda_deque_drop(tda_Deque *self);
@@ -127,7 +126,7 @@ tda_Status tda_deque_copy(const tda_Deque *self, tda_Deque **out);
 
 /// a new deque with the same elems in the same order, on 'al'
 /// @param self the deque to copy
-/// @param al where the copy lives; tda_deque_copy is this one with the allocator of 'self'
+/// @param al the allocator for the copy
 /// @param[out] out the new deque, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated
@@ -135,10 +134,9 @@ tda_Status tda_deque_copy(const tda_Deque *self, tda_Deque **out);
 [[nodiscard]] TDA_API
 tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque **out);
 
-/// overwrites the elems of 'self' with those of 'other', growing its block when it must
-/// @param[in,out] self must have the same elem_size; keeps its own allocator, and
-///                     'self' == 'other' is a no-op
-/// @param other the deque to copy from
+/// overwrites the elems of 'self' with those of 'other', growing the block if needed
+/// @param[in,out] self must have the same elem_size; keeps its allocator
+/// @param other the deque to copy from; may be 'self'
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, leaving 'self' as it was
 /// @bigo{n}
@@ -146,30 +144,29 @@ tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque **ou
 tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other);
 
 /// moves the elems of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same elem_size; releases what it held and keeps
-///                     its own allocator. 'self' == 'other' is a no-op
-/// @param[in,out] other the deque to move from; emptied on success and still usable, on
-///                      its own allocator
+/// @param[in,out] self must have the same elem_size; its old elems are released, its
+///                     allocator kept
+/// @param[in,out] other emptied on success and still usable; may be 'self'
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the two sit on different allocators and the block cannot be taken,
-///         leaving both as they were
-/// @bigo{1} on one allocator, n on two — the block belongs to the allocator that made it
+/// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and the copy cannot be
+///         allocated; both are left unchanged
+/// @bigo{1} on one allocator, n across two
 [[nodiscard]] TDA_API
 tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other);
 
-/// writes every elem into 'dst' in ring order — at most two memcpy, the contents being at
-/// most two runs. This is how a deque reaches an algo that needs one run, as sort does
+/// writes every elem into 'dst' in ring order, in at most two memcpy since the contents
+/// are at most two runs; how a deque reaches an algo that needs one run, like sort
 /// @param self the deque
 /// @param dst must have the same elem_size and be exactly as long as the deque
 /// @bigo{n}
 TDA_API
 void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst);
 
-/// overwrites every elem from 'src' — the pair to tda_deque_copy_to_span: take the
-/// contents out, hand them to algo, put the answer back
+/// overwrites every elem from 'src', in ring order; pairs with tda_deque_copy_to_span to
+/// put an algo result back
 /// @param self the deque
-/// @param src must have the same elem_size and be exactly as long as the deque. Nothing
-///            is allocated, so nothing can fail
+/// @param src must have the same elem_size and be exactly as long as the deque; nothing
+///            is allocated, so this cannot fail
 /// @bigo{n}
 TDA_API
 void tda_deque_copy_from_span(tda_Deque *self, tda_Span src);
@@ -181,7 +178,7 @@ void tda_deque_copy_from_span(tda_Deque *self, tda_Span src);
 
 /// views the contents as the two runs they lie in: the front one from head to the end of
 /// the block, then the back one from its start
-/// @param self the deque; the views are good until it next changes
+/// @param self the deque; the views are valid until it next changes
 /// @param[out] out_front the run holding the front elem; empty only on an empty deque
 /// @param[out] out_back the rest, empty unless the ring wraps
 /// @bigo{1}
@@ -200,8 +197,7 @@ void tda_deque_to_spans_mut(tda_Deque *self, tda_SpanMut *out_front, tda_SpanMut
 
 /// whether the two hold the same elems in ring order, byte for byte
 /// @param a one deque
-/// @param b must have the same elem_size — a mismatch there is a programmer error, not a
-///          false; a differing length is just false
+/// @param b must have the same elem_size (asserted); a different length gives false
 /// @return whether the lengths match and the elems do, wherever either ring starts
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -209,8 +205,8 @@ bool tda_deque_eq(const tda_Deque *a, const tda_Deque *b);
 
 /// whether the two hold equal elems under 'eq'
 /// @param a one deque
-/// @param b must have the same elem_size as 'a'
-/// @param eq asked of every pair until one says no
+/// @param b must have the same elem_size
+/// @param eq asked of each pair until one fails
 /// @return whether the lengths match and every pair does
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -223,7 +219,7 @@ bool tda_deque_eq_by(const tda_Deque *a, const tda_Deque *b, tda_Eq eq);
 
 /// how many elems the deque holds
 /// @param self the deque
-/// @return the length, never above the capacity
+/// @return the length
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_deque_len(const tda_Deque *self);
@@ -235,7 +231,7 @@ size_t tda_deque_len(const tda_Deque *self);
 [[nodiscard]] TDA_API
 size_t tda_deque_cap(const tda_Deque *self);
 
-/// the size of one elem, as named at construction
+/// the size of one elem
 /// @param self the deque
 /// @return elem_size
 /// @bigo{1}
@@ -244,7 +240,7 @@ size_t tda_deque_elem_size(const tda_Deque *self);
 
 /// how many bytes the elems take
 /// @param self the deque
-/// @return len * elem_size, the capacity not counted
+/// @return len * elem_size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_deque_bytes(const tda_Deque *self);
@@ -263,7 +259,7 @@ tda_Al *tda_deque_al(const tda_Deque *self);
 
 /// the front elem
 /// @param self asserts the deque is not empty
-/// @return a pointer into the block, good until the next op that may reallocate
+/// @return valid until the next op that may reallocate
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_deque_front(const tda_Deque *self);
@@ -287,7 +283,7 @@ void *tda_deque_back_mut(tda_Deque *self);
 /// @param self the deque
 /// @param idx counts from the front, so 0 is the front elem wherever the ring starts;
 ///            asserts idx < len
-/// @return a pointer into the block, good until the next op that may reallocate
+/// @return valid until the next op that may reallocate
 /// @bigo{1}
 [[nodiscard]] TDA_API
 const void *tda_deque_get(const tda_Deque *self, size_t idx);
@@ -312,8 +308,7 @@ void tda_deque_set(tda_Deque *self, size_t idx, const void *val);
 
 /// puts a copy of 'val' at the front
 /// @param self the deque
-/// @param val must not point into this deque's own block: a push that grows moves the
-///            elems out from under it
+/// @param val must not point into this deque: growing would move it
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized
@@ -336,14 +331,14 @@ void tda_deque_pop_front(tda_Deque *self);
 TDA_API
 void tda_deque_pop_back(tda_Deque *self);
 
-/// copies the front elem to 'out', then drops it as tda_deque_pop_front does
+/// copies the front elem to 'out', then drops it
 /// @param self asserts the deque is not empty
-/// @param[out] out where the elem goes; may point anywhere, this deque's own block included
+/// @param[out] out may point into this deque
 /// @bigo{1}
 TDA_API
 void tda_deque_pop_front_to(tda_Deque *self, void *out);
 
-/// copies the back elem to 'out', then drops it as tda_deque_pop_back does
+/// copies the back elem to 'out', then drops it
 /// @copydetails tda_deque_pop_front_to
 TDA_API
 void tda_deque_pop_back_to(tda_Deque *self, void *out);
@@ -351,11 +346,10 @@ void tda_deque_pop_back_to(tda_Deque *self, void *out);
 /// puts a copy of 'val' at 'idx', shifting whichever side is shorter
 /// @param self the deque
 /// @param idx asserts idx <= len; idx == len is push_back
-/// @param val must not point into this deque's own block, as in tda_deque_push_front
+/// @param val must not point into this deque
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
-/// @bigo{n} — half the constant of a vec, but still O(n): the two ends are what the type
-///            is for
+/// @bigo{n}, with half the constant of a vec
 [[nodiscard]] TDA_API
 tda_Status tda_deque_insert(tda_Deque *self, size_t idx, const void *val);
 
@@ -383,39 +377,35 @@ void tda_deque_clear(tda_Deque *self);
 tda_Status tda_deque_reserve(tda_Deque *self, size_t new_cap);
 
 /// gives back the room above the length
-/// @param self a length of 0 releases the block outright
-/// @retval TDA_STATUS_OK on success, and when there was nothing to give back
-/// @retval TDA_STATUS_ERR_NO_MEM when the allocator refuses the smaller block, leaving
-///         the deque as it was
+/// @param self a length of 0 releases the block
+/// @retval TDA_STATUS_OK on success, including when there was nothing to give back
+/// @retval TDA_STATUS_ERR_NO_MEM when the allocator refuses; the deque is unchanged
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_Status tda_deque_shrink_to_fit(tda_Deque *self);
 
-/// moves the length to 'new_len' at the BACK, so the front stays put and a resize never
-/// renumbers what was already there
+/// moves the length to 'new_len' at the back, so the front stays put and existing elems
+/// keep their indices
 /// @param self the deque
-/// @param new_len below the length drops from the back; above it appends zeroed elems
+/// @param new_len below the length drops from the back, above it appends zeroed elems
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_Status tda_deque_resize(tda_Deque *self, size_t new_len);
 
-/// drops the elems from 'len' on, keeping the capacity — tda_deque_resize that only
-/// shrinks, and so cannot fail
+/// drops the elems from 'len' on, keeping the capacity; a resize that cannot fail
 /// @param self the deque
-/// @param len at or above the length changes nothing
+/// @param len at or above the length is a no-op
 /// @bigo{1}
 TDA_API
 void tda_deque_truncate(tda_Deque *self, size_t len);
 
-/// exchanges the two deques whole, rings and all
+/// exchanges the contents of two deques
 /// @param[in,out] self one deque
-/// @param[in,out] other must have the same elem_size and the same allocator: the blocks
-///                      change hands where they lie, ring and all, so nothing is copied and
-///                      nothing can fail. 'self' == 'other' is a no-op
-/// @note two allocators are a broken precondition, not a runtime state: a block belongs to
-///       the one that made it. Across two: tda_deque_copy_with, then tda_deque_move_assign
+/// @param[in,out] other must have the same elem_size and allocator; may be 'self'
+/// @note a block belongs to the allocator that made it. Across allocators use
+///       tda_deque_copy_with, then tda_deque_move_assign
 /// @bigo{1}
 TDA_API
 void tda_deque_swap(tda_Deque *self, tda_Deque *other);
@@ -435,39 +425,36 @@ void tda_deque_swap_elems(tda_Deque *self, size_t i, size_t j);
 
 /// appends every elem of 'src' at the back, in order
 /// @param self the deque
-/// @param src must have the same elem_size, and must not view this deque's own block:
-///            growing frees what 'src' would be reading from
+/// @param src must have the same elem_size and must not view this deque: growing may
+///            free what it reads
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
-/// @bigo{n} — the room is taken once for the whole run and with the growth factor a push
-///            uses, so a run of extends stays amortized O(1) per elem
+/// @bigo{n}; grows once per call by the growth factor, so repeated extends stay
+///         amortized O(1) per elem
 [[nodiscard]] TDA_API
 tda_Status tda_deque_extend(tda_Deque *self, tda_Span src);
 
 /// inserts every elem of 'src' before 'idx', in order, shifting whichever side is shorter
 /// @param self the deque
 /// @param idx asserts idx <= len; idx == len extends
-/// @param src must have the same elem_size, and must not view this deque's own block, as
-///            in tda_deque_extend
+/// @param src must have the same elem_size and must not view this deque
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
-/// @bigo{n} — the shorter side moves once for the whole run, which a loop of insert
-///            cannot do: it moves that side once per elem
+/// @bigo{n}; the shorter side moves once, where a loop of insert moves it once per elem
 [[nodiscard]] TDA_API
 tda_Status tda_deque_insert_span(tda_Deque *self, size_t idx, tda_Span src);
 
-/// drops 'count' elems starting at 'idx', closing the gap from whichever side is shorter
+/// drops 'count' elems from 'idx', closing the gap from whichever side is shorter
 /// @param self the deque
 /// @param idx asserts idx <= len
-/// @param count asserts idx + count <= len; 0 does nothing. Nothing is allocated, so
-///              nothing can fail
+/// @param count asserts idx + count <= len
 /// @bigo{n}
 TDA_API
 void tda_deque_remove_range(tda_Deque *self, size_t idx, size_t count);
 
-/// keeps the elems 'pred' passes and drops the rest, in one pass that keeps their order
-/// @param self the deque; the capacity stays as it is
-/// @param pred asked once per elem, front to back; it must not change the deque
+/// keeps the elems 'pred' passes, in order
+/// @param self the deque; the capacity is kept
+/// @param pred asked once per elem, front to back; must not change the deque
 /// @param ctx handed to 'pred'
 /// @bigo{n}
 TDA_API
@@ -478,7 +465,7 @@ void tda_deque_retain(tda_Deque *self, tda_Pred pred, void *ctx);
 /// @name print
 /// @{
 
-/// writes the elems to a stream in ring order as [a, b, c], followed by a newline
+/// writes the elems in ring order as [a, b, c] and a newline
 /// @param self the deque
 /// @param stream where to write
 /// @param fprint the printer, called once per elem
@@ -499,8 +486,8 @@ void tda_deque_print(const tda_Deque *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// hands 'self' back once T is checked against the elem size, so a typed macro reads its
-// handle once; _Generic picks the one of the pair that keeps the handle's constness
+// returns 'self' after checking sizeof(T), so a macro evaluates its handle once;
+// _Generic keeps the handle's constness
 [[nodiscard]]
 static inline const tda_Deque *tda_deque_typed_c_(const tda_Deque *self, [[maybe_unused]] size_t size) {
     TDA_EXPECT(tda_deque_elem_size(self) == size);
@@ -545,8 +532,8 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 
 /// tda_deque_from_data with sizeof(T)
 /// @param T the elem type
-/// @param data the elems to copy in, made to typecheck as a const T *
-/// @param len how many elems to read from 'data'
+/// @param data the elems, typechecked as const T *
+/// @param len how many to read
 /// @param al the allocator
 /// @param[out] out where the new deque is written
 /// @bigo{n}
@@ -592,12 +579,12 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 // set and stops the outer loop too. T is checked once, in the init, and not per step
 
 /// walks the deque front to back, binding 'elem' to each elem in turn. A ring has no
-/// view to hand out, so this is the walk that copies nothing
+/// single view, so this is the walk that copies nothing
 /// @param T the elem type
-/// @param elem the name the loop variable takes; it is a const T *
+/// @param elem the name of the loop variable, a const T *
 /// @param self the deque
-/// @note the length is read on every step, so pushing or popping inside the body changes
-///       what the walk covers — and a growth moves the elems out from under 'elem'
+/// @note the length is read on every step, so pushing or popping in the body changes what
+///       the walk covers, and growing moves the elems out from under 'elem'
 /// @note break and continue act on the walk as they would on a plain loop
 /// @bigo{n} over the whole walk
 #define TDA_DEQUE_FOR_EACH_AS(T, elem, self)                                  \
@@ -628,7 +615,7 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
     ((T *) tda_deque_get_mut(TDA_DEQUE_TYPED_(T, self), (idx)))
 
 /// tda_deque_set from a value rather than an address
-/// @param T the elem type; a scalar, since 'val' becomes a compound literal
+/// @param T the elem type; scalars only, as 'val' becomes a compound literal
 /// @param self the deque
 /// @param idx the index, counted from the front
 /// @param val the value to copy in
@@ -637,7 +624,7 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
     tda_deque_set(TDA_DEQUE_TYPED_(T, self), (idx), &(T){ (val) })
 
 /// tda_deque_push_front from a value rather than an address
-/// @param T the elem type; a scalar, since 'val' becomes a compound literal
+/// @param T the elem type; scalars only, as 'val' becomes a compound literal
 /// @param self the deque
 /// @param val the value to copy in
 /// @bigo{1} amortized
@@ -650,7 +637,7 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
     tda_deque_push_back(TDA_DEQUE_TYPED_(T, self), &(T){ (val) })
 
 /// tda_deque_insert from a value rather than an address
-/// @param T the elem type; a scalar, since 'val' becomes a compound literal
+/// @param T the elem type; scalars only, as 'val' becomes a compound literal
 /// @param self the deque
 /// @param idx the index, counted from the front
 /// @param val the value to copy in
@@ -658,7 +645,7 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 #define TDA_DEQUE_INSERT(T, self, idx, val) \
     tda_deque_insert(TDA_DEQUE_TYPED_(T, self), (idx), &(T){ (val) })
 
-/// tda_deque_pop_front_to with 'out' made to typecheck as a T *
+/// tda_deque_pop_front_to with 'out' typechecked as T *
 /// @param T the elem type
 /// @param self the deque
 /// @param[out] out where the elem goes
@@ -666,7 +653,7 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 #define TDA_DEQUE_POP_FRONT_TO(T, self, out) \
     tda_deque_pop_front_to(TDA_DEQUE_TYPED_(T, self), (T *){ (out) })
 
-/// tda_deque_pop_back_to with 'out' made to typecheck as a T *
+/// tda_deque_pop_back_to with 'out' typechecked as T *
 /// @copydetails TDA_DEQUE_POP_FRONT_TO
 #define TDA_DEQUE_POP_BACK_TO(T, self, out) \
     tda_deque_pop_back_to(TDA_DEQUE_TYPED_(T, self), (T *){ (out) })

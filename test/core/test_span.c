@@ -110,7 +110,7 @@ static void test_new_keeps_fields() {
     TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
 }
 
-// a null view is legal only while empty — elem_size stays meaningful
+// a null view is legal only while empty, and elem_size is still set
 static void test_new_empty_over_null() {
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, nullptr, 0);
 
@@ -382,8 +382,8 @@ static void test_mut_fprint_writes_what_fprint_writes() {
     assert_mut_prints("[]\n", TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0));
 }
 
-// the stdout twins take no stream, and C has no portable way to capture one and give it
-// back — so a case can only say that they run and reach the same printer
+// the stdout twins take no stream, and C cannot portably capture stdout and restore it,
+// so a case can only check that they run and reach the same printer
 static void test_print_twins_write_to_stdout() {
     int32_t buf[2] = {4, 5};
 

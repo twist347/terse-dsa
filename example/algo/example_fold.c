@@ -34,13 +34,13 @@ int main() {
     /// [fold]
     const tda_Span s = TDA_SPAN_OF(int32_t, 1, 2, 3, 4);
 
-    // the initial value is the caller's, and an empty span would leave it alone — which
-    // is what makes it the identity of the operation
+    // the initial value is the caller's and an empty span returns it unchanged, so it
+    // should be the identity of the op
     int64_t sum = 0;
     tda_span_fold(s, &sum, add_into, nullptr);
     printf("%" PRId64 "\n", sum); // 10
 
-    // a scan keeps what a fold throws away
+    // a scan keeps every partial result a fold discards
     int32_t buf[4];
     const tda_SpanMut running = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4);
 

@@ -19,8 +19,8 @@ void tearDown() {
 
 #define ANSWER 42
 
-// counts how often an expression is evaluated, so a macro that names its argument twice
-// shows up as a number and not as a shrug
+// counts how often an expression is evaluated, so a macro that evaluates its argument
+// twice shows up in the count
 static int calls;
 
 static int bump() {
@@ -37,18 +37,18 @@ static int nodiscard_bump() {
 
 /* ========== stringify ========== */
 
-// the whole point of the two-level form: the argument is macro expanded first
+// the two-level form macro-expands the argument first
 static void test_stringify_expands_a_macro_argument() {
     TEST_ASSERT_EQUAL_STRING("42", TDA_STRINGIFY(ANSWER));
 }
 
-// and the inner form is what it is expanded THROUGH — on its own it spells the name
+// the inner form used on its own spells the name unexpanded
 static void test_stringify_inner_form_takes_the_name_as_written() {
     TEST_ASSERT_EQUAL_STRING("ANSWER", TDA_STRINGIFY_(ANSWER));
 }
 
-// what status.c relies on: an enumerator is not a macro, so expansion is a no-op and the
-// name survives. Were it a macro, tda_status_to_str would return its value instead
+// status.c relies on this: an enumerator is not a macro, so expansion is a no-op and the
+// name survives. Were it a macro, tda_status_to_str would return its value instead.
 static void test_stringify_leaves_an_enumerator_as_its_own_name() {
     TEST_ASSERT_EQUAL_STRING("TDA_STATUS_OK", TDA_STRINGIFY(TDA_STATUS_OK));
 }
@@ -60,7 +60,7 @@ static void test_stringify_normalizes_spacing() {
 
 /* ========== unused ========== */
 
-// TDA_UNUSED discards the VALUE, not the work: the expression still runs, so it is safe
+// TDA_UNUSED discards the value, not the work: the expression still runs, so it is safe
 // to wrap a call whose side effect is wanted
 static void test_unused_evaluates_its_argument() {
     calls = 0;
@@ -79,9 +79,8 @@ static void test_unused_evaluates_its_argument_exactly_once() {
     TEST_ASSERT_EQUAL_INT(2, calls);
 }
 
-// the assertion this case really makes is that the file compiles: a bare call would trip
-// -Wunused-result, and the tests build with -Wall -Wextra. The counter only proves the
-// call was not optimised away with the warning
+// the real check is that the file compiles: a bare call would trip -Wunused-result, and
+// the tests build with -Wall -Wextra. The counter only proves the call still runs.
 static void test_unused_silences_a_nodiscard_result() {
     calls = 0;
 
@@ -102,7 +101,7 @@ static void test_swap_exchanges_scalars() {
     TEST_ASSERT_EQUAL_INT32(1, b);
 }
 
-// an elem wider than a word, copied whole rather than by its first field
+// an elem wider than a word must be copied whole, not just its first field
 static void test_swap_exchanges_structs() {
     Pair a = {.a = 1, .b = 2};
     Pair b = {.a = 30, .b = 40};
@@ -157,9 +156,9 @@ static void test_swap_exchanges_whole_spans() {
     TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), b.elem_size);
 }
 
-// The macro names each side once for its address and reaches the value only through that
-// pointer, so an argument with a side effect is safe. This is the property that a
-// straightforward three-assignment macro does NOT have
+// The macro takes each side's address once and reaches the value only through that
+// pointer, so an argument with a side effect is safe, unlike in a plain three-assignment
+// macro.
 static void test_swap_evaluates_each_side_exactly_once() {
     int32_t v[4] = {10, 20, 30, 40};
     size_t i = 0;
@@ -185,7 +184,7 @@ static void test_swap_with_itself_changes_nothing() {
     TEST_ASSERT_EQUAL_INT32(5, x);
 }
 
-// the do/while(0) wrapper earns its keep here: without it this else belongs to nothing
+// without the do/while(0) wrapper this else would belong to nothing
 static void test_swap_is_a_single_statement() {
     int32_t a = 1;
     int32_t b = 2;
@@ -200,7 +199,7 @@ static void test_swap_is_a_single_statement() {
 }
 
 // the macro's own temporary is declared after the typeof that reads the argument, so a
-// caller variable of that very name is still swapped correctly
+// caller variable of the same name is still swapped correctly
 static void test_swap_survives_a_caller_variable_named_like_its_temporary() {
     int32_t tda_swap_tmp_ = 1;
     int32_t other = 2;

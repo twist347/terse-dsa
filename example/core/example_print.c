@@ -8,8 +8,8 @@
 #include <stdio.h>
 
 /// [custom]
-// a printer is handed the elem by address and writes the value and nothing around it —
-// the brackets and the commas belong to whoever prints the container
+// a printer gets the elem by address and writes only the value; brackets and commas
+// belong to whoever prints the container
 typedef struct {
     const char *name;
     int32_t age;
@@ -27,9 +27,9 @@ int main() {
     const tda_Span nums = TDA_SPAN_OF(int32_t, 5, 3, 1);
     tda_span_print(nums, tda_fprint_i32); // [5, 3, 1]
 
-    // cstr reads a pointer to a pointer, quotes what it finds, and gives a null pointer a
-    // form of its own. It needs a type name of its own too: the macro writes 'const T',
-    // and 'const const char *' is not a type
+    // cstr reads a pointer to a pointer, quotes the string and prints a null one as null.
+    // It also needs its own type name: the macro writes 'const T', and
+    // 'const const char *' is not a type
     typedef const char *Cstr;
 
     const tda_Span names = TDA_SPAN_OF(Cstr, "ann", nullptr, "bo, jr");

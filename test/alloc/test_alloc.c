@@ -75,7 +75,7 @@ static void test_dealloc_null_does_not_dispatch() {
     TEST_ASSERT_EQUAL_size_t(0, probe.dealloc_calls);
 }
 
-// the size travels through untouched — the allocator is entitled to rely on it
+// the size reaches the allocator unchanged, and the allocator may rely on it
 static void test_dealloc_forwards_the_size() {
     tda_Al al = bare_al();
 
@@ -125,8 +125,8 @@ static void test_calloc_fallback_zeroes_the_block() {
     tda_dealloc(&al, p, 32);
 }
 
-// num * size overflowing size_t is caught above the interface, on both paths: a hook is
-// never handed a request that cannot exist, whether or not it brings its own calloc
+// num * size overflowing size_t is caught before any hook is called, whether or not the
+// allocator has its own calloc
 static void test_calloc_rejects_overflow_on_either_path() {
     tda_Al bare = bare_al();
     TEST_ASSERT_NULL(tda_calloc(&bare, SIZE_MAX, 2));
@@ -161,7 +161,7 @@ static void test_realloc_prefers_the_native_hook() {
     probe.live = 0;
 }
 
-// new_size == 0 means "release it" — defined behaviour, not a failure
+// new_size == 0 releases the block; this is defined behaviour, not a failure
 static void test_realloc_to_zero_releases() {
     tda_Al al = bare_al();
 
@@ -216,7 +216,7 @@ static void test_realloc_fallback_shrinks() {
     tda_dealloc(&al, q, 4);
 }
 
-// growing from nothing is just an allocation — there is nothing to release
+// growing from nothing is a plain allocation with nothing to release
 static void test_realloc_fallback_from_null_is_an_alloc() {
     tda_Al al = bare_al();
 
@@ -228,7 +228,7 @@ static void test_realloc_fallback_from_null_is_an_alloc() {
     tda_dealloc(&al, p, 16);
 }
 
-// on failure the original block must survive intact — the caller still owns it
+// on failure the original block stays intact; the caller still owns it
 static void test_realloc_fallback_failure_keeps_the_original() {
     tda_Al al = bare_al();
 
@@ -288,8 +288,8 @@ static void test_macro_alloc_reads_the_count_once() {
     TDA_DEALLOC(int32_t, &al, p, 4);
 }
 
-// count * sizeof(T) would wrap: the request is refused before it reaches the
-// allocator, which would otherwise be asked for a buffer smaller than the caller wants
+// count * sizeof(T) would wrap, so the request is refused before the allocator is asked
+// for a buffer smaller than the caller wants
 static void test_macro_alloc_rejects_a_count_that_would_wrap() {
     tda_Al al = bare_al();
 
@@ -297,8 +297,8 @@ static void test_macro_alloc_rejects_a_count_that_would_wrap() {
     TEST_ASSERT_EQUAL_size_t(0, probe.alloc_calls);
 }
 
-// the largest count that still fits is not the guard's business: it goes through and
-// fails as an ordinary out-of-memory
+// the largest count that still fits passes the guard and fails as an ordinary
+// out-of-memory error
 static void test_macro_alloc_passes_the_largest_fitting_count_through() {
     tda_Al al = bare_al();
 
@@ -318,9 +318,8 @@ static void test_macro_calloc_hands_the_operands_over_unmultiplied() {
     TDA_DEALLOC(int32_t, &al, p, 4);
 }
 
-// the count is never multiplied by the macro, so the overflow is tda_calloc's to catch
-// and TDA_CALLOC needs no guard of its own — see test_calloc_rejects_overflow_on_either_path
-// for the contract this leans on.
+// TDA_CALLOC never multiplies the count: tda_calloc catches the overflow, so the macro
+// needs no guard of its own (see test_calloc_rejects_overflow_on_either_path)
 static void test_macro_calloc_overflow_is_caught_below_the_macro() {
     tda_Al al = bare_al();
 
@@ -365,9 +364,9 @@ static void test_macro_realloc_reads_each_count_once() {
     TDA_DEALLOC(int32_t, &al, q, 8);
 }
 
-// new_count * sizeof(T) wraps to exactly 0 here. Unguarded that reaches tda_realloc as
-// "resize to nothing", which releases the block and reports nullptr — and the caller,
-// told its pointer survives a failure, is left holding freed memory.
+// new_count * sizeof(T) wraps to exactly 0 here. Unguarded, tda_realloc would take that
+// as a release and return nullptr, and the caller, told its pointer survives a failure,
+// would be left holding freed memory.
 static void test_macro_realloc_rejects_a_new_count_that_would_wrap() {
     tda_Al al = bare_al();
 

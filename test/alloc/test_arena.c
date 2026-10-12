@@ -5,7 +5,6 @@
 
 #include <unity.h>
 
-#include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -105,7 +104,7 @@ static void test_every_block_is_aligned() {
     tda_al_arena_drop(arena);
 }
 
-// consecutive blocks are disjoint — writing one must not disturb its neighbour
+// consecutive blocks are disjoint: writing one must not disturb its neighbour
 static void test_blocks_do_not_overlap() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
@@ -229,7 +228,7 @@ static void test_calloc_rejects_overflow() {
 
 /* ========== realloc ========== */
 
-// nothing lies past the last block, so it grows where it stands and costs only the growth
+// nothing lies past the last block, so it grows in place and costs only the growth
 static void test_realloc_grows_the_last_block_in_place() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
@@ -262,8 +261,8 @@ static void test_realloc_shrinks_the_last_block_in_place() {
     tda_al_arena_drop(arena);
 }
 
-// a block with another one after it has nowhere to grow: it moves, and the old slot stays
-// charged like every block the arena lends
+// a block with another one after it has to move to grow, and its old slot stays charged
+// like any block the arena lends
 static void test_realloc_moves_a_block_that_is_not_the_last() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
@@ -285,8 +284,8 @@ static void test_realloc_moves_a_block_that_is_not_the_last() {
     tda_al_arena_drop(arena);
 }
 
-// shrinking a block that is not the last one needs no new room: it stays where it is, and
-// even a full arena can do it
+// shrinking a block that is not the last needs no new room: it stays in place, so even a
+// full arena can do it
 static void test_realloc_shrinks_a_block_that_is_not_the_last_in_place() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 4 * ALIGNMENT);
 
@@ -301,7 +300,7 @@ static void test_realloc_shrinks_a_block_that_is_not_the_last_in_place() {
     tda_al_arena_drop(arena);
 }
 
-// past the last block lies only the free tail: when growing there does not fit, nothing
+// past the last block lies only the free tail: if growing there does not fit, nothing
 // would, and the block is left as it was
 static void test_realloc_of_the_last_block_beyond_the_capacity_fails() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 64);
@@ -441,8 +440,8 @@ static void test_rewinding_an_outer_mark_skips_the_inner_ones() {
     tda_al_arena_drop(arena);
 }
 
-// the trap the floor exists for: a block from before the mark, last when the mark was
-// taken, must not grow in place past it, or the rewind hands its tail out a second time
+// why the floor exists: a block from before the mark, last when the mark was taken, must
+// not grow in place past it, or the rewind hands its tail out a second time
 static void test_a_block_from_under_the_mark_moves_to_grow() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
@@ -489,7 +488,7 @@ static void test_a_block_from_under_the_mark_shrinks_where_it_stands() {
     tda_al_arena_drop(arena);
 }
 
-// a block from above the mark is the arena's own business again: it grows in place
+// a block from above the mark grows in place as usual
 static void test_a_block_from_above_the_mark_grows_in_place() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
@@ -537,7 +536,7 @@ static void test_reset_drops_the_floor() {
     tda_al_arena_drop(arena);
 }
 
-// scratch in a caller's buffer works the same: the mark is about the offset, not the parent
+// marks work the same in a caller's buffer: they track the offset, not the parent
 static void test_mark_and_rewind_in_a_buffer() {
     alignas(max_align_t) unsigned char buf[512];
     tda_Al *arena = tda_al_arena_from_buf(buf, sizeof(buf));

@@ -60,7 +60,7 @@ static void test_fill_empty_is_noop() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 2);
 }
 
-// filling a subspan must stay inside it — the neighbours are not part of the view
+// filling a subspan must not touch its neighbours
 static void test_fill_stays_within_the_subspan() {
     int32_t buf[5] = {0, 0, 0, 0, 0};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);

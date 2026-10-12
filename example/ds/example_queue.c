@@ -14,7 +14,7 @@
 
 int main() {
     /// [build]
-    // the elems join in the order given, so the first one in is the first one served
+    // elems join in the order given, so the first in is the first served
     tda_Al *al = tda_al_default();
 
     tda_Queue *q = nullptr;
@@ -30,31 +30,30 @@ int main() {
     /// [build]
 
     /// [fifo]
-    // two ends, each with one job: elems join at the back and leave from the front, both
-    // in O(1) amortized. There is no get by index, no insert, no remove, no push_front and
-    // no pop_back — the deque underneath could do all of it
+    // two ends, one job each: elems join at the back and leave from the front, both O(1)
+    // amortized. There is no indexed get, insert, remove, push_front or pop_back, though
+    // the deque underneath has them all
     int rc = 1;
-    tda_Deque *d = nullptr; // taken from the queue further down, and named here for the exit
+    tda_Deque *d = nullptr; // taken from the queue below; declared here for the exit
 
     if (TDA_STATUS_IS_ERR(TDA_QUEUE_PUSH(int32_t, q, 4))) {
         goto out;
     }
     tda_queue_print(q, tda_fprint_i32); // [1, 2, 3, 4]
 
-    // both ends are writable: what makes a queue a queue is where elems enter and leave,
-    // not what they hold
+    // both ends are writable; a queue limits where elems go in and out, not their values
     *TDA_QUEUE_FRONT_MUT_AS(int32_t, q) = 9;
 
-    // read the elem before dropping it — a pop that returned it would have nowhere to put
-    // the bytes
+    // read the elem before popping: a pop that returned it would have nowhere to put the
+    // bytes
     printf("%" PRId32 " ", *TDA_QUEUE_FRONT_AS(int32_t, q));
     tda_queue_pop(q);
     printf("%" PRId32 "\n", *TDA_QUEUE_FRONT_AS(int32_t, q)); // 9 2
     /// [fifo]
 
     /// [read]
-    // the elems may wrap the ring underneath, so there is no view to hand over: the whole
-    // bridge to algo is one copy out into a buffer exactly as long as the queue
+    // the elems may wrap the ring, so there is no view to hand over; the only bridge to
+    // algo is a copy into a buffer exactly as long as the queue
     int32_t buf[8];
     const tda_SpanMut out_span = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, tda_queue_len(q));
 
@@ -64,19 +63,18 @@ int main() {
     printf("%zu waiting, %zu of them 3\n", view.len,
            tda_span_count(view, &(int32_t){3}, tda_eq_i32)); // 3 waiting, 1 of them 3
 
-    // and it runs one way only: sorting the copy would say nothing about the queue, so
-    // there is no copy_from_span to write one back
+    // and it is one way: sorting the copy says nothing about the queue, so there is no
+    // copy_from_span to write it back
     tda_queue_print(q, tda_fprint_i32); // [2, 3, 4]
     /// [read]
 
     /// [into]
-    // the deque was under the queue all along, ring and all, so taking it costs nothing.
-    // It CONSUMES the queue: the header goes back and the handle must not be used again
+    // the deque was under the queue all along, so taking it is free. It CONSUMES the
+    // queue: the header is freed and the handle must not be used again
     d = tda_queue_into_deque(q);
     q = nullptr;
 
-    // and the narrow interface goes with it: a queue refuses a push at the front, the
-    // deque underneath never did
+    // the narrow interface is gone too: the deque allows the front push a queue refused
     if (TDA_STATUS_IS_ERR(TDA_DEQUE_PUSH_FRONT(int32_t, d, 1))) {
         goto out;
     }

@@ -16,14 +16,14 @@
      assert((q)->vec),   \
      assert((q)->cmp))
 
-// A queue is a vec plus the order it is kept in: every mutation leaves algo/heap's invariant
-// standing over the vec's buffer, while the growth and the allocator stay the vec's.
+// A vec plus its comparator. Every mutation keeps the vec a heap (algo/heap); growth
+// and allocator are the vec's.
 struct tda_PQueue {
     tda_Vec *vec;
     tda_Cmp cmp;
 };
 
-/// takes ownership of 'vec' either way: on failure it is dropped, not handed back
+/// takes ownership of 'vec'; on failure it is dropped
 [[nodiscard]]
 static tda_Status wrap(tda_Vec *vec, tda_Cmp cmp, tda_PQueue **out);
 
@@ -130,7 +130,7 @@ tda_Status tda_pqueue_copy_with(const tda_PQueue *self, tda_Al *al, tda_PQueue *
         return st;
     }
 
-    // the buffer is copied as it stands, heap order and all, so no reheapifying
+    // the copy is already a heap, so no rebuild
     return wrap(vec, self->cmp, out);
 }
 
@@ -148,8 +148,7 @@ tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
         return st;
     }
 
-    // keeping self's own comparator would leave it holding a buffer that is a heap
-    // under nobody's order
+    // the elems are a heap under the comparator of 'other', so take it too
     self->cmp = other->cmp;
 
     ASSERT_PQUEUE(self);
@@ -171,8 +170,7 @@ tda_Status tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other) {
         return st;
     }
 
-    // the elems arrive arranged under the comparator of 'other', so it travels with them —
-    // the same reason copy_assign hands it over
+    // the comparator travels with the elems, as in copy_assign
     self->cmp = other->cmp;
 
     ASSERT_PQUEUE(self);
@@ -232,7 +230,7 @@ tda_Status tda_pqueue_push(tda_PQueue *self, const void *val) {
         return st;
     }
 
-    // the new elem sits last, which is exactly where push_heap expects it
+    // push_heap expects the new elem last, where the push put it
     tda_span_push_heap(tda_vec_to_span_mut(self->vec), self->cmp);
 
     return TDA_STATUS_OK;
@@ -242,8 +240,8 @@ void tda_pqueue_pop(tda_PQueue *self) {
     ASSERT_PQUEUE(self);
     TDA_EXPECT(tda_vec_len(self->vec) > 0);
 
-    // pop_heap parks the greatest elem last and leaves a heap in front of it; dropping
-    // the tail is then the vec's business
+    // pop_heap moves the greatest elem last and leaves a heap before it; the vec then
+    // drops the tail
     tda_span_pop_heap(tda_vec_to_span_mut(self->vec), self->cmp);
     tda_vec_pop(self->vec);
 }
@@ -253,7 +251,7 @@ void tda_pqueue_pop_to(tda_PQueue *self, void *out) {
     assert(out);
     TDA_EXPECT(tda_vec_len(self->vec) > 0);
 
-    // as in tda_pqueue_pop, and the elem pop_heap parks last is the one handed out
+    // as in tda_pqueue_pop, but the elem moved last is copied out
     tda_span_pop_heap(tda_vec_to_span_mut(self->vec), self->cmp);
     tda_vec_pop_to(self->vec, out);
 }
@@ -263,8 +261,8 @@ void tda_pqueue_replace_top(tda_PQueue *self, const void *val) {
     assert(val);
     TDA_EXPECT(tda_vec_len(self->vec) > 0);
 
-    // only the root can be out of place, and the sift down from it is what pop_heap
-    // runs after its swap. vec_set copes with 'val' being the root itself
+    // only the root can be out of place, so one sift down from it restores the heap.
+    // vec_set handles 'val' aliasing the root
     tda_vec_set(self->vec, 0, val);
 
     const tda_SpanMut s = tda_vec_to_span_mut(self->vec);

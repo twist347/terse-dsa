@@ -29,7 +29,7 @@ static tda_Hash hash_mix_u64(uint64_t x);
 
 // every integer type is the same operation: read it, widen it, mix it. Widening a signed
 // type sign-extends, which is a bijection into uint64_t, so equal values stay equal and
-// different ones stay different — all the mixer needs.
+// different ones stay different, which is all the mixer needs.
 #define DEFINE_HASH_INT(name, T)                          \
     tda_Hash tda_hash_##name(const void *val) {           \
         assert(val);                                      \
@@ -71,7 +71,7 @@ tda_Hash tda_hash_f32(const void *val) {
     uint32_t bits;
     memcpy(&bits, &f, sizeof(bits));
 
-    // every NaN is equal to every other one here, so they must all hash alike — but not
+    // every NaN is equal to every other one here, so they must all hash alike, but not
     // alike to zero, which folding them onto 0.f would have done
     if (isnan(f)) {
         bits = NAN_CANON_32;
@@ -101,7 +101,7 @@ tda_Hash tda_hash_f64(const void *val) {
 /* ========== char ========== */
 
 // read as unsigned char, not as char: the byte is the same either way, but char's
-// signedness is the target's business and would otherwise leak into the hash — the same
+// signedness is the target's business and would otherwise leak into the hash: the same
 // letter would hash differently on x86 and on ARM. Character types may alias freely, so
 // reading a char object through unsigned char is fine.
 DEFINE_HASH_INT(char, unsigned char)
@@ -132,7 +132,7 @@ tda_Hash tda_hash_cstr(const void *val) {
 
     const char *str = *(const char *const *) val;
 
-    // null is a value of its own, not the empty string — tda_eq_cstr keeps them apart,
+    // null is a value of its own, not the empty string; tda_eq_cstr keeps them apart,
     // so their hashes must be free to differ too
     if (!str) {
         return hash_mix_u64(0);

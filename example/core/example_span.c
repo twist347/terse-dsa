@@ -14,7 +14,7 @@ int main() {
     int32_t nums[] = {5, 3, 1, 4, 2};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, nums, 5);
 
-    // the fields are public — a view owns nothing, so it has no invariant to protect
+    // the fields are public: a view owns nothing, so it has no invariant to protect
     printf("%zu elems of %zu bytes, %zu in all\n", s.len, s.elem_size,
            tda_span_bytes(tda_span_mut_to_span(s))); // 5 elems of 4 bytes, 20 in all
     /// [build]
@@ -27,8 +27,7 @@ int main() {
     // writing through the view writes the source: this is the same elem
     printf("%" PRId32 "\n", nums[0]); // 2
 
-    // the walk that goes with a view. The elem type has to be named: a span carries
-    // sizes, not types, and this is the one place that shows
+    // walking a view needs the elem type named: a span carries sizes, not types
     int32_t total = 0;
     TDA_SPAN_FOR_EACH_AS (int32_t, elem, tda_span_mut_to_span(s)) {
         total += *elem;
@@ -37,13 +36,13 @@ int main() {
     /// [access]
 
     /// [sub]
-    // a subspan views the same memory, offset and shortened — nothing is copied
+    // a subspan views the same memory, offset and shortened; nothing is copied
     const tda_SpanMut tail = tda_span_sub_mut(s, 1, 4);
     tda_span_mut_print(tail, tda_fprint_i32); // [3, 1, 4, 9]
     /// [sub]
 
     /// [bridge]
-    // the seam: ds hands out a view, algo works in place through it
+    // ds hands out a view and algo works in place through it
     tda_span_sort(s, tda_cmp_i32);
     tda_span_print(tda_span_mut_to_span(s), tda_fprint_i32); // [1, 2, 3, 4, 9]
     /// [bridge]

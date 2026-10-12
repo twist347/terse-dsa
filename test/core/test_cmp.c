@@ -14,10 +14,9 @@ void setUp() {
 void tearDown() {
 }
 
-// The value form the public API no longer carries. It lives here, in the only file that
-// wants readable operands, and is exactly what tda_cmp_<T> used to be: the comparator
-// called with the addresses of two values. Instantiated only where a case calls it, so
-// an unused one is a warning rather than dead weight.
+// The by-value form the public API dropped, kept here because these cases want readable
+// operands. It is what tda_cmp_<T> used to be: the comparator called with the addresses
+// of two values. Instantiated only where a case calls it, so an unused one warns.
 #define DEFINE_CMP_FORM(name, T)      \
     static int cmp_##name(T a, T b) { \
         return tda_cmp_##name(&a, &b); \
@@ -53,7 +52,7 @@ DEFINE_EQ_FORM(cstr, const char *)
 #undef DEFINE_CMP_FORM
 #undef DEFINE_EQ_FORM
 
-// every comparator must answer with a sign, not just any int of the right side
+// every comparator must return exactly -1, 0 or 1, not just any int of the right sign
 static void expect_order(int less, int equal, int greater) {
     TEST_ASSERT_EQUAL_INT(-1, less);
     TEST_ASSERT_EQUAL_INT(0, equal);
@@ -108,9 +107,9 @@ static void test_cmp_unsigned_survives_the_extremes() {
 
 /* ========== ptrdiff ========== */
 
-// size and ptrdiff are the two entries whose width follows the target, so neither can be
-// stood in for by a fixed-width one: on a 32-bit build tda_cmp_u64 would read past a
-// size_t, and tda_cmp_i64 past a ptrdiff_t
+// size and ptrdiff follow the target's width, so no fixed-width entry can stand in for
+// them: on a 32-bit build tda_cmp_u64 would read past a size_t, and tda_cmp_i64 past a
+// ptrdiff_t
 static void test_cmp_ptrdiff_orders_and_survives_the_extremes() {
     expect_order(cmp_ptrdiff(-1, 0), cmp_ptrdiff(7, 7), cmp_ptrdiff(0, -1));
     expect_order(
@@ -122,11 +121,10 @@ static void test_cmp_ptrdiff_orders_and_survives_the_extremes() {
 
 /* ========== char ========== */
 
-// char is neither signed char nor unsigned char, and which of the two it behaves like is
-// the target's business. So the expectation cannot be a literal: it is that the
-// comparator answers what the platform's own operators answer for the same two chars.
-// (char) 200 is negative on x86 and 200 under -funsigned-char; substituting tda_cmp_i8
-// or tda_cmp_u8 is wrong on exactly one of the two, and this case says which.
+// char is neither signed char nor unsigned char, and which one it behaves like depends on
+// the target. So the expected result is not a literal: the comparator must agree with the
+// platform's own operators. (char) 200 is negative on x86 and 200 under -funsigned-char;
+// tda_cmp_i8 or tda_cmp_u8 in its place is wrong on exactly one of the two.
 static void test_cmp_char_follows_the_signedness_of_the_target() {
     constexpr char high = (char) 200;
     constexpr char low = 100;
@@ -140,7 +138,7 @@ static void test_cmp_char_follows_the_signedness_of_the_target() {
     TEST_ASSERT_FALSE(eq_char('a', 'b'));
 }
 
-// the plain reason to have it: sorting the letters of a word
+// the typical use: sorting the letters of a word
 static void test_cmp_char_sorts_letters() {
     char buf[5] = {'d', 'a', 'e', 'b', 'c'};
 
@@ -156,14 +154,14 @@ static void test_cmp_float_orders_ordinary_values() {
     expect_order(cmp_f64(1.0, 2.0), cmp_f64(2.0, 2.0), cmp_f64(2.0, 1.0));
 }
 
-// IEEE says -0.0 == +0.0, and the ordering must agree rather than invent a tie-break
+// IEEE says -0.0 == +0.0, and the ordering must agree, with no tie-break
 static void test_cmp_float_treats_the_two_zeroes_as_one() {
     TEST_ASSERT_EQUAL_INT(0, cmp_f32(-0.0f, 0.0f));
     TEST_ASSERT_EQUAL_INT(0, cmp_f64(-0.0, 0.0));
     TEST_ASSERT_TRUE(eq_f64(-0.0, 0.0));
 }
 
-// the reason these are not (a > b) - (a < b): every comparison against NaN is false,
+// why these are not (a > b) - (a < b): every comparison against NaN is false,
 // so the naive form calls NaN equal to everything and the order stops being an order
 static void test_cmp_float_sorts_nan_after_every_number() {
     constexpr double nan_val = NAN;
@@ -202,7 +200,7 @@ static void test_cmp_cstr_orders_lexicographically() {
     expect_order(cmp_cstr("abc", "abd"), cmp_cstr("abc", "abc"), cmp_cstr("abd", "abc"));
 }
 
-// strcmp only promises a sign, and glibc happily returns values far from ±1
+// strcmp only promises a sign, and glibc returns values far from ±1
 static void test_cmp_cstr_normalizes_to_a_sign() {
     TEST_ASSERT_EQUAL_INT(-1, cmp_cstr("a", "z"));
     TEST_ASSERT_EQUAL_INT(1, cmp_cstr("z", "a"));

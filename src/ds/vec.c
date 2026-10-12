@@ -35,7 +35,7 @@ static tda_Status new_impl(bool zeroed, size_t len, size_t cap, size_t elem_size
 
 static void set_fields(tda_Vec *obj, void *data, size_t len, size_t cap, size_t elem_size, tda_Al *al);
 
-/// hands the block back and leaves an empty vec on the same allocator
+/// frees the block, leaving an empty vec on the same allocator
 static void release_data(tda_Vec *self);
 
 [[nodiscard]]
@@ -44,13 +44,12 @@ static size_t next_cap(const tda_Vec *self);
 [[nodiscard]]
 static tda_Status grow(tda_Vec *self);
 
-/// room for one more elem, growing the block when it is full
+/// room for one more elem
 [[nodiscard]]
 static tda_Status reserve_one(tda_Vec *self);
 
-/// room for 'new_len' elems, asked for with the growth factor when that is the bigger of
-/// the two so a run of extends keeps the amortized cost a run of pushes has. Falls back
-/// to the exact length when the eager request is refused
+/// room for 'new_len' elems: grows by the growth factor when that is more, so repeated
+/// extends stay amortized, and falls back to the exact size if that is refused
 [[nodiscard]]
 static tda_Status reserve_for(tda_Vec *self, size_t new_len);
 
@@ -182,8 +181,7 @@ tda_Status tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
         return TDA_STATUS_OK;
     }
 
-    // one allocator: the block is handed over, capacity and all. What 'self' held ends up in 'other' and is released
-    // there, through the very allocator that made it
+    // one allocator: swap the blocks, then release what 'self' held from 'other'
     if (self->al == other->al) {
         TDA_SWAP(*self, *other);
         release_data(other);
@@ -194,8 +192,7 @@ tda_Status tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
         return TDA_STATUS_OK;
     }
 
-    // two allocators: the whole copy is built on the target's before anything of it is
-    // touched, so a refusal leaves both as they were
+    // two allocators: build the copy first, so a refusal changes nothing
     tda_Vec *obj;
     const tda_Status st = tda_vec_copy_with(other, self->al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -310,7 +307,7 @@ void tda_vec_set(tda_Vec *self, size_t idx, const void *val) {
     assert(val);
     TDA_EXPECT(idx < self->len);
 
-    // memmove: 'val' may be the very elem being set, and memcpy onto itself is undefined
+    // memmove: 'val' may alias the elem being set
     memmove(vec_offset_mut(self, idx), val, self->elem_size);
 }
 
@@ -356,7 +353,7 @@ void tda_vec_pop_to(tda_Vec *self, void *out) {
     TDA_EXPECT(self->len > 0);
 
     --self->len;
-    // memmove: 'out' may be the very slot just dropped, and memcpy onto itself is undefined
+    // memmove: 'out' may alias the dropped slot
     memmove(out, vec_offset(self, self->len), self->elem_size);
 }
 
@@ -397,7 +394,7 @@ void tda_vec_swap_remove(tda_Vec *self, size_t idx) {
     TDA_EXPECT(idx < self->len);
 
     --self->len;
-    // the back elem leaves no gap to fill, and memcpy onto itself is undefined
+    // removing the back elem leaves no gap; memcpy onto itself is undefined
     if (idx != self->len) {
         memcpy(vec_offset_mut(self, idx), vec_offset(self, self->len), self->elem_size);
     }
@@ -546,8 +543,7 @@ tda_Status tda_vec_insert_span(tda_Vec *self, size_t idx, tda_Span src) {
         }
     }
 
-    // one move for the whole run: this is the difference from a loop of insert, which
-    // walks the tail again for every elem
+    // one move for the whole run, not one per elem
     const size_t tail = self->len - idx;
     if (tail > 0) {
         memmove(vec_offset_mut(self, idx + src.len), vec_offset_mut(self, idx), tail * self->elem_size);

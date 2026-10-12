@@ -5,7 +5,6 @@
 
 #include <unity.h>
 
-#include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -128,7 +127,7 @@ static void test_alloc_of_a_partial_block_still_costs_one() {
     tda_al_pool_drop(pool);
 }
 
-// the pool hands out fixed slots — anything larger cannot be served
+// the pool hands out fixed slots, so anything larger cannot be served
 static void test_alloc_larger_than_a_block_fails() {
     tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 4);
 
@@ -229,8 +228,8 @@ static void test_freed_block_is_reused_first() {
     tda_al_pool_drop(pool);
 }
 
-// the head of the free list is what the double-free check looks at, and a block taken
-// back from there belongs to its new owner — freeing it again is an ordinary free
+// the double-free check looks at the head of the free list; a block taken back from there
+// belongs to its new owner, so freeing it again is an ordinary free
 static void test_block_taken_back_from_the_head_frees_again() {
     tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 3);
 
@@ -322,7 +321,7 @@ static void test_calloc_rejects_overflow() {
 
 /* ========== realloc ========== */
 
-// a block already has the pool's one size: a new size that fits keeps it where it is
+// every block has the pool's one size, so a new size that fits keeps it in place
 static void test_realloc_within_a_block_stays_in_place() {
     tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 3);
 
@@ -356,7 +355,7 @@ static void test_realloc_in_place_needs_no_free_block() {
     tda_al_pool_drop(pool);
 }
 
-// past a block is past what the pool can ever give, and the old block stays yours
+// more than a block is more than the pool can ever give; the old block stays the caller's
 static void test_realloc_beyond_a_block_fails_and_keeps_the_block() {
     tda_Al *pool = tda_al_pool_new(tda_al_default(), 32, 3);
 
@@ -437,7 +436,8 @@ static bool inside(const void *ptr, size_t size, const void *buf, size_t buf_siz
     return addr >= begin && addr + size <= begin + buf_size;
 }
 
-// the header is paid for out of the buffer, and the rest is cut into as many blocks as fit
+// the header is paid for out of the buffer, and the rest is cut into as
+// many blocks as fit
 static void test_from_buf_fits_as_many_blocks_as_the_rest_holds() {
     tda_Al *pool = tda_al_pool_from_buf(mem, sizeof(mem), 32);
     TEST_ASSERT_NOT_NULL(pool);

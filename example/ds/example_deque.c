@@ -1,5 +1,6 @@
 // for @snippet
 
+#include "tda/algo/search.h"
 #include "tda/algo/sort.h"
 #include "tda/alloc/default.h"
 #include "tda/core/cmp.h"
@@ -25,8 +26,8 @@ int main() {
     /// [build]
 
     /// [ends]
-    // both ends cost O(1) amortized — that is the whole point of the ring, and what a vec
-    // cannot do at the front. Every push may grow the block, so every push has a status
+    // both ends are O(1) amortized, which a vec cannot do at the front. Any push may grow
+    // the block, so every push returns a status
     int rc = 1;
 
     if (TDA_STATUS_IS_ERR(TDA_DEQUE_PUSH_FRONT(int32_t, d, 2))) {
@@ -42,7 +43,7 @@ int main() {
         *TDA_DEQUE_BACK_AS(int32_t, d)
     ); // 2 .. 6
 
-    // the pops take from either end and leave the room alone
+    // pops take from either end and leave the capacity alone
     tda_deque_pop_front(d);
     tda_deque_pop_back(d);
     tda_deque_print(d, tda_fprint_i32); // [3, 4, 5]
@@ -50,16 +51,15 @@ int main() {
 
     /// [index]
     // an index counts from the front, so 0 is the front elem wherever the ring starts.
-    // Where that is the deque never says: the capacity tells how much room there is and
-    // nothing about the seam
+    // The seam stays hidden: the capacity says how much room there is, not where it wraps
     printf("%" PRId32 " of %zu in room for %zu\n", *TDA_DEQUE_GET_AS(int32_t, d, 0),
            tda_deque_len(d), tda_deque_cap(d)); // 3 of 3 in room for 6
 
     TDA_DEQUE_SET(int32_t, d, 1, 9);
     tda_deque_print(d, tda_fprint_i32); // [3, 9, 5]
 
-    // insert and remove are the operations this type is NOT for: they shift whichever
-    // side is shorter, which is half a vec's constant and still O(n)
+    // insert and remove are NOT what this type is for: they shift the shorter side, half
+    // a vec's cost but still O(n)
     if (TDA_STATUS_IS_ERR(TDA_DEQUE_INSERT(int32_t, d, 1, 7))) {
         goto out;
     }
@@ -68,8 +68,7 @@ int main() {
     tda_deque_remove(d, 1);
     tda_deque_print(d, tda_fprint_i32); // [3, 9, 5]
 
-    // the walk goes by index too, so the seam is never visible — and nothing is copied,
-    // which a to_span would have had to do
+    // the walk goes by index, so the seam never shows; a to_span would have had to copy
     TDA_DEQUE_FOR_EACH_AS (int32_t, elem, d) {
         printf("%" PRId32 " ", *elem); // 3 9 5
     }
@@ -77,8 +76,18 @@ int main() {
     /// [index]
 
     /// [algo]
-    // the contents may wrap, so there is no view to hand over: the bridge to algo is a
-    // pair of copies. Out into a buffer of exactly the right length, sort it, and back
+    // an algo that reads run by run takes the ring as it lies: at most two views, the
+    // front run and the back one, nothing copied
+    tda_Span front, back;
+    tda_deque_to_spans(d, &front, &back);
+
+    const int32_t key = 9;
+    printf(
+        "%d\n", tda_span_contains(front, &key, tda_eq_i32) || tda_span_contains(back, &key, tda_eq_i32)
+    ); // 1
+
+    // an algo that needs one run, like sort, goes through copies: out into a buffer of
+    // exactly the right length, sort, and back
     int32_t buf[8];
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, tda_deque_len(d));
 

@@ -89,8 +89,8 @@ bool tda_span_is_permutation(tda_Span a, tda_Span b, tda_Eq eq) {
         return false;
     }
 
-    // what the two share elem by elem is a permutation of itself, so only the rest is
-    // counted; equal lengths and no mismatch at all is equal outright
+    // the common prefix is trivially a permutation of itself, so only the rest is
+    // counted; with equal lengths and no mismatch the spans are equal
     size_t from;
     if (!tda_span_mismatch(a, b, eq, &from)) {
         return true;
@@ -102,13 +102,12 @@ bool tda_span_is_permutation(tda_Span a, tda_Span b, tda_Eq eq) {
     for (size_t i = 0; i < rest_a.len; ++i) {
         const void *elem = tda_span_get(rest_a, i);
 
-        // an elem seen earlier in the rest was counted there, every copy at once
+        // an elem seen earlier was already counted, all its copies at once
         if (holds(tda_span_sub(rest_a, 0, i), elem, eq)) {
             continue;
         }
 
-        // its copies in 'a' all lie from 'i' on; 'b' has none to spare, so a zero there is
-        // the cheap no
+        // all its copies in 'a' lie at 'i' or later; a zero count in 'b' fails early
         const size_t in_b = count_of(rest_b, elem, eq);
         if (in_b == 0 || in_b != count_of(tda_span_sub(rest_a, i, rest_a.len - i), elem, eq)) {
             return false;

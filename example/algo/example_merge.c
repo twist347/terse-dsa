@@ -20,12 +20,12 @@ int main() {
     tda_span_merge(dst, a, b, tda_cmp_i32);
     tda_span_mut_print(dst, tda_fprint_i32); // [1, 2, 3, 4, 7, 8]
 
-    // in place: a span that is two sorted runs end to end becomes one. Finding where the
-    // second run starts is what tda_span_is_sorted_until is for
+    // in place: two sorted runs end to end become one; tda_span_is_sorted_until finds
+    // where the second run starts
     const tda_SpanMut s = TDA_SPAN_OF_MUT(int32_t, 1, 4, 7, 2, 3, 8);
     const size_t mid = tda_span_is_sorted_until(tda_span_mut_to_span(s), tda_cmp_i32);
 
-    // the allocator is a speed knob, not a requirement: null takes the buffer-free path
+    // the allocator only speeds this up; with null it runs without a buffer
     tda_span_inplace_merge(s, mid, tda_cmp_i32, tda_al_default());
     tda_span_mut_print(s, tda_fprint_i32); // [1, 2, 3, 4, 7, 8]
     /// [merge]

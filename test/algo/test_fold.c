@@ -14,7 +14,7 @@ void setUp() {
 void tearDown() {
 }
 
-// the accumulator is wider than the elems — the reason it belongs to the caller
+// the accumulator is wider than the elems, which is why the caller owns it
 static void sum_i32_into_i64(void *acc, const void *elem, void *ctx) {
     TDA_UNUSED(ctx);
 
@@ -27,10 +27,9 @@ static void product_i32(void *acc, const void *elem, void *ctx) {
     *(int32_t *) acc *= *(const int32_t *) elem;
 }
 
-// acc = acc * 10 + elem. Folding the digits left and right builds two
-// different numbers, which is what makes the direction observable —
-// subtraction would NOT do: taking every elem away lands on the same
-// value whatever the order
+// acc = acc * 10 + elem: folding the digits left and right builds two
+// different numbers, so the direction is observable. Subtraction would
+// not do: taking every elem away gives the same value in any order
 static void horner_i32(void *acc, const void *elem, void *ctx) {
     TDA_UNUSED(ctx);
 
@@ -108,8 +107,8 @@ static void test_fold_accumulator_type_is_the_callers() {
     TEST_ASSERT_EQUAL_INT64(6000000000LL, acc);
 }
 
-// an empty span leaves the accumulator alone, so the caller's initial
-// value is the identity of whatever operation is being folded
+// an empty span leaves the accumulator alone, so the initial value acts
+// as the identity of the folded operation
 static void test_fold_of_an_empty_span_keeps_the_seed() {
     int64_t sum = 42;
     int32_t product = 7;
@@ -302,7 +301,7 @@ static void test_adjacent_difference_reports_the_steps() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, dst, 5);
 }
 
-// it reads the SOURCE either side, so its own output never feeds back
+// it reads the source on both sides, so its own output never feeds back
 static void test_adjacent_difference_reads_only_the_source() {
     constexpr int32_t src[4] = {5, 5, 5, 5};
     int32_t dst[4] = {9, 9, 9, 9};

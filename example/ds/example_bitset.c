@@ -7,7 +7,7 @@
 
 int main() {
     /// [build]
-    // the universe is named once and never grows: this set holds a subset of 0 .. 11
+    // the universe is fixed at construction: this set holds a subset of 0 .. 11
     tda_Al *al = tda_al_default();
 
     tda_BitSet *a = nullptr;
@@ -25,8 +25,8 @@ int main() {
     /// [build]
 
     /// [bits]
-    // one index at a time. There is no elem to hand in or out — an index is its own key,
-    // and one outside the universe asserts rather than returning a status
+    // one index at a time; an index is its own key, and one outside the universe asserts
+    // instead of returning a status
     printf("%d %d\n", tda_bitset_test(a, 3), tda_bitset_test(a, 4)); // 1 0
 
     tda_bitset_flip(a, 3); // in, so now out
@@ -37,15 +37,14 @@ int main() {
     /// [bits]
 
     /// [scan]
-    // find_next takes where to start, so a walk of the members needs no bound of its own:
-    // a start past the universe is a miss and not an assert. Its two-variable loop is what
-    // TDA_BITSET_FOR_EACH hides
+    // find_next takes a start, and a start past the universe is a miss, not an assert, so
+    // a walk needs no bound of its own. TDA_BITSET_FOR_EACH hides this loop
     TDA_BITSET_FOR_EACH (idx, a) {
         printf("%zu ", idx); // 0 7
     }
     putchar('\n');
 
-    // and the same for what is not in it, which has no walk of its own
+    // the same for the non-members, which have no walk of their own
     size_t gap;
     if (tda_bitset_find_next_clear(a, 0, &gap)) {
         printf("first gap at %zu\n", gap); // first gap at 1
@@ -53,8 +52,8 @@ int main() {
     /// [scan]
 
     /// [set ops]
-    // the pairwise ops write into the left operand and only read the right, and both must
-    // name the same universe — a bitset over another one is a different kind of set
+    // the pairwise ops write into the left operand and only read the right; both must
+    // have the same universe
     tda_BitSet *b = nullptr;
     tda_BitSet *both = nullptr;
     int rc = 1;
@@ -67,7 +66,7 @@ int main() {
 
     printf("%d %d\n", tda_bitset_intersects(a, b), tda_bitset_is_subset(b, a)); // 1 0
 
-    // union and difference need somewhere to land, so they work on a copy of the left
+    // union and difference write into the left, so they work on a copy of it
     if (TDA_STATUS_IS_ERR(tda_bitset_copy(a, &both))) {
         goto out;
     }
@@ -78,8 +77,7 @@ int main() {
     tda_bitset_difference(both, b);
     tda_bitset_print(both); // {0}
 
-    // the complement is taken over the universe, so it holds the other eleven indices and
-    // nothing above them
+    // the complement is over the universe: the other eleven indices and nothing above
     tda_bitset_flip_all(both);
     printf("%zu\n", tda_bitset_count(both)); // 11
 

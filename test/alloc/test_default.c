@@ -2,7 +2,6 @@
 
 #include <unity.h>
 
-#include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -15,7 +14,7 @@ void tearDown() {
 
 /* ========== identity ========== */
 
-// the default allocator is a static singleton — every call names the same object
+// the default allocator is a static singleton: every call returns the same object
 static void test_default_is_a_singleton() {
     tda_Al *a = tda_al_default();
     tda_Al *b = tda_al_default();
@@ -64,7 +63,7 @@ static void test_alloc_is_max_aligned() {
     }
 }
 
-// two live allocations are distinct regions — writing one must not touch the other
+// two live allocations are distinct regions: writing one must not touch the other
 static void test_allocations_are_independent() {
     tda_Al *al = tda_al_default();
 

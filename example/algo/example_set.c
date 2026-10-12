@@ -10,12 +10,12 @@
 
 int main() {
     /// [ops]
-    // both sides sorted by the same cmp, and equal elems are counted, not collapsed: 'a'
+    // both sides sorted by the same cmp; equal elems are counted, not collapsed: 'a'
     // holds two 2s and 'b' holds one
     const tda_Span a = TDA_SPAN_OF(int32_t, 1, 2, 2, 5);
     const tda_Span b = TDA_SPAN_OF(int32_t, 2, 3, 5);
 
-    // 'dst' has to fit the worst case, and the return says how much of it was filled
+    // 'dst' must fit the worst case; the return says how much was filled
     int32_t buf[7];
     const tda_SpanMut dst = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7);
 

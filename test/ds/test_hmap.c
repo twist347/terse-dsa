@@ -24,23 +24,21 @@ void tearDown() {
 
 /* ========== helpers ========== */
 
-// every key in one bucket. Without it the chains stay one node long and the code that
-// walks them is never reached, whatever the keys are
+// every key in one bucket; otherwise chains stay one node long and the code that walks
+// them is never reached
 static tda_Hash hash_all_alike(const void *x) {
     TDA_UNUSED(x);
 
     return 0;
 }
 
-// two keys per bucket at most, whatever the map's size: enough to build chains without
-// collapsing the whole map into one
+// at most two keys per bucket at any size: chains, without collapsing the map into one
 static tda_Hash hash_by_parity(const void *x) {
     return (tda_Hash) (*(const int32_t *) x & 1);
 }
 
-// a hasher and an equality for Pair, built the way core/hash prescribes: a struct's hash
-// is folded from its fields' rather than taken over its bytes, since padding is not part
-// of the value
+// hasher and equality for Pair as core/hash prescribes: the hash is folded from the
+// fields, not taken over the bytes, since padding is not part of the value
 static tda_Hash hash_pair(const void *x) {
     const Pair *p = x;
 
@@ -54,8 +52,8 @@ static bool eq_pair(const void *lhs, const void *rhs) {
     return a->a == b->a && a->b == b->b;
 }
 
-// hashes that differ in the high bits and agree in the low ones: every key lands in one
-// bucket while no two hashes are equal
+// hashes that differ in the high bits and agree in the low ones: one bucket for every
+// key, yet no two hashes equal
 static tda_Hash hash_high_bits_only(const void *x) {
     return ((tda_Hash) *(const int32_t *) x) << 32;
 }
@@ -111,8 +109,8 @@ static void assert_missing(const tda_HMap *m, int32_t key) {
     TEST_ASSERT_NULL(TDA_HMAP_FIND(int32_t, m, key));
 }
 
-// the walk reaches exactly 'len' entries, and every one of them answers get with the
-// value it carries. The order is unspecified, so that is all a walk can promise
+// the walk reaches exactly 'len' entries, each answering get with its own value; the
+// order is unspecified, so that is all a walk can promise
 static void assert_walk_sees_everything(const tda_HMap *m) {
     size_t seen = 0;
     TDA_HMAP_FOR_EACH(node, m) {
@@ -141,7 +139,7 @@ static void test_new_starts_empty() {
     tda_hmap_drop(m);
 }
 
-// an empty map owns no buckets at all: the array is taken on the first insert
+// an empty map owns no buckets; the array is taken on the first insert
 static void test_new_takes_no_buckets_until_the_first_insert() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -234,7 +232,7 @@ static void test_insert_overwrites_an_existing_key() {
     tda_hmap_drop(m);
 }
 
-// the new value may be the one it overwrites, handed back from a lookup
+// the new value may be the one it overwrites, as returned by a lookup
 static void test_insert_over_a_key_with_its_own_value() {
     tda_HMap *m = make_map(tda_hash_i32);
     put(m, 1, 10);
@@ -297,8 +295,7 @@ static void test_node_val_mut_writes_through() {
     tda_hmap_drop(m);
 }
 
-// every key lands in one bucket, so lookup has to walk a chain instead of hitting the
-// head of it
+// every key in one bucket, so lookup walks a chain instead of hitting its head
 static void test_a_map_whose_keys_all_collide_still_finds_them() {
     tda_HMap *m = make_filled(hash_all_alike, 20);
 
@@ -324,7 +321,7 @@ static void test_colliding_keys_overwrite_only_their_own_entry() {
     tda_hmap_drop(m);
 }
 
-// a hash that agrees where the keys do not: 'eq' is what has the final word
+// a hash that agrees where the keys do not: 'eq' decides
 static void test_a_hash_collision_is_not_an_equality() {
     tda_HMap *m = make_map(hash_all_alike);
 
@@ -355,8 +352,8 @@ static void test_wide_keys_and_values_travel_whole() {
     tda_hmap_drop(m);
 }
 
-// what the eight bytes of cached hash buy: walking a chain of ten, only the node whose
-// hash matches is ever handed to 'eq', and a miss asks it nothing at all
+// the cached hash at work: in a chain of ten only the node whose hash matches reaches
+// 'eq', and a miss never calls it
 static void test_the_chain_is_walked_by_hash_before_eq() {
     tda_HMap *m = nullptr;
     TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_high_bits_only, eq_i32_counting, tda_al_default(), &m));
@@ -408,8 +405,8 @@ static void test_every_entry_survives_the_growths() {
     tda_hmap_drop(m);
 }
 
-// the property chaining was chosen for: growth reallocates the bucket array and relinks,
-// so the node a caller borrowed before it is still that entry afterwards
+// the reason for chaining: growth reallocates the bucket array and relinks, so a node
+// borrowed before it is still that entry afterwards
 static void test_a_borrowed_node_survives_every_growth() {
     tda_HMap *m = make_map(tda_hash_i32);
 
@@ -436,7 +433,7 @@ static void test_a_borrowed_node_survives_every_growth() {
     tda_hmap_drop(m);
 }
 
-// growing moves no entry, so the only allocation a rehash makes is the bucket array
+// growing moves no entry, so a rehash allocates only the bucket array
 static void test_a_growth_allocates_only_the_bucket_array() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -451,7 +448,7 @@ static void test_a_growth_allocates_only_the_bucket_array() {
     const size_t before = tda_test_probe_requests(&probe);
     put(m, 8, 8); // the one that pushes the load past one per bucket
 
-    // one array plus one node, and not a single request per entry moved
+    // one array plus one node, nothing per entry moved
     TEST_ASSERT_EQUAL_size_t(2, tda_test_probe_requests(&probe) - before);
 
     tda_hmap_drop(m);
@@ -515,7 +512,7 @@ static void test_remove_on_an_empty_map_says_so() {
     tda_hmap_drop(m);
 }
 
-// unlinking from the middle of a chain is the case the head-of-bucket path never reaches
+// unlinking from the middle of a chain, which the head-of-bucket path never reaches
 static void test_remove_from_the_middle_of_a_chain() {
     tda_HMap *m = make_filled(hash_all_alike, 5);
 
@@ -545,8 +542,8 @@ static void test_remove_every_key_of_a_chain_in_turn() {
     tda_hmap_drop(m);
 }
 
-// the mutable walk is the const one with a value to write through: every entry doubled
-// in one pass, without a lookup per key
+// the mutable walk writes through the value: every entry doubled in one pass, with no
+// lookup per key
 static void test_mut_walk_writes_through_every_entry() {
     tda_HMap *m = make_filled(tda_hash_i32, 4);
 
@@ -617,7 +614,7 @@ static void test_take_of_a_missing_key_writes_nothing() {
     tda_hmap_drop(m);
 }
 
-// either side may be left behind, and with both left behind take is remove
+// either side may be left behind; with both left behind, take is remove
 static void test_take_with_null_outs() {
     tda_HMap *m = make_filled(tda_hash_i32, 4);
 
@@ -646,7 +643,7 @@ static void test_take_on_an_empty_map_says_so() {
     tda_hmap_drop(m);
 }
 
-// every key of one chain in turn, each value coming out with its own key
+// every key of one chain in turn, each value with its own key
 static void test_take_every_key_of_a_chain_in_turn() {
     tda_HMap *m = make_filled(hash_all_alike, 6);
 
@@ -661,8 +658,8 @@ static void test_take_every_key_of_a_chain_in_turn() {
     tda_hmap_drop(m);
 }
 
-// keys equal modulo 100: what equality ignores is what tells the stored key from the
-// probe, and the stored one is what a map owning its keys has to free
+// keys equal modulo 100: equality ignores what tells the stored key from the probe, and
+// the stored one is what a map owning its keys has to free
 static tda_Hash hash_mod_100(const void *x) {
     return tda_hash_i32(&(int32_t){ *(const int32_t *) x % 100 });
 }
@@ -671,7 +668,7 @@ static bool eq_mod_100(const void *lhs, const void *rhs) {
     return *(const int32_t *) lhs % 100 == *(const int32_t *) rhs % 100;
 }
 
-// the stored key comes out, not the probe — even into the probe's own storage, which is
+// the stored key comes out, not the probe, even into the probe's own storage, which is
 // read before it is written
 static void test_take_hands_out_the_stored_key_over_the_probe() {
     tda_HMap *m = nullptr;
@@ -752,7 +749,7 @@ static void test_the_walk_reaches_every_entry_once() {
     tda_hmap_drop(m);
 }
 
-// one bucket holds everything, so the walk is one chain and never has to skip
+// one bucket holds everything, so the walk is one chain with nothing to skip
 static void test_the_walk_crosses_a_single_chain() {
     tda_HMap *m = make_filled(hash_all_alike, 12);
 
@@ -817,8 +814,7 @@ static void test_get_or_insert_puts_a_missing_key_in() {
     tda_hmap_drop(m);
 }
 
-// unlike insert, it does NOT overwrite: the value it carries is only for a key that was
-// not there
+// unlike insert, it does not overwrite: its value is only for an absent key
 static void test_get_or_insert_leaves_a_present_key_alone() {
     tda_HMap *m = make_map(tda_hash_i32);
     put(m, 1, 10);
@@ -844,8 +840,7 @@ static void test_get_or_insert_hands_back_the_node_that_is_already_there() {
     tda_hmap_drop(m);
 }
 
-// the whole reason the operation exists. Reaching the same result through get_mut and
-// then insert asks the hasher twice whenever the key turns out to be absent
+// the reason it exists: get_mut then insert hashes the key twice whenever it is absent
 static void test_get_or_insert_hashes_the_key_once() {
     tda_HMap *m = nullptr;
     TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_i32_counting, tda_eq_i32, tda_al_default(), &m));
@@ -855,14 +850,14 @@ static void test_get_or_insert_hashes_the_key_once() {
     TDA_TEST_OK(TDA_HMAP_GET_OR_INSERT(int32_t, int32_t, m, 1, 10, &node));
     TEST_ASSERT_EQUAL_size_t(1, hash_calls);
 
-    // the pair it replaces, on a key that is not there either
+    // the get_mut + insert pair it replaces, on another absent key
     hash_calls = 0;
     if (!tda_hmap_get_mut(m, &(int32_t){2})) {
         TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, m, 2, 20, nullptr));
     }
     TEST_ASSERT_EQUAL_size_t(2, hash_calls);
 
-    // and once again on a key that IS there, where both forms cost the same
+    // and on a present key, where both forms cost the same
     hash_calls = 0;
     TDA_TEST_OK(TDA_HMAP_GET_OR_INSERT(int32_t, int32_t, m, 1, 0, &node));
     TEST_ASSERT_EQUAL_size_t(1, hash_calls);
@@ -870,7 +865,7 @@ static void test_get_or_insert_hashes_the_key_once() {
     tda_hmap_drop(m);
 }
 
-// the idiom it was added for: a tally that never looks a key up twice
+// the idiom it was added for: a tally that looks each key up once
 static void test_get_or_insert_carries_the_counter_idiom() {
     tda_HMap *m = make_map(tda_hash_i32);
 
@@ -911,8 +906,8 @@ static void test_shrink_to_fit_gives_the_buckets_back() {
     tda_hmap_drop(m);
 }
 
-// the floor is the count a fresh map takes: a nearly empty map lands exactly where a new
-// one starts, not at some denser shape that happens to still work
+// the floor is a fresh map's bucket count: a nearly empty map lands exactly where a new
+// one starts, not at some denser shape that still works
 static void test_shrink_to_fit_stops_at_the_starting_size() {
     tda_HMap *fresh = make_map(tda_hash_i32);
     put(fresh, 0, 0);
@@ -932,7 +927,7 @@ static void test_shrink_to_fit_stops_at_the_starting_size() {
     tda_hmap_drop(m);
 }
 
-// nothing left to hold, so the map owns nothing at all — as it did when it was made
+// nothing left to hold, so the map owns nothing, as when it was made
 static void test_shrink_to_fit_of_an_empty_map_owns_nothing() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -951,7 +946,7 @@ static void test_shrink_to_fit_of_an_empty_map_owns_nothing() {
     TEST_ASSERT_EQUAL_size_t(1, probe.live); // the header alone
     TEST_ASSERT_NULL(tda_hmap_first_node(m));
 
-    // and it is still a map: the next insert takes buckets again
+    // still a map: the next insert takes buckets again
     put(m, 1, 10);
     assert_has(m, 1, 10);
 
@@ -959,8 +954,7 @@ static void test_shrink_to_fit_of_an_empty_map_owns_nothing() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// shrinking relinks the entries where they lie, exactly as growing does, so a borrowed
-// node comes through it
+// shrinking relinks the entries in place, as growing does, so a borrowed node survives
 static void test_shrink_to_fit_keeps_borrowed_nodes() {
     tda_HMap *m = make_filled(tda_hash_i32, 200);
 
@@ -1005,7 +999,7 @@ static void test_shrink_to_fit_allocates_only_the_bucket_array() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-// a map that is already as small as it can be asks the allocator for nothing
+// a map already at its smallest asks the allocator for nothing
 static void test_shrink_to_fit_when_already_tight_is_a_noop() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1111,7 +1105,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// the buckets and the nodes are asked of the allocator the copy is going to
+// the buckets and nodes come from the copy's allocator
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 4096);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1145,26 +1139,26 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     const size_t requests = tda_test_probe_requests(&probe);
     TDA_TEST_OK(tda_hmap_move_assign(dst, src));
 
-    // nothing was asked of the allocator: the buckets and the nodes changed hands
+    // nothing was allocated: the buckets and nodes changed hands
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
     TEST_ASSERT_EQUAL_size_t(2, tda_hmap_len(dst));
     assert_has(dst, 1, 10);
     assert_has(dst, 2, 20);
 
-    // the hasher travels with the entries, or the table would be read under another order
+    // the hasher travels with the entries, or the table would be read under another hash
     TEST_ASSERT_EQUAL_PTR(hash_all_alike, tda_hmap_hasher(dst));
 
-    // the source gives back everything, its buckets included, as every container does
+    // the source gives back everything, buckets included, like every container
     TEST_ASSERT_EQUAL_size_t(0, tda_hmap_len(src));
     TEST_ASSERT_EQUAL_size_t(0, tda_hmap_bucket_count(src));
 
-    // but keeps its own order: the swap that moved the table must not leave it the
-    // target's old hasher, as a move across two allocators does not either
+    // but keeps its own hasher: the swap that moved the table must not leave it the
+    // target's old one, just as a move across two allocators does not
     TEST_ASSERT_EQUAL_PTR(hash_all_alike, tda_hmap_hasher(src));
     TEST_ASSERT_EQUAL_PTR(tda_eq_i32, tda_hmap_key_eq(src));
 
-    // and is still a map: the first insert makes its buckets anew
+    // and is still a map: the first insert makes new buckets
     put(src, 5, 50);
     assert_has(src, 5, 50);
 
@@ -1309,8 +1303,8 @@ static void test_copy_assign_keeps_the_target_allocator() {
     tda_al_arena_drop(arena);
 }
 
-// what the target held before must go back to the allocator rather than be stranded when
-// the clone takes its place. The default allocator would say nothing about it
+// the target's old contents must go back to the allocator, not be stranded when the
+// clone replaces them; the default allocator would not notice
 static void test_copy_assign_hands_back_the_old_contents() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1356,7 +1350,7 @@ static void test_swap_exchanges_the_entries_and_the_hashers() {
     tda_hmap_drop(b);
 }
 
-// the nodes change map without moving, which is why swap wants one allocator
+// the nodes change map without moving, which is why swap needs one allocator
 static void test_swap_keeps_the_nodes_alive() {
     tda_HMap *a = make_filled(tda_hash_i32, 4);
     tda_HMap *b = make_map(tda_hash_i32);
@@ -1385,8 +1379,8 @@ static void test_swap_self_is_noop() {
 
 /* ========== retain ========== */
 
-// keeps an entry when the key's bit is set in the mask 'ctx' points to, and checks on the
-// way that the value handed over is the one stored with that key
+// keeps an entry when the key's bit is set in the mask at 'ctx', checking that the
+// value passed is the one stored under that key
 static bool in_mask_with_its_val(const void *key, const void *val, void *ctx) {
     const int32_t k = *(const int32_t *) key;
     TEST_ASSERT_EQUAL_INT32(k * 10, *(const int32_t *) val);
@@ -1394,8 +1388,8 @@ static bool in_mask_with_its_val(const void *key, const void *val, void *ctx) {
     return *(const uint32_t *) ctx >> k & 1;
 }
 
-// every subset of six entries, on spread buckets and on one chain, where a removal has to
-// relink a neighbour rather than empty a bucket
+// every subset of six entries, on spread buckets and on one chain, where a removal
+// relinks a neighbour instead of emptying a bucket
 static void test_retain_keeps_exactly_the_passing_entries() {
     const tda_Hasher hashers[2] = {tda_hash_i32, hash_all_alike};
 
@@ -1479,7 +1473,7 @@ static void test_from_spans_pairs_keys_with_vals_by_index() {
     tda_hmap_drop(m);
 }
 
-// as insert does: a key given twice keeps the value it was given last
+// as with insert, a key given twice keeps its last value
 static void test_from_spans_keeps_the_last_value_of_a_repeated_key() {
     tda_HMap *m = nullptr;
     TDA_TEST_OK(
@@ -1576,7 +1570,7 @@ static void test_new_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// the header is taken and the bucket array is refused: the header must not be stranded
+// the header is taken and the bucket array refused: the header must not be stranded
 static void test_new_cap_frees_the_header_when_the_buckets_are_refused() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1609,8 +1603,7 @@ static void test_insert_reports_an_exhausted_arena_and_changes_nothing() {
     tda_al_arena_drop(arena);
 }
 
-// overwriting an existing key needs no memory at all, so an exhausted arena is no
-// obstacle to it
+// overwriting an existing key needs no memory, so an exhausted arena does not stop it
 static void test_an_overwrite_needs_no_allocator() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 512);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1680,7 +1673,7 @@ static void test_copy_assign_leaves_the_target_untouched_on_failure() {
     tda_al_arena_drop(arena);
 }
 
-// the node is taken and then the map is left as it was: nothing leaks on the way out
+// a refused node leaves the map as it was and leaks nothing
 static void test_a_refused_node_leaves_nothing_behind() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1719,7 +1712,7 @@ static void test_get_or_insert_reports_an_exhausted_arena() {
     tda_al_arena_drop(arena);
 }
 
-// finding a key that is there needs no memory, so an exhausted arena is no obstacle
+// finding a present key needs no memory, so an exhausted arena does not stop it
 static void test_get_or_insert_of_a_present_key_needs_no_allocator() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 512);
     TEST_ASSERT_NOT_NULL(arena);
@@ -1738,8 +1731,8 @@ static void test_get_or_insert_of_a_present_key_needs_no_allocator() {
 
 /* ========== compare ========== */
 
-// an equality over the value side that sees less than the bytes do, to show that what
-// counts as an equal value is the caller's call and not the map's
+// a value equality coarser than the bytes: what counts as an equal value is the
+// caller's choice, not the map's
 static bool eq_i32_abs(const void *lhs, const void *rhs) {
     const int32_t a = *(const int32_t *) lhs;
     const int32_t b = *(const int32_t *) rhs;
@@ -1747,8 +1740,7 @@ static bool eq_i32_abs(const void *lhs, const void *rhs) {
     return (a < 0 ? -a : a) == (b < 0 ? -b : b);
 }
 
-// neither the order the entries went in nor the number of buckets they landed in is part
-// of what a map holds
+// neither insertion order nor bucket count is part of what a map holds
 static void test_eq_ignores_insertion_order_and_bucket_count() {
     tda_HMap *a = make_filled(tda_hash_i32, 40);
 
@@ -1767,8 +1759,8 @@ static void test_eq_ignores_insertion_order_and_bucket_count() {
     tda_hmap_drop(b);
 }
 
-// the keys of 'a' are looked up in 'b', so it is the hasher of 'b' that has to answer:
-// a hash taken from 'a' would point at the wrong bucket of a differently hashed table
+// the keys of 'a' are looked up in 'b', so the hasher of 'b' must answer: a hash from
+// 'a' would pick the wrong bucket in a differently hashed table
 static void test_eq_looks_the_keys_up_with_the_hasher_of_the_other() {
     tda_HMap *a = make_filled(tda_hash_i32, 12);
     tda_HMap *b = make_filled(hash_all_alike, 12);
@@ -1789,7 +1781,7 @@ static void test_eq_parts_a_differing_value() {
     TEST_ASSERT_FALSE(tda_hmap_eq(a, b));
     TEST_ASSERT_FALSE(tda_hmap_eq(b, a));
 
-    // ... unless the equality the caller names forgives the difference
+    // ... unless the caller's equality forgives the difference
     TEST_ASSERT_TRUE(tda_hmap_eq_by(a, b, eq_i32_abs));
     TEST_ASSERT_TRUE(tda_hmap_eq_by(b, a, eq_i32_abs));
 
@@ -1852,8 +1844,8 @@ static void test_eq_walks_whole_chains() {
     tda_hmap_drop(b);
 }
 
-// a value with a field that does not count is what the second door is for: these Pairs
-// agree in the first field and differ in the second
+// a value field that does not count is what eq_by is for: these Pairs agree in the
+// first field and differ in the second
 static void test_eq_by_asks_the_equality_for_the_value_side() {
     tda_HMap *a = nullptr;
     tda_HMap *b = nullptr;
@@ -1872,7 +1864,7 @@ static void test_eq_by_asks_the_equality_for_the_value_side() {
     tda_hmap_drop(b);
 }
 
-// the two doors are one walk: wherever the equality IS the bytes they answer alike
+// eq and eq_by share one walk: where the equality is the bytes, they agree
 static void test_eq_and_eq_by_agree_on_plain_values() {
     tda_HMap *a = make_filled(tda_hash_i32, 16);
     tda_HMap *b = make_filled(tda_hash_i32, 16);
@@ -1903,8 +1895,7 @@ static void test_eq_matches_a_copy() {
 
 /* ========== print ========== */
 
-// a printer writes to a stream, so a case reads one back through tmpfile, as
-// test/core/test_print.c does
+// printers write to a stream; cases read it back via tmpfile, like test/core/test_print.c
 static void assert_prints(const char *expected, const tda_HMap *m) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
@@ -1929,8 +1920,8 @@ static void test_fprint_writes_the_entry() {
     tda_hmap_drop(m);
 }
 
-// with more than one entry the order is the buckets', which the header calls unspecified —
-// so a case may say what is printed only where there is nothing to order
+// with more than one entry the order is the buckets', which is unspecified, so a case
+// states the output only where there is nothing to order
 static void test_fprint_of_an_empty_map() {
     tda_HMap *m = make_map(tda_hash_i32);
 
@@ -1939,8 +1930,8 @@ static void test_fprint_of_an_empty_map() {
     tda_hmap_drop(m);
 }
 
-// the stdout twin takes no stream and cannot be captured portably, so a case can only
-// say that it runs and reaches the same printer
+// the stdout twin cannot be captured portably, so a case only checks that it runs and
+// reaches the same printer
 static void test_print_writes_to_stdout() {
     tda_HMap *m = make_filled(tda_hash_i32, 3);
 
