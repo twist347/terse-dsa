@@ -3,6 +3,7 @@
 #include "tda/alloc/default.h"
 
 #include "support/probe.h"
+#include "support/tagged.h"
 
 #include <unity.h>
 
@@ -14,16 +15,6 @@ void setUp() {
 }
 
 void tearDown() {
-}
-
-// ordered by key only, so tag can witness which side an equal element came from
-typedef struct {
-    int32_t key;
-    int32_t tag;
-} Tagged;
-
-static int cmp_tagged(const void *a, const void *b) {
-    return tda_cmp_i32(&((const Tagged *) a)->key, &((const Tagged *) b)->key);
 }
 
 /* ========== merge ========== */
@@ -156,7 +147,7 @@ static void test_merge_is_stable_on_ties() {
         TDA_SPAN_FROM_DATA_MUT(Tagged, dst, 4),
         TDA_SPAN_FROM_DATA(Tagged, a, 2),
         TDA_SPAN_FROM_DATA(Tagged, b, 2),
-        cmp_tagged
+        tda_test_tagged_cmp_key
     );
 
     TEST_ASSERT_EQUAL_INT32(1, dst[0].key);
@@ -276,7 +267,7 @@ static void test_inplace_merge_is_stable_on_ties() {
         {1, 200}, {2, 201}, {3, 202},
     };
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 6), 3, cmp_tagged, tda_al_default());
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 6), 3, tda_test_tagged_cmp_key, tda_al_default());
 
     constexpr int32_t want_keys[6] = {1, 1, 2, 2, 2, 3};
     constexpr int32_t want_tags[6] = {100, 200, 101, 102, 201, 202};
@@ -317,7 +308,7 @@ static void check_sweep(size_t left_len, size_t right_len, tda_Al *al) {
     }
     qsort(want_keys, len, sizeof(int32_t), tda_cmp_i32);
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, len), left_len, cmp_tagged, al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, len), left_len, tda_test_tagged_cmp_key, al);
 
     for (size_t i = 0; i < len; ++i) {
         TEST_ASSERT_EQUAL_INT32_MESSAGE(want_keys[i], buf[i].key, "not the sorted order");

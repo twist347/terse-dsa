@@ -1,6 +1,7 @@
 #include "tda/ds/hset.h"
 
 #include "tda/core/check.h"
+#include "tda/core/util.h"
 
 #include "internal/hmap_impl.h"
 
@@ -29,6 +30,24 @@ struct tda_HSet {
 /// takes ownership of 'map' either way: on failure it is dropped, not handed back
 [[nodiscard]]
 static tda_Status wrap(tda_HMap *map, tda_HSet **out);
+
+/// a tda_Pred on keys, carried through tda_hmap_retain
+typedef struct {
+    tda_Pred pred;
+    void *ctx;
+} KeyPred;
+
+/// tda_EntryPred over a KeyPred
+[[nodiscard]]
+static bool key_passes(const void *key, const void *val, void *ctx);
+
+/// tda_EntryPred: whether the map 'ctx' holds 'key'
+[[nodiscard]]
+static bool held_by(const void *key, const void *val, void *ctx);
+
+/// tda_EntryPred: whether the map 'ctx' lacks 'key'
+[[nodiscard]]
+static bool not_held_by(const void *key, const void *val, void *ctx);
 
 /* ========== lifetime ========== */
 
@@ -180,8 +199,7 @@ bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b) {
 
     // not tda_hmap_eq: the map under a set carries val_size 0, so it has no value side to
     // compare and node_val would point one past the key
-    for (const tda_HMapNode *node = tda_hmap_first_node(a->map); node;
-         node = tda_hmap_node_next(a->map, node)) {
+    TDA_HMAP_FOR_EACH(node, a->map) {
         if (!tda_hmap_contains(b->map, tda_hmap_node_key(node))) {
             return false;
         }
@@ -298,12 +316,7 @@ void tda_hset_retain(tda_HSet *self, tda_Pred pred, void *ctx) {
     ASSERT_HSET(self);
     assert(pred);
 
-    for (tda_HMapNode *node = tda_hmap_first_node_mut(self->map), *next; node; node = next) {
-        next = tda_hmap_node_next_mut(self->map, node);
-        if (!pred(tda_hmap_node_key(node), ctx)) {
-            tda_hmap_remove_node(self->map, node);
-        }
-    }
+    tda_hmap_retain(self->map, key_passes, &(KeyPred){pred, ctx});
 }
 
 void tda_hset_clear(tda_HSet *self) {
@@ -342,11 +355,7 @@ tda_Status tda_hset_union(tda_HSet *self, const tda_HSet *other) {
         return TDA_STATUS_OK;
     }
 
-    for (
-        const tda_HMapNode *node = tda_hmap_first_node(other->map);
-        node;
-        node = tda_hmap_node_next(other->map, node)
-    ) {
+    TDA_HMAP_FOR_EACH(node, other->map) {
         const tda_Status st = tda_hmap_insert(self->map, tda_hmap_node_key(node), nullptr, nullptr);
         if (TDA_STATUS_IS_ERR(st)) {
             return st;
@@ -365,17 +374,7 @@ void tda_hset_intersect(tda_HSet *self, const tda_HSet *other) {
         return;
     }
 
-    // the next node is taken before the current one may be freed
-    for (
-        tda_HMapNode *node = tda_hmap_first_node_mut(self->map), *next;
-        node;
-        node = next
-    ) {
-        next = tda_hmap_node_next_mut(self->map, node);
-        if (!tda_hmap_contains(other->map, tda_hmap_node_key(node))) {
-            tda_hmap_remove_node(self->map, node);
-        }
-    }
+    tda_hmap_retain(self->map, held_by, other->map);
 }
 
 void tda_hset_difference(tda_HSet *self, const tda_HSet *other) {
@@ -391,22 +390,13 @@ void tda_hset_difference(tda_HSet *self, const tda_HSet *other) {
     // either side can drive: every key of 'other' removed from 'self', or every key of
     // 'self' checked against 'other'. Both give the same set, so the shorter walk wins
     if (tda_hmap_len(other->map) < tda_hmap_len(self->map)) {
-        for (
-            const tda_HMapNode *node = tda_hmap_first_node(other->map);
-            node;
-            node = tda_hmap_node_next(other->map, node)
-        ) {
+        TDA_HMAP_FOR_EACH(node, other->map) {
             tda_hmap_remove(self->map, tda_hmap_node_key(node));
         }
         return;
     }
 
-    for (tda_HMapNode *node = tda_hmap_first_node_mut(self->map), *next; node; node = next) {
-        next = tda_hmap_node_next_mut(self->map, node);
-        if (tda_hmap_contains(other->map, tda_hmap_node_key(node))) {
-            tda_hmap_remove_node(self->map, node);
-        }
-    }
+    tda_hmap_retain(self->map, not_held_by, other->map);
 }
 
 tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other) {
@@ -421,11 +411,7 @@ tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other) 
 
     // each key of 'other' flips: out of 'self' when it was there, in when it was not.
     // The keys of 'other' are distinct, so none is flipped twice
-    for (
-        const tda_HMapNode *node = tda_hmap_first_node(other->map);
-        node;
-        node = tda_hmap_node_next(other->map, node)
-    ) {
+    TDA_HMAP_FOR_EACH(node, other->map) {
         const void *key = tda_hmap_node_key(node);
         if (tda_hmap_remove(self->map, key)) {
             continue;
@@ -454,11 +440,7 @@ bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other) {
         return false;
     }
 
-    for (
-        const tda_HMapNode *node = tda_hmap_first_node(self->map);
-        node;
-        node = tda_hmap_node_next(self->map, node)
-    ) {
+    TDA_HMAP_FOR_EACH(node, self->map) {
         if (!tda_hmap_contains(other->map, tda_hmap_node_key(node))) {
             return false;
         }
@@ -480,11 +462,7 @@ bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other) {
         asked = self;
     }
 
-    for (
-        const tda_HMapNode *node = tda_hmap_first_node(walked->map);
-        node;
-        node = tda_hmap_node_next(walked->map, node)
-    ) {
+    TDA_HMAP_FOR_EACH(node, walked->map) {
         if (tda_hmap_contains(asked->map, tda_hmap_node_key(node))) {
             return true;
         }
@@ -502,7 +480,7 @@ void tda_hset_fprint(const tda_HSet *self, FILE *stream, tda_FPrint fprint) {
 
     fputc('{', stream);
     bool first = true;
-    for (const tda_HSetNode *node = tda_hset_first_node(self); node; node = tda_hset_node_next(self, node)) {
+    TDA_HSET_FOR_EACH(node, self) {
         if (!first) {
             fputs(", ", stream);
         }
@@ -533,4 +511,23 @@ static tda_Status wrap(tda_HMap *map, tda_HSet **out) {
     *out = obj;
 
     return TDA_STATUS_OK;
+}
+
+static bool key_passes(const void *key, const void *val, void *ctx) {
+    TDA_UNUSED(val);
+    const KeyPred *key_pred = ctx;
+
+    return key_pred->pred(key, key_pred->ctx);
+}
+
+static bool held_by(const void *key, const void *val, void *ctx) {
+    TDA_UNUSED(val);
+
+    return tda_hmap_contains(ctx, key);
+}
+
+static bool not_held_by(const void *key, const void *val, void *ctx) {
+    TDA_UNUSED(val);
+
+    return !tda_hmap_contains(ctx, key);
 }

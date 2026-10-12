@@ -119,29 +119,14 @@ tda_Al *tda_al_pool_from_buf(void *buf, size_t size, size_t block_size) {
         return nullptr;
     }
 
-    // the header goes first and the blocks right after it, both aligned; offsets and not
-    // pointers until they are known to fit, so no address is formed past the buffer
-    const size_t head_offset = tda_ptr_align_pad(buf, TDA_DEFAULT_ALIGNMENT);
-    size_t data_offset;
-    if (ckd_add(&data_offset, head_offset, tda_align_up(sizeof(PoolHead), TDA_DEFAULT_ALIGNMENT))
-        || data_offset >= size) {
+    void *head_ptr, *data;
+    size_t rest;
+    if (!tda_buf_split_head(buf, size, sizeof(PoolHead), &head_ptr, &data, &rest) || rest < block_size) {
         return nullptr;
     }
 
-    const size_t block_count = (size - data_offset) / block_size;
-    if (block_count == 0) {
-        return nullptr;
-    }
-
-    PoolHead *head = (void *) tda_byte_offset_mut(buf, 1, head_offset);
-    pool_init(
-        &head->al,
-        &head->ctx,
-        nullptr,
-        tda_byte_offset_mut(buf, 1, data_offset),
-        block_size,
-        block_count
-    );
+    PoolHead *head = head_ptr;
+    pool_init(&head->al, &head->ctx, nullptr, data, block_size, rest / block_size);
 
     return &head->al;
 }

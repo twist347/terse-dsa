@@ -1,12 +1,13 @@
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
 
+#include "support/probe.h"
+
 #include <unity.h>
 
 #include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 
 // the arena rounds every request up to this, so sizes and offsets are predictable
@@ -18,53 +19,18 @@ static size_t aligned(size_t size) {
 
 /* ========== probe allocator ==========
  *
- * Counts live blocks and can fail on demand, so the arena's own construction
- * and teardown paths can be checked for leaks.
+ * The shared probe, bare: counts live blocks and can fail on demand, so the arena's
+ * construction and teardown paths can be checked for leaks.
  */
 
-typedef struct {
-    size_t live;
-    size_t alloc_calls;
-    size_t fail_after;
-} Probe;
-
-static Probe probe;
-
-static void *probe_alloc(void *ctx, size_t size) {
-    Probe *p = ctx;
-    ++p->alloc_calls;
-
-    if (p->alloc_calls > p->fail_after) {
-        return nullptr;
-    }
-
-    void *ptr = malloc(size);
-    if (ptr) {
-        ++p->live;
-    }
-    return ptr;
-}
-
-static void probe_dealloc(void *ctx, void *ptr, size_t size) {
-    Probe *p = ctx;
-    (void) size;
-
-    --p->live;
-    free(ptr);
-}
+static tda_TestProbe probe;
 
 static tda_Al probe_al() {
-    return (tda_Al){
-        .ctx = &probe,
-        .alloc = probe_alloc,
-        .calloc = nullptr,
-        .realloc = nullptr,
-        .dealloc = probe_dealloc,
-    };
+    return tda_test_probe_bare(&probe);
 }
 
 void setUp() {
-    probe = (Probe){.fail_after = SIZE_MAX};
+    tda_test_probe_reset(&probe);
 }
 
 void tearDown() {
@@ -99,7 +65,8 @@ static void test_drop_returns_everything_to_the_parent() {
 // each construction step can fail; none of them may leak the earlier ones
 static void test_new_cleans_up_after_a_failing_parent() {
     for (size_t fail_at = 0; fail_at < 3; ++fail_at) {
-        probe = (Probe){.fail_after = fail_at};
+        tda_test_probe_reset(&probe);
+        tda_test_probe_fail_after_next(&probe, fail_at);
         tda_Al parent = probe_al();
 
         TEST_ASSERT_NULL(tda_al_arena_new(&parent, 256));
@@ -664,6 +631,23 @@ static void test_from_buf_runs_out_inside_the_buffer() {
     tda_al_arena_drop(arena);
 }
 
+// the block runs up to the end of the buffer: what is left past it is too short for a
+// slot. Every size over one slot's span puts the end exactly on a slot once
+static void test_from_buf_wastes_less_than_a_slot_at_the_end() {
+    for (size_t size = sizeof(mem) - ALIGNMENT; size < sizeof(mem); ++size) {
+        tda_Al *arena = tda_al_arena_from_buf(mem, size);
+        TEST_ASSERT_NOT_NULL(arena);
+
+        uintptr_t end = 0;
+        for (void *p; (p = tda_alloc(arena, ALIGNMENT));) {
+            end = (uintptr_t) p + ALIGNMENT;
+        }
+        TEST_ASSERT_TRUE((uintptr_t) mem + size - end < ALIGNMENT);
+
+        tda_al_arena_drop(arena);
+    }
+}
+
 // drop gives nothing back to anyone, so the same buffer builds the next arena
 static void test_from_buf_can_be_built_again_after_drop() {
     tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem));
@@ -746,6 +730,7 @@ int main() {
     RUN_TEST(test_from_buf_rejects_a_buffer_too_small_for_the_header);
     RUN_TEST(test_from_buf_on_the_smallest_buffer_hands_out_a_slot);
     RUN_TEST(test_from_buf_runs_out_inside_the_buffer);
+    RUN_TEST(test_from_buf_wastes_less_than_a_slot_at_the_end);
     RUN_TEST(test_from_buf_can_be_built_again_after_drop);
 
     RUN_TEST(test_arena_can_feed_another_arena);

@@ -2,6 +2,7 @@
 #include "tda/algo/sort.h"
 #include "tda/core/util.h"
 
+#include "support/i32.h"
 #include "support/pair.h"
 
 #include <unity.h>
@@ -12,27 +13,6 @@ void setUp() {
 }
 
 void tearDown() {
-}
-
-static bool is_even(const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
-    return *(const int32_t *) elem % 2 == 0;
-}
-
-static bool greater_than(const void *elem, void *ctx) {
-    return *(const int32_t *) elem > *(const int32_t *) ctx;
-}
-
-// equality that deliberately disagrees with memcmp, to prove the callback is used
-static bool eq_abs_i32(const void *a, const void *b) {
-    const int32_t x = *(const int32_t *) a;
-    const int32_t y = *(const int32_t *) b;
-
-    const int32_t ax = x < 0 ? -x : x;
-    const int32_t ay = y < 0 ? -y : y;
-
-    return tda_eq_i32(&ax, &ay);
 }
 
 // "within one" is deliberately NOT transitive: 1~2 and 2~3, but 1 !~ 3.
@@ -94,7 +74,7 @@ static void test_unique_of_short_spans() {
 static void test_unique_honours_the_callback() {
     int32_t buf[4] = {1, -1, 2, 3};
 
-    const size_t n = tda_span_unique(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), eq_abs_i32);
+    const size_t n = tda_span_unique(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), tda_test_i32_eq_abs);
 
     TEST_ASSERT_EQUAL_size_t(3, n); // 1 and -1 are equal by absolute value
     constexpr int32_t want[3] = {1, 2, 3};
@@ -176,7 +156,7 @@ static void test_remove_of_an_empty_span_is_zero() {
 static void test_remove_if_drops_matching_elems() {
     int32_t buf[6] = {1, 2, 3, 4, 5, 6};
 
-    const size_t n = tda_span_remove_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), is_even, nullptr);
+    const size_t n = tda_span_remove_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_test_i32_is_even, nullptr);
 
     TEST_ASSERT_EQUAL_size_t(3, n);
     constexpr int32_t want[3] = {1, 3, 5};
@@ -187,7 +167,7 @@ static void test_remove_if_passes_the_ctx_through() {
     int32_t buf[5] = {1, 5, 2, 4, 3};
     int32_t bound = 3;
 
-    const size_t n = tda_span_remove_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), greater_than, &bound);
+    const size_t n = tda_span_remove_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_test_i32_greater_than, &bound);
 
     TEST_ASSERT_EQUAL_size_t(3, n);
     constexpr int32_t want[3] = {1, 2, 3};
@@ -197,7 +177,7 @@ static void test_remove_if_passes_the_ctx_through() {
 static void test_remove_if_keeps_the_order_of_survivors() {
     int32_t buf[7] = {5, 2, 7, 4, 9, 6, 1};
 
-    const size_t n = tda_span_remove_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), is_even, nullptr);
+    const size_t n = tda_span_remove_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), tda_test_i32_is_even, nullptr);
 
     TEST_ASSERT_EQUAL_size_t(4, n);
     constexpr int32_t want[4] = {5, 7, 9, 1};
@@ -244,7 +224,7 @@ static void test_replace_if_overwrites_matching_elems() {
     int32_t buf[6] = {1, 2, 3, 4, 5, 6};
     constexpr int32_t val = 0;
 
-    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), is_even, nullptr, &val);
+    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_test_i32_is_even, nullptr, &val);
 
     constexpr int32_t want[6] = {1, 0, 3, 0, 5, 0};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 6);
@@ -255,7 +235,7 @@ static void test_replace_if_passes_the_ctx_through() {
     int32_t bound = 3;
     constexpr int32_t val = 0;
 
-    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), greater_than, &bound, &val);
+    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_test_i32_greater_than, &bound, &val);
 
     constexpr int32_t want[5] = {1, 0, 2, 0, 3};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);

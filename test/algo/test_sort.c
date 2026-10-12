@@ -2,6 +2,8 @@
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
 
+#include "support/tagged.h"
+
 #include <unity.h>
 
 #include <stdint.h>
@@ -12,16 +14,6 @@ void setUp() {
 }
 
 void tearDown() {
-}
-
-// ordered by key only, so tag can witness whether equal elements kept their order
-typedef struct {
-    int32_t key;
-    int32_t tag;
-} Tagged;
-
-static int cmp_tagged(const void *a, const void *b) {
-    return tda_cmp_i32(&((const Tagged *) a)->key, &((const Tagged *) b)->key);
 }
 
 // sorts a copy with the libc qsort — an oracle that shares no code with what is tested
@@ -114,7 +106,7 @@ static void test_insertion_sort_is_stable() {
     };
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 5);
 
-    tda_span_insertion_sort(s, cmp_tagged);
+    tda_span_insertion_sort(s, tda_test_tagged_cmp_key);
 
     TEST_ASSERT_EQUAL_INT32(1, buf[0].key);
     TEST_ASSERT_EQUAL_INT32(0, buf[0].tag);
@@ -275,7 +267,7 @@ static void test_sort_orders_a_long_span() {
 static void test_sort_moves_whole_elems() {
     Tagged buf[3] = {{3, 30}, {1, 10}, {2, 20}};
 
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 3), cmp_tagged);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 3), tda_test_tagged_cmp_key);
 
     TEST_ASSERT_EQUAL_INT32(1, buf[0].key);
     TEST_ASSERT_EQUAL_INT32(10, buf[0].tag);
@@ -307,7 +299,7 @@ static void test_sort_stable_keeps_equal_elems_in_order() {
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 6), cmp_tagged, tda_al_default())
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 6), tda_test_tagged_cmp_key, tda_al_default())
     );
 
     for (size_t i = 0; i < 3; ++i) {

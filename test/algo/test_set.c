@@ -17,12 +17,6 @@ void tearDown() {
 
 /* ========== helpers ========== */
 
-// order over Pair by its first field, so two elems can be equal by 'cmp' and still be
-// told apart by the payload — that is what makes "taken from 'a'" observable
-static int cmp_pair_a(const void *lhs, const void *rhs) {
-    return tda_cmp_i64(&((const Pair *) lhs)->a, &((const Pair *) rhs)->a);
-}
-
 // a value that cannot come out of any operation, so anything left over in dst is visible
 static constexpr int32_t UNTOUCHED = 0x7f7f7f7f;
 
@@ -135,7 +129,7 @@ static void test_intersection_takes_its_elems_from_the_first_span() {
         tda_span_from_data_mut(dst, 2, sizeof(Pair)),
         tda_span_from_data(a, 2, sizeof(Pair)),
         tda_span_from_data(b, 2, sizeof(Pair)),
-        cmp_pair_a
+        tda_test_pair_cmp_a
     );
 
     TEST_ASSERT_EQUAL_size_t(2, got);

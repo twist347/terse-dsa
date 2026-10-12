@@ -7,6 +7,7 @@
 #include "tda/core/util.h"
 
 #include "support/arena.h"
+#include "support/i32.h"
 #include "support/pair.h"
 #include "support/probe.h"
 #include "support/status.h"
@@ -1123,10 +1124,6 @@ static void test_remove_range_shifts_the_shorter_side() {
     tda_deque_drop(front_half);
 }
 
-static bool is_even(const void *elem, [[maybe_unused]] void *ctx) {
-    return *(const int32_t *) elem % 2 == 0;
-}
-
 // writes each elem it is asked about to the back of the deque at 'ctx', and passes them all
 static bool record(const void *elem, void *ctx) {
     TDA_TEST_OK(tda_deque_push_back(ctx, elem));
@@ -1140,7 +1137,7 @@ static void test_retain_keeps_what_passes_in_order() {
     for (size_t head = 0; head < cap; ++head) {
         tda_Deque *d = make_at(cap, head, cap); // 100 .. 107
 
-        tda_deque_retain(d, is_even, nullptr);
+        tda_deque_retain(d, tda_test_i32_is_even, nullptr);
 
         assert_elems(d, (int32_t[]){100, 102, 104, 106}, 4);
         TEST_ASSERT_EQUAL_size_t(cap, tda_deque_cap(d));
@@ -1167,7 +1164,7 @@ static void test_retain_of_none_empties_the_deque() {
     tda_Deque *d = nullptr;
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, tda_al_default(), &d, 1, 3, 5));
 
-    tda_deque_retain(d, is_even, nullptr);
+    tda_deque_retain(d, tda_test_i32_is_even, nullptr);
 
     TEST_ASSERT_EQUAL_size_t(0, tda_deque_len(d));
 

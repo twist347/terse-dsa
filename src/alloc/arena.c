@@ -96,21 +96,15 @@ tda_Al *tda_al_arena_from_buf(void *buf, size_t size) {
     assert(buf);
     assert(size > 0);
 
-    // the header goes first and the block right after it, both aligned; offsets and not
-    // pointers until they are known to fit, so no address is formed past the buffer
-    const size_t head_offset = tda_ptr_align_pad(buf, TDA_DEFAULT_ALIGNMENT);
-    size_t data_offset;
-    if (ckd_add(&data_offset, head_offset, tda_align_up(sizeof(ArenaHead), TDA_DEFAULT_ALIGNMENT))
-        || data_offset > size
-        || size - data_offset < TDA_DEFAULT_ALIGNMENT) {
+    void *head_ptr, *data;
+    size_t rest;
+    if (!tda_buf_split_head(buf, size, sizeof(ArenaHead), &head_ptr, &data, &rest) || rest < TDA_DEFAULT_ALIGNMENT) {
         return nullptr;
     }
 
     // cut down to whole slots, as tda_al_arena_new rounds up: a shorter tail is no use
-    const size_t block_size = tda_align_down(size - data_offset, TDA_DEFAULT_ALIGNMENT);
-
-    ArenaHead *head = (void *) tda_byte_offset_mut(buf, 1, head_offset);
-    arena_init(&head->al, &head->ctx, nullptr, tda_byte_offset_mut(buf, 1, data_offset), block_size);
+    ArenaHead *head = head_ptr;
+    arena_init(&head->al, &head->ctx, nullptr, data, tda_align_down(rest, TDA_DEFAULT_ALIGNMENT));
 
     return &head->al;
 }

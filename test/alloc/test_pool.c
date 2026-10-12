@@ -1,6 +1,8 @@
 #include "tda/alloc/pool.h"
 #include "tda/alloc/default.h"
 
+#include "support/probe.h"
+
 #include <unity.h>
 
 #include <stdalign.h>
@@ -21,53 +23,18 @@ static size_t aligned(size_t size) {
 
 /* ========== probe allocator ==========
  *
- * Counts live blocks and can fail on demand, so the pool's construction and
- * teardown paths can be checked for leaks.
+ * The shared probe, bare: counts live blocks and can fail on demand, so the pool's
+ * construction and teardown paths can be checked for leaks.
  */
 
-typedef struct {
-    size_t live;
-    size_t alloc_calls;
-    size_t fail_after;
-} Probe;
-
-static Probe probe;
-
-static void *probe_alloc(void *ctx, size_t size) {
-    Probe *p = ctx;
-    ++p->alloc_calls;
-
-    if (p->alloc_calls > p->fail_after) {
-        return nullptr;
-    }
-
-    void *ptr = malloc(size);
-    if (ptr) {
-        ++p->live;
-    }
-    return ptr;
-}
-
-static void probe_dealloc(void *ctx, void *ptr, size_t size) {
-    Probe *p = ctx;
-    (void) size;
-
-    --p->live;
-    free(ptr);
-}
+static tda_TestProbe probe;
 
 static tda_Al probe_al() {
-    return (tda_Al){
-        .ctx = &probe,
-        .alloc = probe_alloc,
-        .calloc = nullptr,
-        .realloc = nullptr,
-        .dealloc = probe_dealloc,
-    };
+    return tda_test_probe_bare(&probe);
 }
 
 void setUp() {
-    probe = (Probe){.fail_after = SIZE_MAX};
+    tda_test_probe_reset(&probe);
 }
 
 void tearDown() {
@@ -124,7 +91,8 @@ static void test_drop_returns_everything_to_the_parent() {
 // each construction step can fail; none of them may leak the earlier ones
 static void test_new_cleans_up_after_a_failing_parent() {
     for (size_t fail_at = 0; fail_at < 3; ++fail_at) {
-        probe = (Probe){.fail_after = fail_at};
+        tda_test_probe_reset(&probe);
+        tda_test_probe_fail_after_next(&probe, fail_at);
         tda_Al parent = probe_al();
 
         TEST_ASSERT_NULL(tda_al_pool_new(&parent, 32, 4));
@@ -490,6 +458,27 @@ static void test_from_buf_fits_as_many_blocks_as_the_rest_holds() {
     tda_al_pool_drop(pool);
 }
 
+// the blocks run up to the end of the buffer: what is left past the last one is too short
+// for another. Every size over one block's span puts the end exactly on a block once
+static void test_from_buf_wastes_less_than_a_block_at_the_end() {
+    const size_t block = aligned(32);
+
+    for (size_t size = sizeof(mem) - block; size < sizeof(mem); ++size) {
+        tda_Al *pool = tda_al_pool_from_buf(mem, size, 32);
+        TEST_ASSERT_NOT_NULL(pool);
+
+        uintptr_t end = 0;
+        for (void *p; (p = tda_alloc(pool, 32));) {
+            if ((uintptr_t) p + block > end) {
+                end = (uintptr_t) p + block;
+            }
+        }
+        TEST_ASSERT_TRUE((uintptr_t) mem + size - end < block);
+
+        tda_al_pool_drop(pool);
+    }
+}
+
 // the caller's array may sit at any address; every block still has to be aligned
 static void test_from_buf_aligns_whatever_the_buffer() {
     for (size_t off = 0; off < ALIGNMENT; ++off) {
@@ -579,6 +568,7 @@ int main() {
     RUN_TEST(test_reset_recovers_from_a_scrambled_free_list);
 
     RUN_TEST(test_from_buf_fits_as_many_blocks_as_the_rest_holds);
+    RUN_TEST(test_from_buf_wastes_less_than_a_block_at_the_end);
     RUN_TEST(test_from_buf_aligns_whatever_the_buffer);
     RUN_TEST(test_from_buf_rejects_a_buffer_without_room_for_a_block);
     RUN_TEST(test_from_buf_can_be_built_again_after_drop);

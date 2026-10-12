@@ -1,82 +1,25 @@
 #include "tda/alloc/log.h"
 
+#include "support/probe.h"
+
 #include <unity.h>
 
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 /* ========== probe allocator ==========
  *
- * The wrapped allocator. Its counters prove that the log layer forwards every
- * operation instead of merely reporting it.
+ * The wrapped allocator, the shared probe with all four hooks. Its counters prove that
+ * the log layer forwards every operation instead of merely reporting it.
  */
 
-typedef struct {
-    size_t live;
-    size_t alloc_calls;
-    size_t calloc_calls;
-    size_t realloc_calls;
-    size_t dealloc_calls;
-    size_t fail_after;
-} Probe;
-
-static Probe probe;
+static tda_TestProbe probe;
 static FILE *log_stream;
 
-static void *probe_alloc(void *ctx, size_t size) {
-    Probe *p = ctx;
-    ++p->alloc_calls;
-
-    if (p->alloc_calls > p->fail_after) {
-        return nullptr;
-    }
-
-    void *ptr = malloc(size);
-    if (ptr) {
-        ++p->live;
-    }
-    return ptr;
-}
-
-static void *probe_calloc(void *ctx, size_t num, size_t size) {
-    Probe *p = ctx;
-    ++p->calloc_calls;
-
-    void *ptr = calloc(num, size);
-    if (ptr) {
-        ++p->live;
-    }
-    return ptr;
-}
-
-static void *probe_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size) {
-    Probe *p = ctx;
-    ++p->realloc_calls;
-    (void) old_size;
-
-    return realloc(ptr, new_size);
-}
-
-static void probe_dealloc(void *ctx, void *ptr, size_t size) {
-    Probe *p = ctx;
-    ++p->dealloc_calls;
-    (void) size;
-
-    --p->live;
-    free(ptr);
-}
-
 static tda_Al probe_al() {
-    return (tda_Al){
-        .ctx = &probe,
-        .alloc = probe_alloc,
-        .calloc = probe_calloc,
-        .realloc = probe_realloc,
-        .dealloc = probe_dealloc,
-    };
+    return tda_test_probe_full(&probe);
 }
 
 // snapshot of everything written to the log so far
@@ -91,7 +34,7 @@ static void log_text(char *buf, size_t cap) {
 }
 
 void setUp() {
-    probe = (Probe){.fail_after = SIZE_MAX};
+    tda_test_probe_reset(&probe);
     log_stream = tmpfile();
     TEST_ASSERT_NOT_NULL(log_stream);
 }
@@ -149,7 +92,8 @@ static void test_drop_returns_everything_to_the_wrapped() {
 
 static void test_new_cleans_up_after_a_failing_parent() {
     for (size_t fail_at = 0; fail_at < 2; ++fail_at) {
-        probe = (Probe){.fail_after = fail_at};
+        tda_test_probe_reset(&probe);
+        tda_test_probe_fail_after_next(&probe, fail_at);
         tda_Al parent = probe_al();
 
         TEST_ASSERT_NULL(tda_al_log_new(&parent, log_stream));
@@ -227,7 +171,7 @@ static void test_failure_is_forwarded() {
     tda_Al parent = probe_al();
     tda_Al *log = tda_al_log_new(&parent, log_stream);
 
-    probe.fail_after = probe.alloc_calls; // fail from here on
+    tda_test_probe_fail_after_next(&probe, 0); // fail from here on
     TEST_ASSERT_NULL(tda_alloc(log, 32));
 
     probe.fail_after = SIZE_MAX;

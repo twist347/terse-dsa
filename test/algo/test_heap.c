@@ -306,17 +306,13 @@ static void test_descending_comparator_gives_a_min_heap() {
 
 /* ========== wide elems ========== */
 
-static int cmp_pair_a(const void *a, const void *b) {
-    return tda_cmp_i64(&((const Pair *) a)->a, &((const Pair *) b)->a);
-}
-
 // A span of equal keys is already a heap at every edge, so a correct sift_down stops on
 // the first comparison and nothing moves. Equal keys alone cannot witness that — the
 // array would read the same either way — so the payload carries the evidence.
 static void test_make_heap_leaves_equal_elems_where_they_are() {
     Pair buf[6] = {{7, 1}, {7, 2}, {7, 3}, {7, 4}, {7, 5}, {7, 6}};
 
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(Pair, buf, 6), cmp_pair_a);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(Pair, buf, 6), tda_test_pair_cmp_a);
 
     for (size_t i = 0; i < 6; ++i) {
         TEST_ASSERT_EQUAL_INT64(7, buf[i].a);
@@ -329,12 +325,12 @@ static void test_heap_moves_wide_elems_whole() {
     Pair buf[5] = {{1, 10}, {5, 50}, {3, 30}, {2, 20}, {4, 40}};
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(Pair, buf, 5);
-    tda_span_make_heap(s, cmp_pair_a);
+    tda_span_make_heap(s, tda_test_pair_cmp_a);
 
     TEST_ASSERT_EQUAL_INT64(5, buf[0].a);
     TEST_ASSERT_EQUAL_INT64(50, buf[0].b);
 
-    tda_span_sort_heap(s, cmp_pair_a);
+    tda_span_sort_heap(s, tda_test_pair_cmp_a);
 
     for (size_t i = 0; i < 5; ++i) {
         TEST_ASSERT_EQUAL_INT64((int64_t) i + 1, buf[i].a);

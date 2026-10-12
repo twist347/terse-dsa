@@ -4,6 +4,7 @@
 #include "tda/core/print.h"
 
 #include "support/arena.h"
+#include "support/i32.h"
 #include "support/pair.h"
 #include "support/probe.h"
 #include "support/status.h"
@@ -1151,10 +1152,6 @@ static void test_remove_range_moves_wide_elems_whole() {
     tda_vec_drop(v);
 }
 
-static bool is_even(const void *elem, [[maybe_unused]] void *ctx) {
-    return *(const int32_t *) elem % 2 == 0;
-}
-
 // writes each elem it is asked about into the vec at 'ctx', and passes them all
 static bool record(const void *elem, void *ctx) {
     TDA_TEST_OK(tda_vec_push(ctx, elem));
@@ -1165,7 +1162,7 @@ static void test_retain_keeps_what_passes_in_order() {
     tda_Vec *v = make_vec(7); // 0 .. 6
     const size_t cap = tda_vec_cap(v);
 
-    tda_vec_retain(v, is_even, nullptr);
+    tda_vec_retain(v, tda_test_i32_is_even, nullptr);
 
     constexpr int32_t want[4] = {0, 2, 4, 6};
     assert_elems(v, want, 4);
@@ -1193,7 +1190,7 @@ static void test_retain_of_none_empties_the_vec() {
     tda_Vec *v = nullptr;
     TDA_TEST_OK(TDA_VEC_OF(int32_t, tda_al_default(), &v, 1, 3, 5));
 
-    tda_vec_retain(v, is_even, nullptr);
+    tda_vec_retain(v, tda_test_i32_is_even, nullptr);
 
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(v));
 

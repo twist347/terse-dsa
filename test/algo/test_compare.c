@@ -1,5 +1,6 @@
 #include "tda/algo/compare.h"
 
+#include "support/i32.h"
 #include "support/pair.h"
 
 #include <unity.h>
@@ -11,16 +12,6 @@ void setUp() {
 }
 
 void tearDown() {
-}
-
-// equality that deliberately disagrees with memcmp
-static bool eq_abs_i32(const void *a, const void *b) {
-    const int32_t x = *(const int32_t *) a;
-    const int32_t y = *(const int32_t *) b;
-    const int32_t ax = x < 0 ? -x : x;
-    const int32_t ay = y < 0 ? -y : y;
-
-    return tda_eq_i32(&ax, &ay);
 }
 
 // a comparator returning the raw difference, not -1/0/+1: tda_span_cmp
@@ -93,7 +84,9 @@ static void test_eq_by_uses_the_predicate() {
 
     // byte-wise these differ, by absolute value they match
     TEST_ASSERT_FALSE(tda_span_eq(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3)));
-    TEST_ASSERT_TRUE(tda_span_eq_by(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), eq_abs_i32));
+    TEST_ASSERT_TRUE(
+        tda_span_eq_by(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), tda_test_i32_eq_abs)
+    );
 }
 
 static void test_eq_by_different_lengths() {
@@ -227,7 +220,12 @@ static void test_mismatch_honours_the_callback() {
     size_t idx = 999;
     // -2 and 2 differ by value but agree by absolute value
     TEST_ASSERT_TRUE(
-        tda_span_mismatch(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), eq_abs_i32, &idx)
+        tda_span_mismatch(
+            TDA_SPAN_FROM_DATA(int32_t, a, 3),
+            TDA_SPAN_FROM_DATA(int32_t, b, 3),
+            tda_test_i32_eq_abs,
+            &idx
+        )
     );
     TEST_ASSERT_EQUAL_size_t(2, idx);
 }
@@ -311,7 +309,7 @@ static void test_is_permutation_honours_the_equality() {
     const tda_Span a = TDA_SPAN_OF(int32_t, 1, -2, 3);
     const tda_Span b = TDA_SPAN_OF(int32_t, -3, 2, -1);
 
-    TEST_ASSERT_TRUE(tda_span_is_permutation(a, b, eq_abs_i32));
+    TEST_ASSERT_TRUE(tda_span_is_permutation(a, b, tda_test_i32_eq_abs));
     TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32));
 }
 

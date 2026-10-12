@@ -8,6 +8,7 @@
 #include "tda/core/util.h"
 
 #include "support/arena.h"
+#include "support/i32.h"
 #include "support/pair.h"
 #include "support/probe.h"
 #include "support/status.h"
@@ -21,15 +22,6 @@ void setUp() {
 }
 
 void tearDown() {
-}
-
-// an equality that sees less than the bytes do, to show that find asks for one rather
-// than comparing the elems itself
-static bool eq_abs_i32(const void *lhs, const void *rhs) {
-    const int32_t a = *(const int32_t *) lhs;
-    const int32_t b = *(const int32_t *) rhs;
-
-    return (a < 0 ? -a : a) == (b < 0 ? -b : b);
 }
 
 static void push_int(tda_List *l, int32_t val) {
@@ -75,11 +67,6 @@ static void assert_elems(const tda_List *l, const int32_t *want, size_t n) {
         TEST_ASSERT_NULL(tda_list_front_node(l));
         TEST_ASSERT_NULL(tda_list_back_node(l));
     }
-}
-
-// order over Pair by its first field alone, so the second is free to witness stability
-static int cmp_pair_a(const void *lhs, const void *rhs) {
-    return tda_cmp_i64(&((const Pair *) lhs)->a, &((const Pair *) rhs)->a);
 }
 
 [[nodiscard]]
@@ -856,11 +843,6 @@ static void test_clear_frees_every_node() {
 
 /* ========== retain ========== */
 
-// a tda_Pred over int32_t keeping what is set in the mask 'ctx' points to
-static bool in_mask(const void *elem, void *ctx) {
-    return *(const uint32_t *) ctx >> *(const int32_t *) elem & 1;
-}
-
 // every subset of six elems, checked for the order kept and for the very nodes kept
 static void test_retain_keeps_exactly_the_passing_nodes_in_order() {
     for (uint32_t mask = 0; mask < 64; ++mask) {
@@ -868,7 +850,7 @@ static void test_retain_keeps_exactly_the_passing_nodes_in_order() {
         const tda_ListNode *before[6];
         collect_nodes(l, before, 6);
 
-        tda_list_retain(l, in_mask, &mask);
+        tda_list_retain(l, tda_test_i32_in_mask, &mask);
 
         int32_t want[6];
         const tda_ListNode *kept[6];
@@ -1107,7 +1089,7 @@ static void test_find_asks_the_equality_it_is_given() {
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 1, -2, 3));
 
     TEST_ASSERT_NULL(TDA_LIST_FIND(int32_t, l, 2, tda_eq_i32));
-    TEST_ASSERT_NOT_NULL(TDA_LIST_FIND(int32_t, l, 2, eq_abs_i32));
+    TEST_ASSERT_NOT_NULL(TDA_LIST_FIND(int32_t, l, 2, tda_test_i32_eq_abs));
 
     tda_list_drop(l);
 }
@@ -1484,7 +1466,7 @@ static void test_sort_is_stable() {
         TDA_TEST_OK(tda_list_push_back(l, &src[i]));
     }
 
-    tda_list_sort(l, cmp_pair_a);
+    tda_list_sort(l, tda_test_pair_cmp_a);
 
     constexpr Pair want[6] = {{1, 1}, {1, 2}, {1, 3}, {2, 1}, {2, 2}, {2, 3}};
     size_t i = 0;
@@ -1599,7 +1581,7 @@ static void test_merge_keeps_equal_elems_of_self_first() {
         TDA_TEST_OK(tda_list_push_back(b, &from_b[i]));
     }
 
-    TDA_TEST_OK(tda_list_merge(a, b, cmp_pair_a));
+    TDA_TEST_OK(tda_list_merge(a, b, tda_test_pair_cmp_a));
 
     constexpr Pair want[4] = {{1, 100}, {1, 200}, {2, 100}, {2, 200}};
     size_t i = 0;

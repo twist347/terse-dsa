@@ -27,12 +27,6 @@ void tearDown() {
 
 /* ========== helpers ========== */
 
-// order over Pair by its first field, written the way cmp.h prescribes: a comparator for
-// a struct delegates to the one for the field it orders by
-static int cmp_pair_a(const void *lhs, const void *rhs) {
-    return tda_cmp_i64(&((const Pair *) lhs)->a, &((const Pair *) rhs)->a);
-}
-
 static void push_int(tda_PQueue *q, int32_t val) {
     TDA_TEST_OK(tda_pqueue_push(q, &val));
 }
@@ -178,7 +172,7 @@ static void test_from_span_copies_the_view() {
 static void test_from_data_copies_whole_elems() {
     constexpr Pair src[] = {{.a = 1, .b = 10}, {.a = 3, .b = 30}, {.a = 2, .b = 20}};
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(Pair, src, 3, cmp_pair_a, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(Pair, src, 3, tda_test_pair_cmp_a, tda_al_default(), &q));
 
     TEST_ASSERT_EQUAL_size_t(sizeof(Pair), tda_pqueue_elem_size(q));
 
@@ -297,7 +291,7 @@ static void test_equal_keys_keep_every_payload() {
         {.a = 7, .b = 4}, {.a = 7, .b = 5}, {.a = 7, .b = 6},
     };
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(Pair, src, 6, cmp_pair_a, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(Pair, src, 6, tda_test_pair_cmp_a, tda_al_default(), &q));
 
     bool seen[7] = {};
     for (size_t i = 0; i < 6; ++i) {
@@ -333,7 +327,7 @@ static void test_pop_to_drains_greatest_first() {
 
 static void test_pop_to_macro_moves_whole_elems() {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(Pair, cmp_pair_a, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_NEW(Pair, tda_test_pair_cmp_a, tda_al_default(), &q));
     TDA_TEST_OK(tda_pqueue_push(q, &(Pair){1, 10}));
     TDA_TEST_OK(tda_pqueue_push(q, &(Pair){3, 30}));
     TDA_TEST_OK(tda_pqueue_push(q, &(Pair){2, 20}));

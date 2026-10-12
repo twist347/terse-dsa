@@ -7,6 +7,7 @@
 #include "tda/core/util.h"
 
 #include "support/arena.h"
+#include "support/i32.h"
 #include "support/pair.h"
 #include "support/probe.h"
 #include "support/status.h"
@@ -877,10 +878,6 @@ static void test_swap_self_is_noop() {
 
 /* ========== retain ========== */
 
-static bool in_mask(const void *key, void *ctx) {
-    return *(const uint32_t *) ctx >> *(const int32_t *) key & 1;
-}
-
 // every subset of {0..5}, on spread buckets and on one long chain, where a removal has to
 // relink a neighbour rather than empty a bucket
 static void test_retain_keeps_exactly_the_passing_keys() {
@@ -890,7 +887,7 @@ static void test_retain_keeps_exactly_the_passing_keys() {
         for (uint32_t mask = 0; mask < 64; ++mask) {
             tda_HSet *s = make_filled(hashers[h], 6);
 
-            tda_hset_retain(s, in_mask, &mask);
+            tda_hset_retain(s, tda_test_i32_in_mask, &mask);
 
             size_t n = 0;
             for (int32_t i = 0; i < 6; ++i) {

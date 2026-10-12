@@ -9,6 +9,10 @@
 /// whether 'sub' sits in 's' starting at 'at'. The caller guarantees the room
 static bool matches_at(tda_Span s, tda_Span sub, size_t at, tda_Eq eq);
 
+/// the first index whose elem orders after 'key' — or not before it, when not 'upper'
+[[nodiscard]]
+static size_t bound(tda_Span s, const void *key, tda_Cmp cmp, bool upper);
+
 /* ========== find ========== */
 
 bool tda_span_find(tda_Span s, const void *key, tda_Eq eq, size_t *out_idx) {
@@ -231,20 +235,7 @@ size_t tda_span_lower_bound(tda_Span s, const void *key, tda_Cmp cmp) {
     assert(key);
     assert(cmp);
 
-    size_t lo = 0, hi = s.len;
-
-    while (lo < hi) {
-        const size_t mid = lo + (hi - lo) / 2;
-        const void *midp = tda_span_get(s, mid);
-
-        if (cmp(midp, key) < 0) {
-            lo = mid + 1;
-        } else {
-            hi = mid;
-        }
-    }
-
-    return lo;
+    return bound(s, key, cmp, false);
 }
 
 size_t tda_span_upper_bound(tda_Span s, const void *key, tda_Cmp cmp) {
@@ -252,20 +243,7 @@ size_t tda_span_upper_bound(tda_Span s, const void *key, tda_Cmp cmp) {
     assert(key);
     assert(cmp);
 
-    size_t lo = 0, hi = s.len;
-
-    while (lo < hi) {
-        const size_t mid = lo + (hi - lo) / 2;
-        const void *midp = tda_span_get(s, mid);
-
-        if (cmp(midp, key) <= 0) {
-            lo = mid + 1;
-        } else {
-            hi = mid;
-        }
-    }
-
-    return lo;
+    return bound(s, key, cmp, true);
 }
 
 bool tda_span_binary_search(tda_Span s, const void *key, tda_Cmp cmp, size_t *out_idx) {
@@ -434,6 +412,23 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp) {
 }
 
 /* ========== private defs ========== */
+
+static size_t bound(tda_Span s, const void *key, tda_Cmp cmp, bool upper) {
+    size_t lo = 0, hi = s.len;
+
+    while (lo < hi) {
+        const size_t mid = lo + (hi - lo) / 2;
+        const int c = cmp(tda_span_get(s, mid), key);
+
+        if (c < 0 || (upper && c == 0)) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+
+    return lo;
+}
 
 static bool matches_at(tda_Span s, tda_Span sub, size_t at, tda_Eq eq) {
     assert(at + sub.len <= s.len);

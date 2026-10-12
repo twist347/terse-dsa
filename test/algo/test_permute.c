@@ -5,6 +5,7 @@
 #include "tda/core/rng.h"
 #include "tda/core/util.h"
 
+#include "support/i32.h"
 #include "support/pair.h"
 #include "support/probe.h"
 #include "support/status.h"
@@ -20,18 +21,8 @@ void setUp() {
 void tearDown() {
 }
 
-static bool is_even(const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
-    return *(const int32_t *) elem % 2 == 0;
-}
-
-static bool greater_than(const void *elem, void *ctx) {
-    return *(const int32_t *) elem > *(const int32_t *) ctx;
-}
-
-// the same question as is_even, but it keeps a tally in ctx: how many times a
-// partition asks about an elem is part of its contract
+// the same question as tda_test_i32_is_even, but it keeps a tally in ctx: how many
+// times a partition asks about an elem is part of its contract
 static bool is_even_counting(const void *elem, void *ctx) {
     ++*(size_t *) ctx;
 
@@ -390,7 +381,7 @@ static void test_prev_permutation_moves_whole_elems() {
 static void test_partition_moves_matches_to_the_front() {
     int32_t buf[6] = {1, 2, 3, 4, 5, 6};
 
-    const size_t boundary = tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), is_even, nullptr);
+    const size_t boundary = tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_test_i32_is_even, nullptr);
 
     TEST_ASSERT_EQUAL_size_t(3, boundary);
     for (size_t i = 0; i < boundary; ++i) {
@@ -408,8 +399,14 @@ static void test_partition_at_the_ends() {
     int32_t all[3] = {2, 4, 6};
     int32_t none[3] = {1, 3, 5};
 
-    TEST_ASSERT_EQUAL_size_t(3, tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, all, 3), is_even, nullptr));
-    TEST_ASSERT_EQUAL_size_t(0, tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, none, 3), is_even, nullptr));
+    TEST_ASSERT_EQUAL_size_t(
+        3,
+        tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, all, 3), tda_test_i32_is_even, nullptr)
+    );
+    TEST_ASSERT_EQUAL_size_t(
+        0,
+        tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, none, 3), tda_test_i32_is_even, nullptr)
+    );
 
     constexpr int32_t want_all[3] = {2, 4, 6};
     constexpr int32_t want_none[3] = {1, 3, 5};
@@ -418,14 +415,21 @@ static void test_partition_at_the_ends() {
 }
 
 static void test_partition_of_an_empty_span_is_zero() {
-    TEST_ASSERT_EQUAL_size_t(0, tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0), is_even, nullptr));
+    TEST_ASSERT_EQUAL_size_t(
+        0,
+        tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0), tda_test_i32_is_even, nullptr)
+    );
 }
 
 static void test_partition_passes_the_ctx_through() {
     int32_t buf[5] = {1, 5, 2, 4, 3};
     int32_t bound = 3;
 
-    const size_t boundary = tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), greater_than, &bound);
+    const size_t boundary = tda_span_partition(
+        TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5),
+        tda_test_i32_greater_than,
+        &bound
+    );
 
     TEST_ASSERT_EQUAL_size_t(2, boundary);
     for (size_t i = 0; i < boundary; ++i) {
@@ -461,7 +465,7 @@ static void test_partition_stable_keeps_the_order_on_both_sides() {
     TDA_TEST_OK(
         tda_span_partition_stable(
             TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6),
-            is_even,
+            tda_test_i32_is_even,
             nullptr,
             tda_al_default(),
             &boundary
@@ -483,14 +487,18 @@ static void test_partition_stable_agrees_with_partition_on_the_boundary() {
     TDA_TEST_OK(
         tda_span_partition_stable(
             TDA_SPAN_FROM_DATA_MUT(int32_t, stable_buf, 7),
-            is_even,
+            tda_test_i32_is_even,
             nullptr,
             tda_al_default(),
             &stable
         )
     );
 
-    const size_t plain = tda_span_partition(TDA_SPAN_FROM_DATA_MUT(int32_t, plain_buf, 7), is_even, nullptr);
+    const size_t plain = tda_span_partition(
+        TDA_SPAN_FROM_DATA_MUT(int32_t, plain_buf, 7),
+        tda_test_i32_is_even,
+        nullptr
+    );
 
     TEST_ASSERT_EQUAL_size_t(plain, stable);
     assert_same_elems(stable_buf, plain_buf, 7);
@@ -527,7 +535,7 @@ static void test_partition_stable_leaves_a_partitioned_span_alone() {
     TDA_TEST_OK(
         tda_span_partition_stable(
             TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5),
-            is_even,
+            tda_test_i32_is_even,
             nullptr,
             tda_al_default(),
             &boundary
@@ -547,7 +555,7 @@ static void test_partition_stable_at_the_ends() {
     TDA_TEST_OK(
         tda_span_partition_stable(
             TDA_SPAN_FROM_DATA_MUT(int32_t, all, 3),
-            is_even,
+            tda_test_i32_is_even,
             nullptr,
             tda_al_default(),
             &boundary
@@ -559,7 +567,7 @@ static void test_partition_stable_at_the_ends() {
     TDA_TEST_OK(
         tda_span_partition_stable(
             TDA_SPAN_FROM_DATA_MUT(int32_t, none, 3),
-            is_even,
+            tda_test_i32_is_even,
             nullptr,
             tda_al_default(),
             &boundary
@@ -574,10 +582,13 @@ static void test_partition_stable_result_is_partitioned() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8);
 
     size_t boundary = 999;
-    TDA_TEST_OK(tda_span_partition_stable(s, is_even, nullptr, tda_al_default(), &boundary));
+    TDA_TEST_OK(tda_span_partition_stable(s, tda_test_i32_is_even, nullptr, tda_al_default(), &boundary));
 
-    TEST_ASSERT_TRUE(tda_span_is_partitioned(tda_span_mut_to_span(s), is_even, nullptr));
-    TEST_ASSERT_EQUAL_size_t(tda_span_partition_point(tda_span_mut_to_span(s), is_even, nullptr), boundary);
+    TEST_ASSERT_TRUE(tda_span_is_partitioned(tda_span_mut_to_span(s), tda_test_i32_is_even, nullptr));
+    TEST_ASSERT_EQUAL_size_t(
+        tda_span_partition_point(tda_span_mut_to_span(s), tda_test_i32_is_even, nullptr),
+        boundary
+    );
 }
 
 static void test_partition_stable_passes_the_ctx_through() {
@@ -588,7 +599,7 @@ static void test_partition_stable_passes_the_ctx_through() {
     TDA_TEST_OK(
         tda_span_partition_stable(
             TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5),
-            greater_than,
+            tda_test_i32_greater_than,
             (void *) &bound,
             tda_al_default(),
             &boundary
@@ -606,7 +617,9 @@ static void test_partition_stable_of_a_subspan_leaves_the_neighbours_alone() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6);
 
     size_t boundary = 999;
-    TDA_TEST_OK(tda_span_partition_stable(tda_span_sub_mut(s, 1, 4), is_even, nullptr, tda_al_default(), &boundary));
+    TDA_TEST_OK(
+        tda_span_partition_stable(tda_span_sub_mut(s, 1, 4), tda_test_i32_is_even, nullptr, tda_al_default(), &boundary)
+    );
 
     constexpr int32_t want[6] = {9, 2, 4, 1, 3, 9};
     TEST_ASSERT_EQUAL_size_t(2, boundary);
@@ -642,7 +655,15 @@ static void test_partition_stable_releases_its_scratch() {
     int32_t buf[4] = {1, 2, 3, 4};
 
     size_t boundary = 999;
-    TDA_TEST_OK(tda_span_partition_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), is_even, nullptr, &al, &boundary));
+    TDA_TEST_OK(
+        tda_span_partition_stable(
+            TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4),
+            tda_test_i32_is_even,
+            nullptr,
+            &al,
+            &boundary
+        )
+    );
 
     TEST_ASSERT_EQUAL_size_t(1, probe.alloc_calls);
     TEST_ASSERT_EQUAL_size_t(1, probe.dealloc_calls);
@@ -663,7 +684,13 @@ static void test_partition_stable_reports_a_refused_scratch() {
     size_t boundary = 777;
     TDA_TEST_STATUS(
         TDA_STATUS_ERR_NO_MEM,
-        tda_span_partition_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), is_even, nullptr, &al, &boundary)
+        tda_span_partition_stable(
+            TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4),
+            tda_test_i32_is_even,
+            nullptr,
+            &al,
+            &boundary
+        )
     );
 
     constexpr int32_t want[4] = {1, 2, 3, 4};
@@ -681,7 +708,13 @@ static void test_partition_stable_of_an_empty_span_asks_for_nothing() {
 
     size_t boundary = 999;
     TDA_TEST_OK(
-        tda_span_partition_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0), is_even, nullptr, &al, &boundary)
+        tda_span_partition_stable(
+            TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0),
+            tda_test_i32_is_even,
+            nullptr,
+            &al,
+            &boundary
+        )
     );
 
     TEST_ASSERT_EQUAL_size_t(0, boundary);
@@ -694,17 +727,17 @@ static void test_is_partitioned_accepts_a_split_span() {
     constexpr int32_t split[5] = {2, 4, 1, 3, 5};
     constexpr int32_t mixed[5] = {2, 1, 4, 3, 5};
 
-    TEST_ASSERT_TRUE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, split, 5), is_even, nullptr));
-    TEST_ASSERT_FALSE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, mixed, 5), is_even, nullptr));
+    TEST_ASSERT_TRUE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, split, 5), tda_test_i32_is_even, nullptr));
+    TEST_ASSERT_FALSE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, mixed, 5), tda_test_i32_is_even, nullptr));
 }
 
 static void test_is_partitioned_on_uniform_and_empty_spans() {
     constexpr int32_t all[3] = {2, 4, 6};
     constexpr int32_t none[3] = {1, 3, 5};
 
-    TEST_ASSERT_TRUE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, all, 3), is_even, nullptr));
-    TEST_ASSERT_TRUE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, none, 3), is_even, nullptr));
-    TEST_ASSERT_TRUE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), is_even, nullptr));
+    TEST_ASSERT_TRUE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, all, 3), tda_test_i32_is_even, nullptr));
+    TEST_ASSERT_TRUE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, none, 3), tda_test_i32_is_even, nullptr));
+    TEST_ASSERT_TRUE(tda_span_is_partitioned(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), tda_test_i32_is_even, nullptr));
 }
 
 

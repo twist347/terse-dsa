@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tda/core/cmp.h"
 #include "tda/core/util.h"
 
 #include <stdint.h>
@@ -37,4 +38,11 @@ static inline bool tda_test_pair_a_is_negative(const void *elem, void *ctx) {
 /// differ byte for byte, which is exactly what parts an _eq_by from an _eq
 static inline bool tda_test_pair_eq_a(const void *lhs, const void *rhs) {
     return ((const Pair *) lhs)->a == ((const Pair *) rhs)->a;
+}
+
+/* ========== comparators ========== */
+
+/// tda_Cmp over Pair, ordering by the first field alone
+static inline int tda_test_pair_cmp_a(const void *lhs, const void *rhs) {
+    return tda_cmp_i64(&((const Pair *) lhs)->a, &((const Pair *) rhs)->a);
 }

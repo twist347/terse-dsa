@@ -1,6 +1,7 @@
 #include "tda/algo/copy.h"
 #include "tda/core/util.h"
 
+#include "support/i32.h"
 #include "support/pair.h"
 
 #include <unity.h>
@@ -11,16 +12,6 @@ void setUp() {
 }
 
 void tearDown() {
-}
-
-static bool is_even(const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
-    return *(const int32_t *) elem % 2 == 0;
-}
-
-static bool greater_than(const void *elem, void *ctx) {
-    return *(const int32_t *) elem > *(const int32_t *) ctx;
 }
 
 /* ========== copy ========== */
@@ -143,7 +134,7 @@ static void test_copy_if_takes_only_the_matching_elems() {
     const size_t n = tda_span_copy_if(
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 6),
         TDA_SPAN_FROM_DATA(int32_t, src, 6),
-        is_even,
+        tda_test_i32_is_even,
         nullptr
     );
 
@@ -160,7 +151,7 @@ static void test_copy_if_needs_room_only_for_the_matches() {
     const size_t n = tda_span_copy_if(
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 3),
         TDA_SPAN_FROM_DATA(int32_t, src, 6),
-        is_even,
+        tda_test_i32_is_even,
         nullptr
     );
 
@@ -178,7 +169,7 @@ static void test_copy_if_leaves_the_tail_of_dst_alone() {
     const size_t n = tda_span_copy_if(
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 6),
         TDA_SPAN_FROM_DATA(int32_t, src, 4),
-        is_even,
+        tda_test_i32_is_even,
         nullptr
     );
 
@@ -194,7 +185,7 @@ static void test_copy_if_takes_everything_when_all_match() {
     const size_t n = tda_span_copy_if(
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 3),
         TDA_SPAN_FROM_DATA(int32_t, src, 3),
-        is_even,
+        tda_test_i32_is_even,
         nullptr
     );
 
@@ -209,7 +200,7 @@ static void test_copy_if_takes_nothing_when_none_match() {
     const size_t n = tda_span_copy_if(
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 3),
         TDA_SPAN_FROM_DATA(int32_t, src, 3),
-        is_even,
+        tda_test_i32_is_even,
         nullptr
     );
 
@@ -226,7 +217,7 @@ static void test_copy_if_of_an_empty_source_is_zero() {
         tda_span_copy_if(
             TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 2),
             TDA_SPAN_FROM_DATA(int32_t, nullptr, 0),
-            is_even,
+            tda_test_i32_is_even,
             nullptr
         )
     );
@@ -240,7 +231,7 @@ static void test_copy_if_passes_the_ctx_through() {
     const size_t n = tda_span_copy_if(
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 5),
         TDA_SPAN_FROM_DATA(int32_t, src, 5),
-        greater_than,
+        tda_test_i32_greater_than,
         &bound
     );
 
@@ -256,7 +247,7 @@ static void test_copy_if_keeps_the_source_order() {
     const size_t n = tda_span_copy_if(
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 7),
         TDA_SPAN_FROM_DATA(int32_t, src, 7),
-        is_even,
+        tda_test_i32_is_even,
         nullptr
     );
 

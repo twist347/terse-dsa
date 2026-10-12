@@ -812,8 +812,8 @@ void tda_deque_fprint(const tda_Deque *self, FILE *stream, tda_FPrint fprint) {
     assert(stream);
     assert(fprint);
 
-    // spelled out rather than delegated to tda_span_fprint: there is no span to
-    // delegate with. The format is the same one on purpose
+    // spelled out rather than delegated to tda_span_fprint: the ring is two spans at
+    // most, and one bracket has to hold both. The format is the same one on purpose
     fputc('[', stream);
     for (size_t i = 0; i < self->len; ++i) {
         if (i > 0) {

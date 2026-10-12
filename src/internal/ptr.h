@@ -3,6 +3,7 @@
 #include "tda/core/util.h"
 
 #include <assert.h>
+#include <stdckdint.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -117,6 +118,36 @@ static inline bool tda_ptr_is_aligned(const void *ptr, size_t alignment) {
     assert((alignment & (alignment - 1)) == 0);
 
     return ((uintptr_t) ptr & (alignment - 1)) == 0;
+}
+
+/// carves a caller's buffer into a header of 'head_size' and the rest, both at
+/// TDA_DEFAULT_ALIGNMENT. Offsets are checked against 'size' before an address is formed
+/// @return false when the header does not fit; the outs are written only on true
+[[nodiscard]]
+static inline bool tda_buf_split_head(
+    void *buf,
+    size_t size,
+    size_t head_size,
+    void **out_head,
+    void **out_rest,
+    size_t *out_rest_size
+) {
+    assert(buf);
+    assert(out_head);
+    assert(out_rest);
+    assert(out_rest_size);
+
+    const size_t head_offset = tda_ptr_align_pad(buf, TDA_DEFAULT_ALIGNMENT);
+    size_t rest_offset;
+    if (ckd_add(&rest_offset, head_offset, tda_align_up(head_size, TDA_DEFAULT_ALIGNMENT))
+        || rest_offset > size) {
+        return false;
+    }
+
+    *out_head = tda_byte_offset_mut(buf, 1, head_offset);
+    *out_rest = tda_byte_offset_mut(buf, 1, rest_offset);
+    *out_rest_size = size - rest_offset;
+    return true;
 }
 
 static inline void tda_bytes_swap(void *a, void *b, size_t n) {
