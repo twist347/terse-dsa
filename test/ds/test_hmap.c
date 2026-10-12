@@ -1383,6 +1383,185 @@ static void test_swap_self_is_noop() {
     tda_hmap_drop(m);
 }
 
+/* ========== retain ========== */
+
+// keeps an entry when the key's bit is set in the mask 'ctx' points to, and checks on the
+// way that the value handed over is the one stored with that key
+static bool in_mask_with_its_val(const void *key, const void *val, void *ctx) {
+    const int32_t k = *(const int32_t *) key;
+    TEST_ASSERT_EQUAL_INT32(k * 10, *(const int32_t *) val);
+
+    return *(const uint32_t *) ctx >> k & 1;
+}
+
+// every subset of six entries, on spread buckets and on one chain, where a removal has to
+// relink a neighbour rather than empty a bucket
+static void test_retain_keeps_exactly_the_passing_entries() {
+    const tda_Hasher hashers[2] = {tda_hash_i32, hash_all_alike};
+
+    for (size_t h = 0; h < 2; ++h) {
+        for (uint32_t mask = 0; mask < 64; ++mask) {
+            tda_HMap *m = make_filled(hashers[h], 6);
+
+            tda_hmap_retain(m, in_mask_with_its_val, &mask);
+
+            size_t n = 0;
+            for (int32_t i = 0; i < 6; ++i) {
+                if (mask >> i & 1) {
+                    assert_has(m, i, i * 10);
+                    ++n;
+                } else {
+                    assert_missing(m, i);
+                }
+            }
+            TEST_ASSERT_EQUAL_size_t(n, tda_hmap_len(m));
+            assert_walk_sees_everything(m);
+
+            tda_hmap_drop(m);
+        }
+    }
+}
+
+static bool count_and_keep_odd(const void *key, const void *val, void *ctx) {
+    TDA_UNUSED(val);
+    size_t *seen = ctx;
+    const int32_t k = *(const int32_t *) key;
+    ++seen[k];
+
+    return k % 2 != 0;
+}
+
+static void test_retain_asks_once_per_entry_and_keeps_the_nodes() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_HMap *m = nullptr;
+    TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_all_alike, tda_eq_i32, &al, &m));
+    for (int32_t i = 0; i < 6; ++i) {
+        put(m, i, i * 10);
+    }
+    const tda_HMapNode *kept = TDA_HMAP_FIND(int32_t, m, 3);
+
+    size_t seen[6] = {0};
+    tda_hmap_retain(m, count_and_keep_odd, seen);
+
+    for (size_t i = 0; i < 6; ++i) {
+        TEST_ASSERT_EQUAL_size_t(1, seen[i]);
+    }
+    TEST_ASSERT_EQUAL_PTR(kept, TDA_HMAP_FIND(int32_t, m, 3));
+    TEST_ASSERT_EQUAL_size_t(5, probe.live); // header, buckets, three nodes
+
+    tda_hmap_drop(m);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+/* ========== from_spans / extend ========== */
+
+static void test_from_spans_pairs_keys_with_vals_by_index() {
+    tda_HMap *m = nullptr;
+    TDA_TEST_OK(
+        tda_hmap_from_spans(
+            TDA_SPAN_OF(int32_t, 1, 2, 3),
+            TDA_SPAN_OF(int32_t, 10, 20, 30),
+            tda_hash_i32,
+            tda_eq_i32,
+            tda_al_default(),
+            &m
+        )
+    );
+
+    TEST_ASSERT_EQUAL_size_t(3, tda_hmap_len(m));
+    assert_has(m, 1, 10);
+    assert_has(m, 2, 20);
+    assert_has(m, 3, 30);
+
+    tda_hmap_drop(m);
+}
+
+// as insert does: a key given twice keeps the value it was given last
+static void test_from_spans_keeps_the_last_value_of_a_repeated_key() {
+    tda_HMap *m = nullptr;
+    TDA_TEST_OK(
+        tda_hmap_from_spans(
+            TDA_SPAN_OF(int32_t, 1, 2, 1),
+            TDA_SPAN_OF(int32_t, 10, 20, 11),
+            tda_hash_i32,
+            tda_eq_i32,
+            tda_al_default(),
+            &m
+        )
+    );
+
+    TEST_ASSERT_EQUAL_size_t(2, tda_hmap_len(m));
+    assert_has(m, 1, 11);
+    assert_has(m, 2, 20);
+
+    tda_hmap_drop(m);
+}
+
+static void test_from_spans_takes_both_sizes_from_the_spans() {
+    constexpr Pair vals[1] = {{7, 8}};
+
+    tda_HMap *m = nullptr;
+    TDA_TEST_OK(
+        tda_hmap_from_spans(
+            TDA_SPAN_OF(int32_t, 1),
+            TDA_SPAN_FROM_DATA(Pair, vals, 1),
+            tda_hash_i32,
+            tda_eq_i32,
+            tda_al_default(),
+            &m
+        )
+    );
+
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_hmap_key_size(m));
+    TEST_ASSERT_EQUAL_size_t(sizeof(Pair), tda_hmap_val_size(m));
+    TEST_ASSERT_EQUAL_INT64(8, TDA_HMAP_GET_AS(int32_t, Pair, m, 1)->b);
+
+    tda_hmap_drop(m);
+}
+
+static void test_extend_overwrites_present_keys_and_adds_new_ones() {
+    tda_HMap *m = make_map(tda_hash_i32);
+    put(m, 1, 10);
+    put(m, 5, 50);
+
+    TDA_TEST_OK(tda_hmap_extend(m, TDA_SPAN_OF(int32_t, 1, 2), TDA_SPAN_OF(int32_t, 100, 200)));
+
+    TEST_ASSERT_EQUAL_size_t(3, tda_hmap_len(m));
+    assert_has(m, 1, 100);
+    assert_has(m, 2, 200);
+    assert_has(m, 5, 50);
+
+    tda_hmap_drop(m);
+}
+
+static void test_from_spans_fails_at_every_step_without_a_leak() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+    const tda_Span keys = TDA_SPAN_OF(int32_t, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+    const tda_Span vals = TDA_SPAN_OF(int32_t, 9, 8, 7, 6, 5, 4, 3, 2, 1);
+
+    for (size_t n = 0;; ++n) {
+        tda_test_probe_fail_after_next(&probe, n);
+
+        tda_HMap *m = nullptr;
+        const tda_Status st = tda_hmap_from_spans(keys, vals, tda_hash_i32, tda_eq_i32, &al, &m);
+        if (TDA_STATUS_IS_OK(st)) {
+            TEST_ASSERT_EQUAL_size_t(9, tda_hmap_len(m));
+            tda_hmap_drop(m);
+            TEST_ASSERT_EQUAL_size_t(0, probe.live);
+            break;
+        }
+
+        TEST_ASSERT_EQUAL(TDA_STATUS_ERR_NO_MEM, st);
+        TEST_ASSERT_NULL(m);
+        TEST_ASSERT_EQUAL_size_t(0, probe.live);
+    }
+}
+
 /* ========== allocation failure ========== */
 
 static void test_new_reports_an_exhausted_arena() {
@@ -1858,6 +2037,15 @@ int main() {
     RUN_TEST(test_swap_exchanges_the_entries_and_the_hashers);
     RUN_TEST(test_swap_keeps_the_nodes_alive);
     RUN_TEST(test_swap_self_is_noop);
+
+    RUN_TEST(test_retain_keeps_exactly_the_passing_entries);
+    RUN_TEST(test_retain_asks_once_per_entry_and_keeps_the_nodes);
+
+    RUN_TEST(test_from_spans_pairs_keys_with_vals_by_index);
+    RUN_TEST(test_from_spans_keeps_the_last_value_of_a_repeated_key);
+    RUN_TEST(test_from_spans_takes_both_sizes_from_the_spans);
+    RUN_TEST(test_extend_overwrites_present_keys_and_adds_new_ones);
+    RUN_TEST(test_from_spans_fails_at_every_step_without_a_leak);
 
     RUN_TEST(test_new_reports_an_exhausted_arena);
     RUN_TEST(test_new_cap_frees_the_header_when_the_buckets_are_refused);

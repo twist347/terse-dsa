@@ -6,6 +6,7 @@
 #include "tda/core/export.h"
 #include "tda/core/hash.h"
 #include "tda/core/print.h"
+#include "tda/core/span.h"
 #include "tda/core/status.h"
 
 #include <stddef.h>
@@ -51,6 +52,9 @@ typedef struct tda_HMap tda_HMap;
 /// for it, with no way for the map to notice
 typedef struct tda_HMapNode tda_HMapNode;
 
+/// A test of one entry, key and value together — what tda_Pred is for a single elem
+typedef bool (*tda_EntryPred)(const void *key, const void *val, void *ctx);
+
 /// @name lifetime
 /// @{
 
@@ -84,6 +88,26 @@ tda_Status tda_hmap_new_cap(
     size_t cap,
     size_t key_size, size_t val_size,
     tda_Hasher hasher, tda_Eq eq,
+    tda_Al *al,
+    tda_HMap **out
+);
+
+/// a map holding keys[i] -> vals[i], taking key_size and val_size from the spans
+/// @param keys the keys; a repeated one keeps the value of its last occurrence
+/// @param vals the values; asserts the same len as 'keys'
+/// @param hasher the hash the keys are placed by
+/// @param eq the equality the keys are matched by
+/// @param al the allocator
+/// @param[out] out the new map, written only on success
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when the map, its buckets or a node cannot be allocated
+/// @bigo{n} expected
+[[nodiscard]] TDA_API
+tda_Status tda_hmap_from_spans(
+    tda_Span keys,
+    tda_Span vals,
+    tda_Hasher hasher,
+    tda_Eq eq,
     tda_Al *al,
     tda_HMap **out
 );
@@ -341,6 +365,18 @@ void *tda_hmap_node_val_mut(const tda_HMap *self, tda_HMapNode *node);
 [[nodiscard]] TDA_API
 tda_Status tda_hmap_insert(tda_HMap *self, const void *key, const void *val, bool *out_is_new);
 
+/// tda_hmap_insert of keys[i] -> vals[i] for every i, in order
+/// @param self the map
+/// @param keys the keys, of the map's key_size; a present or repeated one takes the last
+///             value given for it
+/// @param vals the values, of the map's val_size; asserts the same len as 'keys'
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when a node or a wider bucket array cannot be allocated.
+///         The pairs before the failing one are in: a map still, but not the whole run
+/// @bigo{n} expected, plus the amortized cost of growing
+[[nodiscard]] TDA_API
+tda_Status tda_hmap_extend(tda_HMap *self, tda_Span keys, tda_Span vals);
+
 /// drops the entry under 'key' if there is one
 /// @param self the map
 /// @param key the key to drop
@@ -369,6 +405,14 @@ bool tda_hmap_take(tda_HMap *self, const void *key, void *out_key, void *out_val
 /// @bigo{1} expected — the node's bucket is walked to reach the link to it
 TDA_API
 void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node);
+
+/// keeps the entries 'pred' passes and drops the rest
+/// @param self the map; the kept nodes stay where they are, so pointers into them live on
+/// @param pred asked once per entry, in walk order; it must not change the map
+/// @param ctx handed to 'pred'
+/// @bigo{n} plus the bucket count
+TDA_API
+void tda_hmap_retain(tda_HMap *self, tda_EntryPred pred, void *ctx);
 
 /// hands back the entry for 'key', putting 'val_if_absent' there first when the key was
 /// missing. This is the counter idiom's operation

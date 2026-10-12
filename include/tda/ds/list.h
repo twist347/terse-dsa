@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tda/algo/fn.h"
 #include "tda/alloc/alloc.h"
 #include "tda/core/check.h"
 #include "tda/core/cmp.h"
@@ -352,6 +353,14 @@ void tda_list_remove(tda_List *self, tda_ListNode *node);
 /// @bigo{n}
 TDA_API
 void tda_list_clear(tda_List *self);
+
+/// keeps the elems 'pred' passes and releases the nodes of the rest
+/// @param self the list; the kept nodes stay where they are, so pointers into them live on
+/// @param pred asked once per elem, front to back; it must not change the list
+/// @param ctx handed to 'pred'
+/// @bigo{n}
+TDA_API
+void tda_list_retain(tda_List *self, tda_Pred pred, void *ctx);
 
 /// moves every node of 'src' to the front of 'self', leaving 'src' empty
 /// @param self the list written into

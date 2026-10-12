@@ -467,6 +467,91 @@ static void test_the_quantifiers_agree_on_an_empty_span() {
     TEST_ASSERT_TRUE(tda_span_none_of(empty, is_even, nullptr));
 }
 
+/* ========== starts_with / ends_with ========== */
+
+static void test_starts_and_ends_with_a_matching_run() {
+    constexpr int32_t buf[5] = {1, 2, 3, 4, 5};
+    constexpr int32_t head[2] = {1, 2};
+    constexpr int32_t tail[2] = {4, 5};
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 5);
+
+    TEST_ASSERT_TRUE(tda_span_starts_with(s, TDA_SPAN_FROM_DATA(int32_t, head, 2), tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_span_ends_with(s, TDA_SPAN_FROM_DATA(int32_t, tail, 2), tda_eq_i32));
+
+    // each is the wrong end for the other
+    TEST_ASSERT_FALSE(tda_span_starts_with(s, TDA_SPAN_FROM_DATA(int32_t, tail, 2), tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_span_ends_with(s, TDA_SPAN_FROM_DATA(int32_t, head, 2), tda_eq_i32));
+}
+
+// the empty run sits at both ends of every span, the empty one included; a run longer
+// than the span sits at neither
+static void test_starts_and_ends_with_at_the_lengths_edges() {
+    constexpr int32_t buf[3] = {1, 2, 3};
+    constexpr int32_t longer[4] = {1, 2, 3, 4};
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 3);
+    const tda_Span empty = TDA_SPAN_FROM_DATA(int32_t, nullptr, 0);
+
+    TEST_ASSERT_TRUE(tda_span_starts_with(s, empty, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_span_ends_with(s, empty, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_span_starts_with(empty, empty, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_span_ends_with(empty, empty, tda_eq_i32));
+
+    TEST_ASSERT_TRUE(tda_span_starts_with(s, s, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_span_ends_with(s, s, tda_eq_i32));
+
+    TEST_ASSERT_FALSE(tda_span_starts_with(s, TDA_SPAN_FROM_DATA(int32_t, longer, 4), tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_span_ends_with(s, TDA_SPAN_FROM_DATA(int32_t, longer, 4), tda_eq_i32));
+}
+
+static bool eq_last_digit(const void *lhs, const void *rhs) {
+    return *(const int32_t *) lhs % 10 == *(const int32_t *) rhs % 10;
+}
+
+static void test_starts_and_ends_with_compare_under_eq() {
+    constexpr int32_t buf[3] = {11, 22, 33};
+    constexpr int32_t head[2] = {1, 2};
+    constexpr int32_t tail[2] = {42, 53};
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 3);
+
+    TEST_ASSERT_TRUE(tda_span_starts_with(s, TDA_SPAN_FROM_DATA(int32_t, head, 2), eq_last_digit));
+    TEST_ASSERT_TRUE(tda_span_ends_with(s, TDA_SPAN_FROM_DATA(int32_t, tail, 2), eq_last_digit));
+    TEST_ASSERT_FALSE(tda_span_starts_with(s, TDA_SPAN_FROM_DATA(int32_t, head, 2), tda_eq_i32));
+}
+
+// every span over {0, 1} up to four long against every run up to five long, checked
+// against comparing the matching end elem by elem
+static void test_starts_and_ends_with_agree_with_a_plain_comparison() {
+    for (size_t len = 0; len <= 4; ++len) {
+        for (size_t bits = 0; bits < (1u << len); ++bits) {
+            int32_t buf[4];
+            for (size_t i = 0; i < len; ++i) {
+                buf[i] = (int32_t) (bits >> i & 1);
+            }
+
+            for (size_t run_len = 0; run_len <= 5; ++run_len) {
+                for (size_t run_bits = 0; run_bits < (1u << run_len); ++run_bits) {
+                    int32_t run[5];
+                    for (size_t i = 0; i < run_len; ++i) {
+                        run[i] = (int32_t) (run_bits >> i & 1);
+                    }
+
+                    bool head = run_len <= len;
+                    bool tail = run_len <= len;
+                    for (size_t i = 0; i < run_len && run_len <= len; ++i) {
+                        head = head && buf[i] == run[i];
+                        tail = tail && buf[len - run_len + i] == run[i];
+                    }
+
+                    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, len);
+                    const tda_Span r = TDA_SPAN_FROM_DATA(int32_t, run, run_len);
+                    TEST_ASSERT_EQUAL(head, tda_span_starts_with(s, r, tda_eq_i32));
+                    TEST_ASSERT_EQUAL(tail, tda_span_ends_with(s, r, tda_eq_i32));
+                }
+            }
+        }
+    }
+}
+
 static size_t cmp_calls = 0;
 
 static int cmp_counting_i32(const void *a, const void *b) {
@@ -1088,6 +1173,11 @@ int main() {
     RUN_TEST(test_any_of_holds_when_at_least_one_satisfies);
     RUN_TEST(test_none_of_is_the_negation_of_any_of);
     RUN_TEST(test_the_quantifiers_agree_on_an_empty_span);
+
+    RUN_TEST(test_starts_and_ends_with_a_matching_run);
+    RUN_TEST(test_starts_and_ends_with_at_the_lengths_edges);
+    RUN_TEST(test_starts_and_ends_with_compare_under_eq);
+    RUN_TEST(test_starts_and_ends_with_agree_with_a_plain_comparison);
 
 
     RUN_TEST(test_equal_range_covers_the_whole_run);

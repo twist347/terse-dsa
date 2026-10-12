@@ -281,6 +281,130 @@ static void test_copy_if_moves_whole_elems() {
     TEST_ASSERT_EQUAL_INT64(20, dst[0].b);
 }
 
+/* ========== sample ========== */
+
+// the picks come out in source order, so over an increasing source they increase
+static void test_sample_picks_in_source_order() {
+    constexpr int32_t src[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+    int32_t dst[3] = {0};
+
+    tda_Rng rng = tda_rng_from_seed(1);
+    const size_t n = tda_span_sample(
+        TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 3),
+        TDA_SPAN_FROM_DATA(int32_t, src, 8),
+        &rng
+    );
+
+    TEST_ASSERT_EQUAL_size_t(3, n);
+    TEST_ASSERT_TRUE(dst[0] < dst[1]);
+    TEST_ASSERT_TRUE(dst[1] < dst[2]);
+    TEST_ASSERT_TRUE(dst[0] >= 0);
+    TEST_ASSERT_TRUE(dst[2] <= 7);
+}
+
+// asking for at least as many as there are copies them all, and the tail of dst is left
+static void test_sample_of_more_than_there_is_copies_the_whole_source() {
+    constexpr int32_t src[3] = {4, 5, 6};
+    int32_t dst[5] = {-1, -1, -1, -1, -1};
+
+    tda_Rng rng = tda_rng_from_seed(2);
+    const size_t n = tda_span_sample(
+        TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 5),
+        TDA_SPAN_FROM_DATA(int32_t, src, 3),
+        &rng
+    );
+
+    TEST_ASSERT_EQUAL_size_t(3, n);
+    constexpr int32_t want[5] = {4, 5, 6, -1, -1};
+    TEST_ASSERT_EQUAL_INT32_ARRAY(want, dst, 5);
+}
+
+// nothing wanted or nothing to pick from: no write and no draw, so the rng is where it was
+static void test_sample_of_nothing_draws_nothing() {
+    constexpr int32_t src[3] = {1, 2, 3};
+    int32_t dst[2] = {-1, -1};
+
+    tda_Rng rng = tda_rng_from_seed(3);
+    tda_Rng untouched = tda_rng_from_seed(3);
+
+    TEST_ASSERT_EQUAL_size_t(
+        0,
+        tda_span_sample(TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 0), TDA_SPAN_FROM_DATA(int32_t, src, 3), &rng)
+    );
+    TEST_ASSERT_EQUAL_size_t(
+        0,
+        tda_span_sample(TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 2), TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), &rng)
+    );
+
+    TEST_ASSERT_EQUAL_INT32(-1, dst[0]);
+    TEST_ASSERT_EQUAL_UINT64(tda_rng_u64(&untouched), tda_rng_u64(&rng));
+}
+
+// what makes it a sample: each of the ten pairs out of five comes up equally often, and
+// nothing that is not a pair in order ever does
+static void test_sample_reaches_every_pick_equally_often() {
+    static constexpr size_t TRIALS = 100000;
+    constexpr int32_t src[5] = {0, 1, 2, 3, 4};
+
+    tda_Rng rng = tda_rng_from_seed(4);
+    size_t seen[5][5] = {0};
+
+    for (size_t i = 0; i < TRIALS; ++i) {
+        int32_t dst[2];
+        const size_t n = tda_span_sample(
+            TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 2),
+            TDA_SPAN_FROM_DATA(int32_t, src, 5),
+            &rng
+        );
+        TEST_ASSERT_EQUAL_size_t(2, n);
+
+        ++seen[dst[0]][dst[1]];
+    }
+
+    const double expected = (double) TRIALS / 10.0;
+    for (size_t i = 0; i < 5; ++i) {
+        for (size_t j = 0; j < 5; ++j) {
+            if (i < j) {
+                TEST_ASSERT_DOUBLE_WITHIN(expected * 0.04, expected, (double) seen[i][j]);
+            } else {
+                TEST_ASSERT_EQUAL_size_t(0, seen[i][j]);
+            }
+        }
+    }
+}
+
+static void test_sample_replays_the_same_seed() {
+    constexpr int32_t src[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    int32_t a[4] = {0};
+    int32_t b[4] = {0};
+
+    tda_Rng one = tda_rng_from_seed(5);
+    tda_Rng two = tda_rng_from_seed(5);
+
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, src, 10);
+    TEST_ASSERT_EQUAL_size_t(4, tda_span_sample(TDA_SPAN_FROM_DATA_MUT(int32_t, a, 4), s, &one));
+    TEST_ASSERT_EQUAL_size_t(4, tda_span_sample(TDA_SPAN_FROM_DATA_MUT(int32_t, b, 4), s, &two));
+
+    TEST_ASSERT_EQUAL_INT32_ARRAY(a, b, 4);
+}
+
+static void test_sample_moves_whole_elems() {
+    constexpr Pair src[5] = {{1, 100}, {2, 200}, {3, 300}, {4, 400}, {5, 500}};
+    Pair dst[3] = {0};
+
+    tda_Rng rng = tda_rng_from_seed(6);
+    const size_t n = tda_span_sample(
+        TDA_SPAN_FROM_DATA_MUT(Pair, dst, 3),
+        TDA_SPAN_FROM_DATA(Pair, src, 5),
+        &rng
+    );
+
+    TEST_ASSERT_EQUAL_size_t(3, n);
+    for (size_t i = 0; i < 3; ++i) {
+        TEST_ASSERT_EQUAL_INT64(dst[i].a * 100, dst[i].b);
+    }
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -305,6 +429,13 @@ int main() {
     RUN_TEST(test_copy_if_passes_the_ctx_through);
     RUN_TEST(test_copy_if_keeps_the_source_order);
     RUN_TEST(test_copy_if_moves_whole_elems);
+
+    RUN_TEST(test_sample_picks_in_source_order);
+    RUN_TEST(test_sample_of_more_than_there_is_copies_the_whole_source);
+    RUN_TEST(test_sample_of_nothing_draws_nothing);
+    RUN_TEST(test_sample_reaches_every_pick_equally_often);
+    RUN_TEST(test_sample_replays_the_same_seed);
+    RUN_TEST(test_sample_moves_whole_elems);
 
     return UNITY_END();
 }

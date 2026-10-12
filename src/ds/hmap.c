@@ -126,6 +126,35 @@ tda_Status tda_hmap_new_cap(
     return tda_hmap_new_raw_(cap, key_size, val_size, hasher, eq, al, out);
 }
 
+tda_Status tda_hmap_from_spans(
+    tda_Span keys,
+    tda_Span vals,
+    tda_Hasher hasher,
+    tda_Eq eq,
+    tda_Al *al,
+    tda_HMap **out
+) {
+    TDA_SPAN_ASSERT(keys);
+    TDA_SPAN_ASSERT(vals);
+    TDA_EXPECT(keys.len == vals.len);
+    assert(out);
+
+    tda_HMap *obj;
+    tda_Status st = tda_hmap_new_cap(keys.len, keys.elem_size, vals.elem_size, hasher, eq, al, &obj);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    st = tda_hmap_extend(obj, keys, vals);
+    if (TDA_STATUS_IS_ERR(st)) {
+        tda_hmap_drop(obj);
+        return st;
+    }
+
+    *out = obj;
+    return TDA_STATUS_OK;
+}
+
 tda_Status tda_hmap_new_raw_(
     size_t cap, size_t key_size, size_t val_size,
     tda_Hasher hasher, tda_Eq eq,
@@ -499,6 +528,24 @@ tda_Status tda_hmap_insert(tda_HMap *self, const void *key, const void *val, boo
     return TDA_STATUS_OK;
 }
 
+tda_Status tda_hmap_extend(tda_HMap *self, tda_Span keys, tda_Span vals) {
+    ASSERT_HMAP(self);
+    TDA_SPAN_ASSERT(keys);
+    TDA_SPAN_ASSERT(vals);
+    TDA_EXPECT(keys.elem_size == self->key_size);
+    TDA_EXPECT(vals.elem_size == self->val_size);
+    TDA_EXPECT(keys.len == vals.len);
+
+    for (size_t i = 0; i < keys.len; ++i) {
+        const tda_Status st = tda_hmap_insert(self, tda_span_get(keys, i), tda_span_get(vals, i), nullptr);
+        if (TDA_STATUS_IS_ERR(st)) {
+            return st;
+        }
+    }
+
+    return TDA_STATUS_OK;
+}
+
 tda_Status tda_hmap_get_or_insert(
     tda_HMap *self,
     const void *key,
@@ -586,6 +633,25 @@ void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node) {
     --self->len;
 
     ASSERT_HMAP(self);
+}
+
+void tda_hmap_retain(tda_HMap *self, tda_EntryPred pred, void *ctx) {
+    ASSERT_HMAP(self);
+    assert(pred);
+
+    for (size_t b = 0; b < self->bucket_count; ++b) {
+        tda_HMapNode **link = &self->buckets[b];
+        while (*link) {
+            tda_HMapNode *node = *link;
+            if (pred(node_key(node), node_val(self, node), ctx)) {
+                link = &node->next;
+                continue;
+            }
+            *link = node->next;
+            node_drop(self, node);
+            --self->len;
+        }
+    }
 }
 
 void tda_hmap_clear(tda_HMap *self) {

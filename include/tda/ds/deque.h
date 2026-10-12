@@ -25,8 +25,9 @@
 ///
 /// There is no tda_deque_data: there is no single block to point at. There is no
 /// tda_deque_to_span either, and no linearize to earn one — making the ring contiguous
-/// would be a mutation the next push_front undoes. The bridge to algo is the pair
-/// tda_deque_copy_to_span / tda_deque_copy_from_span, which copies instead of rearranging.
+/// would be a mutation the next push_front undoes. What algo gets instead is
+/// tda_deque_to_spans, the two runs as they lie, for whatever works run by run, and the
+/// pair tda_deque_copy_to_span / tda_deque_copy_from_span for whatever needs one run.
 ///
 /// The pointers are not stable: growing moves every elem. That is what ds/list is for.
 ///
@@ -157,7 +158,7 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other);
 tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other);
 
 /// writes every elem into 'dst' in ring order — at most two memcpy, the contents being at
-/// most two runs. This is how a deque reaches algo: sort or search the copy, not the ring
+/// most two runs. This is how a deque reaches an algo that needs one run, as sort does
 /// @param self the deque
 /// @param dst must have the same elem_size and be exactly as long as the deque
 /// @bigo{n}
@@ -172,6 +173,25 @@ void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst);
 /// @bigo{n}
 TDA_API
 void tda_deque_copy_from_span(tda_Deque *self, tda_Span src);
+
+/// @}
+
+/// @name to spans
+/// @{
+
+/// views the contents as the two runs they lie in: the front one from head to the end of
+/// the block, then the back one from its start
+/// @param self the deque; the views are good until it next changes
+/// @param[out] out_front the run holding the front elem; empty only on an empty deque
+/// @param[out] out_back the rest, empty unless the ring wraps
+/// @bigo{1}
+TDA_API
+void tda_deque_to_spans(const tda_Deque *self, tda_Span *out_front, tda_Span *out_back);
+
+/// tda_deque_to_spans, writable
+/// @copydetails tda_deque_to_spans
+TDA_API
+void tda_deque_to_spans_mut(tda_Deque *self, tda_SpanMut *out_front, tda_SpanMut *out_back);
 
 /// @}
 

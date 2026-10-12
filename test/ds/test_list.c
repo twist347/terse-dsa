@@ -854,6 +854,86 @@ static void test_clear_frees_every_node() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
+/* ========== retain ========== */
+
+// a tda_Pred over int32_t keeping what is set in the mask 'ctx' points to
+static bool in_mask(const void *elem, void *ctx) {
+    return *(const uint32_t *) ctx >> *(const int32_t *) elem & 1;
+}
+
+// every subset of six elems, checked for the order kept and for the very nodes kept
+static void test_retain_keeps_exactly_the_passing_nodes_in_order() {
+    for (uint32_t mask = 0; mask < 64; ++mask) {
+        tda_List *l = make_list(6);
+        const tda_ListNode *before[6];
+        collect_nodes(l, before, 6);
+
+        tda_list_retain(l, in_mask, &mask);
+
+        int32_t want[6];
+        const tda_ListNode *kept[6];
+        size_t n = 0;
+        for (int32_t i = 0; i < 6; ++i) {
+            if (mask >> i & 1) {
+                kept[n] = before[i];
+                want[n++] = i;
+            }
+        }
+        assert_elems(l, want, n);
+
+        const tda_ListNode *after[6];
+        collect_nodes(l, after, n);
+        for (size_t i = 0; i < n; ++i) {
+            TEST_ASSERT_EQUAL_PTR(kept[i], after[i]);
+        }
+
+        tda_list_drop(l);
+    }
+}
+
+typedef struct {
+    int32_t seen[8];
+    size_t calls;
+} Calls;
+
+static bool record_and_keep_odd(const void *elem, void *ctx) {
+    Calls *calls = ctx;
+    const int32_t val = *(const int32_t *) elem;
+    calls->seen[calls->calls++] = val;
+
+    return val % 2 != 0;
+}
+
+static void test_retain_asks_once_per_elem_front_to_back() {
+    tda_List *l = make_list(5);
+
+    Calls calls = {0};
+    tda_list_retain(l, record_and_keep_odd, &calls);
+
+    TEST_ASSERT_EQUAL_size_t(5, calls.calls);
+    constexpr int32_t order[5] = {0, 1, 2, 3, 4};
+    TEST_ASSERT_EQUAL_INT32_ARRAY(order, calls.seen, 5);
+
+    tda_list_drop(l);
+}
+
+static void test_retain_frees_the_dropped_nodes() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_bare(&probe);
+
+    tda_List *l = nullptr;
+    TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &l, 0, 1, 2, 3, 4, 5));
+
+    Calls calls = {0};
+    tda_list_retain(l, record_and_keep_odd, &calls);
+
+    TEST_ASSERT_EQUAL_size_t(4, probe.live); // the list struct and three nodes
+
+    tda_list_drop(l);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
 /* ========== splice ========== */
 
 static void test_splice_back_appends_and_empties_the_source() {
@@ -2101,6 +2181,10 @@ int main() {
     RUN_TEST(test_clear_of_an_empty_list_is_noop);
     RUN_TEST(test_clear_leaves_the_list_usable);
     RUN_TEST(test_clear_frees_every_node);
+
+    RUN_TEST(test_retain_keeps_exactly_the_passing_nodes_in_order);
+    RUN_TEST(test_retain_asks_once_per_elem_front_to_back);
+    RUN_TEST(test_retain_frees_the_dropped_nodes);
 
     RUN_TEST(test_splice_back_appends_and_empties_the_source);
     RUN_TEST(test_splice_front_prepends_and_empties_the_source);

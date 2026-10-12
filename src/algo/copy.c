@@ -51,3 +51,24 @@ void tda_span_copy_overlapping(tda_SpanMut dst, tda_Span src) {
 
     memmove(dst.data, src.data, dst.len * dst.elem_size);
 }
+
+size_t tda_span_sample(tda_SpanMut dst, tda_Span src, tda_Rng *rng) {
+    TDA_SPAN_ASSERT(dst);
+    TDA_SPAN_ASSERT(src);
+    TDA_EXPECT(dst.elem_size == src.elem_size);
+    assert(rng);
+
+    const size_t want = dst.len < src.len ? dst.len : src.len;
+    size_t write = 0;
+
+    // 'read' never runs past the end: once what is left equals what is still wanted, the
+    // draw below always hits, and every remaining elem goes
+    for (size_t read = 0; write < want; ++read) {
+        if (tda_rng_idx(rng, src.len - read) < want - write) {
+            memcpy(tda_span_get_mut(dst, write), tda_span_get(src, read), dst.elem_size);
+            ++write;
+        }
+    }
+
+    return write;
+}

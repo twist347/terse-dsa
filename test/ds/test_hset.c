@@ -875,6 +875,167 @@ static void test_swap_self_is_noop() {
     tda_hset_drop(s);
 }
 
+/* ========== retain ========== */
+
+static bool in_mask(const void *key, void *ctx) {
+    return *(const uint32_t *) ctx >> *(const int32_t *) key & 1;
+}
+
+// every subset of {0..5}, on spread buckets and on one long chain, where a removal has to
+// relink a neighbour rather than empty a bucket
+static void test_retain_keeps_exactly_the_passing_keys() {
+    const tda_Hasher hashers[2] = {tda_hash_i32, hash_all_alike};
+
+    for (size_t h = 0; h < 2; ++h) {
+        for (uint32_t mask = 0; mask < 64; ++mask) {
+            tda_HSet *s = make_filled(hashers[h], 6);
+
+            tda_hset_retain(s, in_mask, &mask);
+
+            size_t n = 0;
+            for (int32_t i = 0; i < 6; ++i) {
+                if (mask >> i & 1) {
+                    assert_has(s, i);
+                    ++n;
+                } else {
+                    assert_missing(s, i);
+                }
+            }
+            TEST_ASSERT_EQUAL_size_t(n, tda_hset_len(s));
+            assert_walk_sees_everything(s);
+
+            tda_hset_drop(s);
+        }
+    }
+}
+
+static bool count_and_keep_all(const void *key, void *ctx) {
+    size_t *seen = ctx;
+    ++seen[*(const int32_t *) key];
+
+    return true;
+}
+
+static void test_retain_asks_once_per_key() {
+    tda_HSet *s = make_filled(hash_all_alike, 6);
+
+    size_t seen[6] = {0};
+    tda_hset_retain(s, count_and_keep_all, seen);
+
+    for (size_t i = 0; i < 6; ++i) {
+        TEST_ASSERT_EQUAL_size_t(1, seen[i]);
+    }
+    TEST_ASSERT_EQUAL_size_t(6, tda_hset_len(s));
+
+    tda_hset_drop(s);
+}
+
+/* ========== from_span / extend ========== */
+
+static void test_from_span_collapses_repeats() {
+    tda_HSet *s = nullptr;
+    TDA_TEST_OK(
+        tda_hset_from_span(
+            TDA_SPAN_OF(int32_t, 3, 1, 3, 2, 1),
+            tda_hash_i32,
+            tda_eq_i32,
+            tda_al_default(),
+            &s
+        )
+    );
+
+    TEST_ASSERT_EQUAL_size_t(3, tda_hset_len(s));
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_hset_key_size(s));
+    assert_has(s, 1);
+    assert_has(s, 2);
+    assert_has(s, 3);
+    assert_missing(s, 4);
+
+    tda_hset_drop(s);
+}
+
+static void test_from_an_empty_span_is_an_empty_set() {
+    tda_HSet *s = nullptr;
+    TDA_TEST_OK(
+        tda_hset_from_span(
+            TDA_SPAN_FROM_DATA(int32_t, nullptr, 0),
+            tda_hash_i32,
+            tda_eq_i32,
+            tda_al_default(),
+            &s
+        )
+    );
+
+    TEST_ASSERT_EQUAL_size_t(0, tda_hset_len(s));
+
+    tda_hset_drop(s);
+}
+
+static void test_extend_adds_to_the_keys_already_there() {
+    tda_HSet *s = make_filled(tda_hash_i32, 3);
+
+    TDA_TEST_OK(tda_hset_extend(s, TDA_SPAN_OF(int32_t, 2, 3, 4)));
+    TDA_TEST_OK(TDA_HSET_EXTEND(int32_t, s, 5, 5));
+
+    TEST_ASSERT_EQUAL_size_t(6, tda_hset_len(s));
+    for (int32_t i = 0; i < 6; ++i) {
+        assert_has(s, i);
+    }
+    assert_walk_sees_everything(s);
+
+    tda_hset_drop(s);
+}
+
+// a refusal at any step of the build leaves nothing behind and no set handed out
+static void test_from_span_fails_at_every_step_without_a_leak() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+    const tda_Span keys = TDA_SPAN_OF(int32_t, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+
+    for (size_t n = 0;; ++n) {
+        tda_test_probe_fail_after_next(&probe, n);
+
+        tda_HSet *s = nullptr;
+        const tda_Status st = tda_hset_from_span(keys, tda_hash_i32, tda_eq_i32, &al, &s);
+        if (TDA_STATUS_IS_OK(st)) {
+            TEST_ASSERT_EQUAL_size_t(9, tda_hset_len(s));
+            tda_hset_drop(s);
+            TEST_ASSERT_EQUAL_size_t(0, probe.live);
+            break;
+        }
+
+        TEST_ASSERT_EQUAL(TDA_STATUS_ERR_NO_MEM, st);
+        TEST_ASSERT_NULL(s);
+        TEST_ASSERT_EQUAL_size_t(0, probe.live);
+    }
+}
+
+// what a refused extend keeps is the run up to the failing key, not a scattering of it
+static void test_extend_that_fails_keeps_a_prefix_of_the_run() {
+    constexpr int32_t keys[8] = {10, 11, 12, 13, 14, 15, 16, 17};
+
+    for (size_t n = 0; n < 12; ++n) {
+        tda_TestProbe probe;
+        tda_test_probe_reset(&probe);
+        tda_Al al = tda_test_probe_full(&probe);
+
+        tda_HSet *s = nullptr;
+        TDA_TEST_OK(TDA_HSET_NEW(int32_t, tda_hash_i32, tda_eq_i32, &al, &s));
+        tda_test_probe_fail_after_next(&probe, n);
+
+        const tda_Status st = tda_hset_extend(s, TDA_SPAN_FROM_DATA(int32_t, keys, 8));
+        const size_t len = tda_hset_len(s);
+        TEST_ASSERT_TRUE(TDA_STATUS_IS_ERR(st) ? len < 8 : len == 8);
+        for (size_t i = 0; i < 8; ++i) {
+            TEST_ASSERT_EQUAL(i < len, TDA_HSET_CONTAINS(int32_t, s, keys[i]));
+        }
+
+        tda_hset_drop(s);
+        TEST_ASSERT_EQUAL_size_t(0, probe.live);
+    }
+}
+
 /* ========== allocation failure ========== */
 
 static void test_new_reports_an_exhausted_arena() {
@@ -1373,6 +1534,15 @@ int main() {
     RUN_TEST(test_swap_exchanges_the_keys_and_the_hashers);
     RUN_TEST(test_swap_keeps_the_nodes_alive);
     RUN_TEST(test_swap_self_is_noop);
+
+    RUN_TEST(test_retain_keeps_exactly_the_passing_keys);
+    RUN_TEST(test_retain_asks_once_per_key);
+
+    RUN_TEST(test_from_span_collapses_repeats);
+    RUN_TEST(test_from_an_empty_span_is_an_empty_set);
+    RUN_TEST(test_extend_adds_to_the_keys_already_there);
+    RUN_TEST(test_from_span_fails_at_every_step_without_a_leak);
+    RUN_TEST(test_extend_that_fails_keeps_a_prefix_of_the_run);
 
     RUN_TEST(test_new_reports_an_exhausted_arena);
     RUN_TEST(test_insert_reports_an_exhausted_arena_and_changes_nothing);

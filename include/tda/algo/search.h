@@ -248,6 +248,24 @@ bool tda_span_any_of(tda_Span s, tda_Pred pred, void *ctx);
 [[nodiscard]] TDA_API
 bool tda_span_none_of(tda_Span s, tda_Pred pred, void *ctx);
 
+/// whether 's' opens with 'prefix'
+/// @param s the span to look in
+/// @param prefix what it should open with; empty is true, longer than 's' is false
+/// @param eq the equality
+/// @return whether the first prefix.len elems of 's' equal those of 'prefix'
+/// @bigo{m} — m being prefix.len; it stops at the first pair that differs
+[[nodiscard]] TDA_API
+bool tda_span_starts_with(tda_Span s, tda_Span prefix, tda_Eq eq);
+
+/// whether 's' closes with 'suffix'
+/// @param s the span to look in
+/// @param suffix what it should close with; empty is true, longer than 's' is false
+/// @param eq the equality
+/// @return whether the last suffix.len elems of 's' equal those of 'suffix'
+/// @bigo{m} — m being suffix.len; it stops at the first pair that differs
+[[nodiscard]] TDA_API
+bool tda_span_ends_with(tda_Span s, tda_Span suffix, tda_Eq eq);
+
 /// @}
 
 /// @name extremes

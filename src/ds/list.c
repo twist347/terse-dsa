@@ -518,6 +518,18 @@ void tda_list_remove(tda_List *self, tda_ListNode *node) {
     remove_node(self, node);
 }
 
+void tda_list_retain(tda_List *self, tda_Pred pred, void *ctx) {
+    ASSERT_LIST(self);
+    assert(pred);
+
+    for (tda_ListNode *node = self->head, *next; node; node = next) {
+        next = node->next;
+        if (!pred(node->elem, ctx)) {
+            remove_node(self, node);
+        }
+    }
+}
+
 void tda_list_clear(tda_List *self) {
     ASSERT_LIST(self);
 

@@ -350,6 +350,24 @@ bool tda_span_none_of(tda_Span s, tda_Pred pred, void *ctx) {
     return !tda_span_any_of(s, pred, ctx);
 }
 
+bool tda_span_starts_with(tda_Span s, tda_Span prefix, tda_Eq eq) {
+    TDA_SPAN_ASSERT(s);
+    TDA_SPAN_ASSERT(prefix);
+    TDA_EXPECT(s.elem_size == prefix.elem_size);
+    assert(eq);
+
+    return prefix.len <= s.len && matches_at(s, prefix, 0, eq);
+}
+
+bool tda_span_ends_with(tda_Span s, tda_Span suffix, tda_Eq eq) {
+    TDA_SPAN_ASSERT(s);
+    TDA_SPAN_ASSERT(suffix);
+    TDA_EXPECT(s.elem_size == suffix.elem_size);
+    assert(eq);
+
+    return suffix.len <= s.len && matches_at(s, suffix, s.len - suffix.len, eq);
+}
+
 /* ========== extremes ========== */
 
 size_t tda_span_min_elem(tda_Span s, tda_Cmp cmp) {

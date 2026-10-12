@@ -52,6 +52,26 @@ tda_Status tda_hset_new_cap(size_t cap, size_t key_size, tda_Hasher hasher, tda_
     return wrap(map, out);
 }
 
+tda_Status tda_hset_from_span(tda_Span s, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HSet **out) {
+    TDA_SPAN_ASSERT(s);
+    assert(out);
+
+    tda_HSet *obj;
+    tda_Status st = tda_hset_new_cap(s.len, s.elem_size, hasher, eq, al, &obj);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    st = tda_hset_extend(obj, s);
+    if (TDA_STATUS_IS_ERR(st)) {
+        tda_hset_drop(obj);
+        return st;
+    }
+
+    *out = obj;
+    return TDA_STATUS_OK;
+}
+
 void tda_hset_drop(tda_HSet *self) {
     if (!self) {
         return;
@@ -237,6 +257,21 @@ tda_Status tda_hset_insert(tda_HSet *self, const void *key, bool *out_is_new) {
     return tda_hmap_insert(self->map, key, nullptr, out_is_new);
 }
 
+tda_Status tda_hset_extend(tda_HSet *self, tda_Span src) {
+    ASSERT_HSET(self);
+    TDA_SPAN_ASSERT(src);
+    TDA_EXPECT(src.elem_size == tda_hmap_key_size(self->map));
+
+    for (size_t i = 0; i < src.len; ++i) {
+        const tda_Status st = tda_hmap_insert(self->map, tda_span_get(src, i), nullptr, nullptr);
+        if (TDA_STATUS_IS_ERR(st)) {
+            return st;
+        }
+    }
+
+    return TDA_STATUS_OK;
+}
+
 bool tda_hset_remove(tda_HSet *self, const void *key) {
     ASSERT_HSET(self);
     assert(key);
@@ -257,6 +292,18 @@ bool tda_hset_take(tda_HSet *self, const void *key, void *out_key) {
 
     // a set's map has no value side, so there is nothing to hand out but the key
     return tda_hmap_take(self->map, key, out_key, nullptr);
+}
+
+void tda_hset_retain(tda_HSet *self, tda_Pred pred, void *ctx) {
+    ASSERT_HSET(self);
+    assert(pred);
+
+    for (tda_HMapNode *node = tda_hmap_first_node_mut(self->map), *next; node; node = next) {
+        next = tda_hmap_node_next_mut(self->map, node);
+        if (!pred(tda_hmap_node_key(node), ctx)) {
+            tda_hmap_remove_node(self->map, node);
+        }
+    }
 }
 
 void tda_hset_clear(tda_HSet *self) {

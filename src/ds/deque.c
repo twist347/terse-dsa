@@ -286,6 +286,28 @@ void tda_deque_copy_from_span(tda_Deque *self, tda_Span src) {
     copy_in(self, src.data);
 }
 
+/* ========== to spans ========== */
+
+void tda_deque_to_spans(const tda_Deque *self, tda_Span *out_front, tda_Span *out_back) {
+    ASSERT_DEQUE(self);
+    assert(out_front);
+    assert(out_back);
+
+    const size_t front_len = first_run(self);
+    *out_front = tda_span_from_data(front_len ? elem_at(self, 0) : nullptr, front_len, self->elem_size);
+    *out_back = tda_span_from_data(self->data, self->len - front_len, self->elem_size);
+}
+
+void tda_deque_to_spans_mut(tda_Deque *self, tda_SpanMut *out_front, tda_SpanMut *out_back) {
+    ASSERT_DEQUE(self);
+    assert(out_front);
+    assert(out_back);
+
+    const size_t front_len = first_run(self);
+    *out_front = tda_span_from_data_mut(front_len ? elem_at_mut(self, 0) : nullptr, front_len, self->elem_size);
+    *out_back = tda_span_from_data_mut(self->data, self->len - front_len, self->elem_size);
+}
+
 /* ========== compare ========== */
 
 bool tda_deque_eq(const tda_Deque *a, const tda_Deque *b) {

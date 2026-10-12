@@ -1,11 +1,13 @@
 #pragma once
 
+#include "tda/algo/fn.h"
 #include "tda/alloc/alloc.h"
 #include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/hash.h"
 #include "tda/core/print.h"
+#include "tda/core/span.h"
 #include "tda/core/status.h"
 #include "tda/ds/hmap.h"
 
@@ -75,6 +77,18 @@ tda_Status tda_hset_new(size_t key_size, tda_Hasher hasher, tda_Eq eq, tda_Al *a
 /// @bigo{n}
 [[nodiscard]] TDA_API
 tda_Status tda_hset_new_cap(size_t cap, size_t key_size, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HSet **out);
+
+/// a set holding the keys 's' views, taking key_size from its elem_size
+/// @param s the keys; repeats collapse into one
+/// @param hasher the hash the keys are placed by
+/// @param eq the equality the keys are matched by
+/// @param al the allocator
+/// @param[out] out the new set, written only on success
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when the set, its buckets or a node cannot be allocated
+/// @bigo{n} expected
+[[nodiscard]] TDA_API
+tda_Status tda_hset_from_span(tda_Span s, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HSet **out);
 
 /// releases every node, the buckets and the set through the allocator it was built with
 /// @param self null is a no-op, so this is safe on a partly built object
@@ -276,6 +290,16 @@ const void *tda_hset_node_key(const tda_HSetNode *node);
 [[nodiscard]] TDA_API
 tda_Status tda_hset_insert(tda_HSet *self, const void *key, bool *out_is_new);
 
+/// tda_hset_insert of every key 'src' views
+/// @param self the set
+/// @param src the keys, of the set's key_size
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when a node or a wider bucket array cannot be allocated.
+///         The keys before the failing one are in: a set still, but not the whole run
+/// @bigo{n} expected, plus the amortized cost of growing
+[[nodiscard]] TDA_API
+tda_Status tda_hset_extend(tda_HSet *self, tda_Span src);
+
 /// drops 'key' if it is there
 /// @param self the set
 /// @param key the key to drop
@@ -302,6 +326,14 @@ void tda_hset_remove_node(tda_HSet *self, tda_HSetNode *node);
 /// @bigo{1} expected
 TDA_API
 bool tda_hset_take(tda_HSet *self, const void *key, void *out_key);
+
+/// keeps the keys 'pred' passes and drops the rest
+/// @param self the set; the kept nodes stay where they are, so pointers into them live on
+/// @param pred asked once per key, in walk order; it must not change the set
+/// @param ctx handed to 'pred'
+/// @bigo{n} plus the bucket count
+TDA_API
+void tda_hset_retain(tda_HSet *self, tda_Pred pred, void *ctx);
 
 /// drops every key, keeping the buckets
 /// @param self the set
@@ -479,6 +511,14 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
 /// @bigo{1} expected
 #define TDA_HSET_CONTAINS(K, self, key) \
     tda_hset_contains(TDA_HSET_TYPED_(K, self), &(K){ (key) })
+
+/// tda_hset_extend from the keys written out
+/// @param K the key type
+/// @param self the set
+/// @param ... the keys, as a K initializer list
+/// @bigo{n} expected
+#define TDA_HSET_EXTEND(K, self, ...) \
+    tda_hset_extend((self), TDA_SPAN_OF(K, __VA_ARGS__))
 
 /// tda_hset_find from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS

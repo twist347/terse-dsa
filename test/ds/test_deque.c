@@ -716,6 +716,71 @@ static void test_the_span_pair_carries_the_deque_through_algo() {
     tda_deque_drop(d);
 }
 
+/* ========== to spans ========== */
+
+// every head over every length on a ring of six: the two runs, read front then back, are
+// the ring order, and the front one is the one holding the front elem
+static void test_to_spans_are_the_ring_order_split_at_the_seam() {
+    constexpr size_t CAP = 6;
+
+    for (size_t head = 0; head < CAP; ++head) {
+        for (size_t len = 0; len <= CAP; ++len) {
+            tda_Deque *d = make_at(CAP, head, len);
+
+            tda_Span front, back;
+            tda_deque_to_spans(d, &front, &back);
+
+            TEST_ASSERT_EQUAL_size_t(len, front.len + back.len);
+            TEST_ASSERT_EQUAL_size_t(len > 0, front.len > 0);
+            TEST_ASSERT_EQUAL(len > 0 && wraps(d), back.len > 0);
+            for (size_t i = 0; i < len; ++i) {
+                const tda_Span run = i < front.len ? front : back;
+                const size_t at = i < front.len ? i : i - front.len;
+                TEST_ASSERT_EQUAL_PTR(tda_deque_get(d, i), tda_span_get(run, at));
+            }
+
+            tda_deque_drop(d);
+        }
+    }
+}
+
+static void test_to_spans_of_a_fresh_deque_are_empty() {
+    tda_Deque *d = nullptr;
+    TDA_TEST_OK(TDA_DEQUE_NEW(int32_t, tda_al_default(), &d));
+
+    tda_Span front, back;
+    tda_deque_to_spans(d, &front, &back);
+
+    TEST_ASSERT_EQUAL_size_t(0, front.len);
+    TEST_ASSERT_EQUAL_size_t(0, back.len);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), front.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), back.elem_size);
+
+    tda_deque_drop(d);
+}
+
+// what the mutable pair is for: an algo that works run by run, applied in place
+static void test_to_spans_mut_write_through_to_the_ring() {
+    tda_Deque *d = make_wrapped();
+    TEST_ASSERT_TRUE(wraps(d));
+
+    tda_SpanMut front, back;
+    tda_deque_to_spans_mut(d, &front, &back);
+    TEST_ASSERT_TRUE(back.len > 0);
+
+    TDA_SPAN_FOR_EACH_MUT_AS(int32_t, elem, front) {
+        *elem += 1;
+    }
+    TDA_SPAN_FOR_EACH_MUT_AS(int32_t, elem, back) {
+        *elem += 1;
+    }
+
+    constexpr int32_t want[4] = {11, 21, 31, 41};
+    assert_elems(d, want, 4);
+
+    tda_deque_drop(d);
+}
+
 /* ========== insert / remove ========== */
 
 static void test_insert_at_the_front_matches_push_front() {
@@ -1655,6 +1720,10 @@ int main() {
     RUN_TEST(test_copy_from_span_writes_back_in_ring_order);
     RUN_TEST(test_the_span_pair_round_trips_an_untouched_deque);
     RUN_TEST(test_the_span_pair_carries_the_deque_through_algo);
+
+    RUN_TEST(test_to_spans_are_the_ring_order_split_at_the_seam);
+    RUN_TEST(test_to_spans_of_a_fresh_deque_are_empty);
+    RUN_TEST(test_to_spans_mut_write_through_to_the_ring);
 
     RUN_TEST(test_insert_at_the_front_matches_push_front);
     RUN_TEST(test_insert_at_len_matches_push_back);
