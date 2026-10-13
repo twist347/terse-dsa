@@ -12,4 +12,6 @@ function(tda_add_bench target_name source_file)
 endfunction()
 
 tda_add_bench(bench_algo_sort algo/bench_sort.c)
+tda_add_bench(bench_alloc alloc/bench_alloc.c)
+tda_add_bench(bench_ds_hmap ds/bench_hmap.c)
 tda_add_bench(bench_ds_vec ds/bench_vec.c)

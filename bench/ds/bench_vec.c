@@ -1,5 +1,5 @@
-// push is where the growth policy shows: every benchmark here pushes the same elems, and
-// the pair "grows" / "reserved" says what the growing itself cost on that allocator
+// every benchmark pushes the same elems; "grows" minus "reserved" is the cost of growth
+// on that allocator
 
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
@@ -11,12 +11,10 @@
 
 static constexpr size_t PUSHES = 100'000;
 
-// the arena has to hold every block the growth walks through, not just the last one:
-// its dealloc is a no-op, so nothing is ever handed back
+// the arena never frees, so it must fit every block the growth passes through
 static constexpr size_t ARENA_CAP = 4 * 1024 * 1024;
 
-/// pushes PUSHES elems into a fresh vec on 'al'. A non-zero 'cap' asks for the room up
-/// front, so the difference between the two is the cost of growing
+/// pushes PUSHES elems into a fresh vec on 'al'. A non-zero 'cap' reserves up front
 static void push_all(tda_Al *al, size_t cap) {
     tda_Vec *v = nullptr;
     if (TDA_STATUS_IS_ERR(TDA_VEC_NEW(int32_t, al, &v))) {
@@ -46,8 +44,8 @@ UBENCH(push, default_reserved) {
     push_all(tda_al_default(), PUSHES);
 }
 
-// the arena has no realloc of its own, so every growth is take-copy-drop and the dropped
-// block stays dead until the arena is reset — the case the growth factor matters most in
+// the arena grows its last block in place, so a vec alone in it pays almost nothing
+// for growth; the pair is the baseline for the default allocator above
 UBENCH(push, arena_grows) {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), ARENA_CAP);
     if (!arena) {
