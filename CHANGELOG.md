@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.4.0 — 2026-10-13
+
+### Added
+
+- **Building from spans.** `tda_hmap_from_spans` and `tda_hset_from_span` make a
+  container from what spans view, taking the key and value sizes from them;
+  `tda_hmap_extend`, `tda_hset_extend` and `TDA_HSET_EXTEND` insert a run into one that
+  exists. A repeated key keeps its last value. On a refused allocation the pairs before
+  the failing one stay inserted.
+- **`retain` on every container with a predicate to filter by.** `tda_list_retain`,
+  `tda_hmap_retain` and `tda_hset_retain` join those of `tda_Vec` and `tda_Deque`: the
+  entries that fail are dropped in one pass, and the kept nodes do not move, so pointers
+  into them stay valid.
+- `tda_deque_to_spans` and `tda_deque_to_spans_mut` view a deque as the two runs it lies
+  in, so the algo layer reaches it without a copy: a find or a fold runs on each half.
+  The back run is empty unless the ring wraps.
+- `tda_span_sample` copies a random selection into `dst`, none twice and in their order
+  in `src`, in one pass that leaves `src` unchanged. Every pick of that size is equally
+  likely.
+- `tda_span_starts_with` and `tda_span_ends_with`, under an equality.
+
 ## 1.3.0 — 2026-10-08
 
 ### Added

@@ -98,12 +98,12 @@ uses stays the better habit.
 | | |
 |---|---|
 | `fn.h` | `tda_Pred`, `tda_Fold`, `tda_Gen`, `tda_UnOp`, `tda_BinOp` |
-| `search.h` | find and its kin from either end, count, the all_of/any_of/none_of trio, min_elem and max_elem, and the binary family over a sorted span |
+| `search.h` | find and its kin from either end, count, starts_with and ends_with, the all_of/any_of/none_of trio, min_elem and max_elem, and the binary family over a sorted span |
 | `sort.h` | sort and sort_stable, insertion_sort, partial_sort, nth_elem and the is_sorted checks |
 | `heap.h` | make_heap, push_heap, pop_heap, sort_heap and the is_heap checks |
 | `permute.h` | reverse, rotate, swap_ranges, shuffle and shuffle_prefix, the partition family and stepping through permutations |
 | `modify.h` | remove, remove_if and unique, which return the new length; replace and replace_if, which write in place |
-| `copy.h` | copy, copy_if, copy_overlapping |
+| `copy.h` | copy, copy_if, copy_overlapping, sample |
 | `fill.h` | fill, fill_zero, generate |
 | `fold.h` | fold, fold_back, partial_sum, adjacent_difference |
 | `transform.h` | transform and zip_with |
@@ -167,7 +167,7 @@ With `FetchContent`:
 include(FetchContent)
 FetchContent_Declare(terse-dsa
     GIT_REPOSITORY https://github.com/twist347/terse-dsa.git
-    GIT_TAG v1.3.0
+    GIT_TAG v1.4.0
 )
 FetchContent_MakeAvailable(terse-dsa)
 
@@ -179,7 +179,7 @@ As a submodule:
 ```sh
 git submodule add https://github.com/twist347/terse-dsa.git \
     thirdparty/terse-dsa
-git -C thirdparty/terse-dsa checkout v1.3.0
+git -C thirdparty/terse-dsa checkout v1.4.0
 ```
 
 ```cmake
