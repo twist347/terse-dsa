@@ -3,6 +3,7 @@
 #include "tda/core/check.h"
 #include "tda/core/util.h"
 
+#include "internal/order.h"
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -930,7 +931,7 @@ static tda_ListNode *merge_chains(tda_ListNode *a, tda_ListNode *b, tda_Cmp cmp)
     tda_ListNode **tail = &head;
 
     while (a && b) {
-        if (cmp(a->elem, b->elem) <= 0) {
+        if (!tda_right_goes_first(cmp, a->elem, b->elem)) {
             *tail = a;
             a = a->next;
         } else {

@@ -5,6 +5,7 @@
 #include "tda/core/check.h"
 
 #include "internal/emit.h"
+#include "internal/order.h"
 #include "internal/overlap.h"
 
 #include <assert.h>
@@ -37,9 +38,9 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
         const void *l = tda_span_get(a, i);
         const void *r = tda_span_get(b, j);
 
-        // '<=' takes from 'a' on a tie, keeping equal elems in order; this is what
-        // makes tda_span_sort_stable stable
-        if (cmp(l, r) <= 0) {
+        // a tie takes from 'a', keeping equal elems in order; this is what makes
+        // tda_span_sort_stable stable
+        if (!tda_right_goes_first(cmp, l, r)) {
             out = tda_emit(dst, out, l);
             ++i;
         } else {
@@ -107,7 +108,7 @@ static void merge_in_place(tda_SpanMut s, size_t mid, tda_Cmp cmp) {
 
     if (s.len == 2) {
         const tda_Span cs = tda_span_mut_to_span(s);
-        if (cmp(tda_span_get(cs, 1), tda_span_get(cs, 0)) < 0) {
+        if (tda_right_goes_first(cmp, tda_span_get(cs, 0), tda_span_get(cs, 1))) {
             tda_span_swap_elems(s, 0, 1);
         }
         return;
@@ -163,8 +164,8 @@ static void merge_buffered(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *buf) {
         size_t r = mid;
 
         while (b < left_len && r < s.len) {
-            // '<' keeps the buffered left run ahead of an equal elem on the right
-            const bool take_right = cmp(tda_span_get(cs, r), tda_span_get(parked, b)) < 0;
+            // a tie keeps the buffered left run ahead of an equal elem on the right
+            const bool take_right = tda_right_goes_first(cmp, tda_span_get(parked, b), tda_span_get(cs, r));
 
             memcpy(tda_span_get_mut(s, w), take_right ? tda_span_get(cs, r) : tda_span_get(parked, b), tsz);
             take_right ? ++r : ++b;
@@ -188,9 +189,10 @@ static void merge_buffered(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *buf) {
     size_t b = right_len;
 
     while (l > 0 && b > 0) {
-        // '>' takes the left elem only when strictly greater, so on a tie the buffered
-        // right elem is placed later and the left run stays first
-        const bool take_left = cmp(tda_span_get(cs, l - 1), tda_span_get(parked, b - 1)) > 0;
+        // filling from the back, the left elem is placed only when the right one goes
+        // before it, so on a tie the buffered right elem lands later and the left run
+        // stays first
+        const bool take_left = tda_right_goes_first(cmp, tda_span_get(cs, l - 1), tda_span_get(parked, b - 1));
 
         --w;
         if (take_left) {

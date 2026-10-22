@@ -6,11 +6,6 @@
 
 #include <assert.h>
 
-/* ========== internals ========== */
-
-/// moves 'idx' towards the root while it is greater than its parent
-static void sift_up(tda_SpanMut s, size_t idx, tda_Cmp cmp);
-
 /* ========== build ========== */
 
 void tda_span_make_heap(tda_SpanMut s, tda_Cmp cmp) {
@@ -30,7 +25,7 @@ void tda_span_push_heap(tda_SpanMut s, tda_Cmp cmp) {
     assert(cmp);
     TDA_EXPECT(s.len > 0);
 
-    sift_up(s, s.len - 1, cmp);
+    tda_heap_sift_up(s, s.len - 1, cmp);
 }
 
 void tda_span_pop_heap(tda_SpanMut s, tda_Cmp cmp) {
@@ -74,29 +69,10 @@ size_t tda_span_is_heap_until(tda_Span s, tda_Cmp cmp) {
     // every elem but the root is a child, so checking each against its parent covers
     // every edge once
     for (size_t child = 1; child < s.len; ++child) {
-        const size_t parent = (child - 1) / 2;
-
-        if (cmp(tda_span_get(s, parent), tda_span_get(s, child)) < 0) {
+        if (!tda_heap_above(s, tda_heap_parent(child), child, cmp)) {
             return child;
         }
     }
 
     return s.len;
-}
-
-/* ========== internals ========== */
-
-static void sift_up(tda_SpanMut s, size_t idx, tda_Cmp cmp) {
-    const tda_Span cs = tda_span_mut_to_span(s);
-
-    while (idx > 0) {
-        const size_t parent = (idx - 1) / 2;
-
-        if (cmp(tda_span_get(cs, parent), tda_span_get(cs, idx)) >= 0) {
-            break;
-        }
-
-        tda_span_swap_elems(s, parent, idx);
-        idx = parent;
-    }
 }

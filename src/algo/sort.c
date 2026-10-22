@@ -7,6 +7,7 @@
 #include "tda/core/util.h"
 
 #include "internal/bits.h"
+#include "internal/order.h"
 
 #include <assert.h>
 #include <string.h>
@@ -217,7 +218,7 @@ size_t tda_span_is_sorted_until(tda_Span s, tda_Cmp cmp) {
     for (size_t i = 1; i < s.len; ++i) {
         const void *prev = tda_span_get(s, i - 1);
         const void *cur = tda_span_get(s, i);
-        if (cmp(prev, cur) > 0) {
+        if (tda_right_goes_first(cmp, prev, cur)) {
             return i;
         }
     }
@@ -296,7 +297,7 @@ static size_t insertion_slot(tda_Span s, size_t idx, tda_Cmp cmp) {
     const void *val = tda_span_get(s, idx);
 
     size_t slot = idx;
-    while (slot > 0 && cmp(tda_span_get(s, slot - 1), val) > 0) {
+    while (slot > 0 && tda_right_goes_first(cmp, tda_span_get(s, slot - 1), val)) {
         --slot;
     }
     return slot;
