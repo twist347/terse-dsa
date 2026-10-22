@@ -49,9 +49,10 @@ out:
 Two rules shape the whole API:
 
 - **Memory is explicit and swappable.** Nothing allocates on its own — every container is
-  handed a `tda_Al *` and uses only that. Swapping in an arena or a logging
+  handed a `tda_Al *` and uses only that. Swapping in an arena, a slab or a logging
   allocator is a one-line change at the call site. A pool hands out blocks of one size,
-  so of the containers only a list runs on it.
+  so of the containers only a list runs on it; a slab keeps a pool per size class, and
+  any container runs on it.
 - **Errors cannot be dropped.** A fallible operation returns `tda_Status` and writes its
   result through a trailing `out`; `[[nodiscard]]` makes ignoring it a warning every
   compiler raises unasked, and a compile error under `-Werror`. Broken preconditions are
@@ -93,6 +94,7 @@ uses stays the better habit.
 | `default.h` | malloc and friends |
 | `arena.h` | bump allocation, freed all at once or back to a mark; over a parent or a buffer of your own |
 | `pool.h` | fixed-size blocks off a free list; over a parent or a buffer of your own |
+| `slab.h` | small blocks from pools by size class, large ones from the parent; the one to put under a container |
 | `aligned.h` | wraps another allocator and over-aligns every block it hands out |
 | `log.h` | wraps another allocator and writes down what it is asked |
 | `debug.h` | wraps another allocator and stops on misuse: wrong sizes, double frees, writes past the end or after a free; reports leaks and fails on demand |

@@ -5,6 +5,7 @@ tda_add_test(test_alloc_debug test_debug.c)
 tda_add_test(test_alloc_default test_default.c)
 tda_add_test(test_alloc_log test_log.c)
 tda_add_test(test_alloc_pool test_pool.c)
+tda_add_test(test_alloc_slab test_slab.c)
 
 # each misuse aborts, so each runs as its own process and passes on its report line
 add_executable(test_alloc_debug_misuse test_debug_misuse.c)

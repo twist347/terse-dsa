@@ -21,6 +21,7 @@
 #include "tda/alloc/default.h"
 #include "tda/alloc/log.h"
 #include "tda/alloc/pool.h"
+#include "tda/alloc/slab.h"
 
 #include "tda/algo/compare.h"
 #include "tda/algo/copy.h"

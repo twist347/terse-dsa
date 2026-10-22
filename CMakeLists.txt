@@ -61,6 +61,7 @@ set(TDA_ALLOC_SOURCES
         src/alloc/default.c
         src/alloc/log.c
         src/alloc/pool.c
+        src/alloc/slab.c
 )
 
 set(TDA_CORE_SOURCES

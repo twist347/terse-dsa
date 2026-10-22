@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.0 — unreleased
+
+### Added
+
+- **`alloc/slab`**, an allocator that keeps small blocks in pools by size class, from
+  16 to 512 bytes, and passes larger ones to its parent. Every container runs on it with
+  no tuning: the struct and the nodes of a list or an hmap go to pools, the buffer of a
+  grown vec to the parent. Pools take 4 KiB chunks as they need them, a freed block goes
+  back to its own pool, and no block carries a header. Over the default allocator it
+  runs a list about twice as fast and an hmap about a third faster; the memory of a
+  peak stays held until the drop.
+
 ## 1.5.0 — 2026-10-22
 
 ### Added
