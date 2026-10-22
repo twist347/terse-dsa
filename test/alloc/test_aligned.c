@@ -319,7 +319,7 @@ static void narrow_dealloc(void *ctx, void *ptr, size_t size) {
 }
 
 static tda_Al narrow_al() {
-    return (tda_Al){ .ctx = tda_al_default(), .alloc = narrow_alloc, .dealloc = narrow_dealloc };
+    return (tda_Al){.ctx = tda_al_default(), .alloc = narrow_alloc, .dealloc = narrow_dealloc};
 }
 
 static void test_the_narrow_parent_misses_max_align_t() {

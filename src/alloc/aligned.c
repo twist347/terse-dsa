@@ -3,6 +3,7 @@
 #include "internal/ptr.h"
 
 #include <assert.h>
+#include <stdckdint.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -13,6 +14,12 @@ static void *aligned_alloc_block(void *ctx, size_t size);
 
 static void aligned_dealloc_block(void *ctx, void *ptr, size_t size);
 
+/// what a request for 'size' costs the parent: room to slide up to the alignment, plus
+/// the word that keeps the parent's address. True when that does not fit in size_t
+[[nodiscard]]
+static bool ckd_parent_size(size_t *out, size_t size, size_t alignment);
+
+/// ckd_parent_size for a block already handed out, which therefore fits
 [[nodiscard]]
 static size_t parent_size(size_t size, size_t alignment);
 
@@ -84,11 +91,12 @@ static void *aligned_alloc_block(void *ctx, size_t size) {
         return nullptr;
     }
 
-    if (size > SIZE_MAX - (alignment - 1 + sizeof(void *))) {
+    size_t bytes;
+    if (ckd_parent_size(&bytes, size, alignment)) {
         return nullptr;
     }
 
-    unsigned char *base = tda_alloc(aligned_ctx->parent_al, parent_size(size, alignment));
+    unsigned char *base = tda_alloc(aligned_ctx->parent_al, bytes);
     if (!base) {
         return nullptr;
     }
@@ -114,6 +122,14 @@ static void aligned_dealloc_block(void *ctx, void *ptr, size_t size) {
     tda_dealloc(aligned_ctx->parent_al, base, parent_size(size, aligned_ctx->alignment));
 }
 
+static bool ckd_parent_size(size_t *out, size_t size, size_t alignment) {
+    return ckd_add(out, size, alignment - 1) || ckd_add(out, *out, sizeof(void *));
+}
+
 static size_t parent_size(size_t size, size_t alignment) {
-    return size + alignment - 1 + sizeof(void *);
+    size_t bytes;
+    [[maybe_unused]] const bool overflow = ckd_parent_size(&bytes, size, alignment);
+    assert(!overflow);
+
+    return bytes;
 }

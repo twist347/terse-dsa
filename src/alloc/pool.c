@@ -58,6 +58,10 @@ static void pool_init(
 
 static void pool_build_free_list(PoolCtx *ctx);
 
+/// the bytes of the block array, which fit: the constructor checked the product
+[[nodiscard]]
+static size_t pool_data_bytes(const PoolCtx *ctx);
+
 [[nodiscard]] [[maybe_unused]]
 static bool pool_owns(const PoolCtx *ctx, const void *ptr);
 
@@ -146,7 +150,7 @@ void tda_al_pool_drop(tda_Al *self) {
         return;
     }
 
-    tda_dealloc(parent_al, pool_ctx->data, pool_ctx->block_size * pool_ctx->block_count);
+    tda_dealloc(parent_al, pool_ctx->data, pool_data_bytes(pool_ctx));
     tda_dealloc(parent_al, pool_ctx, sizeof(PoolCtx));
     tda_dealloc(parent_al, self, sizeof(tda_Al));
 }
@@ -282,12 +286,16 @@ static void pool_build_free_list(PoolCtx *ctx) {
     }
 }
 
+static size_t pool_data_bytes(const PoolCtx *ctx) {
+    return ctx->block_size * ctx->block_count;
+}
+
 static bool pool_owns(const PoolCtx *ctx, const void *ptr) {
     // addresses, not pointers: ordering a pointer from outside the pool against the
     // pool's own is undefined, and one from outside is exactly what this is here to catch
     const uintptr_t addr = (uintptr_t) ptr;
     const uintptr_t begin = (uintptr_t) ctx->data;
-    const uintptr_t end = begin + ctx->block_size * ctx->block_count;
+    const uintptr_t end = begin + pool_data_bytes(ctx);
 
     return addr >= begin && addr < end && (addr - begin) % ctx->block_size == 0;
 }

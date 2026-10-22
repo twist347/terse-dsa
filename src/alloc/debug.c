@@ -85,6 +85,19 @@ static void release_oldest(DebugCtx *debug_ctx);
 [[nodiscard]]
 static bool all_equal(const unsigned char *ptr, size_t n, unsigned char fill);
 
+/// what a block of 'size' costs the parent, the guard included. True when that does not
+/// fit in size_t
+[[nodiscard]]
+static bool ckd_parent_size(size_t *out, size_t size);
+
+/// ckd_parent_size for a block already handed out, which therefore fits
+[[nodiscard]]
+static size_t parent_size(size_t size);
+
+/// the slot a probe for 'addr' starts from
+[[nodiscard]]
+static size_t table_home(const Table *table, uintptr_t addr);
+
 /// the slot where 'addr' is, or the empty slot where it would go
 [[nodiscard]]
 static size_t table_probe(const Table *table, uintptr_t addr);
@@ -222,19 +235,19 @@ static void *debug_alloc(void *ctx, size_t size) {
         return nullptr;
     }
 
-    size_t parent_size;
-    if (ckd_add(&parent_size, size, GUARD_SIZE)) {
+    size_t bytes;
+    if (ckd_parent_size(&bytes, size)) {
         return nullptr;
     }
 
-    unsigned char *block = tda_alloc(debug_ctx->parent, parent_size);
+    unsigned char *block = tda_alloc(debug_ctx->parent, bytes);
     if (!block) {
         return nullptr;
     }
 
     const Entry entry = {.addr = (uintptr_t) block, .size = size, .serial = serial};
     if (!table_insert(&debug_ctx->table, entry)) {
-        tda_dealloc(debug_ctx->parent, block, parent_size);
+        tda_dealloc(debug_ctx->parent, block, bytes);
         return nullptr;
     }
 
@@ -283,7 +296,7 @@ static void debug_dealloc(void *ctx, void *ptr, size_t size) {
     }
 
     debug_ctx->live_bytes -= size;
-    memset(block, FILL_FREED, size + GUARD_SIZE);
+    memset(block, FILL_FREED, parent_size(size));
 
     if (debug_ctx->quarantine_len == QUARANTINE_LEN) {
         release_oldest(debug_ctx);
@@ -330,14 +343,14 @@ static void release_oldest(DebugCtx *debug_ctx) {
     debug_ctx->quarantine_head = (debug_ctx->quarantine_head + 1) % QUARANTINE_LEN;
     --debug_ctx->quarantine_len;
 
-    if (!all_equal(f.ptr, f.size + GUARD_SIZE, FILL_FREED)) {
+    if (!all_equal(f.ptr, parent_size(f.size), FILL_FREED)) {
         report(
             "block #%llu at %p (%zu bytes) was written after it was freed",
             (unsigned long long) f.serial, f.ptr, f.size
         );
     }
 
-    tda_dealloc(debug_ctx->parent, f.ptr, f.size + GUARD_SIZE);
+    tda_dealloc(debug_ctx->parent, f.ptr, parent_size(f.size));
 }
 
 static bool all_equal(const unsigned char *ptr, size_t n, unsigned char fill) {
@@ -349,13 +362,29 @@ static bool all_equal(const unsigned char *ptr, size_t n, unsigned char fill) {
     return true;
 }
 
-static size_t table_probe(const Table *table, uintptr_t addr) {
+static bool ckd_parent_size(size_t *out, size_t size) {
+    return ckd_add(out, size, GUARD_SIZE);
+}
+
+static size_t parent_size(size_t size) {
+    size_t bytes;
+    [[maybe_unused]] const bool overflow = ckd_parent_size(&bytes, size);
+    assert(!overflow);
+
+    return bytes;
+}
+
+static size_t table_home(const Table *table, uintptr_t addr) {
     assert(table->cap > 0);
 
     // the low bits of a block address are zeros of its alignment; the mixer spreads the
     // rest over all of them
     const uint64_t key = addr;
-    size_t i = (size_t) tda_hash_u64(&key) & (table->cap - 1);
+    return (size_t) tda_hash_u64(&key) & (table->cap - 1);
+}
+
+static size_t table_probe(const Table *table, uintptr_t addr) {
+    size_t i = table_home(table, addr);
     while (table->slots[i].addr != 0 && table->slots[i].addr != addr) {
         i = (i + 1) & (table->cap - 1);
     }
@@ -408,8 +437,7 @@ static bool table_take(Table *table, uintptr_t addr, Entry *out) {
     // lies at or before it, so a probe never stops early at the hole
     const size_t mask = table->cap - 1;
     for (size_t i = (hole + 1) & mask; table->slots[i].addr != 0; i = (i + 1) & mask) {
-        const uint64_t key = table->slots[i].addr;
-        const size_t home = (size_t) tda_hash_u64(&key) & mask;
+        const size_t home = table_home(table, table->slots[i].addr);
         // distance from home to i against distance from hole to i, both around the ring
         if (((i - home) & mask) >= ((i - hole) & mask)) {
             table->slots[hole] = table->slots[i];
