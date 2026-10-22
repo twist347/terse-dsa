@@ -297,12 +297,14 @@ static void test_over_itself() {
 
 /* ========== over a parent that aligns too little ==========
  *
- * Every block of this parent sits 8 past a max_align_t boundary, below what the tda_Al
- * contract asks. list and hmap would put their elems there unaligned; the aligned
+ * Every block of this parent sits a pointer's alignment past a max_align_t boundary,
+ * below what the tda_Al contract asks wherever max_align_t is the wider of the two. list and hmap would put their elems there unaligned; the aligned
  * allocator in between is the fix the contract names.
  */
 
-static constexpr size_t NARROW_SHIFT = 8;
+// as narrow as an allocator can be and still hold the aligned allocator's own state,
+// which keeps pointers in the parent's blocks
+static constexpr size_t NARROW_SHIFT = alignof(void *);
 
 static void *narrow_alloc(void *ctx, size_t size) {
     unsigned char *base = tda_alloc(ctx, size + alignof(max_align_t));
@@ -325,6 +327,12 @@ static tda_Al narrow_al() {
 }
 
 static void test_the_narrow_parent_misses_max_align_t() {
+    // where max_align_t is no wider than a pointer (arm64 macOS), a pointer-aligned
+    // block already meets the contract and there is no narrow parent to build
+    if (alignof(max_align_t) <= NARROW_SHIFT) {
+        TEST_IGNORE_MESSAGE("max_align_t is no wider than a pointer here");
+    }
+
     tda_Al narrow = narrow_al();
 
     void *ptr = tda_alloc(&narrow, 32);
