@@ -1,0 +1,43 @@
+name: docs
+
+# on a release, so the published reference matches a tag; by hand for the first run
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: sudo apt-get update && sudo apt-get install -y doxygen
+
+      - run: doxygen docs/Doxyfile
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: build-docs/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-26.04
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

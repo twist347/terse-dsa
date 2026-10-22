@@ -6,6 +6,8 @@
 
 Classic containers and algorithms, written plainly. No dependencies.
 
+The reference lives at [twist347.github.io/terse-dsa](https://twist347.github.io/terse-dsa/).
+
 ## Example
 
 ```c
@@ -151,7 +153,8 @@ on macOS with Apple clang, and on Windows with clang from MSYS2 against the UCRT
 shared library included. MSVC's `cl` does not build it: it lacks too much of C23
 (`constexpr`, `_BitInt`, `<stdckdint.h>`).
 
-The reference, generated from the same headers:
+The reference is generated from the same headers and published with each release; to
+build it locally:
 
 ```sh
 doxygen docs/Doxyfile   # -> build-docs/html/index.html
