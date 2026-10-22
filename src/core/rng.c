@@ -34,6 +34,11 @@ static uint64_t rotl64(uint64_t val, int count);
 [[nodiscard]]
 static uint64_t next_u64(tda_Rng *self);
 
+/// the top half of a draw: xoshiro's high bits are its best, and every 32-bit draw takes
+/// them from here, so u32 and the bounded and float draws share one stream
+[[nodiscard]]
+static uint32_t next_u32(tda_Rng *self);
+
 /* ========== seeding ========== */
 
 tda_Rng tda_rng_from_seed(uint64_t seed) {
@@ -55,7 +60,7 @@ tda_Rng tda_rng_from_seed(uint64_t seed) {
 uint32_t tda_rng_u32(tda_Rng *self) {
     assert(self);
 
-    return (uint32_t) (next_u64(self) >> 32);
+    return next_u32(self);
 }
 
 uint64_t tda_rng_u64(tda_Rng *self) {
@@ -70,7 +75,7 @@ uint32_t tda_rng_u32_max(tda_Rng *self, uint32_t max) {
     assert(self);
 
     if (max == UINT32_MAX) {
-        return (uint32_t) (next_u64(self) >> 32); // range would overflow, and need not
+        return next_u32(self); // range would overflow, and need not
     }
 
     // Lemire's nearly divisionless method. One multiply carries the draw into
@@ -83,14 +88,14 @@ uint32_t tda_rng_u32_max(tda_Rng *self, uint32_t max) {
     // two takes no division but throws away up to half the draws, and an unpredictable
     // branch costs more than the multiply saves.
     const uint32_t range = max + 1;
-    uint64_t wide = (uint64_t) (uint32_t) (next_u64(self) >> 32) * range;
+    uint64_t wide = (uint64_t) next_u32(self) * range;
     uint32_t low = (uint32_t) wide;
 
     if (low < range) {
         const uint32_t threshold = (uint32_t) (-range) % range; // 2^32 mod range
 
         while (low < threshold) {
-            wide = (uint64_t) (uint32_t) (next_u64(self) >> 32) * range;
+            wide = (uint64_t) next_u32(self) * range;
             low = (uint32_t) wide;
         }
     }
@@ -157,7 +162,7 @@ float tda_rng_f32(tda_Rng *self) {
 
     // 24 bits is what a float holds whole, so every draw names a distinct multiple of
     // 2^-24 and the scaling is exact
-    return (float) ((uint32_t) (next_u64(self) >> 32) >> 8) * 0x1.0p-24f;
+    return (float) (next_u32(self) >> 8) * 0x1.0p-24f;
 }
 
 double tda_rng_f64(tda_Rng *self) {
@@ -239,4 +244,8 @@ static uint64_t next_u64(tda_Rng *self) {
     self->s[3] = rotl64(self->s[3], 45);
 
     return result;
+}
+
+static uint32_t next_u32(tda_Rng *self) {
+    return (uint32_t) (next_u64(self) >> 32);
 }
