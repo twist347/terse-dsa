@@ -1,19 +1,10 @@
 #include "tda/algo/compare.h"
 
+#include "tda/algo/search.h"
 #include "tda/core/check.h"
 
 #include <assert.h>
 #include <string.h>
-
-/* ========== internals ========== */
-
-/// how many elems of 's' equal 'key' under 'eq'
-[[nodiscard]]
-static size_t count_of(tda_Span s, const void *key, tda_Eq eq);
-
-/// whether some elem of 's' equals 'key' under 'eq'
-[[nodiscard]]
-static bool holds(tda_Span s, const void *key, tda_Eq eq);
 
 /* ========== equality ========== */
 
@@ -103,13 +94,13 @@ bool tda_span_is_permutation(tda_Span a, tda_Span b, tda_Eq eq) {
         const void *elem = tda_span_get(rest_a, i);
 
         // an elem seen earlier was already counted, all its copies at once
-        if (holds(tda_span_sub(rest_a, 0, i), elem, eq)) {
+        if (tda_span_contains(tda_span_sub(rest_a, 0, i), elem, eq)) {
             continue;
         }
 
         // all its copies in 'a' lie at 'i' or later; a zero count in 'b' fails early
-        const size_t in_b = count_of(rest_b, elem, eq);
-        if (in_b == 0 || in_b != count_of(tda_span_sub(rest_a, i, rest_a.len - i), elem, eq)) {
+        const size_t in_b = tda_span_count(rest_b, elem, eq);
+        if (in_b == 0 || in_b != tda_span_count(tda_span_sub(rest_a, i, rest_a.len - i), elem, eq)) {
             return false;
         }
     }
@@ -138,23 +129,4 @@ int tda_span_cmp(tda_Span a, tda_Span b, tda_Cmp cmp) {
         }
     }
     return (a.len > b.len) - (a.len < b.len);
-}
-
-/* ========== internals ========== */
-
-static size_t count_of(tda_Span s, const void *key, tda_Eq eq) {
-    size_t n = 0;
-    for (size_t i = 0; i < s.len; ++i) {
-        n += eq(tda_span_get(s, i), key);
-    }
-    return n;
-}
-
-static bool holds(tda_Span s, const void *key, tda_Eq eq) {
-    for (size_t i = 0; i < s.len; ++i) {
-        if (eq(tda_span_get(s, i), key)) {
-            return true;
-        }
-    }
-    return false;
 }

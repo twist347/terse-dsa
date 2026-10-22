@@ -2,6 +2,7 @@
 
 #include "tda/core/check.h"
 
+#include "internal/emit.h"
 #include "internal/overlap.h"
 
 #include <assert.h>
@@ -34,8 +35,7 @@ size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx)
     for (size_t read = 0; read < src.len; ++read) {
         const void *cur = tda_span_get(src, read);
         if (pred(cur, ctx)) {
-            memcpy(tda_span_get_mut(dst, write), cur, dst.elem_size);
-            ++write;
+            write = tda_emit(dst, write, cur);
         }
     }
 
@@ -69,8 +69,7 @@ size_t tda_span_sample(tda_SpanMut dst, tda_Span src, tda_Rng *rng) {
     // the draw always hits and every remaining elem is taken
     for (size_t read = 0; write < want; ++read) {
         if (tda_rng_idx(rng, src.len - read) < want - write) {
-            memcpy(tda_span_get_mut(dst, write), tda_span_get(src, read), dst.elem_size);
-            ++write;
+            write = tda_emit(dst, write, tda_span_get(src, read));
         }
     }
 

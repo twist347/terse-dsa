@@ -6,9 +6,10 @@
 #include <string.h>
 
 /*
- * Appending into a span that is filled left to right, for the algorithms that walk two
- * sorted spans at once — algo/merge and algo/set. Both take the current write position
- * and report the next one, so the caller carries one cursor instead of two.
+ * Appending into a span that is filled left to right: the algorithms that walk two sorted
+ * spans at once (algo/merge, algo/set) and those that pick elems out of one (copy_if,
+ * sample). Each helper takes the current write position and reports the next one, so the
+ * caller carries one cursor instead of two.
  */
 
 /// appends one elem to 'dst' at 'out' and reports the next write position
