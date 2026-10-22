@@ -6,7 +6,7 @@
 #include "internal/ptr.h"
 
 #include <assert.h>
-#include <stdckdint.h>
+#include <stdint.h>
 #include <string.h>
 
 /* ========== internals ========== */
@@ -45,6 +45,18 @@ static tda_Status node_new(tda_Al *al, size_t elem_size, const void *val, tda_Li
 
 static void node_drop(tda_Al *al, size_t elem_size, tda_ListNode *node);
 
+/// links the chain 'first'..'last' of 'count' nodes between 'prev' and 'next'; a null
+/// neighbour stands for that end of the list
+static void link_chain(
+    tda_List *self,
+    tda_ListNode *first,
+    tda_ListNode *last,
+    size_t count,
+    tda_ListNode *prev,
+    tda_ListNode *next
+);
+
+/// link_chain for one node
 static void link_node(tda_List *self, tda_ListNode *node, tda_ListNode *prev, tda_ListNode *next);
 
 [[nodiscard]]
@@ -55,6 +67,25 @@ static void unlink_node(tda_List *self, tda_ListNode *node);
 static void remove_node(tda_List *self, tda_ListNode *node);
 
 static void splice_nodes(tda_List *self, tda_List *src, bool front);
+
+/// where the nodes for 'self' come from: 'src' itself on one allocator, otherwise a copy
+/// of it on the allocator of 'self', since a node belongs to the allocator that made it
+[[nodiscard]]
+static tda_Status nodes_for(tda_List *self, tda_List *src, tda_List **out);
+
+/// after the nodes of 'from' went into 'self': a copy is dropped and 'src' emptied
+static void release_source(tda_List *src, tda_List *from);
+
+/// splice_front and splice_back
+[[nodiscard]]
+static tda_Status splice_impl(tda_List *self, tda_List *src, bool front);
+
+/// the walk behind eq and eq_by; a null 'eq' compares bytes
+[[nodiscard]]
+static bool eq_impl(const tda_List *a, const tda_List *b, tda_Eq eq);
+
+/// forgets every node without freeing any; they were moved or freed already
+static void set_empty(tda_List *self);
 
 static void swap_contents(tda_List *a, tda_List *b);
 
@@ -89,6 +120,11 @@ tda_Status tda_list_new(size_t elem_size, tda_Al *al, tda_List **out) {
     assert(elem_size > 0);
     assert(al);
     assert(out);
+
+    // checked once here, so node_bytes needs no check of its own
+    if (elem_size > SIZE_MAX - sizeof(tda_ListNode)) {
+        return TDA_STATUS_ERR_NO_MEM;
+    }
 
     tda_List *obj = tda_alloc(al, sizeof(tda_List));
     if (!obj) {
@@ -283,25 +319,7 @@ bool tda_list_eq(const tda_List *a, const tda_List *b) {
     ASSERT_LIST(b);
     TDA_EXPECT(a->elem_size == b->elem_size);
 
-    if (a == b) {
-        return true;
-    }
-
-    if (a->len != b->len) {
-        return false;
-    }
-
-    const tda_ListNode *x = a->head;
-    const tda_ListNode *y = b->head;
-    while (x) {
-        if (memcmp(x->elem, y->elem, a->elem_size) != 0) {
-            return false;
-        }
-        x = x->next;
-        y = y->next;
-    }
-
-    return true;
+    return eq_impl(a, b, nullptr);
 }
 
 bool tda_list_eq_by(const tda_List *a, const tda_List *b, tda_Eq eq) {
@@ -310,25 +328,7 @@ bool tda_list_eq_by(const tda_List *a, const tda_List *b, tda_Eq eq) {
     TDA_EXPECT(a->elem_size == b->elem_size);
     assert(eq);
 
-    if (a == b) {
-        return true;
-    }
-
-    if (a->len != b->len) {
-        return false;
-    }
-
-    const tda_ListNode *x = a->head;
-    const tda_ListNode *y = b->head;
-    while (x) {
-        if (!eq(x->elem, y->elem)) {
-            return false;
-        }
-        x = x->next;
-        y = y->next;
-    }
-
-    return true;
+    return eq_impl(a, b, eq);
 }
 
 /* ========== info ========== */
@@ -541,29 +541,7 @@ tda_Status tda_list_splice_front(tda_List *self, tda_List *src) {
     TDA_EXPECT(self != src);
     TDA_EXPECT(self->elem_size == src->elem_size);
 
-    if (src->len == 0) {
-        return TDA_STATUS_OK;
-    }
-
-    if (self->al == src->al) {
-        splice_nodes(self, src, true);
-        return TDA_STATUS_OK;
-    }
-
-    tda_List *copy;
-    const tda_Status st = tda_list_copy_with(src, self->al, &copy);
-    if (TDA_STATUS_IS_ERR(st)) {
-        return st;
-    }
-
-    splice_nodes(self, copy, true);
-    tda_list_drop(copy);
-    clear_nodes(src);
-
-    ASSERT_LIST(self);
-    ASSERT_LIST(src);
-
-    return TDA_STATUS_OK;
+    return splice_impl(self, src, true);
 }
 
 tda_Status tda_list_splice_back(tda_List *self, tda_List *src) {
@@ -572,29 +550,7 @@ tda_Status tda_list_splice_back(tda_List *self, tda_List *src) {
     TDA_EXPECT(self != src);
     TDA_EXPECT(self->elem_size == src->elem_size);
 
-    if (src->len == 0) {
-        return TDA_STATUS_OK;
-    }
-
-    if (self->al == src->al) {
-        splice_nodes(self, src, false);
-        return TDA_STATUS_OK;
-    }
-
-    tda_List *copy;
-    const tda_Status st = tda_list_copy_with(src, self->al, &copy);
-    if (TDA_STATUS_IS_ERR(st)) {
-        return st;
-    }
-
-    splice_nodes(self, copy, false);
-    tda_list_drop(copy);
-    clear_nodes(src);
-
-    ASSERT_LIST(self);
-    ASSERT_LIST(src);
-
-    return TDA_STATUS_OK;
+    return splice_impl(self, src, false);
 }
 
 void tda_list_swap(tda_List *self, tda_List *other) {
@@ -693,20 +649,14 @@ tda_Status tda_list_merge(tda_List *self, tda_List *src, tda_Cmp cmp) {
         return TDA_STATUS_OK;
     }
 
-    if (self->al == src->al) {
-        merge_into(self, src, cmp);
-        return TDA_STATUS_OK;
-    }
-
-    tda_List *copy;
-    const tda_Status st = tda_list_copy_with(src, self->al, &copy);
+    tda_List *from;
+    const tda_Status st = nodes_for(self, src, &from);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    merge_into(self, copy, cmp);
-    tda_list_drop(copy);
-    clear_nodes(src);
+    merge_into(self, from, cmp);
+    release_source(src, from);
 
     ASSERT_LIST(self);
     ASSERT_LIST(src);
@@ -767,6 +717,8 @@ void tda_list_print(const tda_List *self, tda_FPrint fprint) {
 /* ========== internals ========== */
 
 static size_t node_bytes(size_t elem_size) {
+    assert(elem_size <= SIZE_MAX - sizeof(tda_ListNode)); // tda_list_new refuses the rest
+
     return sizeof(tda_ListNode) + elem_size;
 }
 
@@ -776,12 +728,7 @@ static tda_Status node_new(tda_Al *al, size_t elem_size, const void *val, tda_Li
     assert(val);
     assert(out);
 
-    size_t bytes;
-    if (ckd_add(&bytes, sizeof(tda_ListNode), elem_size)) {
-        return TDA_STATUS_ERR_NO_MEM;
-    }
-
-    tda_ListNode *node = tda_alloc(al, bytes);
+    tda_ListNode *node = tda_alloc(al, node_bytes(elem_size));
     if (!node) {
         return TDA_STATUS_ERR_NO_MEM;
     }
@@ -802,23 +749,34 @@ static void node_drop(tda_Al *al, size_t elem_size, tda_ListNode *node) {
     tda_dealloc(al, node, node_bytes(elem_size));
 }
 
-static void link_node(tda_List *self, tda_ListNode *node, tda_ListNode *prev, tda_ListNode *next) {
-    node->prev = prev;
-    node->next = next;
+static void link_chain(
+    tda_List *self,
+    tda_ListNode *first,
+    tda_ListNode *last,
+    size_t count,
+    tda_ListNode *prev,
+    tda_ListNode *next
+) {
+    first->prev = prev;
+    last->next = next;
 
     if (prev) {
-        prev->next = node;
+        prev->next = first;
     } else {
-        self->head = node;
+        self->head = first;
     }
 
     if (next) {
-        next->prev = node;
+        next->prev = last;
     } else {
-        self->tail = node;
+        self->tail = last;
     }
 
-    ++self->len;
+    self->len += count;
+}
+
+static void link_node(tda_List *self, tda_ListNode *node, tda_ListNode *prev, tda_ListNode *next) {
+    link_chain(self, node, node, 1, prev, next);
 }
 
 // backs push_front/push_back/insert_before/insert_after, which differ only in the
@@ -869,27 +827,73 @@ static void splice_nodes(tda_List *self, tda_List *src, bool front) {
     assert(self->elem_size == src->elem_size);
     assert(src->len > 0);
 
-    if (self->len == 0) {
-        self->head = src->head;
-        self->tail = src->tail;
-    } else if (front) {
-        src->tail->next = self->head;
-        self->head->prev = src->tail;
-        self->head = src->head;
-    } else {
-        src->head->prev = self->tail;
-        self->tail->next = src->head;
-        self->tail = src->tail;
-    }
-
-    self->len += src->len;
-
-    src->head = nullptr;
-    src->tail = nullptr;
-    src->len = 0;
+    tda_ListNode *prev = front ? nullptr : self->tail;
+    tda_ListNode *next = front ? self->head : nullptr;
+    link_chain(self, src->head, src->tail, src->len, prev, next);
+    set_empty(src);
 
     ASSERT_LIST(self);
     ASSERT_LIST(src);
+}
+
+static tda_Status nodes_for(tda_List *self, tda_List *src, tda_List **out) {
+    if (self->al == src->al) {
+        *out = src;
+        return TDA_STATUS_OK;
+    }
+
+    return tda_list_copy_with(src, self->al, out);
+}
+
+static void release_source(tda_List *src, tda_List *from) {
+    if (from != src) {
+        tda_list_drop(from);
+        clear_nodes(src);
+    }
+}
+
+static tda_Status splice_impl(tda_List *self, tda_List *src, bool front) {
+    if (src->len == 0) {
+        return TDA_STATUS_OK;
+    }
+
+    tda_List *from;
+    const tda_Status st = nodes_for(self, src, &from);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    splice_nodes(self, from, front);
+    release_source(src, from);
+
+    ASSERT_LIST(self);
+    ASSERT_LIST(src);
+
+    return TDA_STATUS_OK;
+}
+
+static bool eq_impl(const tda_List *a, const tda_List *b, tda_Eq eq) {
+    if (a == b) {
+        return true;
+    }
+
+    if (a->len != b->len) {
+        return false;
+    }
+
+    for (const tda_ListNode *x = a->head, *y = b->head; x; x = x->next, y = y->next) {
+        if (eq ? !eq(x->elem, y->elem) : memcmp(x->elem, y->elem, a->elem_size) != 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void set_empty(tda_List *self) {
+    self->head = nullptr;
+    self->tail = nullptr;
+    self->len = 0;
 }
 
 static void swap_contents(tda_List *a, tda_List *b) {
@@ -916,9 +920,7 @@ static void clear_nodes(tda_List *self) {
         node = next;
     }
 
-    self->head = nullptr;
-    self->tail = nullptr;
-    self->len = 0;
+    set_empty(self);
 }
 
 static tda_ListNode *merge_chains(tda_ListNode *a, tda_ListNode *b, tda_Cmp cmp) {
@@ -985,9 +987,7 @@ static void merge_into(tda_List *self, tda_List *src, tda_Cmp cmp) {
     self->len += src->len;
     relink_prev(self);
 
-    src->head = nullptr;
-    src->tail = nullptr;
-    src->len = 0;
+    set_empty(src);
 
     ASSERT_LIST(self);
     ASSERT_LIST(src);

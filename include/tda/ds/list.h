@@ -59,7 +59,8 @@ typedef struct tda_ListNode tda_ListNode;
 /// @param al used for every later allocation
 /// @param[out] out the new list, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated, or a node of this
+///         elem size would not fit in size_t
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Status tda_list_new(size_t elem_size, tda_Al *al, tda_List **out);

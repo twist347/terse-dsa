@@ -120,6 +120,19 @@ static void test_new_starts_empty() {
     tda_list_drop(l);
 }
 
+// a node is a header plus the elem; an elem size near SIZE_MAX overflows that sum, which
+// the constructor refuses before anything is allocated
+static void test_new_refuses_an_elem_size_that_overflows_the_node() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_List *out = nullptr;
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_new(SIZE_MAX - 8, &al, &out));
+    TEST_ASSERT_NULL(out);
+    TEST_ASSERT_EQUAL_size_t(0, probe.alloc_calls);
+}
+
 static void test_new_keeps_elem_size_and_allocator() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
     TEST_ASSERT_NOT_NULL(arena);
@@ -2097,6 +2110,7 @@ int main() {
 
     RUN_TEST(test_new_starts_empty);
     RUN_TEST(test_new_keeps_elem_size_and_allocator);
+    RUN_TEST(test_new_refuses_an_elem_size_that_overflows_the_node);
     RUN_TEST(test_from_data_copies_and_detaches_the_source);
     RUN_TEST(test_from_data_empty_is_empty);
     RUN_TEST(test_from_data_copies_whole_elems);
