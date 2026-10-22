@@ -17,6 +17,7 @@
 #include "tda/alloc/aligned.h"
 #include "tda/alloc/alloc.h"
 #include "tda/alloc/arena.h"
+#include "tda/alloc/debug.h"
 #include "tda/alloc/default.h"
 #include "tda/alloc/log.h"
 #include "tda/alloc/pool.h"

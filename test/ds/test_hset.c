@@ -130,10 +130,7 @@ static void test_new_refuses_a_key_size_that_overflows_the_node() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_HSet *out = nullptr;
-    TDA_TEST_STATUS(
-        TDA_STATUS_ERR_NO_MEM,
-        tda_hset_new(SIZE_MAX - 8, tda_hash_i32, tda_eq_i32, &al, &out)
-    );
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_new(SIZE_MAX - 8, tda_hash_i32, tda_eq_i32, &al, &out));
     TEST_ASSERT_NULL(out);
     TEST_ASSERT_EQUAL_size_t(0, probe.alloc_calls);
 }

@@ -298,8 +298,9 @@ static void test_over_itself() {
 /* ========== over a parent that aligns too little ==========
  *
  * Every block of this parent sits a pointer's alignment past a max_align_t boundary,
- * below what the tda_Al contract asks wherever max_align_t is the wider of the two. list and hmap would put their elems there unaligned; the aligned
- * allocator in between is the fix the contract names.
+ * below what the tda_Al contract asks wherever max_align_t is the wider of the two.
+ * list and hmap would put their elems there unaligned; the aligned allocator in between
+ * is the fix the contract names.
  */
 
 // as narrow as an allocator can be and still hold the aligned allocator's own state,
@@ -313,17 +314,12 @@ static void *narrow_alloc(void *ctx, size_t size) {
 
 static void narrow_dealloc(void *ctx, void *ptr, size_t size) {
     if (ptr) {
-        unsigned char *base = (unsigned char *) ptr - NARROW_SHIFT;
-        tda_dealloc(ctx, base, size + alignof(max_align_t));
+        tda_dealloc(ctx, (unsigned char *) ptr - NARROW_SHIFT, size + alignof(max_align_t));
     }
 }
 
 static tda_Al narrow_al() {
-    return (tda_Al){
-        .ctx = tda_al_default(),
-        .alloc = narrow_alloc,
-        .dealloc = narrow_dealloc,
-    };
+    return (tda_Al){ .ctx = tda_al_default(), .alloc = narrow_alloc, .dealloc = narrow_dealloc };
 }
 
 static void test_the_narrow_parent_misses_max_align_t() {
@@ -375,14 +371,7 @@ static void test_an_hmap_runs_over_a_narrow_parent() {
     tda_HMap *m = nullptr;
     TEST_ASSERT_EQUAL(
         TDA_STATUS_OK,
-        tda_hmap_new(
-            sizeof(int32_t),
-            sizeof(long double),
-            tda_hash_i32,
-            tda_eq_i32,
-            al,
-            &m
-        )
+        tda_hmap_new(sizeof(int32_t), sizeof(long double), tda_hash_i32, tda_eq_i32, al, &m)
     );
     for (int32_t key = 0; key < 40; ++key) {
         const long double val = key;

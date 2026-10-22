@@ -339,12 +339,10 @@ void tda_bitset_print(const tda_BitSet *self);
 
 /// @cond
 // the body of the walk; the hidden names come in already unique
-#define TDA_BITSET_WALK_(idx, self, bitset, once, from)                \
-    for (const tda_BitSet *bitset = (self), **once = &bitset;          \
-         once;                                                         \
-         once = nullptr)                                               \
-        for (size_t idx = 0, from = 0;                                 \
-             tda_bitset_find_next(bitset, from, &idx);                 \
+#define TDA_BITSET_WALK_(idx, self, bitset, once, from)                             \
+    for (const tda_BitSet *bitset = (self), **once = &bitset; once; once = nullptr) \
+        for (size_t idx = 0, from = 0;                                              \
+             tda_bitset_find_next(bitset, from, &idx);                              \
              from = idx + 1)
 /// @endcond
 
@@ -355,13 +353,7 @@ void tda_bitset_print(const tda_BitSet *self);
 ///       inside the loop is safe, while setting a smaller one no longer changes the walk
 /// @bigo{n/64} over the whole walk
 #define TDA_BITSET_FOR_EACH(idx, self) \
-    TDA_BITSET_WALK_(                  \
-        idx,                           \
-        self,                          \
-        TDA_LINE_NAME_(bitset_),       \
-        TDA_LINE_NAME_(once_),         \
-        TDA_LINE_NAME_(from_)          \
-    )
+    TDA_BITSET_WALK_(idx, self, TDA_LINE_NAME_(bitset_), TDA_LINE_NAME_(once_), TDA_LINE_NAME_(from_))
 
 /// @}
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.0 — 2026-10-22
+
+### Added
+
+- **`alloc/debug`**, an allocator that checks how another one is used, for builds
+  without sanitizers. It stops the program with a report on a wrong size in a dealloc or
+  realloc, a double free, a pointer it never handed out, a write past the end of a block
+  and a write after a free, which a quarantine of freed blocks keeps checkable. New
+  blocks are filled with 0xCD and freed ones with 0xDD, and a realloc always moves, so a
+  pointer kept across a growth always reads freed memory.
+  `tda_al_debug_fprint_leaks` lists the live blocks by serial, `tda_al_debug_break_at`
+  stops at a serial so a debugger shows where a block was made, and
+  `tda_al_debug_fail_after` refuses requests to walk the out-of-memory paths.
+
 ## 1.4.1 — 2026-10-22
 
 ### Fixed

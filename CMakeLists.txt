@@ -57,6 +57,7 @@ set(TDA_ALLOC_SOURCES
         src/alloc/aligned.c
         src/alloc/alloc.c
         src/alloc/arena.c
+        src/alloc/debug.c
         src/alloc/default.c
         src/alloc/log.c
         src/alloc/pool.c

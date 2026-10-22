@@ -93,6 +93,7 @@ uses stays the better habit.
 | `pool.h` | fixed-size blocks off a free list; over a parent or a buffer of your own |
 | `aligned.h` | wraps another allocator and over-aligns every block it hands out |
 | `log.h` | wraps another allocator and writes down what it is asked |
+| `debug.h` | wraps another allocator and stops on misuse: wrong sizes, double frees, writes past the end or after a free; reports leaks and fails on demand |
 
 **`algo`** — operations over spans, customized only through function pointers.
 
