@@ -65,8 +65,12 @@ static tda_Status node_new(const tda_HMap *self, const void *key, const void *va
 
 static void node_drop(const tda_HMap *self, tda_HMapNode *node);
 
-/// which bucket a hash belongs to. The count is a power of two, so this is a mask, which
-/// is safe only because the mixer in core/hash avalanches every bit
+/// which of 'count' buckets a hash belongs to. The count is a power of two, so this is a
+/// mask, which is safe only because the mixer in core/hash avalanches every bit
+[[nodiscard]]
+static size_t bucket_in(tda_Hash hash, size_t count);
+
+/// bucket_in over the map's own buckets
 [[nodiscard]]
 static size_t bucket_of(const tda_HMap *self, tda_Hash hash);
 
@@ -785,10 +789,16 @@ static void node_drop(const tda_HMap *self, tda_HMapNode *node) {
     tda_dealloc(self->al, node, node_bytes(self));
 }
 
+static size_t bucket_in(tda_Hash hash, size_t count) {
+    assert(count > 0 && (count & (count - 1)) == 0);
+
+    return (size_t) hash & (count - 1);
+}
+
 static size_t bucket_of(const tda_HMap *self, tda_Hash hash) {
     assert(self->bucket_count > 0);
 
-    return (size_t) hash & (self->bucket_count - 1);
+    return bucket_in(hash, self->bucket_count);
 }
 
 static tda_HMapNode *find_node(const tda_HMap *self, const void *key, tda_Hash hash) {
@@ -857,7 +867,7 @@ static tda_Status rehash(tda_HMap *self, size_t new_count) {
         tda_HMapNode *node = self->buckets[i];
         while (node) {
             tda_HMapNode *next = node->next;
-            const size_t bucket = node->hash & (new_count - 1);
+            const size_t bucket = bucket_in(node->hash, new_count);
             node->next = buckets[bucket];
             buckets[bucket] = node;
             node = next;
