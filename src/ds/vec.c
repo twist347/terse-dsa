@@ -41,9 +41,6 @@ static void release_data(tda_Vec *self);
 [[nodiscard]]
 static size_t next_cap(const tda_Vec *self);
 
-[[nodiscard]]
-static tda_Status grow(tda_Vec *self);
-
 /// room for one more elem
 [[nodiscard]]
 static tda_Status reserve_one(tda_Vec *self);
@@ -362,31 +359,14 @@ tda_Status tda_vec_insert(tda_Vec *self, size_t idx, const void *val) {
     assert(val);
     TDA_EXPECT(idx <= self->len);
 
-    const tda_Status st = reserve_one(self);
-    if (TDA_STATUS_IS_ERR(st)) {
-        return st;
-    }
-
-    const size_t tail = self->len - idx;
-    if (tail > 0) {
-        memmove(vec_offset_mut(self, idx + 1), vec_offset_mut(self, idx), tail * self->elem_size);
-    }
-
-    memcpy(vec_offset_mut(self, idx), val, self->elem_size);
-    ++self->len;
-
-    return TDA_STATUS_OK;
+    return tda_vec_insert_span(self, idx, tda_span_from_data(val, 1, self->elem_size));
 }
 
 void tda_vec_remove(tda_Vec *self, size_t idx) {
     ASSERT_VEC(self);
     TDA_EXPECT(idx < self->len);
 
-    const size_t tail = self->len - idx - 1;
-    if (tail > 0) {
-        memmove(vec_offset_mut(self, idx), vec_offset_mut(self, idx + 1), tail * self->elem_size);
-    }
-    --self->len;
+    tda_vec_remove_range(self, idx, 1);
 }
 
 void tda_vec_swap_remove(tda_Vec *self, size_t idx) {
@@ -436,12 +416,7 @@ tda_Status tda_vec_shrink_to_fit(tda_Vec *self) {
     }
 
     if (self->len == 0) {
-        tda_dealloc(self->al, self->data, cap_bytes(self));
-        self->data = nullptr;
-        self->cap = 0;
-
-        ASSERT_VEC(self);
-
+        release_data(self);
         return TDA_STATUS_OK;
     }
 
@@ -684,25 +659,16 @@ static size_t next_cap(const tda_Vec *self) {
     return grown;
 }
 
-static tda_Status grow(tda_Vec *self) {
-    assert(self->len == self->cap);
+static tda_Status reserve_one(tda_Vec *self) {
+    if (self->len < self->cap) {
+        return TDA_STATUS_OK;
+    }
 
     if (self->cap == SIZE_MAX) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
-    const size_t wanted = next_cap(self);
-
-    const tda_Status st = tda_vec_reserve(self, wanted);
-    if (TDA_STATUS_IS_OK(st) || wanted <= self->cap + 1) {
-        return st;
-    }
-
-    return tda_vec_reserve(self, self->cap + 1);
-}
-
-static tda_Status reserve_one(tda_Vec *self) {
-    return self->len == self->cap ? grow(self) : TDA_STATUS_OK;
+    return reserve_for(self, self->cap + 1);
 }
 
 static tda_Status reserve_for(tda_Vec *self, size_t new_len) {
