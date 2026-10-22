@@ -13,6 +13,16 @@ static bool matches_at(tda_Span s, tda_Span sub, size_t at, tda_Eq eq);
 [[nodiscard]]
 static size_t bound(tda_Span s, const void *key, tda_Cmp cmp, bool upper);
 
+/// whether 'cur' takes the place of 'best' as the min, or as the max when 'max' is set.
+/// Only a strictly better elem does, so among equals the first one stays: the tie rule
+/// of min_elem, max_elem and minmax_elem alike
+[[nodiscard]]
+static bool beats(tda_Cmp cmp, const void *cur, const void *best, bool max);
+
+/// the min_elem and max_elem walk
+[[nodiscard]]
+static size_t extreme(tda_Span s, tda_Cmp cmp, bool max);
+
 /* ========== find ========== */
 
 bool tda_span_find(tda_Span s, const void *key, tda_Eq eq, size_t *out_idx) {
@@ -352,18 +362,7 @@ size_t tda_span_min_elem(tda_Span s, tda_Cmp cmp) {
     assert(cmp);
     TDA_EXPECT(s.len > 0);
 
-    size_t best = 0;
-    const void *best_p = tda_span_get(s, 0);
-
-    for (size_t i = 1; i < s.len; ++i) {
-        const void *cur = tda_span_get(s, i);
-        if (cmp(cur, best_p) < 0) {
-            best = i;
-            best_p = cur;
-        }
-    }
-
-    return best;
+    return extreme(s, cmp, false);
 }
 
 size_t tda_span_max_elem(tda_Span s, tda_Cmp cmp) {
@@ -371,18 +370,7 @@ size_t tda_span_max_elem(tda_Span s, tda_Cmp cmp) {
     assert(cmp);
     TDA_EXPECT(s.len > 0);
 
-    size_t best = 0;
-    const void *best_p = tda_span_get(s, 0);
-
-    for (size_t i = 1; i < s.len; ++i) {
-        const void *cur = tda_span_get(s, i);
-        if (cmp(cur, best_p) > 0) {
-            best = i;
-            best_p = cur;
-        }
-    }
-
-    return best;
+    return extreme(s, cmp, true);
 }
 
 tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp) {
@@ -397,11 +385,11 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp) {
     for (size_t i = 1; i < s.len; ++i) {
         const void *cur = tda_span_get(s, i);
 
-        if (cmp(cur, min_p) < 0) {
+        if (beats(cmp, cur, min_p, false)) {
             out.min = i;
             min_p = cur;
         }
-        if (cmp(cur, max_p) > 0) {
+        if (beats(cmp, cur, max_p, true)) {
             out.max = i;
             max_p = cur;
         }
@@ -427,6 +415,26 @@ static size_t bound(tda_Span s, const void *key, tda_Cmp cmp, bool upper) {
     }
 
     return lo;
+}
+
+static bool beats(tda_Cmp cmp, const void *cur, const void *best, bool max) {
+    // asked as "less" both ways round, so the max needs no "greater" from 'cmp'
+    return max ? cmp(best, cur) < 0 : cmp(cur, best) < 0;
+}
+
+static size_t extreme(tda_Span s, tda_Cmp cmp, bool max) {
+    size_t best = 0;
+    const void *best_p = tda_span_get(s, 0);
+
+    for (size_t i = 1; i < s.len; ++i) {
+        const void *cur = tda_span_get(s, i);
+        if (beats(cmp, cur, best_p, max)) {
+            best = i;
+            best_p = cur;
+        }
+    }
+
+    return best;
 }
 
 static bool matches_at(tda_Span s, tda_Span sub, size_t at, tda_Eq eq) {
