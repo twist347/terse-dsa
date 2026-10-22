@@ -6,12 +6,16 @@
 #include "internal/bits.h"
 
 #include <assert.h>
+#include <limits.h>
 #include <stdint.h>
 #include <string.h>
 
 /* ========== internals ========== */
 
 static constexpr size_t WORD_BITS = 64;
+
+// the words are uint64_t, sized by sizeof elsewhere; the two spellings must agree
+static_assert(WORD_BITS == sizeof(uint64_t) * CHAR_BIT);
 
 // The bits above the last live one are not part of the set, and every read here counts on
 // them being clear: count sums whole words, any tests whole words, find_next trusts the
@@ -70,6 +74,11 @@ static uint64_t word_upto(uint64_t word, size_t upto);
 /// where the highest one bit of 'word' sits, given that 'word' is word number 'w'
 [[nodiscard]]
 static size_t idx_of_last_one(size_t w, uint64_t word);
+
+/// find_next over 'self' or its complement. Walking up, it reaches the bits above the
+/// universe, which a complement turns to ones, so a hit past nbits is a miss
+[[nodiscard]]
+static bool find_next_impl(const tda_BitSet *self, bool clear, size_t from, size_t *out_idx);
 
 /// find_prev over 'self' or its complement. Starting inside the universe and walking
 /// down, it never meets the bits above it, which a complement would turn to ones
@@ -367,57 +376,14 @@ bool tda_bitset_find_next(const tda_BitSet *self, size_t from, size_t *out_idx) 
     ASSERT_BITSET(self);
     assert(out_idx);
 
-    if (from >= self->nbits) {
-        return false;
-    }
-
-    size_t w = word_of(from);
-    uint64_t word = word_from(self->words[w], from);
-
-    for (;;) {
-        if (word != 0) {
-            *out_idx = idx_of_first_one(w, word);
-            return true;
-        }
-
-        if (++w == self->nwords) {
-            return false;
-        }
-
-        word = self->words[w];
-    }
+    return find_next_impl(self, false, from, out_idx);
 }
 
 bool tda_bitset_find_next_clear(const tda_BitSet *self, size_t from, size_t *out_idx) {
     ASSERT_BITSET(self);
     assert(out_idx);
 
-    if (from >= self->nbits) {
-        return false;
-    }
-
-    size_t w = word_of(from);
-    uint64_t word = word_from(~self->words[w], from);
-
-    for (;;) {
-        if (word != 0) {
-            const size_t idx = idx_of_first_one(w, word);
-
-            // the complement turns the tail into ones, and those are not members
-            if (idx >= self->nbits) {
-                return false;
-            }
-
-            *out_idx = idx;
-            return true;
-        }
-
-        if (++w == self->nwords) {
-            return false;
-        }
-
-        word = ~self->words[w];
-    }
+    return find_next_impl(self, true, from, out_idx);
 }
 
 bool tda_bitset_find_prev(const tda_BitSet *self, size_t from, size_t *out_idx) {
@@ -601,6 +567,35 @@ static uint64_t word_upto(uint64_t word, size_t upto) {
 
 static size_t idx_of_last_one(size_t w, uint64_t word) {
     return w * WORD_BITS + (WORD_BITS - 1 - tda_bit_clz(word));
+}
+
+static bool find_next_impl(const tda_BitSet *self, bool clear, size_t from, size_t *out_idx) {
+    if (from >= self->nbits) {
+        return false;
+    }
+
+    const uint64_t flip = clear ? ~UINT64_C(0) : 0;
+    size_t w = word_of(from);
+    uint64_t word = word_from(self->words[w] ^ flip, from);
+
+    for (;;) {
+        if (word != 0) {
+            // with the tail kept clear, only a complement can find a one past nbits
+            const size_t idx = idx_of_first_one(w, word);
+            if (idx >= self->nbits) {
+                return false;
+            }
+
+            *out_idx = idx;
+            return true;
+        }
+
+        if (++w == self->nwords) {
+            return false;
+        }
+
+        word = self->words[w] ^ flip;
+    }
 }
 
 static bool find_prev_impl(const tda_BitSet *self, bool clear, size_t from, size_t *out_idx) {
