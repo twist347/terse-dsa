@@ -26,6 +26,10 @@
 static constexpr size_t HMAP_BUCKETS_BASE = 8;
 static constexpr size_t HMAP_GROWTH_FACTOR = 2;
 
+// bucket_in masks, so every bucket count must be a power of two
+static_assert((HMAP_BUCKETS_BASE & (HMAP_BUCKETS_BASE - 1)) == 0);
+static_assert((HMAP_GROWTH_FACTOR & (HMAP_GROWTH_FACTOR - 1)) == 0);
+
 // The key and the value share one flexible array, so an entry is one allocation: the key
 // sits at 0 and the value at 'val_offset', which is 'key_size' rounded up to
 // max_align_t. The hash is cached so growing relinks without rehashing, and a lookup
@@ -43,6 +47,7 @@ struct tda_HMap {
     size_t key_size;
     size_t val_size;
     size_t val_offset;
+    size_t node_size; // checked against overflow once, at construction
     tda_Hasher hasher;
     tda_Eq eq;
     tda_Al *al;
@@ -74,24 +79,52 @@ static size_t bucket_in(tda_Hash hash, size_t count);
 [[nodiscard]]
 static size_t bucket_of(const tda_HMap *self, tda_Hash hash);
 
+/// the bytes of a bucket array of 'count'
+[[nodiscard]]
+static size_t buckets_bytes(size_t count);
+
+/// whether 'node' is the entry for 'key'; the one place that decides it
+[[nodiscard]]
+static bool holds_key(const tda_HMap *self, const tda_HMapNode *node, const void *key, tda_Hash hash);
+
+/// the link that points at the entry for 'key', or the null link ending its chain
+[[nodiscard]]
+static tda_HMapNode **find_link(const tda_HMap *self, const void *key, tda_Hash hash);
+
 [[nodiscard]]
 static tda_HMapNode *find_node(const tda_HMap *self, const void *key, tda_Hash hash);
+
+/// puts 'node' at the head of its bucket among 'count'
+static void link_node(tda_HMapNode **buckets, size_t count, tda_HMapNode *node);
+
+/// takes the node at '*link' out of its chain and frees it
+static void unlink_at(tda_HMap *self, tda_HMapNode **link);
+
+/// the node after 'node' in walk order: down its chain, then on to the next bucket
+[[nodiscard]]
+static tda_HMapNode *next_node(const tda_HMap *self, const tda_HMapNode *node);
 
 /// builds the entry for a key known to be absent and links it into its bucket. Shared by
 /// insert and get_or_insert, which differ only when the key is present
 [[nodiscard]]
 static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda_Hash hash, tda_HMapNode **out);
 
-/// the smallest power of two that is at least 'want', or 0 on overflow
+/// the bucket count that holds 'n' entries at the load of one entry per bucket: the
+/// smallest power of two at least 'n' and the base, or 0 on overflow
 [[nodiscard]]
-static size_t round_up_pow2(size_t want);
+static size_t buckets_for(size_t n);
 
 /// moves every node into a fresh bucket array of 'new_count'. Only the array is
 /// allocated; the nodes are relinked, so borrowed nodes stay valid
 [[nodiscard]]
 static tda_Status rehash(tda_HMap *self, size_t new_count);
 
-/// room for one more entry, growing the buckets when the load would pass one per bucket
+/// buckets for 'cap' entries at the load of one per bucket; the body of tda_hmap_reserve,
+/// kept static so the insert path calls it directly
+[[nodiscard]]
+static tda_Status reserve_for(tda_HMap *self, size_t cap);
+
+/// room for one more entry
 [[nodiscard]]
 static tda_Status reserve_one(tda_HMap *self);
 
@@ -190,6 +223,7 @@ tda_Status tda_hmap_new_raw_(
     obj->key_size = key_size;
     obj->val_size = val_size;
     obj->val_offset = val_offset;
+    obj->node_size = node_size;
     obj->hasher = hasher;
     obj->eq = eq;
     obj->al = al;
@@ -216,10 +250,8 @@ void tda_hmap_drop(tda_HMap *self) {
 
     ASSERT_HMAP(self);
 
-    tda_Al *al_copy = self->al;
-    clear_nodes(self);
-    tda_dealloc(al_copy, self->buckets, self->bucket_count * sizeof(tda_HMapNode *));
-    tda_dealloc(al_copy, self, sizeof(tda_HMap));
+    release_buckets(self);
+    tda_dealloc(self->al, self, sizeof(tda_HMap));
 }
 
 /* ========== copy ========== */
@@ -452,22 +484,14 @@ const tda_HMapNode *tda_hmap_node_next(const tda_HMap *self, const tda_HMapNode 
     ASSERT_HMAP(self);
     assert(node);
 
-    if (node->next) {
-        return node->next;
-    }
-
-    return first_from(self, bucket_of(self, node->hash) + 1);
+    return next_node(self, node);
 }
 
 tda_HMapNode *tda_hmap_node_next_mut(tda_HMap *self, tda_HMapNode *node) {
     ASSERT_HMAP(self);
     assert(node);
 
-    if (node->next) {
-        return node->next;
-    }
-
-    return first_from(self, bucket_of(self, node->hash) + 1);
+    return next_node(self, node);
 }
 
 const void *tda_hmap_node_key(const tda_HMapNode *node) {
@@ -582,34 +606,23 @@ bool tda_hmap_take(tda_HMap *self, const void *key, void *out_key, void *out_val
         return false;
     }
 
-    const tda_Hash hash = self->hasher(key);
-
-    // walk the links, not the nodes: the chain is singly linked, so the link stands in
-    // for the previous node
-    tda_HMapNode **link = &self->buckets[bucket_of(self, hash)];
-    while (*link) {
-        if ((*link)->hash == hash && self->eq(node_key(*link), key)) {
-            tda_HMapNode *dead = *link;
-            *link = dead->next;
-
-            // memmove: 'out_key' may alias 'key'
-            if (out_key) {
-                memmove(out_key, node_key(dead), self->key_size);
-            }
-            if (out_val) {
-                memcpy(out_val, node_val(self, dead), self->val_size);
-            }
-            node_drop(self, dead);
-            --self->len;
-
-            ASSERT_HMAP(self);
-
-            return true;
-        }
-        link = &(*link)->next;
+    tda_HMapNode **link = find_link(self, key, self->hasher(key));
+    if (!*link) {
+        return false;
     }
 
-    return false;
+    // memmove: 'out_key' may alias 'key'
+    if (out_key) {
+        memmove(out_key, node_key(*link), self->key_size);
+    }
+    if (out_val) {
+        memcpy(out_val, node_val(self, *link), self->val_size);
+    }
+    unlink_at(self, link);
+
+    ASSERT_HMAP(self);
+
+    return true;
 }
 
 void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node) {
@@ -626,9 +639,7 @@ void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node) {
     // done, so the check is free
     TDA_EXPECT(*link == node);
 
-    *link = node->next;
-    node_drop(self, node);
-    --self->len;
+    unlink_at(self, link);
 
     ASSERT_HMAP(self);
 }
@@ -645,9 +656,7 @@ void tda_hmap_retain(tda_HMap *self, tda_EntryPred pred, void *ctx) {
                 link = &node->next;
                 continue;
             }
-            *link = node->next;
-            node_drop(self, node);
-            --self->len;
+            unlink_at(self, link);
         }
     }
 }
@@ -669,18 +678,7 @@ void tda_hmap_clear(tda_HMap *self) {
 tda_Status tda_hmap_reserve(tda_HMap *self, size_t cap) {
     ASSERT_HMAP(self);
 
-    if (cap <= self->bucket_count) {
-        return TDA_STATUS_OK;
-    }
-
-    // round_up_pow2 never returns less than the base, so a small 'cap' does not get one
-    // or two buckets
-    const size_t want = round_up_pow2(cap);
-    if (want == 0) {
-        return TDA_STATUS_ERR_NO_MEM;
-    }
-
-    return rehash(self, want);
+    return reserve_for(self, cap);
 }
 
 tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
@@ -695,7 +693,7 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
         return TDA_STATUS_OK;
     }
 
-    const size_t want = round_up_pow2(self->len);
+    const size_t want = buckets_for(self->len);
     if (want == 0 || want >= self->bucket_count) {
         return TDA_STATUS_OK;
     }
@@ -749,7 +747,7 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 /* ========== internals ========== */
 
 static size_t node_bytes(const tda_HMap *self) {
-    return sizeof(tda_HMapNode) + self->val_offset + self->val_size;
+    return self->node_size;
 }
 
 static const void *node_key(const tda_HMapNode *node) {
@@ -801,19 +799,64 @@ static size_t bucket_of(const tda_HMap *self, tda_Hash hash) {
     return bucket_in(hash, self->bucket_count);
 }
 
+static size_t buckets_bytes(size_t count) {
+    // a bucket array of this count was allocated, so the product fits
+    return count * sizeof(tda_HMapNode *);
+}
+
+static bool holds_key(const tda_HMap *self, const tda_HMapNode *node, const void *key, tda_Hash hash) {
+    // the cheap hash first, so 'eq' runs only on keys whose hashes match
+    return node->hash == hash && self->eq(node_key(node), key);
+}
+
+static tda_HMapNode **find_link(const tda_HMap *self, const void *key, tda_Hash hash) {
+    // walk the links, not the nodes: the chain is singly linked, so the link stands in
+    // for the previous node when the entry is taken out
+    tda_HMapNode **link = &self->buckets[bucket_of(self, hash)];
+    while (*link && !holds_key(self, *link, key, hash)) {
+        link = &(*link)->next;
+    }
+
+    return link;
+}
+
 static tda_HMapNode *find_node(const tda_HMap *self, const void *key, tda_Hash hash) {
     if (self->bucket_count == 0) {
         return nullptr;
     }
 
+    // its own walk over nodes rather than *find_link: a lookup is the hot path, and the
+    // walk over links measured slower here
     for (tda_HMapNode *node = self->buckets[bucket_of(self, hash)]; node; node = node->next) {
-        // compare the cheap hash first, so 'eq' runs only on keys whose hashes match
-        if (node->hash == hash && self->eq(node_key(node), key)) {
+        if (holds_key(self, node, key, hash)) {
             return node;
         }
     }
 
     return nullptr;
+}
+
+static void link_node(tda_HMapNode **buckets, size_t count, tda_HMapNode *node) {
+    const size_t bucket = bucket_in(node->hash, count);
+    node->next = buckets[bucket];
+    buckets[bucket] = node;
+}
+
+static void unlink_at(tda_HMap *self, tda_HMapNode **link) {
+    tda_HMapNode *node = *link;
+    assert(node);
+
+    *link = node->next;
+    node_drop(self, node);
+    --self->len;
+}
+
+static tda_HMapNode *next_node(const tda_HMap *self, const tda_HMapNode *node) {
+    if (node->next) {
+        return node->next;
+    }
+
+    return first_from(self, bucket_of(self, node->hash) + 1);
 }
 
 static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda_Hash hash, tda_HMapNode **out) {
@@ -829,9 +872,7 @@ static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda
         return st;
     }
 
-    const size_t bucket = bucket_of(self, hash);
-    node->next = self->buckets[bucket];
-    self->buckets[bucket] = node;
+    link_node(self->buckets, self->bucket_count, node);
     ++self->len;
 
     ASSERT_HMAP(self);
@@ -841,7 +882,7 @@ static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda
     return TDA_STATUS_OK;
 }
 
-static size_t round_up_pow2(size_t want) {
+static size_t buckets_for(size_t want) {
     size_t n = HMAP_BUCKETS_BASE;
     while (n < want) {
         size_t grown;
@@ -867,14 +908,12 @@ static tda_Status rehash(tda_HMap *self, size_t new_count) {
         tda_HMapNode *node = self->buckets[i];
         while (node) {
             tda_HMapNode *next = node->next;
-            const size_t bucket = bucket_in(node->hash, new_count);
-            node->next = buckets[bucket];
-            buckets[bucket] = node;
+            link_node(buckets, new_count, node);
             node = next;
         }
     }
 
-    tda_dealloc(self->al, self->buckets, self->bucket_count * sizeof(tda_HMapNode *));
+    tda_dealloc(self->al, self->buckets, buckets_bytes(self->bucket_count));
     self->buckets = buckets;
     self->bucket_count = new_count;
 
@@ -883,21 +922,22 @@ static tda_Status rehash(tda_HMap *self, size_t new_count) {
     return TDA_STATUS_OK;
 }
 
-static tda_Status reserve_one(tda_HMap *self) {
-    if (self->len < self->bucket_count) {
+static tda_Status reserve_for(tda_HMap *self, size_t cap) {
+    if (cap <= self->bucket_count) {
         return TDA_STATUS_OK;
     }
 
-    if (self->bucket_count == 0) {
-        return rehash(self, HMAP_BUCKETS_BASE);
-    }
-
-    size_t grown;
-    if (ckd_mul(&grown, self->bucket_count, HMAP_GROWTH_FACTOR)) {
+    const size_t want = buckets_for(cap);
+    if (want == 0) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
-    return rehash(self, grown);
+    return rehash(self, want);
+}
+
+static tda_Status reserve_one(tda_HMap *self) {
+    // len is at most the bucket count, which is far below SIZE_MAX, so len + 1 fits
+    return reserve_for(self, self->len + 1);
 }
 
 static tda_HMapNode *first_from(const tda_HMap *self, size_t idx) {
@@ -923,7 +963,7 @@ static void clear_nodes(tda_HMap *self) {
 
 static void release_buckets(tda_HMap *self) {
     clear_nodes(self);
-    tda_dealloc(self->al, self->buckets, self->bucket_count * sizeof(tda_HMapNode *));
+    tda_dealloc(self->al, self->buckets, buckets_bytes(self->bucket_count));
     self->buckets = nullptr;
     self->bucket_count = 0;
     self->len = 0;
