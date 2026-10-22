@@ -125,13 +125,18 @@ an error cannot be silently dropped.
   `nullptr` → `TDA_STATUS_ERR_NO_MEM`. Never turn one of those into UB or an assert.
 - **`TDA_EXPECT` vs `assert`.** A precondition of a public function whose breach would
   touch memory out of bounds — an index, emptiness, a range, matching `elem_size` — is a
-  `TDA_EXPECT`, which `TDA_HARDENED` keeps in release. Invariants and anything above O(1)
+  `TDA_EXPECT`, which `TDA_HARDENED` keeps in release, and so is an allocator's block
+  that misses the alignment the contract promises. Invariants, anything above O(1) and a
+  breach that only gives a wrong answer, such as an output overlapping an input in algo,
   stay `assert`.
-- **Typed macros check their type.** A `*_AS`, `SET`, `PUSH` and kin passes its handle
-  through `tda_<slug>_typed_`, which `TDA_EXPECT`s `sizeof(T)` against the elem size and
-  hands the handle back — one evaluation, constness kept by a `_Generic` choice between a
-  const and a mutable helper, so no cast drops it. The node macros (`TDA_LIST_NODE_ELEM_AS`,
-  `TDA_HMAP_NODE_KEY_AS`, `TDA_HSET_NODE_KEY_AS`) are the exception: a node has no
-  container to ask, so their type is taken on trust.
+- **Typed macros check their type's size.** A `*_AS`, `SET`, `PUSH` and kin passes its
+  handle through `tda_<slug>_typed_`, which `TDA_EXPECT`s `sizeof(T)` against the elem
+  size and hands the handle back — one evaluation, constness kept by a `_Generic` choice
+  between a const and a mutable helper, so no cast drops it. A container stores no type,
+  so this catches a wrong width only: `float` passes for `int32_t`. A walk macro reads its
+  handle once too, and names its hidden variables with `TDA_LINE_NAME_`, so walks nest
+  without `-Wshadow`. The node macros (`TDA_LIST_NODE_ELEM_AS`, `TDA_HMAP_NODE_KEY_AS`,
+  `TDA_HSET_NODE_KEY_AS`) are the exception: a node has no container to ask, so their
+  type is taken on trust.
 - Public symbols carry `TDA_API` (see `core/export.h`); everything else stays hidden under
   the library's default-hidden visibility.

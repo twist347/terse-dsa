@@ -331,7 +331,8 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] si
 
 /// tda_span_from_data with sizeof(T) for the elem size
 /// @param T the elem type
-/// @param data the first elem, typechecked as a const T *
+/// @param data the first elem, converted to a const T *: a pointer to another type is an
+///             error, a void * passes unchecked
 /// @param len elems in the view
 /// @bigo{1}
 #define TDA_SPAN_FROM_DATA(T, data, len) \
@@ -339,7 +340,8 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] si
 
 /// tda_span_from_data_mut with sizeof(T)
 /// @param T the elem type
-/// @param data the first elem, typechecked as a T *
+/// @param data the first elem, converted to a T *: a pointer to another type is an
+///             error, a void * passes unchecked
 /// @param len elems in the view
 /// @bigo{1}
 #define TDA_SPAN_FROM_DATA_MUT(T, data, len) \
@@ -347,7 +349,8 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] si
 
 /// a view over the elems written out: TDA_SPAN_OF(int32_t, 5, 3, 1)
 /// @param T the elem type
-/// @param ... the elems, as a T initializer list
+/// @param ... the elems, as a T initializer list, not empty: C has no array of zero
+///            length, and an empty list builds one only as a compiler extension
 /// @warning the elems are a compound literal, gone at the end of the enclosing block
 /// @bigo{1}
 #define TDA_SPAN_OF(T, ...)                             \
@@ -358,7 +361,7 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] si
 
 /// TDA_SPAN_OF, writable
 /// @param T the elem type
-/// @param ... the elems, as a T initializer list
+/// @param ... the elems, as a T initializer list, not empty
 /// @warning the elems are a compound literal, gone at the end of the enclosing block
 /// @bigo{1}
 #define TDA_SPAN_OF_MUT(T, ...)                   \
@@ -383,31 +386,45 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] si
 #define TDA_SPAN_GET_MUT_AS(T, s, idx) \
     ((T *) tda_span_get_mut(tda_span_mut_typed_((s), sizeof(T)), (idx)))
 
-// an empty view may carry a null data pointer, and null + 0 is undefined in C23, so the
-// end is formed only when there are elems to step over
+/// @cond
+// the body of both span walks; the hidden names come in already unique. An empty view
+// may carry a null data pointer, and null + 0 is undefined in C23, so the end is formed
+// only when there are elems to step over
+#define TDA_SPAN_WALK_(SpanT, ElemT, elem, view, span, once, end)               \
+    for (SpanT span = (view), *once = &span; once; once = nullptr)              \
+        for (ElemT *elem = span.data, *end = span.len ? elem + span.len : elem; \
+             elem != end;                                                       \
+             ++elem)
+/// @endcond
 
 /// walks the span front to back, binding 'elem' to each elem in turn
 /// @param T the elem type; a span carries sizes, not types
 /// @param elem the name of the loop variable, a const T *
 /// @param s the view, evaluated once, so tda_vec_to_span(v) and the like are fine here
 /// @bigo{n} for the whole walk
-#define TDA_SPAN_FOR_EACH_AS(T, elem, s)                                              \
-    for (tda_Span span_ = tda_span_typed_((s), sizeof(T)), *once_ = &span_;           \
-         once_;                                                                       \
-         once_ = nullptr)                                                             \
-        for (const T *elem = span_.data, *end_ = span_.len ? elem + span_.len : elem; \
-             elem != end_;                                                            \
-             ++elem)
+#define TDA_SPAN_FOR_EACH_AS(T, elem, s) \
+    TDA_SPAN_WALK_(                      \
+        tda_Span,                        \
+        const T,                         \
+        elem,                            \
+        tda_span_typed_((s), sizeof(T)), \
+        TDA_LINE_NAME_(span_),           \
+        TDA_LINE_NAME_(once_),           \
+        TDA_LINE_NAME_(end_)             \
+    )
 
 /// the same walk over elems that may be written through
 /// @copydetails TDA_SPAN_FOR_EACH_AS
-#define TDA_SPAN_FOR_EACH_MUT_AS(T, elem, s)                                       \
-    for (tda_SpanMut span_ = tda_span_mut_typed_((s), sizeof(T)), *once_ = &span_; \
-         once_;                                                                    \
-         once_ = nullptr)                                                          \
-        for (T *elem = span_.data, *end_ = span_.len ? elem + span_.len : elem;    \
-             elem != end_;                                                         \
-             ++elem)
+#define TDA_SPAN_FOR_EACH_MUT_AS(T, elem, s) \
+    TDA_SPAN_WALK_(                          \
+        tda_SpanMut,                         \
+        T,                                   \
+        elem,                                \
+        tda_span_mut_typed_((s), sizeof(T)), \
+        TDA_LINE_NAME_(span_),               \
+        TDA_LINE_NAME_(once_),               \
+        TDA_LINE_NAME_(end_)                 \
+    )
 
 /// tda_span_set from a value rather than its address
 /// @param T the elem type; scalars only, since (T){ val } takes nothing else

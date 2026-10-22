@@ -681,6 +681,28 @@ static void test_for_each_over_an_empty_set_runs_no_body() {
     tda_bitset_drop(b);
 }
 
+static const tda_BitSet *counted(const tda_BitSet *b, size_t *calls) {
+    ++*calls;
+    return b;
+}
+
+static void test_for_each_reads_its_bitset_once() {
+    constexpr size_t want[] = {1, 70, 128};
+    tda_BitSet *b = make_bitset(129, want, 3);
+
+    size_t calls = 0;
+    size_t n = 0;
+    TDA_BITSET_FOR_EACH(idx, counted(b, &calls)) {
+        TDA_UNUSED(idx);
+        ++n;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(3, n);
+    TEST_ASSERT_EQUAL_size_t(1, calls);
+
+    tda_bitset_drop(b);
+}
+
 static void test_swap_exchanges_the_contents() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1183,6 +1205,7 @@ int main() {
     RUN_TEST(test_move_assign_of_itself_changes_nothing);
     RUN_TEST(test_for_each_walks_the_members_in_order);
     RUN_TEST(test_for_each_over_an_empty_set_runs_no_body);
+    RUN_TEST(test_for_each_reads_its_bitset_once);
 
     RUN_TEST(test_swap_exchanges_the_contents);
     RUN_TEST(test_swap_of_itself_changes_nothing);

@@ -27,23 +27,44 @@
 /// @param x the tokens to spell
 #define TDA_STRINGIFY(x)    TDA_STRINGIFY_(x)
 
+/// the innermost step of TDA_LINE_NAME_, which pastes without expanding
+/// @param a the left tokens
+/// @param b the right tokens
+#define TDA_PASTE_(a, b)     a##b
+
+/// the middle step of TDA_LINE_NAME_; the extra level makes __LINE__ expand first
+/// @param a the left tokens
+/// @param b the right tokens
+#define TDA_CAT_(a, b)       TDA_PASTE_(a, b)
+
+/// 'name' with the line number appended, for the hidden variables of the walk macros: a
+/// walk nested in another on a line of its own gets names of its own, so -Wshadow stays
+/// quiet
+/// @param name the stem
+#define TDA_LINE_NAME_(name) TDA_CAT_(name, __LINE__)
+
 /// evaluates 'val' and discards it, to mark a parameter or result as unused on purpose
 /// @param val what to evaluate and discard
 #define TDA_UNUSED(val)    ((void) (val))
 
 /// exchanges two lvalues of one type
 /// @param a one lvalue; both are typed from it, so a mismatch is a compile error, not a
-///          silent truncation
+///          silent truncation, and so is a const on either
 /// @param b the other lvalue
 /// @warning TDA_SWAP(self, other) and TDA_SWAP(*self, *other) both typecheck; the first
 ///          swaps the local pointers and leaves the objects alone
-#define TDA_SWAP(a, b)                                        \
-    do {                                                      \
-        typeof_unqual(a) *tda_swap_pa_ = &(a);                \
-        typeof_unqual(a) *tda_swap_pb_ = &(b);                \
-        const typeof_unqual(a) tda_swap_tmp_ = *tda_swap_pa_; \
-        *tda_swap_pa_ = *tda_swap_pb_;                        \
-        *tda_swap_pb_ = tda_swap_tmp_;                        \
+#define TDA_SWAP(a, b)                                                \
+    do {                                                              \
+        static_assert(                                                \
+            _Generic(&(a), typeof_unqual(a) *: 1, default: 0)         \
+                && _Generic(&(b), typeof_unqual(a) *: 1, default: 0), \
+            "TDA_SWAP needs two modifiable lvalues of one type"       \
+        );                                                            \
+        typeof_unqual(a) *tda_swap_pa_ = &(a);                        \
+        typeof_unqual(a) *tda_swap_pb_ = &(b);                        \
+        const typeof_unqual(a) tda_swap_tmp_ = *tda_swap_pa_;         \
+        *tda_swap_pa_ = *tda_swap_pb_;                                \
+        *tda_swap_pb_ = tda_swap_tmp_;                                \
     } while (0)
 
 /// @}

@@ -47,8 +47,9 @@ out:
 Two rules shape the whole API:
 
 - **Memory is explicit and swappable.** Nothing allocates on its own — every container is
-  handed a `tda_Al *` and uses only that. Swapping in an arena, a pool or a logging
-  allocator is a one-line change at the call site.
+  handed a `tda_Al *` and uses only that. Swapping in an arena or a logging
+  allocator is a one-line change at the call site. A pool hands out blocks of one size,
+  so of the containers only a list runs on it.
 - **Errors cannot be dropped.** A fallible operation returns `tda_Status` and writes its
   result through a trailing `out`; `[[nodiscard]]` makes ignoring it a warning every
   compiler raises unasked, and a compile error under `-Werror`. Broken preconditions are
@@ -167,7 +168,7 @@ With `FetchContent`:
 include(FetchContent)
 FetchContent_Declare(terse-dsa
     GIT_REPOSITORY https://github.com/twist347/terse-dsa.git
-    GIT_TAG v1.4.0
+    GIT_TAG v1.4.1
 )
 FetchContent_MakeAvailable(terse-dsa)
 
@@ -179,7 +180,7 @@ As a submodule:
 ```sh
 git submodule add https://github.com/twist347/terse-dsa.git \
     thirdparty/terse-dsa
-git -C thirdparty/terse-dsa checkout v1.4.0
+git -C thirdparty/terse-dsa checkout v1.4.1
 ```
 
 ```cmake

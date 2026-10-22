@@ -13,7 +13,10 @@
 ///
 /// tda_Al ops take no alignment, so alignment is a property of the allocator. A type that
 /// needs more than max_align_t gets it by handing this allocator to its container, whose
-/// code stays the same.
+/// code stays the same. That holds for the containers that keep their elems in one
+/// buffer: arr, vec, deque, stack, queue and pqueue. list, hmap and hset place an elem at
+/// a fixed offset inside a node, so it is aligned to max_align_t at most, whatever the
+/// node is aligned to.
 ///
 /// Each request goes to the parent 'alignment' - 1 + sizeof(void *) bytes larger. The
 /// block is advanced to the next aligned address, and the parent's address is stored in

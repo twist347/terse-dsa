@@ -90,6 +90,25 @@ static void test_for_each_evaluates_the_view_once() {
     TEST_ASSERT_EQUAL_INT32(9, total); // 2 + 3 + 4, and the sub was taken once
 }
 
+// the hidden loop variables are named per line, so the inner walk does not shadow the
+// outer one, and a break in it leaves the outer one going
+static void test_for_each_nests() {
+    constexpr int32_t buf[3] = {1, 2, 3};
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 3);
+
+    size_t pairs = 0;
+    TDA_SPAN_FOR_EACH_AS(int32_t, outer, s) {
+        TDA_SPAN_FOR_EACH_AS(int32_t, inner, s) {
+            if (*inner > *outer) {
+                break;
+            }
+            ++pairs;
+        }
+    }
+
+    TEST_ASSERT_EQUAL_size_t(1 + 2 + 3, pairs);
+}
+
 static void test_for_each_mut_writes_through_the_view() {
     int32_t buf[3] = {1, 2, 3};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
@@ -397,6 +416,7 @@ int main() {
     RUN_TEST(test_for_each_binds_every_elem_in_order);
     RUN_TEST(test_for_each_over_an_empty_view_runs_no_body);
     RUN_TEST(test_for_each_evaluates_the_view_once);
+    RUN_TEST(test_for_each_nests);
     RUN_TEST(test_for_each_mut_writes_through_the_view);
 
     RUN_TEST(test_new_keeps_fields);

@@ -21,7 +21,14 @@
 ///
 /// The hasher and the equality are fixed at construction and travel with the entries
 /// through copy and swap, since the buckets depend on the hash. Keys equal under 'eq'
-/// must hash alike.
+/// must hash alike. The bucket comes from the low bits of the hash, so a hasher has to
+/// spread its input over them; an identity hasher on keys that differ only in high bits
+/// sends them all to one chain. The hashers in core/hash do this.
+///
+/// A key is stored as its key_size bytes. With tda_hash_cstr and tda_eq_cstr the key is
+/// a const char *, so the map keeps the pointer and not the text: the string must outlive
+/// its entry and stay unchanged, and keys read one after another into a single buffer
+/// all point at it.
 ///
 /// An entry never moves. Growing reallocates the bucket array and relinks the nodes, so a
 /// borrowed node survives inserts, growth and the removal of other entries. It is
@@ -65,7 +72,8 @@ typedef bool (*tda_EntryPred)(const void *key, const void *val, void *ctx);
 /// @param al used for every later allocation
 /// @param[out] out the new map, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated, or a node of
+///         these sizes would not fit in size_t
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Status tda_hmap_new(size_t key_size, size_t val_size, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HMap **out);
@@ -156,8 +164,8 @@ tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other);
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and the copy cannot be
 ///         allocated; both are left unchanged
-/// @bigo{1} on one allocator, n across two; there the entries are rebuilt, so borrowed
-///          nodes do not survive
+/// @bigo{k} on one allocator, for the k old entries of 'self' freed one by one; k + n
+///          across two, where the entries are rebuilt and borrowed nodes do not survive
 [[nodiscard]] TDA_API
 tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other);
 
@@ -227,7 +235,7 @@ tda_Eq tda_hmap_key_eq(const tda_HMap *self);
 ///          one way only; a different length gives false
 /// @return whether the lengths match and every entry of 'a' is in 'b' with the same value
 ///         byte for byte (a tda_Eq takes no size, so it cannot do this)
-/// @bigo{n}
+/// @bigo{n} expected over the entries and the buckets of 'a'
 [[nodiscard]] TDA_API
 bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b);
 
@@ -302,6 +310,8 @@ tda_HMapNode *tda_hmap_first_node_mut(tda_HMap *self);
 /// @param self the map, needed to step past the end of a chain into the next bucket
 /// @param node the position to step from
 /// @return the next node, or null at the end
+/// @warning an insert during a walk may grow the table, which relinks every entry, and
+///          the walk then skips some and repeats others. Collect what to insert first
 /// @bigo{1} amortized over a whole walk, which is n plus the bucket count
 [[nodiscard]] TDA_API
 const tda_HMapNode *tda_hmap_node_next(const tda_HMap *self, const tda_HMapNode *node);
@@ -607,6 +617,14 @@ static inline tda_HMap *tda_hmap_typed_(
 #define TDA_HMAP_TAKE(K, V, self, key, out_key, out_val) \
     tda_hmap_take(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }, (K *){ (out_key) }, (V *){ (out_val) })
 
+/// @cond
+// the body of both walks; the hidden names come in already unique, and 'self' is
+// read once
+#define TDA_HMAP_WALK_(SelfT, NodeT, node, self, first, next, hmap, once) \
+    for (SelfT *hmap = (self), **once = &hmap; once; once = nullptr)      \
+        for (NodeT *node = first(hmap); node; node = next(hmap, node))
+/// @endcond
+
 /// walks every entry, binding 'node' to each in turn, in unspecified (bucket) order
 /// @param node the name of the loop variable, a const tda_HMapNode *
 /// @param self the map
@@ -620,17 +638,32 @@ static inline tda_HMap *tda_hmap_typed_(
 ///     }
 /// }
 /// @endcode
-#define TDA_HMAP_FOR_EACH(node, self)                                \
-    for (const tda_HMapNode *node = tda_hmap_first_node(self);       \
-         node;                                                       \
-         node = tda_hmap_node_next((self), node))
+/// @warning inserting inside the loop is not allowed either; see tda_hmap_node_next
+#define TDA_HMAP_FOR_EACH(node, self) \
+    TDA_HMAP_WALK_(                   \
+        const tda_HMap,               \
+        const tda_HMapNode,           \
+        node,                         \
+        self,                         \
+        tda_hmap_first_node,          \
+        tda_hmap_node_next,           \
+        TDA_LINE_NAME_(hmap_),        \
+        TDA_LINE_NAME_(once_)         \
+    )
 
 /// the same walk over entries whose values may be written through
 /// @copydetails TDA_HMAP_FOR_EACH
-#define TDA_HMAP_FOR_EACH_MUT(node, self)                            \
-    for (tda_HMapNode *node = tda_hmap_first_node_mut(self);         \
-         node;                                                       \
-         node = tda_hmap_node_next_mut((self), node))
+#define TDA_HMAP_FOR_EACH_MUT(node, self) \
+    TDA_HMAP_WALK_(                       \
+        tda_HMap,                         \
+        tda_HMapNode,                     \
+        node,                             \
+        self,                             \
+        tda_hmap_first_node_mut,          \
+        tda_hmap_node_next_mut,           \
+        TDA_LINE_NAME_(hmap_),            \
+        TDA_LINE_NAME_(once_)             \
+    )
 
 /// tda_hmap_node_key as a const K *
 /// @param K the key type

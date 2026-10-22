@@ -23,7 +23,9 @@
 /// with a value size of 0, and a set's node is just the header plus the key.
 ///
 /// The hasher and the equality are fixed at construction and travel with the keys through
-/// copy and swap, as in ds/hmap. Keys equal under 'eq' must hash alike.
+/// copy and swap, as in ds/hmap. Keys equal under 'eq' must hash alike, a hasher has to
+/// spread over the low bits, and a const char * key keeps the pointer, not the text, all
+/// as in ds/hmap.
 ///
 /// The set narrows the map's interface and adds no invariant: there is no value to get,
 /// set or hand out, and a key is either in or out.
@@ -60,7 +62,8 @@ typedef tda_HMapNode tda_HSetNode;
 /// @param al used for every later allocation
 /// @param[out] out the new set, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated, or a node of
+///         these sizes would not fit in size_t
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Status tda_hset_new(size_t key_size, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HSet **out);
@@ -135,8 +138,8 @@ tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other);
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and the copy cannot be
 ///         allocated; both are left unchanged
-/// @bigo{1} on one allocator, n across two; there the keys are rebuilt, so borrowed
-///          nodes do not survive
+/// @bigo{k} on one allocator, for the k old keys of 'self' freed one by one; k + n
+///          across two, where the keys are rebuilt and borrowed nodes do not survive
 [[nodiscard]] TDA_API
 tda_Status tda_hset_move_assign(tda_HSet *self, tda_HSet *other);
 
@@ -198,7 +201,7 @@ tda_Eq tda_hset_key_eq(const tda_HSet *self);
 /// @param b must have the same key_size and key equality, since the check runs one way
 ///          only; a different length gives false
 /// @return whether the lengths match and every key of 'a' is in 'b'
-/// @bigo{n}
+/// @bigo{n} expected over the keys and the buckets of 'a'
 [[nodiscard]] TDA_API
 bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b);
 
@@ -249,6 +252,8 @@ tda_HSetNode *tda_hset_first_node_mut(tda_HSet *self);
 /// @param self the set, needed to step past the end of a chain into the next bucket
 /// @param node the position to step from
 /// @return the next node, or null at the end
+/// @warning an insert during a walk may grow the table, which relinks every entry, and
+///          the walk then skips some and repeats others. Collect what to insert first
 /// @bigo{1} amortized over a whole walk, which is n plus the bucket count
 [[nodiscard]] TDA_API
 const tda_HSetNode *tda_hset_node_next(const tda_HSet *self, const tda_HSetNode *node);
@@ -370,21 +375,22 @@ void tda_hset_swap(tda_HSet *self, tda_HSet *other);
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when a node or the bucket array cannot be allocated;
 ///         'self' keeps its keys and holds some of those of 'other'
-/// @bigo{m} expected over the m keys of 'other', plus the amortized cost of growing
+/// @bigo{m} expected over the m keys and the buckets of 'other', plus the amortized
+///         cost of growing
 [[nodiscard]] TDA_API
 tda_Status tda_hset_union(tda_HSet *self, const tda_HSet *other);
 
 /// drops from 'self' every key that is not in 'other'
 /// @param[in,out] self the set written into
 /// @param other as in tda_hset_union
-/// @bigo{n} expected over the n keys of 'self'
+/// @bigo{n} expected over the n keys and the buckets of 'self'
 TDA_API
 void tda_hset_intersect(tda_HSet *self, const tda_HSet *other);
 
 /// drops from 'self' every key that is in 'other'
 /// @param[in,out] self the set written into
 /// @param other as in tda_hset_union; 'self' empties the set
-/// @bigo{min(n, m)} expected; the smaller of the two is walked
+/// @bigo{min(n, m)} expected; the smaller of the two is walked, its buckets included
 TDA_API
 void tda_hset_difference(tda_HSet *self, const tda_HSet *other);
 
@@ -394,7 +400,8 @@ void tda_hset_difference(tda_HSet *self, const tda_HSet *other);
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when a node or the bucket array cannot be allocated;
 ///         'self' is left partly updated
-/// @bigo{m} expected over the m keys of 'other', plus the amortized cost of growing
+/// @bigo{m} expected over the m keys and the buckets of 'other', plus the amortized
+///         cost of growing
 [[nodiscard]] TDA_API
 tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other);
 
@@ -402,7 +409,8 @@ tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other);
 /// @param self the set that may be contained
 /// @param other as in tda_hset_union
 /// @return true when 'self' is empty
-/// @bigo{n} expected over the n keys of 'self'; O(1) when it is the longer one
+/// @bigo{n} expected over the n keys and the buckets of 'self'; O(1) when it is the
+///         longer one
 [[nodiscard]] TDA_API
 bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other);
 
@@ -410,7 +418,7 @@ bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other);
 /// @param self one set
 /// @param other as in tda_hset_union
 /// @return whether the intersection is non-empty
-/// @bigo{min(n, m)} expected; the smaller of the two is walked
+/// @bigo{min(n, m)} expected; the smaller of the two is walked, its buckets included
 [[nodiscard]] TDA_API
 bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other);
 
@@ -528,6 +536,14 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
 #define TDA_HSET_TAKE(K, self, key, out_key) \
     tda_hset_take(TDA_HSET_TYPED_(K, self), &(K){ (key) }, (K *){ (out_key) })
 
+/// @cond
+// the body of both walks; the hidden names come in already unique, and 'self' is
+// read once
+#define TDA_HSET_WALK_(SelfT, NodeT, node, self, first, next, hset, once) \
+    for (SelfT *hset = (self), **once = &hset; once; once = nullptr)      \
+        for (NodeT *node = first(hset); node; node = next(hset, node))
+/// @endcond
+
 /// walks every key, binding 'node' to each in turn, in unspecified (bucket) order
 /// @param node the name of the loop variable, a const tda_HSetNode *
 /// @param self the set
@@ -541,17 +557,32 @@ static inline tda_HSet *tda_hset_typed_(tda_HSet *self, [[maybe_unused]] size_t 
 ///     }
 /// }
 /// @endcode
-#define TDA_HSET_FOR_EACH(node, self)                          \
-    for (const tda_HSetNode *node = tda_hset_first_node(self); \
-         node;                                                 \
-         node = tda_hset_node_next((self), node))
+/// @warning inserting inside the loop is not allowed either; see tda_hset_node_next
+#define TDA_HSET_FOR_EACH(node, self) \
+    TDA_HSET_WALK_(                   \
+        const tda_HSet,               \
+        const tda_HSetNode,           \
+        node,                         \
+        self,                         \
+        tda_hset_first_node,          \
+        tda_hset_node_next,           \
+        TDA_LINE_NAME_(hset_),        \
+        TDA_LINE_NAME_(once_)         \
+    )
 
 /// the same walk, over nodes that can be removed through
 /// @copydetails TDA_HSET_FOR_EACH
-#define TDA_HSET_FOR_EACH_MUT(node, self)                         \
-    for (tda_HSetNode *node = tda_hset_first_node_mut(self);      \
-         node;                                                    \
-         node = tda_hset_node_next_mut((self), node))
+#define TDA_HSET_FOR_EACH_MUT(node, self) \
+    TDA_HSET_WALK_(                       \
+        tda_HSet,                         \
+        tda_HSetNode,                     \
+        node,                             \
+        self,                             \
+        tda_hset_first_node_mut,          \
+        tda_hset_node_next_mut,           \
+        TDA_LINE_NAME_(hset_),            \
+        TDA_LINE_NAME_(once_)             \
+    )
 
 /// tda_hset_node_key as a const K *
 /// @param K the key type

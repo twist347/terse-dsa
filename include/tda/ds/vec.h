@@ -525,7 +525,7 @@ static inline tda_Vec *tda_vec_typed_(tda_Vec *self, [[maybe_unused]] size_t siz
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new vec is written
-/// @param ... the elems, as a T initializer list
+/// @param ... the elems, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_VEC_OF(T, al, out, ...)                     \
     tda_vec_from_data(                                  \
@@ -605,7 +605,7 @@ static inline tda_Vec *tda_vec_typed_(tda_Vec *self, [[maybe_unused]] size_t siz
 /// tda_vec_extend from the elems written out
 /// @param T the elem type
 /// @param self the vec
-/// @param ... the elems, as a T initializer list
+/// @param ... the elems, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_VEC_EXTEND(T, self, ...) \
     tda_vec_extend((self), TDA_SPAN_OF(T, __VA_ARGS__))
@@ -614,7 +614,7 @@ static inline tda_Vec *tda_vec_typed_(tda_Vec *self, [[maybe_unused]] size_t siz
 /// @param T the elem type
 /// @param self the vec
 /// @param idx the index
-/// @param ... the elems, as a T initializer list
+/// @param ... the elems, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_VEC_INSERT_SPAN(T, self, idx, ...) \
     tda_vec_insert_span((self), (idx), TDA_SPAN_OF(T, __VA_ARGS__))

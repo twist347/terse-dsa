@@ -366,7 +366,7 @@ static inline tda_Stack *tda_stack_typed_(tda_Stack *self, [[maybe_unused]] size
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new stack is written
-/// @param ... the elems, bottom to top, as a T initializer list
+/// @param ... the elems, bottom to top, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_STACK_OF(T, al, out, ...)                   \
     tda_stack_from_data(                                \

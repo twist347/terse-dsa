@@ -22,14 +22,18 @@
 /// A node never moves, so a position stays valid as long as its elem does. The price is
 /// an allocation per elem, scattered memory and no index: reaching the n-th elem is a
 /// walk. Insertion and removal are O(1) at a node already in hand, where a vec pays O(n).
+/// Debug builds assert that such a node belongs to the list, which walks it, so there
+/// those ops cost O(n).
 ///
 /// The relink ops (reverse, sort, merge, splice_node) move nodes, not elems, so a
 /// borrowed node still names the same elem. That is why a list sorts itself instead of
 /// using algo/sort.
 ///
 /// The elems are not contiguous, so algo is reached by copying: tda_list_copy_to_span and
-/// tda_list_copy_from_span. Splice and swap want both lists on one allocator, since a
-/// node cannot change owner without moving.
+/// tda_list_copy_from_span. A node cannot change owner without moving, so the ops that
+/// take nodes from another list (splice, splice_node, merge) relink only on one
+/// allocator. Across two they copy the elems into new nodes and free the old ones, and
+/// positions borrowed from 'src' die. swap takes one allocator only.
 ///
 /// @par Example
 /// @snippet ds/example_list.c build
@@ -130,8 +134,8 @@ tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other);
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and a node cannot be
 ///         allocated; both are left unchanged
-/// @bigo{1} on one allocator, n across two, where the elems are copied and borrowed
-///         positions do not survive
+/// @bigo{k} on one allocator, for the k old nodes of 'self' freed one by one; k + n
+///         across two, where the elems are copied and borrowed positions do not survive
 [[nodiscard]] TDA_API
 tda_Status tda_list_move_assign(tda_List *self, tda_List *other);
 
@@ -357,7 +361,8 @@ void tda_list_retain(tda_List *self, tda_Pred pred, void *ctx);
 
 /// moves every node of 'src' to the front of 'self', leaving 'src' empty
 /// @param self the list written into
-/// @param[in,out] src must have the same elem_size; emptied on success
+/// @param[in,out] src must have the same elem_size and not be 'self' (asserted);
+///                    emptied on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and a node cannot be
 ///         allocated; both are left unchanged
@@ -415,12 +420,14 @@ void tda_list_sort(tda_List *self, tda_Cmp cmp);
 
 /// merges the sorted 'src' into the sorted 'self', leaving 'src' empty
 /// @param self must already be sorted under 'cmp'
-/// @param[in,out] src must have the same elem_size and be sorted under 'cmp'; on ties
-///                    elems of 'self' come first
+/// @param[in,out] src must have the same elem_size, be sorted under 'cmp' and not be
+///                    'self' (asserted); on ties elems of 'self' come first
 /// @param cmp the order both are already in
-/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_OK on success; on one allocator the nodes of 'src' are relinked
+///         and borrowed positions survive
 /// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and a node cannot be
-///         allocated; both are left unchanged
+///         allocated; both are left unchanged. Across two the elems of 'src' are copied
+///         and its borrowed positions do not survive
 /// @bigo{n + m}; splice_back then sort would cost O(n log n)
 [[nodiscard]] TDA_API
 tda_Status tda_list_merge(tda_List *self, tda_List *src, tda_Cmp cmp);
@@ -513,7 +520,7 @@ static inline tda_List *tda_list_typed_(tda_List *self, [[maybe_unused]] size_t 
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new list is written
-/// @param ... the elems, front to back, as a T initializer list
+/// @param ... the elems, front to back, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_LIST_OF(T, al, out, ...)                    \
     tda_list_from_data(                                 \

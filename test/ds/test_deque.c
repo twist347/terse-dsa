@@ -540,6 +540,55 @@ static void test_for_each_goes_on_past_a_continue() {
     tda_deque_drop(d);
 }
 
+static tda_Deque *counted(tda_Deque *d, size_t *calls) {
+    ++*calls;
+    return d;
+}
+
+static void test_for_each_reads_its_handle_once() {
+    tda_Deque *d = make_wrapped();
+
+    size_t calls = 0;
+    size_t n = 0;
+    TDA_DEQUE_FOR_EACH_AS(int32_t, elem, counted(d, &calls)) {
+        TDA_UNUSED(elem);
+        ++n;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(4, n);
+    TEST_ASSERT_EQUAL_size_t(1, calls);
+
+    calls = 0;
+    TDA_DEQUE_FOR_EACH_MUT_AS(int32_t, elem, counted(d, &calls)) {
+        *elem += 1;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(1, calls);
+    assert_elems(d, (int32_t[]){11, 21, 31, 41}, 4);
+
+    tda_deque_drop(d);
+}
+
+static void test_for_each_nests() {
+    // the hidden loop variables are named per line, so the inner walk does not shadow
+    // the outer one and a break in it leaves the outer one going
+    tda_Deque *d = make_wrapped();
+
+    size_t pairs = 0;
+    TDA_DEQUE_FOR_EACH_AS(int32_t, outer, d) {
+        TDA_DEQUE_FOR_EACH_AS(int32_t, inner, d) {
+            if (*inner > *outer) {
+                break;
+            }
+            ++pairs;
+        }
+    }
+
+    TEST_ASSERT_EQUAL_size_t(1 + 2 + 3 + 4, pairs);
+
+    tda_deque_drop(d);
+}
+
 static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1702,6 +1751,8 @@ int main() {
     RUN_TEST(test_for_each_mut_writes_through_every_slot);
     RUN_TEST(test_for_each_stops_at_a_break);
     RUN_TEST(test_for_each_goes_on_past_a_continue);
+    RUN_TEST(test_for_each_reads_its_handle_once);
+    RUN_TEST(test_for_each_nests);
 
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
     RUN_TEST(test_move_assign_across_allocators_empties_the_source);

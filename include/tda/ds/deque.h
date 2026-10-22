@@ -544,7 +544,7 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new deque is written
-/// @param ... the elems, front to back, as a T initializer list
+/// @param ... the elems, front to back, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_DEQUE_OF(T, al, out, ...)                   \
     tda_deque_from_data(                                \
@@ -574,9 +574,16 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 #define TDA_DEQUE_BACK_MUT_AS(T, self) \
     ((T *) tda_deque_back_mut(TDA_DEQUE_TYPED_(T, self)))
 
-// the inner loop only binds 'elem', so a break leaves just that one; 'brk_' is set before
-// the body and cleared only when the body runs to its end, so after a break it is still
-// set and stops the outer loop too. T is checked once, in the init, and not per step
+/// @cond
+// the body of both deque walks; the hidden names come in already unique, and 'self' is
+// read once, which also checks T once. The inner loop only binds 'elem', so a break
+// leaves just that one; 'brk' is set before the body and cleared only when the body runs
+// to its end, so after a break it is still set and stops the walk too
+#define TDA_DEQUE_WALK_(DequeT, ElemT, elem, self, get, deque, once, idx, brk)    \
+    for (DequeT *deque = (self), **once = &deque; once; once = nullptr)           \
+        for (size_t idx = 0, brk = 0; !brk && idx < tda_deque_len(deque); ++idx) \
+            for (ElemT *elem = (brk = 1, get(deque, idx)); brk; brk = 0)
+/// @endcond
 
 /// walks the deque front to back, binding 'elem' to each elem in turn. A ring has no
 /// single view, so this is the walk that copies nothing
@@ -587,19 +594,33 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 ///       the walk covers, and growing moves the elems out from under 'elem'
 /// @note break and continue act on the walk as they would on a plain loop
 /// @bigo{n} over the whole walk
-#define TDA_DEQUE_FOR_EACH_AS(T, elem, self)                                  \
-    for (size_t idx_ = ((void) TDA_DEQUE_TYPED_(T, self), 0), brk_ = 0;       \
-         !brk_ && idx_ < tda_deque_len(self);                                 \
-         ++idx_)                                                              \
-        for (const T *elem = (brk_ = 1, tda_deque_get((self), idx_)); brk_; brk_ = 0)
+#define TDA_DEQUE_FOR_EACH_AS(T, elem, self) \
+    TDA_DEQUE_WALK_(                         \
+        const tda_Deque,                     \
+        const T,                             \
+        elem,                                \
+        TDA_DEQUE_TYPED_(T, self),           \
+        tda_deque_get,                       \
+        TDA_LINE_NAME_(deque_),              \
+        TDA_LINE_NAME_(once_),               \
+        TDA_LINE_NAME_(idx_),                \
+        TDA_LINE_NAME_(brk_)                 \
+    )
 
 /// the same walk over elems that may be written through
 /// @copydetails TDA_DEQUE_FOR_EACH_AS
-#define TDA_DEQUE_FOR_EACH_MUT_AS(T, elem, self)                              \
-    for (size_t idx_ = ((void) TDA_DEQUE_TYPED_(T, self), 0), brk_ = 0;       \
-         !brk_ && idx_ < tda_deque_len(self);                                 \
-         ++idx_)                                                              \
-        for (T *elem = (brk_ = 1, tda_deque_get_mut((self), idx_)); brk_; brk_ = 0)
+#define TDA_DEQUE_FOR_EACH_MUT_AS(T, elem, self) \
+    TDA_DEQUE_WALK_(                             \
+        tda_Deque,                               \
+        T,                                       \
+        elem,                                    \
+        TDA_DEQUE_TYPED_(T, self),               \
+        tda_deque_get_mut,                       \
+        TDA_LINE_NAME_(deque_),                  \
+        TDA_LINE_NAME_(once_),                   \
+        TDA_LINE_NAME_(idx_),                    \
+        TDA_LINE_NAME_(brk_)                     \
+    )
 
 /// tda_deque_get as a const T *
 /// @param T the elem type
@@ -661,7 +682,7 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 /// tda_deque_extend from the elems written out
 /// @param T the elem type
 /// @param self the deque
-/// @param ... the elems, as a T initializer list
+/// @param ... the elems, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_DEQUE_EXTEND(T, self, ...) \
     tda_deque_extend((self), TDA_SPAN_OF(T, __VA_ARGS__))
@@ -670,7 +691,7 @@ static inline tda_Deque *tda_deque_typed_(tda_Deque *self, [[maybe_unused]] size
 /// @param T the elem type
 /// @param self the deque
 /// @param idx the index, counted from the front
-/// @param ... the elems, as a T initializer list
+/// @param ... the elems, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_DEQUE_INSERT_SPAN(T, self, idx, ...) \
     tda_deque_insert_span((self), (idx), TDA_SPAN_OF(T, __VA_ARGS__))

@@ -373,7 +373,7 @@ static inline tda_Queue *tda_queue_typed_(tda_Queue *self, [[maybe_unused]] size
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new queue is written
-/// @param ... the elems, front to back, as a T initializer list
+/// @param ... the elems, front to back, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_QUEUE_OF(T, al, out, ...)                   \
     tda_queue_from_data(                                \

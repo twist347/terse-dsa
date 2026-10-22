@@ -357,7 +357,7 @@ static inline tda_Arr *tda_arr_typed_(tda_Arr *self, [[maybe_unused]] size_t siz
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new arr is written
-/// @param ... the elems, as a T initializer list
+/// @param ... the elems, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_ARR_OF(T, al, out, ...)                     \
     tda_arr_from_data(                                  \

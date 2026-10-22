@@ -1,6 +1,10 @@
 #include "tda/alloc/aligned.h"
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
+#include "tda/core/cmp.h"
+#include "tda/core/hash.h"
+#include "tda/ds/hmap.h"
+#include "tda/ds/list.h"
 
 #include "support/probe.h"
 
@@ -291,6 +295,105 @@ static void test_over_itself() {
     tda_al_aligned_drop(inner);
 }
 
+/* ========== over a parent that aligns too little ==========
+ *
+ * Every block of this parent sits 8 past a max_align_t boundary, below what the tda_Al
+ * contract asks. list and hmap would put their elems there unaligned; the aligned
+ * allocator in between is the fix the contract names.
+ */
+
+static constexpr size_t NARROW_SHIFT = 8;
+
+static void *narrow_alloc(void *ctx, size_t size) {
+    unsigned char *base = tda_alloc(ctx, size + alignof(max_align_t));
+    return base ? base + NARROW_SHIFT : nullptr;
+}
+
+static void narrow_dealloc(void *ctx, void *ptr, size_t size) {
+    if (ptr) {
+        unsigned char *base = (unsigned char *) ptr - NARROW_SHIFT;
+        tda_dealloc(ctx, base, size + alignof(max_align_t));
+    }
+}
+
+static tda_Al narrow_al() {
+    return (tda_Al){
+        .ctx = tda_al_default(),
+        .alloc = narrow_alloc,
+        .dealloc = narrow_dealloc,
+    };
+}
+
+static void test_the_narrow_parent_misses_max_align_t() {
+    tda_Al narrow = narrow_al();
+
+    void *ptr = tda_alloc(&narrow, 32);
+    TEST_ASSERT_NOT_NULL(ptr);
+    TEST_ASSERT_NOT_EQUAL(0, (uintptr_t) ptr % alignof(max_align_t));
+
+    tda_dealloc(&narrow, ptr, 32);
+}
+
+static void test_a_list_runs_over_a_narrow_parent() {
+    tda_Al narrow = narrow_al();
+    tda_Al *al = tda_al_aligned_new(&narrow, alignof(max_align_t));
+    TEST_ASSERT_NOT_NULL(al);
+
+    tda_List *l = nullptr;
+    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_list_new(sizeof(long double), al, &l));
+    for (int i = 0; i < 8; ++i) {
+        const long double val = i;
+        TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_list_push_back(l, &val));
+    }
+
+    int i = 0;
+    TDA_LIST_FOR_EACH(node, l) {
+        const long double *elem = tda_list_node_elem(node);
+        TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) elem % alignof(max_align_t));
+        TEST_ASSERT_TRUE(*elem == i);
+        ++i;
+    }
+    TEST_ASSERT_EQUAL_INT(8, i);
+
+    tda_list_drop(l);
+    tda_al_aligned_drop(al);
+}
+
+static void test_an_hmap_runs_over_a_narrow_parent() {
+    tda_Al narrow = narrow_al();
+    tda_Al *al = tda_al_aligned_new(&narrow, alignof(max_align_t));
+    TEST_ASSERT_NOT_NULL(al);
+
+    tda_HMap *m = nullptr;
+    TEST_ASSERT_EQUAL(
+        TDA_STATUS_OK,
+        tda_hmap_new(
+            sizeof(int32_t),
+            sizeof(long double),
+            tda_hash_i32,
+            tda_eq_i32,
+            al,
+            &m
+        )
+    );
+    for (int32_t key = 0; key < 40; ++key) {
+        const long double val = key;
+        bool is_new;
+        TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_hmap_insert(m, &key, &val, &is_new));
+        TEST_ASSERT_TRUE(is_new);
+    }
+
+    for (int32_t key = 0; key < 40; ++key) {
+        const long double *val = tda_hmap_get(m, &key);
+        TEST_ASSERT_NOT_NULL(val);
+        TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) val % alignof(max_align_t));
+        TEST_ASSERT_TRUE(*val == key);
+    }
+
+    tda_hmap_drop(m);
+    tda_al_aligned_drop(al);
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -313,6 +416,10 @@ int main() {
 
     RUN_TEST(test_over_an_arena);
     RUN_TEST(test_over_itself);
+
+    RUN_TEST(test_the_narrow_parent_misses_max_align_t);
+    RUN_TEST(test_a_list_runs_over_a_narrow_parent);
+    RUN_TEST(test_an_hmap_runs_over_a_narrow_parent);
 
     return UNITY_END();
 }

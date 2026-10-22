@@ -18,6 +18,9 @@ static constexpr uint64_t SPLITMIX_C2 = UINT64_C(0x94d049bb133111eb);
 // the top half of a 64x64 product puts a draw into a range without a division. C23
 // spells that width without an extension, and the assert turns a platform that lacks it
 // into a build error rather than a quietly different generator.
+#ifndef BITINT_MAXWIDTH
+    #error "tda needs C23 _BitInt: <limits.h> defines no BITINT_MAXWIDTH"
+#endif
 static_assert(BITINT_MAXWIDTH >= 128, "tda_rng_u64_max needs a 128-bit product");
 
 typedef unsigned _BitInt(128) u128;
@@ -218,6 +221,9 @@ static uint64_t rotl64(uint64_t val, int count) {
 }
 
 static uint64_t next_u64(tda_Rng *self) {
+    // a zeroed struct is the one state xoshiro cannot leave; the bounded draws would hang
+    assert((self->s[0] | self->s[1] | self->s[2] | self->s[3]) != 0);
+
     // xoshiro256++. The state advances by a linear step (shift, xor, rotate), which
     // gives the period and nothing else. The ++ scrambler in front, a rotate-add over
     // two words, is what makes the output look random. The plain xoshiro256 underneath

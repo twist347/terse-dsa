@@ -373,7 +373,7 @@ static inline tda_PQueue *tda_pqueue_typed_(tda_PQueue *self, [[maybe_unused]] s
 /// @param cmp the order to serve in
 /// @param al the allocator
 /// @param[out] out where the new queue is written
-/// @param ... the elems, in any order, as a T initializer list
+/// @param ... the elems, in any order, as a T initializer list, not empty
 /// @bigo{n}
 #define TDA_PQUEUE_OF(T, cmp, al, out, ...)             \
     tda_pqueue_from_data(                               \

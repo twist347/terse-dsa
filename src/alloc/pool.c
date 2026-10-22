@@ -95,7 +95,8 @@ tda_Al *tda_al_pool_new(tda_Al *parent, size_t block_size, size_t block_count) {
         return nullptr;
     }
 
-    assert(tda_ptr_is_aligned(data, TDA_DEFAULT_ALIGNMENT));
+    // blocks are carved on this grid from the start of data; see the tda_Al contract
+    TDA_EXPECT(tda_ptr_is_aligned(data, TDA_DEFAULT_ALIGNMENT));
 
     // allocate the tda_Al itself
     tda_Al *obj = tda_alloc(parent, sizeof(tda_Al));

@@ -2,6 +2,8 @@
 
 #include "tda/core/check.h"
 
+#include "internal/overlap.h"
+
 #include <assert.h>
 #include <string.h>
 
@@ -10,6 +12,7 @@ void tda_span_copy(tda_SpanMut dst, tda_Span src) {
     TDA_SPAN_ASSERT(src);
     TDA_EXPECT(dst.elem_size == src.elem_size);
     TDA_EXPECT(dst.len == src.len);
+    assert(tda_span_apart_or_same(tda_span_mut_to_span(dst), src));
 
     if (dst.len == 0 || dst.data == src.data) {
         return;
@@ -57,6 +60,7 @@ size_t tda_span_sample(tda_SpanMut dst, tda_Span src, tda_Rng *rng) {
     TDA_SPAN_ASSERT(src);
     TDA_EXPECT(dst.elem_size == src.elem_size);
     assert(rng);
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), src));
 
     const size_t want = dst.len < src.len ? dst.len : src.len;
     size_t write = 0;

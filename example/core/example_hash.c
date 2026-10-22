@@ -9,8 +9,9 @@
 
 /// [struct]
 // a hasher and an equality go together under one rule: what the equality calls equal
-// must hash alike. Build both from the fields, never the bytes: tda_hash_bytes would
-// read the padding between them
+// must hash alike. Build both from the fields. Point would survive tda_hash_bytes, but
+// a struct with padding or a float field would not: its bytes can differ where its
+// values agree
 typedef struct {
     int32_t x;
     int32_t y;

@@ -25,6 +25,11 @@
 /// both, the arena and the pool for calloc. An allocator over another borrows it: the
 /// parent outlives the child, and they drop in reverse order of building.
 ///
+/// Every block must be aligned to alignof(max_align_t), as malloc's are: list and hmap
+/// place an elem at a fixed offset in a node, and the arena and the pool carve their
+/// blocks on that grid. Those four check it with TDA_EXPECT. A parent that aligns less
+/// can be wrapped: tda_al_aligned_new(parent, alignof(max_align_t)).
+///
 /// @par Example
 /// @snippet alloc/example_alloc.c use
 /// @snippet alloc/example_alloc.c custom
@@ -35,7 +40,7 @@
 typedef struct {
     void *ctx; ///< implementation state, passed to every callback
 
-    /// 'size' bytes, uninitialized, or null. Required.
+    /// 'size' bytes, uninitialized, aligned to alignof(max_align_t), or null. Required.
     void *(*alloc)(void *ctx, size_t size);
 
     /// 'num' * 'size' zeroed bytes, or null. Optional: null means alloc and memset.

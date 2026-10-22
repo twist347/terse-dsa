@@ -137,6 +137,20 @@ static void test_get_mut_writes_through() {
     tda_arr_drop(a);
 }
 
+// the value lies in the arr itself; with idx == the source slot the copy overlaps fully
+static void test_set_from_its_own_elem() {
+    tda_Arr *a = make_arr(3);
+
+    tda_arr_set(a, 0, tda_arr_get(a, 2));
+    tda_arr_set(a, 1, tda_arr_get(a, 1));
+
+    TEST_ASSERT_EQUAL_INT32(2, *TDA_ARR_GET_AS(int32_t, a, 0));
+    TEST_ASSERT_EQUAL_INT32(1, *TDA_ARR_GET_AS(int32_t, a, 1));
+    TEST_ASSERT_EQUAL_INT32(2, *TDA_ARR_GET_AS(int32_t, a, 2));
+
+    tda_arr_drop(a);
+}
+
 /* ========== copy ========== */
 
 static void test_copy_is_independent() {
@@ -997,6 +1011,7 @@ int main() {
 
     RUN_TEST(test_set_get_roundtrip);
     RUN_TEST(test_get_mut_writes_through);
+    RUN_TEST(test_set_from_its_own_elem);
 
     RUN_TEST(test_copy_is_independent);
     RUN_TEST(test_copy_assign_grow_shrink_empty);

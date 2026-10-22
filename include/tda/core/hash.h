@@ -157,6 +157,8 @@ tda_Hash tda_hash_bytes(const void *data, size_t len);
 /// a string, by its contents; a null pointer hashes as a value of its own, not as ""
 /// @param val the address of the value; a pointer to the const char *, not the string
 /// @return its hash
+/// @warning as a key of ds/hmap or ds/hset the string is not copied: the container keeps
+///          the pointer, so the text must outlive the entry and not change
 /// @bigo{n}; n is the length of the string
 [[nodiscard]] TDA_API
 tda_Hash tda_hash_cstr(const void *val);

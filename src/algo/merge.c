@@ -5,6 +5,7 @@
 #include "tda/core/check.h"
 
 #include "internal/emit.h"
+#include "internal/overlap.h"
 
 #include <assert.h>
 #include <string.h>
@@ -25,6 +26,8 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
     assert(cmp);
     TDA_EXPECT(dst.elem_size == a.elem_size);
     TDA_EXPECT(dst.elem_size == b.elem_size);
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
     TDA_EXPECT(dst.len == a.len + b.len);
 
     size_t i = 0, j = 0;

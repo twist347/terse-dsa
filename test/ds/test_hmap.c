@@ -124,6 +124,22 @@ static void assert_walk_sees_everything(const tda_HMap *m) {
 
 /* ========== lifetime ========== */
 
+// a node is a header plus the key and the value; a key_size near SIZE_MAX overflows that
+// sum, which must come back as a status before anything is allocated
+static void test_new_refuses_a_key_size_that_overflows_the_node() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_HMap *out = nullptr;
+    TDA_TEST_STATUS(
+        TDA_STATUS_ERR_NO_MEM,
+        tda_hmap_new(SIZE_MAX - 8, sizeof(int32_t), tda_hash_i32, tda_eq_i32, &al, &out)
+    );
+    TEST_ASSERT_NULL(out);
+    TEST_ASSERT_EQUAL_size_t(0, probe.alloc_calls);
+}
+
 static void test_new_starts_empty() {
     tda_HMap *m = make_map(tda_hash_i32);
 
@@ -793,6 +809,28 @@ static void test_the_walk_after_a_removal_sees_the_rest() {
 
     TEST_ASSERT_EQUAL_size_t(15, tda_hmap_len(m));
     assert_walk_sees_everything(m);
+
+    tda_hmap_drop(m);
+}
+
+static const tda_HMap *counted(const tda_HMap *m, size_t *calls) {
+    ++*calls;
+    return m;
+}
+
+// the map is read once: stepping needs it on every entry, from the macro's own copy
+static void test_the_walk_reads_its_map_once() {
+    tda_HMap *m = make_filled(tda_hash_i32, 20);
+
+    size_t calls = 0;
+    size_t seen = 0;
+    TDA_HMAP_FOR_EACH(node, counted(m, &calls)) {
+        TDA_UNUSED(node);
+        ++seen;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(20, seen);
+    TEST_ASSERT_EQUAL_size_t(1, calls);
 
     tda_hmap_drop(m);
 }
@@ -1944,6 +1982,7 @@ int main() {
     UNITY_BEGIN();
 
     RUN_TEST(test_new_starts_empty);
+    RUN_TEST(test_new_refuses_a_key_size_that_overflows_the_node);
     RUN_TEST(test_new_takes_no_buckets_until_the_first_insert);
     RUN_TEST(test_new_cap_reserves_buckets_without_entries);
     RUN_TEST(test_drop_null_is_noop);
@@ -2009,6 +2048,7 @@ int main() {
     RUN_TEST(test_the_walk_skips_the_empty_buckets);
     RUN_TEST(test_the_walk_of_an_empty_map_stops_at_once);
     RUN_TEST(test_the_walk_after_a_removal_sees_the_rest);
+    RUN_TEST(test_the_walk_reads_its_map_once);
 
     RUN_TEST(test_copy_is_independent);
     RUN_TEST(test_copy_carries_the_hasher_and_the_equality);

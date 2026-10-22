@@ -766,7 +766,8 @@ static tda_Status node_new(const tda_HMap *self, const void *key, const void *va
         return TDA_STATUS_ERR_NO_MEM;
     }
 
-    assert(tda_ptr_is_aligned(node, alignof(max_align_t)));
+    // the elem sits at a fixed offset tuned to max_align_t; see the tda_Al contract
+    TDA_EXPECT(tda_ptr_is_aligned(node, alignof(max_align_t)));
 
     node->next = nullptr;
     node->hash = hash;

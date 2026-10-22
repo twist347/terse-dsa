@@ -16,15 +16,20 @@
 ///
 /// tda_realloc resizes the last block in place, since nothing lies past it; any other
 /// block moves and its old slot stays used. A vec growing alone costs the arena its final
-/// capacity; one growing beside others costs every capacity it passed through. The parent
-/// is borrowed and must outlive the arena; tda_al_arena_from_buf needs no parent and uses
-/// memory the caller already has.
+/// capacity; one growing beside others costs every capacity it passed through. A deque
+/// and an hmap always grow into a new buffer, so they cost every capacity even alone.
+/// The parent is borrowed and must outlive the arena; tda_al_arena_from_buf needs no
+/// parent and uses memory the caller already has.
 ///
 /// tda_al_arena_mark and tda_al_arena_rewind give scratch memory inside a long-lived
 /// arena: a per-frame arena can lend room to a pathfind and take it back without a reset.
 /// Marks nest and are rewound in reverse order. A mark also sets a floor: a block from
 /// below it moves instead of growing in place past it, so a rewind never cuts off the
 /// tail of a block that outlives the mark.
+///
+/// @warning what outlives a mark must not allocate before the rewind. A container made
+///          before the mark that grows after it moves into memory above the mark, and
+///          the rewind hands that memory out again under it.
 ///
 /// @par Example
 /// @snippet alloc/example_arena.c build

@@ -3,6 +3,7 @@
 #include "tda/alloc/alloc.h"
 #include "tda/core/export.h"
 #include "tda/core/status.h"
+#include "tda/core/util.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -20,9 +21,9 @@
 /// is its own key. Compared with ds/hset, a word holds 64 members, and the union of two
 /// sets is a loop over words rather than over members.
 ///
-/// Only the constructors allocate, so nothing else can fail, and an index out of range
-/// asserts. The bits above nbits are kept clear, so count, all and the scans never see
-/// them.
+/// Only the constructors and the two assigns allocate, so nothing else can fail, and an
+/// index out of range asserts. The bits above nbits are kept clear, so count, all and
+/// the scans never see them.
 ///
 /// @par Example
 /// @snippet ds/example_bitset.c build
@@ -336,16 +337,31 @@ void tda_bitset_print(const tda_BitSet *self);
 /// @name macros
 /// @{
 
+/// @cond
+// the body of the walk; the hidden names come in already unique
+#define TDA_BITSET_WALK_(idx, self, bitset, once, from)                \
+    for (const tda_BitSet *bitset = (self), **once = &bitset;          \
+         once;                                                         \
+         once = nullptr)                                               \
+        for (size_t idx = 0, from = 0;                                 \
+             tda_bitset_find_next(bitset, from, &idx);                 \
+             from = idx + 1)
+/// @endcond
+
 /// walks the indices in the set, smallest first, binding 'idx' to each in turn
 /// @param idx the name of the loop variable, a size_t
 /// @param self the bitset
 /// @note the step past the current index happens after the body, so clearing that index
 ///       inside the loop is safe, while setting a smaller one no longer changes the walk
 /// @bigo{n/64} over the whole walk
-#define TDA_BITSET_FOR_EACH(idx, self)              \
-    for (size_t idx = 0, from_ = 0;                 \
-         tda_bitset_find_next((self), from_, &idx); \
-         from_ = idx + 1)
+#define TDA_BITSET_FOR_EACH(idx, self) \
+    TDA_BITSET_WALK_(                  \
+        idx,                           \
+        self,                          \
+        TDA_LINE_NAME_(bitset_),       \
+        TDA_LINE_NAME_(once_),         \
+        TDA_LINE_NAME_(from_)          \
+    )
 
 /// @}
 

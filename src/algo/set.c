@@ -3,6 +3,7 @@
 #include "tda/core/check.h"
 
 #include "internal/emit.h"
+#include "internal/overlap.h"
 
 #include <assert.h>
 
@@ -15,6 +16,8 @@ size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) 
     assert(cmp);
     TDA_EXPECT(dst.elem_size == a.elem_size);
     TDA_EXPECT(dst.elem_size == b.elem_size);
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
     TDA_EXPECT(dst.len >= a.len + b.len);
 
     size_t i = 0, j = 0;
@@ -53,6 +56,8 @@ size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cm
     assert(cmp);
     TDA_EXPECT(dst.elem_size == a.elem_size);
     TDA_EXPECT(dst.elem_size == b.elem_size);
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
     TDA_EXPECT(dst.len >= (a.len < b.len ? a.len : b.len));
 
     size_t i = 0, j = 0;
@@ -86,6 +91,8 @@ size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp 
     assert(cmp);
     TDA_EXPECT(dst.elem_size == a.elem_size);
     TDA_EXPECT(dst.elem_size == b.elem_size);
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
     TDA_EXPECT(dst.len >= a.len);
 
     size_t i = 0, j = 0;
@@ -119,6 +126,8 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
     assert(cmp);
     TDA_EXPECT(dst.elem_size == a.elem_size);
     TDA_EXPECT(dst.elem_size == b.elem_size);
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
     TDA_EXPECT(dst.len >= a.len + b.len);
 
     size_t i = 0, j = 0;

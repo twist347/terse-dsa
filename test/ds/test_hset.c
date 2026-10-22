@@ -122,6 +122,22 @@ static void test_a_set_node_is_a_map_node_without_the_value() {
 
 /* ========== lifetime ========== */
 
+// a node is a header plus the key; a key_size near SIZE_MAX overflows that
+// sum, which must come back as a status before anything is allocated
+static void test_new_refuses_a_key_size_that_overflows_the_node() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_HSet *out = nullptr;
+    TDA_TEST_STATUS(
+        TDA_STATUS_ERR_NO_MEM,
+        tda_hset_new(SIZE_MAX - 8, tda_hash_i32, tda_eq_i32, &al, &out)
+    );
+    TEST_ASSERT_NULL(out);
+    TEST_ASSERT_EQUAL_size_t(0, probe.alloc_calls);
+}
+
 static void test_new_starts_empty() {
     tda_HSet *s = make_set(tda_hash_i32);
 
@@ -1477,6 +1493,7 @@ int main() {
     RUN_TEST(test_a_set_node_is_a_map_node_without_the_value);
 
     RUN_TEST(test_new_starts_empty);
+    RUN_TEST(test_new_refuses_a_key_size_that_overflows_the_node);
     RUN_TEST(test_new_cap_reserves_buckets_without_keys);
     RUN_TEST(test_drop_null_is_noop);
     RUN_TEST(test_drop_hands_back_everything);

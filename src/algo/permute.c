@@ -3,6 +3,7 @@
 #include "tda/algo/copy.h"
 #include "tda/core/check.h"
 
+#include "internal/overlap.h"
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -58,6 +59,7 @@ void tda_span_swap_ranges(tda_SpanMut a, tda_SpanMut b) {
     TDA_SPAN_ASSERT(b);
     TDA_EXPECT(a.elem_size == b.elem_size);
     TDA_EXPECT(a.len == b.len);
+    assert(tda_span_apart_or_same(tda_span_mut_to_span(a), tda_span_mut_to_span(b)));
 
     if (a.len == 0 || a.data == b.data) {
         return;

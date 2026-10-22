@@ -269,7 +269,7 @@ void tda_arr_set(tda_Arr *self, size_t idx, const void *val) {
     assert(val);
     TDA_EXPECT(idx < self->len);
 
-    memcpy(arr_offset_mut(self, idx), val, self->elem_size);
+    memmove(arr_offset_mut(self, idx), val, self->elem_size);
 }
 
 const void *tda_arr_data(const tda_Arr *self) {

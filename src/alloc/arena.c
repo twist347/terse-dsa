@@ -85,7 +85,8 @@ tda_Al *tda_al_arena_new(tda_Al *parent, size_t cap) {
         return nullptr;
     }
 
-    assert(tda_ptr_is_aligned(data, TDA_DEFAULT_ALIGNMENT));
+    // blocks are carved on this grid from the start of data; see the tda_Al contract
+    TDA_EXPECT(tda_ptr_is_aligned(data, TDA_DEFAULT_ALIGNMENT));
 
     arena_init(obj, arena_ctx, parent, data, block_size);
 

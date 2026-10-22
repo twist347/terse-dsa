@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.4.1 — 2026-10-22
+
+### Fixed
+
+- `tda_arr_set` takes a value that is the very elem it overwrites, as `tda_vec_set` and
+  `tda_deque_set` already did; that was a `memcpy` onto itself.
+- The walk macros read their handle once. `TDA_DEQUE_FOR_EACH_AS`, `TDA_HMAP_FOR_EACH`,
+  `TDA_HSET_FOR_EACH`, `TDA_BITSET_FOR_EACH` and their `_MUT` forms used to evaluate it
+  on every step, so `ds[k++]` walked a mix of containers. Their hidden variables, and
+  those of `TDA_SPAN_FOR_EACH_AS`, are named per line, so a walk nested in another no
+  longer trips `-Wshadow`.
+- `TDA_SWAP` rejects a const operand at compile time; it used to warn and then write
+  through it.
+- The tda_Al contract asks for blocks aligned to `alignof(max_align_t)`, and list, hmap,
+  arena and pool check it with `TDA_EXPECT`, so hardened builds stop on a parent that
+  aligns less. In release such a list used to crash later on a misaligned access.
+  `tda_al_aligned_new(parent, alignof(max_align_t))` adapts one.
+- Debug builds assert that an output of `tda_span_merge`, the set ops, `tda_span_copy`,
+  `tda_span_sample`, `tda_span_swap_ranges`, `tda_span_partial_sum` and
+  `tda_span_adjacent_difference` does not overlap an input in a way the op cannot take.
+  Those used to give a wrong result in silence.
+- Debug builds assert on a zeroed `tda_Rng`, which drew zeros forever and hung the bounded
+  draws. A platform without C23 `_BitInt` fails the build with a message that says so.
+
+### Documentation
+
+- `alloc/aligned` promises over-alignment to the containers that keep one buffer;
+  list, hmap and hset do not get it. `alloc/pool` says a list is the one container that
+  runs on it, and the README no longer offers a pool as a drop-in.
+- The arena warns that a container made before a mark must not grow before the rewind.
+- list: merge, splice and splice_node relink only on one allocator and copy across two;
+  `src` may not be `self`; debug builds walk the list to check a node.
+- hmap and hset: no inserts during a walk; a `const char *` key keeps the pointer, not
+  the text; the bucket comes from the low bits of the hash.
+- Complexity: move_assign of list, hmap and hset frees the old nodes one by one; the set
+  ops and `tda_hset_eq` walk the buckets as well as the keys.
+- bitset: the assigns allocate too. `TDA_SPAN_FROM_DATA` lets a `void *` through; the
+  `*_OF` macros need at least one elem. conventions.md says typed macros check the size
+  of `T`, not the type.
+
 ## 1.4.0 — 2026-10-13
 
 ### Added

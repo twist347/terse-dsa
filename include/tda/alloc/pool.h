@@ -19,6 +19,11 @@
 /// does not. The parent is borrowed and has to outlive it; tda_al_pool_from_buf needs
 /// none, and runs on memory the caller already has.
 ///
+/// So a pool suits objects of one size, not most containers. A container asks for its
+/// own struct and then for nodes or a buffer. A list works when block_size covers both
+/// the struct and a node. vec, deque, the adapters and hmap grow a buffer (hmap its
+/// bucket array) and get TDA_STATUS_ERR_NO_MEM once it outgrows a block.
+///
 /// A block freed twice goes onto the free list twice and is then handed out to two
 /// owners. The check for it is partial: it catches the second free when nothing was freed
 /// in between, or when no other block is taken; free x, free y, free x passes, since
