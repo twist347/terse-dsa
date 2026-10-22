@@ -14,6 +14,12 @@
   stops at a serial so a debugger shows where a block was made, and
   `tda_al_debug_fail_after` refuses requests to walk the out-of-memory paths.
 
+### Changed
+
+- `tda_list_new` refuses an elem size whose node would not fit in `size_t` with
+  `TDA_STATUS_ERR_NO_MEM`, as `tda_hmap_new` and `tda_hset_new` do; the first push used
+  to be the one to fail.
+
 ## 1.4.1 — 2026-10-22
 
 ### Fixed
