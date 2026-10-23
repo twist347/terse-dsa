@@ -189,10 +189,9 @@ static void pool_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     --self->used_;
 }
 
-static bool pool_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
+static bool pool_resize(void *ctx, void *ptr, tda_Layout, size_t new_size) {
     assert(ctx);
     TDA_UNUSED(ptr); // only the ownership check reads it, and a release build drops that
-    TDA_UNUSED(old);
 
     const tda_Pool *self = ctx;
     TDA_EXPECT(owns_block(self, ptr));

@@ -1,7 +1,6 @@
 #include "tda/algo/merge.h"
 #include "tda/algo/sort.h"
 #include "tda/alloc/default.h"
-#include "tda/core/util.h"
 
 #include "support/probe.h"
 #include "support/tagged.h"
@@ -452,9 +451,7 @@ static void test_inplace_merge_at_the_edges_asks_for_nothing() {
 }
 
 // a comparator carried over from a C++ less-than: it never answers "greater"
-static int cmp_less_only_i32(const void *lhs, const void *rhs, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static int cmp_less_only_i32(const void *lhs, const void *rhs, void *) {
     return *(const int32_t *) lhs < *(const int32_t *) rhs ? -1 : 0;
 }
 

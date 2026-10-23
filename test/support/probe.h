@@ -93,10 +93,9 @@ static inline void *tda_test_probe_alloc_zeroed_(void *ctx, tda_Layout layout) {
 
 // shrinks in place and never grows, so a growth always reaches remap
 [[nodiscard]]
-static inline bool tda_test_probe_resize_(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
+static inline bool tda_test_probe_resize_(void *ctx, void *, tda_Layout old, size_t new_size) {
     tda_TestProbe *self = ctx;
     ++self->resize_calls;
-    (void) ptr;
 
     return new_size <= old.size;
 }

@@ -27,9 +27,7 @@ void tearDown() {
 
 // every key in one bucket; otherwise chains stay one node long and the code that walks
 // them is never reached
-static tda_Hash hash_all_alike(const void *key, void *) {
-    TDA_UNUSED(key);
-
+static tda_Hash hash_all_alike(const void *, void *) {
     return 0;
 }
 
@@ -1445,8 +1443,7 @@ static void test_retain_keeps_exactly_the_passing_entries() {
     }
 }
 
-static bool count_and_keep_odd(const void *key, const void *val, void *ctx) {
-    TDA_UNUSED(val);
+static bool count_and_keep_odd(const void *key, const void *, void *ctx) {
     size_t *seen = ctx;
     const int32_t k = *(const int32_t *) key;
     ++seen[k];

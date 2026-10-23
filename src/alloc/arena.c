@@ -1,7 +1,6 @@
 #include "tda/alloc/arena.h"
 
 #include "tda/core/check.h"
-#include "tda/core/util.h"
 
 #include "internal/ptr.h"
 
@@ -215,12 +214,8 @@ static bool block_end(const tda_Arena *self, size_t start, size_t size, size_t *
     return !ckd_add(out_end, start, size) && *out_end <= self->cap_;
 }
 
-static void arena_dealloc(void *ctx, void *ptr, tda_Layout layout) {
+static void arena_dealloc(void *, void *, tda_Layout) {
     // the arena frees nothing per block
-
-    TDA_UNUSED(ctx);
-    TDA_UNUSED(ptr);
-    TDA_UNUSED(layout);
 }
 
 static tda_Layout block_layout(size_t cap) {

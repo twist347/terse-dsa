@@ -1,7 +1,6 @@
 #pragma once
 
 #include "tda/core/cmp.h"
-#include "tda/core/util.h"
 
 #include <stdint.h>
 
@@ -18,17 +17,13 @@ typedef struct {
 /* ========== predicates ========== */
 
 /// tda_Pred over Pair, reading the first field
-static inline bool tda_test_pair_a_is_positive(const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static inline bool tda_test_pair_a_is_positive(const void *elem, void *) {
     return ((const Pair *) elem)->a > 0;
 }
 
 /// the negation is a separate predicate, for the same reason tda_span_find_if_not
 /// does not exist
-static inline bool tda_test_pair_a_is_negative(const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static inline bool tda_test_pair_a_is_negative(const void *elem, void *) {
     return ((const Pair *) elem)->a < 0;
 }
 

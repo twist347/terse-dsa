@@ -1,5 +1,4 @@
 #include "tda/algo/copy.h"
-#include "tda/core/util.h"
 
 #include "support/i32.h"
 #include "support/pair.h"

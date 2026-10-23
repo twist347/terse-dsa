@@ -1,5 +1,4 @@
 #include "tda/algo/fill.h"
-#include "tda/core/util.h"
 
 #include "support/pair.h"
 
@@ -14,24 +13,18 @@ void tearDown() {
 }
 
 // iota: the index alone is enough
-static void gen_index(void *dst, size_t idx, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void gen_index(void *dst, size_t idx, void *) {
     *(int32_t *) dst = (int32_t) idx;
 }
 
 // a counter in ctx, for a sequence the index cannot express
-static void gen_doubling(void *dst, size_t idx, void *ctx) {
-    TDA_UNUSED(idx);
-
+static void gen_doubling(void *dst, size_t, void *ctx) {
     int32_t *next = ctx;
     *(int32_t *) dst = *next;
     *next *= 2;
 }
 
-static void gen_pair(void *dst, size_t idx, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void gen_pair(void *dst, size_t idx, void *) {
     ((Pair *) dst)->a = (int64_t) idx;
     ((Pair *) dst)->b = (int64_t) idx * 10;
 }

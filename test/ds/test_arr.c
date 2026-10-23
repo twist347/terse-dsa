@@ -2,7 +2,6 @@
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
 #include "tda/core/print.h"
-#include "tda/core/util.h"
 
 #include "support/arena.h"
 #include "support/pair.h"

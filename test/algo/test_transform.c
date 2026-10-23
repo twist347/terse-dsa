@@ -1,5 +1,4 @@
 #include "tda/algo/transform.h"
-#include "tda/core/util.h"
 
 #include "support/pair.h"
 
@@ -13,9 +12,7 @@ void setUp() {
 void tearDown() {
 }
 
-static void double_i32(void *dst, const void *src, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void double_i32(void *dst, const void *src, void *) {
     *(int32_t *) dst = *(const int32_t *) src * 2;
 }
 
@@ -24,31 +21,23 @@ static void scale_i32(void *dst, const void *src, void *ctx) {
     *(int32_t *) dst = *(const int32_t *) src * *(const int32_t *) ctx;
 }
 
-static void pair_sum_into_i64(void *dst, const void *src, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void pair_sum_into_i64(void *dst, const void *src, void *) {
     const Pair *p = src;
     *(int64_t *) dst = p->a + p->b;
 }
 
-static void swap_pair_fields(void *dst, const void *src, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void swap_pair_fields(void *dst, const void *src, void *) {
     const Pair in = *(const Pair *) src;
     ((Pair *) dst)->a = in.b;
     ((Pair *) dst)->b = in.a;
 }
 
-static void add_i32(void *dst, const void *a, const void *b, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void add_i32(void *dst, const void *a, const void *b, void *) {
     *(int32_t *) dst = *(const int32_t *) a + *(const int32_t *) b;
 }
 
 // deliberately not symmetric: min would pass even with the operands swapped
-static void sub_i32(void *dst, const void *a, const void *b, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void sub_i32(void *dst, const void *a, const void *b, void *) {
     *(int32_t *) dst = *(const int32_t *) a - *(const int32_t *) b;
 }
 

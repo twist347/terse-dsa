@@ -5,14 +5,14 @@
 
 #include "tda/alloc/debug.h"
 #include "tda/alloc/default.h"
+#include "tda/core/util.h"
 
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static void on_abort(int sig) {
-    (void) sig;
+static void on_abort(int) {
     _Exit(0);
 }
 
@@ -36,14 +36,12 @@ static void wrong_align(tda_Al *al) {
 // the old size is what the copy reads, so it is checked before the copy
 static void realloc_wrong_size(tda_Al *al) {
     void *p = tda_alloc(al, bytes(8));
-    const void *q = tda_realloc(al, p, bytes(64), 128);
-    (void) q;
+    TDA_UNUSED(tda_realloc(al, p, bytes(64), 128));
 }
 
 static void realloc_wrong_align(tda_Al *al) {
     void *p = tda_alloc(al, (tda_Layout){.size = 64, .align = 64});
-    const void *q = tda_realloc(al, p, bytes(64), 128);
-    (void) q;
+    TDA_UNUSED(tda_realloc(al, p, bytes(64), 128));
 }
 
 static void double_free(tda_Al *al) {
@@ -80,10 +78,8 @@ static void stale_realloc(tda_Al *al) {
 
 static void break_at(tda_Al *al) {
     tda_debug_break_at(&debug, 2);
-    const void *p = tda_alloc(al, bytes(8));
-    const void *q = tda_alloc(al, bytes(8));
-    (void) p;
-    (void) q;
+    TDA_UNUSED(tda_alloc(al, bytes(8)));
+    TDA_UNUSED(tda_alloc(al, bytes(8)));
 }
 
 int main(int argc, char **argv) {

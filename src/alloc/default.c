@@ -73,9 +73,7 @@ static size_t plain_size(size_t size, size_t align) {
     return size >= align ? size : sizeof(max_align_t);
 }
 
-static void *default_alloc(void *ctx, tda_Layout layout) {
-    TDA_UNUSED(ctx);
-
+static void *default_alloc(void *, tda_Layout layout) {
     if (is_plain(layout.align)) {
         return malloc(plain_size(layout.size, layout.align));
     }
@@ -109,9 +107,7 @@ static void *default_alloc_zeroed(void *ctx, tda_Layout layout) {
     return ptr;
 }
 
-static void *default_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
-    TDA_UNUSED(ctx);
-
+static void *default_remap(void *, void *ptr, tda_Layout old, size_t new_size) {
     // realloc may move a large block by remapping its pages instead of copying them, but
     // it keeps only malloc's own alignment, and only what the new size is owed
     if (!is_plain(old.align)) {
@@ -121,9 +117,7 @@ static void *default_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size
     return realloc(ptr, plain_size(new_size, old.align));
 }
 
-static void default_dealloc(void *ctx, void *ptr, tda_Layout layout) {
-    TDA_UNUSED(ctx);
-
+static void default_dealloc(void *, void *ptr, tda_Layout layout) {
 #ifdef _WIN32
     if (!is_plain(layout.align)) {
         _aligned_free(ptr);

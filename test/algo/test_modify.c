@@ -1,6 +1,5 @@
 #include "tda/algo/modify.h"
 #include "tda/algo/sort.h"
-#include "tda/core/util.h"
 
 #include "support/i32.h"
 #include "support/pair.h"

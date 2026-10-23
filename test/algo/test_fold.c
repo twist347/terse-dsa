@@ -1,5 +1,4 @@
 #include "tda/algo/fold.h"
-#include "tda/core/util.h"
 
 #include "support/pair.h"
 
@@ -15,31 +14,23 @@ void tearDown() {
 }
 
 // the accumulator is wider than the elems, which is why the caller owns it
-static void sum_i32_into_i64(void *acc, const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void sum_i32_into_i64(void *acc, const void *elem, void *) {
     *(int64_t *) acc += *(const int32_t *) elem;
 }
 
-static void product_i32(void *acc, const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void product_i32(void *acc, const void *elem, void *) {
     *(int32_t *) acc *= *(const int32_t *) elem;
 }
 
 // acc = acc * 10 + elem: folding the digits left and right builds two
 // different numbers, so the direction is observable. Subtraction would
 // not do: taking every elem away gives the same value in any order
-static void horner_i32(void *acc, const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void horner_i32(void *acc, const void *elem, void *) {
     *(int32_t *) acc = *(int32_t *) acc * 10 + *(const int32_t *) elem;
 }
 
 // records the order elems arrive in
-static void append_digit(void *acc, const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void append_digit(void *acc, const void *elem, void *) {
     char *out = acc;
     const size_t n = strlen(out);
     out[n] = (char) ('0' + *(const int32_t *) elem);
@@ -53,21 +44,15 @@ static void count_above(void *acc, const void *elem, void *ctx) {
     }
 }
 
-static void sum_pair_a(void *acc, const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void sum_pair_a(void *acc, const void *elem, void *) {
     *(int64_t *) acc += ((const Pair *) elem)->a;
 }
 
-static void add_i32(void *dst, const void *a, const void *b, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void add_i32(void *dst, const void *a, const void *b, void *) {
     *(int32_t *) dst = *(const int32_t *) a + *(const int32_t *) b;
 }
 
-static void sub_i32(void *dst, const void *a, const void *b, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void sub_i32(void *dst, const void *a, const void *b, void *) {
     *(int32_t *) dst = *(const int32_t *) a - *(const int32_t *) b;
 }
 
@@ -79,9 +64,7 @@ static void add_capped(void *dst, const void *a, const void *b, void *ctx) {
     *(int32_t *) dst = sum > cap ? cap : sum;
 }
 
-static void add_pairs(void *dst, const void *a, const void *b, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void add_pairs(void *dst, const void *a, const void *b, void *) {
     ((Pair *) dst)->a = ((const Pair *) a)->a + ((const Pair *) b)->a;
     ((Pair *) dst)->b = ((const Pair *) a)->b + ((const Pair *) b)->b;
 }

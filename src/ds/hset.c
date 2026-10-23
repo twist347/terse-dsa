@@ -1,7 +1,6 @@
 #include "tda/ds/hset.h"
 
 #include "tda/core/check.h"
-#include "tda/core/util.h"
 
 #include "internal/hmap_impl.h"
 
@@ -450,21 +449,16 @@ void tda_hset_print(const tda_HSet *self, tda_FPrint fprint) {
 
 /* ========== internals ========== */
 
-static bool key_passes(const void *key, const void *val, void *ctx) {
-    TDA_UNUSED(val);
+static bool key_passes(const void *key, const void *, void *ctx) {
     const KeyPred *key_pred = ctx;
 
     return key_pred->pred(key, key_pred->ctx);
 }
 
-static bool held_by(const void *key, const void *val, void *ctx) {
-    TDA_UNUSED(val);
-
+static bool held_by(const void *key, const void *, void *ctx) {
     return tda_hmap_contains(*(const tda_HMap **) ctx, key);
 }
 
-static bool not_held_by(const void *key, const void *val, void *ctx) {
-    TDA_UNUSED(val);
-
+static bool not_held_by(const void *key, const void *, void *ctx) {
     return !tda_hmap_contains(*(const tda_HMap **) ctx, key);
 }

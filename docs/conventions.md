@@ -219,3 +219,6 @@ an error cannot be silently dropped.
   a loop's `}` and after the line that computed its value alike.
 - **A body of one check and a `return`** — the `_typed_` helpers — is one paragraph and
   takes no blank line.
+- **A parameter the body never reads has no name**, as C23 allows: a hook or a callback
+  that ignores one of its arguments says so in the signature. `TDA_UNUSED` is for a name
+  only a check reads, which a release build drops, or only one `#ifdef` branch reads.

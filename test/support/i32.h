@@ -1,15 +1,11 @@
 #pragma once
 
-#include "tda/core/util.h"
-
 #include <stdint.h>
 
 /* ========== predicates ========== */
 
 /// tda_Pred over int32_t
-static inline bool tda_test_i32_is_even(const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static inline bool tda_test_i32_is_even(const void *elem, void *) {
     return *(const int32_t *) elem % 2 == 0;
 }
 

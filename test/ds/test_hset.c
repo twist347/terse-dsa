@@ -4,7 +4,6 @@
 #include "tda/core/cmp.h"
 #include "tda/core/hash.h"
 #include "tda/core/print.h"
-#include "tda/core/util.h"
 
 #include "support/arena.h"
 #include "support/i32.h"
@@ -26,9 +25,7 @@ void tearDown() {
 /* ========== helpers ========== */
 
 // every key in one bucket, so the chain is walked, not hit at its head
-static tda_Hash hash_all_alike(const void *key, void *) {
-    TDA_UNUSED(key);
-
+static tda_Hash hash_all_alike(const void *, void *) {
     return 0;
 }
 

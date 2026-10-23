@@ -4,7 +4,6 @@
 #include "tda/alloc/default.h"
 #include "tda/core/check.h"
 #include "tda/core/hash.h"
-#include "tda/core/util.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -252,9 +251,8 @@ static void *debug_alloc(void *ctx, tda_Layout layout) {
     return block;
 }
 
-static void *debug_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
+static void *debug_remap(void *ctx, void *ptr, tda_Layout old, size_t) {
     assert(ctx);
-    TDA_UNUSED(new_size);
 
     [[maybe_unused]] const BlockRecord entry = checked_entry(ctx, ptr, old, false, "resized");
 

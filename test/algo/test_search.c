@@ -1,6 +1,5 @@
 #include "tda/algo/permute.h"
 #include "tda/algo/search.h"
-#include "tda/core/util.h"
 
 #include "support/i32.h"
 #include "support/tagged.h"
@@ -1123,9 +1122,7 @@ static void test_find_adjacent_agrees_with_a_run_of_two() {
 }
 
 // a comparator carried over from a C++ less-than: it never answers "greater"
-static int cmp_less_only_i32(const void *lhs, const void *rhs, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static int cmp_less_only_i32(const void *lhs, const void *rhs, void *) {
     return *(const int32_t *) lhs < *(const int32_t *) rhs ? -1 : 0;
 }
 
