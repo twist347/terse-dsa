@@ -42,17 +42,18 @@ int main() {
 }
 ```
 
+Most modules have a program of their own in [example/](example/): each is built and run
+with the tests, and the reference quotes it on that module's page.
+
 ## Design
 
 Three rules shape the whole API:
 
 - **Memory is explicit and swappable.** Nothing allocates on its own — every container is
-  handed a `tda_Al *` and uses only that. Swapping in an arena, a slab or a logging
-  allocator is a one-line change at the call site. A pool hands out blocks of one size,
-  so of the containers only a list runs on it, with blocks of `tda_list_node_layout`; a
-  slab keeps a pool per size class, and any container runs on it. Every request carries
-  a size and an alignment, so an elem aligned past malloc's own lands aligned in any
-  container, on any allocator.
+  handed a `tda_Al *` and uses only that, so swapping in an arena, a slab or a logging
+  allocator is a one-line change at the call site. Every request carries a size and an
+  alignment, so an elem aligned past malloc's own lands aligned in any container, on any
+  allocator.
 - **Containers and allocators are values.** A `tda_Vec` or a `tda_Arena` is a struct
   the caller holds wherever it likes — on the stack, in a struct of its own — built in
   place by an `init` and released by `deinit`. Nothing is allocated for the object
@@ -65,11 +66,34 @@ Three rules shape the whole API:
 
 Out of bounds is never silent in a build that asks: `-DTDA_HARDENED=ON` keeps every
 bounds, emptiness and range check in release, so an index past the end aborts with its
-place instead of reading past it.
+place instead of reading past it. [example_check.c](example/core/example_check.c) shows
+the same mistake in a debug, a release and a hardened build.
 
 The rest of them — how a name is built, where the `mut` marker sits, what is an `assert`
 and what a status — are written down in [conventions](docs/conventions.md), each with the
 reason it is what it is.
+
+## Allocators
+
+An allocator is a value too — `tda_Arena`, `tda_Pool`, `tda_Slab`, `tda_Debug`, `tda_Log`
+— built in place over a parent allocator or a buffer of your own, and `TDA_AL(&arena)`
+hands out its `tda_Al *`. That interface points back at the allocator, so it must stay
+where it was built while anything uses it; a moved or copied one is caught by the first
+of its own functions called on it, under assert or `TDA_HARDENED`.
+
+A pool hands out blocks of one layout, so of the containers only a list runs on it, with
+blocks of `tda_list_node_layout`; a slab keeps a pool per size class, and any container
+runs on it.
+
+A container keeps the `tda_Al *` it was built on, and the allocator is part of its value:
+
+- **A copy is born on its source's allocator** — `tda_vec_copy_with` names another one.
+- **A move carries the allocator along**, as Rust's `Vec<T, A>` does: the target takes
+  the block and the allocator it came from, the source is left empty on that allocator,
+  and nothing is copied, so it is O(1) and cannot fail on any two allocators.
+  `copy_assign` keeps the target's allocator.
+- **`swap` exchanges allocators too**, so each block still goes back to the one that made
+  it, whatever the two sides were built on.
 
 ## Layout
 
@@ -96,7 +120,7 @@ uses stays the better habit.
 
 | | |
 |---|---|
-| `alloc.h` | the `tda_Al` interface, Zig's four hooks and Rust's `alloc_zeroed`, and the `tda_alloc` / `tda_alloc_zeroed` / `tda_resize` / `tda_realloc` / `tda_dealloc` wrappers |
+| `alloc.h` | the `tda_Al` interface (Zig's four hooks and Rust's `alloc_zeroed`), `TDA_AL(&x)` for an allocator's own, the `tda_alloc` / `tda_alloc_zeroed` / `tda_resize` / `tda_remap` / `tda_realloc` / `tda_dealloc` wrappers, and their typed forms `TDA_ALLOC(T, al, count)` and kin |
 | `default.h` | malloc and friends, and `aligned_alloc` past malloc's own alignment |
 | `arena.h` | bump allocation, freed all at once or back to a mark; over a parent or a buffer of your own |
 | `pool.h` | blocks of one layout off a free list; over a parent or a buffer of your own |
@@ -155,6 +179,13 @@ cmake -S . -B build-hardened -DCMAKE_BUILD_TYPE=Release -DTDA_HARDENED=ON
 cmake --build build-hardened && ctest --test-dir build-hardened
 ```
 
+The benchmarks are off by default:
+
+```sh
+cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release -DTDA_BUILD_BENCH=ON
+cmake --build build-bench && ./build-bench/bin/bench_algo_sort
+```
+
 Requires a C23 toolchain. CI builds and runs the tests on Linux with gcc 15 and clang 22,
 on macOS with Apple clang, and on Windows with clang from MSYS2 against the UCRT, the
 shared library included. MSVC's `cl` does not build it: it lacks too much of C23
@@ -200,21 +231,6 @@ add_subdirectory(thirdparty/terse-dsa)
 target_link_libraries(app PRIVATE tda::tda)
 ```
 
-## Allocators, in three rules
-
-A container keeps the `tda_Al *` it was built on, and the allocator is part of its value:
-
-- **A copy is born on its source's allocator** — `tda_vec_copy_with` names another one.
-- **A move carries the allocator along**, as Rust's `Vec<T, A>` does: the target takes
-  the block and the allocator it came from, the source is left empty on that allocator,
-  and nothing is copied, so it is O(1) and cannot fail on any two allocators.
-  `copy_assign` keeps the target's allocator.
-- **`swap` exchanges allocators too**, so each block still goes back to the one that made
-  it, whatever the two sides were built on.
-
-An allocator is a value as well — `tda_Arena`, `tda_Pool`, `tda_Slab` — and its
-`tda_Al` points back at it, so it must stay where it was built while anything uses it.
-
 ## What it does not do
 
 - **Elems are bytes.** A container copies `elem.size` bytes in and out, and drops them by
@@ -223,6 +239,9 @@ An allocator is a value as well — `tda_Arena`, `tda_Pool`, `tda_Slab` — and 
 - **No elem has size 0.** Every layout a container or a span takes is a type's, with a
   size above zero; Rust's zero-sized types have no C counterpart, and a set of nothing
   is a counter.
+- **The hashers are not seeded.** The ready-made ones are fixed functions, fine for keys
+  you control. For keys from outside, write a hasher that takes a seed through its `ctx`,
+  so no one can aim their keys at a single bucket.
 - **Nothing is thread-safe.** No container takes a lock; sharing one across threads is the
   caller's problem. So is an allocator under containers on several threads: each growth
   reaches it, even when the containers themselves are never shared.
