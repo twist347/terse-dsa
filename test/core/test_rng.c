@@ -150,6 +150,22 @@ static void test_rng_u32_max_stays_in_range() {
     }
 }
 
+// a range just past 2^31 rejects close to half the products, so the retry loop runs on
+// about every other draw; what comes out still has to be in range and reach its top half
+static void test_rng_u32_max_retries_on_a_range_past_half() {
+    tda_Rng rng = tda_rng_from_seed(5);
+    constexpr uint32_t max = UINT32_C(1) << 31;
+
+    bool upper_half = false;
+    for (size_t i = 0; i < 2000; ++i) {
+        const uint32_t val = tda_rng_u32_max(&rng, max);
+        TEST_ASSERT_TRUE(val <= max);
+        upper_half = upper_half || val > max / 2;
+    }
+
+    TEST_ASSERT_TRUE(upper_half);
+}
+
 // three does not divide 2^64, so one of the three slots gets one draw more than the
 // others; Lemire's rejection holds it back. A product taken from the wrong half, or a
 // threshold off by one, shows up here as a lopsided bucket.
@@ -395,6 +411,7 @@ int main() {
     RUN_TEST(test_rng_u64_max_stays_in_range);
     RUN_TEST(test_rng_u64_max_takes_the_full_width);
     RUN_TEST(test_rng_u32_max_stays_in_range);
+    RUN_TEST(test_rng_u32_max_retries_on_a_range_past_half);
     RUN_TEST(test_rng_u64_max_is_flat_over_a_bound_that_does_not_divide_the_width);
     RUN_TEST(test_rng_u64_max_rejects_where_the_range_does_not_fit);
     RUN_TEST(test_rng_idx_covers_every_position);

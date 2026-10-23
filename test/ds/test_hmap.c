@@ -482,6 +482,19 @@ static void test_reserve_below_the_bucket_count_changes_nothing() {
     tda_hmap_deinit(&m);
 }
 
+// no bucket count holds SIZE_MAX entries, and the refusal comes before any allocation
+static void test_reserve_reports_a_count_no_bucket_array_holds() {
+    tda_HMap m = make_filled(tda_hash_i32, nullptr, 3);
+    const size_t buckets = tda_hmap_bucket_count(&m);
+
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hmap_reserve(&m, SIZE_MAX));
+
+    TEST_ASSERT_EQUAL_size_t(buckets, tda_hmap_bucket_count(&m));
+    TEST_ASSERT_EQUAL_size_t(3, tda_hmap_len(&m));
+
+    tda_hmap_deinit(&m);
+}
+
 /* ========== remove ========== */
 
 static void test_remove_takes_the_entry_out() {
@@ -1145,6 +1158,31 @@ static void test_copy_with_reports_an_exhausted_target_arena() {
 
     tda_hmap_deinit(&src);
     tda_arena_deinit(&arena);
+}
+
+// a copy that fails halfway gives back the buckets and every node it already took
+static void test_copy_rolls_back_the_partial_copy() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_HMap src;
+    TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al, &src);
+    for (int32_t i = 0; i < 8; ++i) {
+        put(&src, i, i * 10);
+    }
+    const size_t live = probe.live;
+
+    tda_test_probe_fail_after_next(&probe, 3); // the buckets and two nodes, then refuse
+    tda_HMap dst = {};
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hmap_copy(&src, &dst));
+
+    TEST_ASSERT_NULL(dst.al_);
+    TEST_ASSERT_EQUAL_size_t(live, probe.live); // nothing of the copy survived
+
+    probe.fail_after = SIZE_MAX;
+    tda_hmap_deinit(&src);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
 static void test_move_assign_hands_over_the_contents_on_one_allocator() {
@@ -2033,6 +2071,7 @@ int main() {
     RUN_TEST(test_a_growth_allocates_only_the_bucket_array);
     RUN_TEST(test_reserve_grows_the_buckets_only);
     RUN_TEST(test_reserve_below_the_bucket_count_changes_nothing);
+    RUN_TEST(test_reserve_reports_a_count_no_bucket_array_holds);
 
     RUN_TEST(test_get_or_insert_puts_a_missing_key_in);
     RUN_TEST(test_get_or_insert_leaves_a_present_key_alone);
@@ -2078,6 +2117,7 @@ int main() {
     RUN_TEST(test_copy_carries_the_hasher_and_the_equality);
     RUN_TEST(test_copy_with_builds_on_the_given_allocator);
     RUN_TEST(test_copy_with_reports_an_exhausted_target_arena);
+    RUN_TEST(test_copy_rolls_back_the_partial_copy);
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
     RUN_TEST(test_move_assign_across_allocators_hands_the_allocator_over);
     RUN_TEST(test_move_assign_needs_no_memory);

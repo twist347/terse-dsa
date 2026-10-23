@@ -113,6 +113,17 @@ static void test_from_data_puts_the_last_elem_on_top() {
     tda_stack_deinit(&s);
 }
 
+// a const pointer reads through the same typed macros: _Generic picks the const helper
+static void test_typed_reads_through_a_const_pointer() {
+    tda_Stack s;
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_al_default(), &s, 1, 2, 3));
+    const tda_Stack *view = &s;
+
+    TEST_ASSERT_EQUAL_INT32(3, *TDA_STACK_TOP_AS(int32_t, view));
+
+    tda_stack_deinit(&s);
+}
+
 static void test_from_data_empty_stays_empty() {
     tda_Stack s = {};
     TDA_TEST_OK(TDA_STACK_FROM_DATA(int32_t, nullptr, 0, tda_al_default(), &s));
@@ -1106,6 +1117,7 @@ int main() {
     RUN_TEST(test_init_starts_empty);
     RUN_TEST(test_init_cap_reserves_without_length);
     RUN_TEST(test_from_data_puts_the_last_elem_on_top);
+    RUN_TEST(test_typed_reads_through_a_const_pointer);
     RUN_TEST(test_from_data_empty_stays_empty);
     RUN_TEST(test_from_span_copies_the_view);
     RUN_TEST(test_from_data_copies_whole_elems);

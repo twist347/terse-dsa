@@ -130,6 +130,19 @@ static void test_set_get_roundtrip() {
     tda_arr_deinit(&a);
 }
 
+// a const pointer reads through the same typed macros: _Generic picks the const helper
+static void test_typed_reads_through_a_const_pointer() {
+    tda_Arr a;
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, tda_al_default(), &a, 1, 2, 3));
+    const tda_Arr *view = &a;
+
+    TEST_ASSERT_EQUAL_INT32(1, *TDA_ARR_FRONT_AS(int32_t, view));
+    TEST_ASSERT_EQUAL_INT32(2, *TDA_ARR_GET_AS(int32_t, view, 1));
+    TEST_ASSERT_EQUAL_INT32(3, *TDA_ARR_BACK_AS(int32_t, view));
+
+    tda_arr_deinit(&a);
+}
+
 static void test_get_mut_writes_through() {
     tda_Arr a = make_arr(3);
 
@@ -1052,6 +1065,7 @@ int main() {
     RUN_TEST(test_from_data_copies_whole_elements);
 
     RUN_TEST(test_set_get_roundtrip);
+    RUN_TEST(test_typed_reads_through_a_const_pointer);
     RUN_TEST(test_get_mut_writes_through);
     RUN_TEST(test_set_from_its_own_elem);
 

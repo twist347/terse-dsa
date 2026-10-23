@@ -265,6 +265,17 @@ static void test_top_is_the_greatest_after_every_push() {
     tda_pqueue_deinit(&q);
 }
 
+// a const pointer reads through the same typed macros: _Generic picks the const helper
+static void test_typed_reads_through_a_const_pointer() {
+    tda_PQueue q;
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, tda_al_default(), &q, 2, 9, 4));
+    const tda_PQueue *view = &q;
+
+    TEST_ASSERT_EQUAL_INT32(9, *TDA_PQUEUE_TOP_AS(int32_t, view));
+
+    tda_pqueue_deinit(&q);
+}
+
 // popping to empty and refilling: the queue must be reusable
 static void test_pushes_after_a_full_drain_are_ordered_again() {
     tda_PQueue q = make_queue(SPREAD, SPREAD_LEN);
@@ -1054,6 +1065,19 @@ static void test_from_data_reports_a_refused_block() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
+static void test_init_cap_reports_a_refused_block() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+    tda_test_probe_fail_after_next(&probe, 0);
+
+    tda_PQueue q = {};
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_PQUEUE_INIT_CAP(int32_t, 8, tda_cmp_i32, nullptr, &al, &q));
+
+    TEST_ASSERT_NULL(q.vec_.al_);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
 // a refused growth leaves the elems as they were
 static void test_push_reports_a_refused_growth() {
     tda_TestProbe probe;
@@ -1114,6 +1138,7 @@ int main() {
     RUN_TEST(test_every_permutation_drains_in_order);
     RUN_TEST(test_a_descending_comparator_gives_a_min_queue);
     RUN_TEST(test_top_is_the_greatest_after_every_push);
+    RUN_TEST(test_typed_reads_through_a_const_pointer);
     RUN_TEST(test_pushes_after_a_full_drain_are_ordered_again);
     RUN_TEST(test_duplicates_all_come_back);
     RUN_TEST(test_equal_keys_keep_every_payload);
@@ -1170,6 +1195,7 @@ int main() {
     RUN_TEST(test_swap_across_allocators_carries_each_allocator);
 
     RUN_TEST(test_from_data_reports_a_refused_block);
+    RUN_TEST(test_init_cap_reports_a_refused_block);
     RUN_TEST(test_push_reports_a_refused_growth);
     RUN_TEST(test_copy_assign_reports_a_refused_block_and_changes_nothing);
 

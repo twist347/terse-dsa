@@ -138,6 +138,18 @@ static void test_from_data_keeps_arrival_order() {
     tda_queue_deinit(&q);
 }
 
+// a const pointer reads through the same typed macros: _Generic picks the const helper
+static void test_typed_reads_through_a_const_pointer() {
+    tda_Queue q;
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, tda_al_default(), &q, 1, 2, 3));
+    const tda_Queue *view = &q;
+
+    TEST_ASSERT_EQUAL_INT32(1, *TDA_QUEUE_FRONT_AS(int32_t, view));
+    TEST_ASSERT_EQUAL_INT32(3, *TDA_QUEUE_BACK_AS(int32_t, view));
+
+    tda_queue_deinit(&q);
+}
+
 static void test_from_data_empty_stays_empty() {
     tda_Queue q = {};
     TDA_TEST_OK(TDA_QUEUE_FROM_DATA(int32_t, nullptr, 0, tda_al_default(), &q));
@@ -1174,6 +1186,7 @@ int main() {
     RUN_TEST(test_init_starts_empty);
     RUN_TEST(test_init_cap_reserves_without_length);
     RUN_TEST(test_from_data_keeps_arrival_order);
+    RUN_TEST(test_typed_reads_through_a_const_pointer);
     RUN_TEST(test_from_data_empty_stays_empty);
     RUN_TEST(test_from_span_copies_the_view);
     RUN_TEST(test_from_data_copies_whole_elems);

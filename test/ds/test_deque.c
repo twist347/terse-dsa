@@ -734,6 +734,16 @@ static void test_copy_from_span_writes_back_in_ring_order() {
     tda_deque_deinit(&d);
 }
 
+static void test_copy_from_span_of_nothing_into_an_empty_deque() {
+    tda_Deque d = make_deque(0);
+
+    tda_deque_copy_from_span(&d, TDA_SPAN_FROM_DATA(int32_t, nullptr, 0));
+
+    TEST_ASSERT_EQUAL_size_t(0, tda_deque_len(&d));
+
+    tda_deque_deinit(&d);
+}
+
 static void test_the_span_pair_round_trips_an_untouched_deque() {
     tda_Deque d = make_wrapped();
 
@@ -1314,6 +1324,21 @@ static void test_shrink_to_fit_of_an_empty_deque_frees_the_block() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
+// a full ring is already as small as it can be: no new block, the seam stays where it is
+static void test_shrink_to_fit_of_a_full_deque_changes_nothing() {
+    tda_Deque d = make_wrapped();
+    const void *front = tda_deque_front(&d);
+
+    TDA_TEST_OK(tda_deque_shrink_to_fit(&d));
+
+    TEST_ASSERT_EQUAL_size_t(4, tda_deque_cap(&d));
+    TEST_ASSERT_EQUAL_PTR(front, tda_deque_front(&d));
+    TEST_ASSERT_TRUE(wraps(&d));
+    assert_elems(&d, (int32_t[]){10, 20, 30, 40}, 4);
+
+    tda_deque_deinit(&d);
+}
+
 static void test_resize_grows_at_the_back_with_zeros() {
     tda_Deque d = make_wrapped();
 
@@ -1891,6 +1916,7 @@ int main() {
     RUN_TEST(test_copy_assign_of_itself_changes_nothing);
     RUN_TEST(test_copy_to_span_unwraps_the_contents);
     RUN_TEST(test_copy_from_span_writes_back_in_ring_order);
+    RUN_TEST(test_copy_from_span_of_nothing_into_an_empty_deque);
     RUN_TEST(test_the_span_pair_round_trips_an_untouched_deque);
     RUN_TEST(test_the_span_pair_carries_the_deque_through_algo);
 
@@ -1930,6 +1956,7 @@ int main() {
     RUN_TEST(test_reserve_unwraps_the_ring);
     RUN_TEST(test_shrink_to_fit_trims_to_len);
     RUN_TEST(test_shrink_to_fit_of_an_empty_deque_frees_the_block);
+    RUN_TEST(test_shrink_to_fit_of_a_full_deque_changes_nothing);
     RUN_TEST(test_resize_grows_at_the_back_with_zeros);
     RUN_TEST(test_resize_grows_inside_a_wrapped_capacity);
     RUN_TEST(test_resize_shrinks_from_the_back);

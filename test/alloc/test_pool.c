@@ -144,6 +144,17 @@ static void test_init_reports_a_failing_parent() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
+// blocks times count past SIZE_MAX is refused before the parent is asked
+static void test_init_reports_a_count_that_would_wrap() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Pool pool;
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_pool_init(&al, block(32), SIZE_MAX, &pool));
+    TEST_ASSERT_EQUAL_size_t(0, tda_test_probe_requests(&probe));
+}
+
 static void test_deinit_of_an_inert_pool_is_noop() {
     tda_Pool pool = {};
     tda_pool_deinit(&pool);
@@ -586,6 +597,14 @@ static void test_init_buf_rejects_a_buffer_without_room_for_a_block() {
     TEST_ASSERT_NULL(pool.al_.alloc);
 }
 
+// a block that would wrap when rounded up to its alignment is no block at all
+static void test_init_buf_reports_a_block_size_that_would_wrap() {
+    unsigned char buf[64];
+    tda_Pool pool;
+
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_pool_init_buf(buf, sizeof(buf), block(SIZE_MAX), &pool));
+}
+
 // deinit gives nothing back to anyone, so the same buffer builds the next pool
 static void test_init_buf_can_be_built_again_after_deinit() {
     tda_Pool pool;
@@ -638,6 +657,7 @@ int main() {
     RUN_TEST(test_init_of_a_small_type_takes_a_pointer_per_block);
     RUN_TEST(test_deinit_returns_the_blocks_to_the_parent);
     RUN_TEST(test_init_reports_a_failing_parent);
+    RUN_TEST(test_init_reports_a_count_that_would_wrap);
     RUN_TEST(test_deinit_of_an_inert_pool_is_noop);
 
     RUN_TEST(test_alloc_takes_one_block);
@@ -672,6 +692,7 @@ int main() {
     RUN_TEST(test_init_buf_aligns_whatever_the_buffer);
     RUN_TEST(test_init_buf_aligns_to_the_blocks_own_alignment);
     RUN_TEST(test_init_buf_rejects_a_buffer_without_room_for_a_block);
+    RUN_TEST(test_init_buf_reports_a_block_size_that_would_wrap);
     RUN_TEST(test_init_buf_can_be_built_again_after_deinit);
 
     RUN_TEST(test_pool_can_live_in_another_allocator);
