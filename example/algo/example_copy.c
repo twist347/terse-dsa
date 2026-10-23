@@ -4,18 +4,14 @@
 #include "tda/core/print.h"
 #include "tda/core/rng.h"
 #include "tda/core/span.h"
-#include "tda/core/util.h"
 
 #include <stdint.h>
 #include <stdio.h>
 
 /// [pred]
-static bool is_even(const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static bool is_even(const void *elem, void *) {
     return *(const int32_t *) elem % 2 == 0;
 }
-
 /// [pred]
 
 int main() {

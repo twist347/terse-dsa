@@ -5,7 +5,6 @@
 #include "tda/core/hash.h"
 #include "tda/core/print.h"
 #include "tda/core/span.h"
-#include "tda/core/util.h"
 #include "tda/ds/hset.h"
 
 #include <inttypes.h>
@@ -13,12 +12,9 @@
 #include <stdio.h>
 
 /// [pred]
-static bool is_odd(const void *key, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static bool is_odd(const void *key, void *) {
     return *(const int32_t *) key % 2 != 0;
 }
-
 /// [pred]
 
 int main() {
@@ -27,9 +23,11 @@ int main() {
     // equal under 'eq' must hash alike
     tda_Al *al = tda_al_default();
 
-    tda_HSet s = {};
+    tda_HSet s;
     TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &s);
 
+    tda_HSet twin = {}; // used below; declared here so the exit can see them
+    tda_HSet bulk = {};
     int rc = 1;
     for (int32_t i = 1; i <= 4; ++i) {
         if (TDA_STATUS_IS_ERR(TDA_HSET_INSERT(int32_t, &s, i * 10, nullptr))) {
@@ -70,18 +68,19 @@ int main() {
 
     // two sets are equal when they hold the same keys, regardless of insertion order and
     // bucket count
-    tda_HSet twin = {};
     if (TDA_STATUS_IS_ERR(TDA_HSET_INIT_CAP(int32_t, 64, tda_hash_i32, tda_eq_i32, nullptr, al, &twin))) {
         goto out;
     }
     for (int32_t i = 4; i >= 1; --i) {
         if (i != 2 && TDA_STATUS_IS_ERR(TDA_HSET_INSERT(int32_t, &twin, i * 10, nullptr))) {
-            goto out_twin;
+            goto out;
         }
     }
     printf(
-        "%zu vs %zu buckets, equal: %d\n", tda_hset_bucket_count(&s),
-        tda_hset_bucket_count(&twin), tda_hset_eq(&s, &twin)
+        "%zu vs %zu buckets, equal: %d\n",
+        tda_hset_bucket_count(&s),
+        tda_hset_bucket_count(&twin),
+        tda_hset_eq(&s, &twin)
     ); // 8 vs 64 buckets, equal: 1
     /// [walk]
 
@@ -90,12 +89,11 @@ int main() {
     // one key at a time
     const tda_Span keys = TDA_SPAN_OF(int32_t, 1, 2, 2, 3, 3, 3);
 
-    tda_HSet bulk = {};
     if (TDA_STATUS_IS_ERR(tda_hset_from_span(keys, tda_hash_i32, tda_eq_i32, nullptr, al, &bulk))) {
-        goto out_twin;
+        goto out;
     }
     if (TDA_STATUS_IS_ERR(TDA_HSET_EXTEND(int32_t, &bulk, 3, 4, 5, 6))) {
-        goto out_bulk;
+        goto out;
     }
     printf("%zu keys\n", tda_hset_len(&bulk)); // 6 keys
 
@@ -104,12 +102,10 @@ int main() {
     printf("%zu keys\n", tda_hset_len(&bulk)); // 3 keys
 
     rc = 0;
-out_bulk:
-    tda_hset_deinit(&bulk);
-out_twin:
-    tda_hset_deinit(&twin);
 out:
     // deinit of an inert value is a no-op, so this exit is safe from anywhere above
+    tda_hset_deinit(&bulk);
+    tda_hset_deinit(&twin);
     tda_hset_deinit(&s);
 
     return rc;

@@ -3,17 +3,19 @@
 #include "tda/core/status.h"
 #include "tda/core/util.h"
 
+#include <assert.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 
 /// [unused]
-static void on_each(int32_t val, void *ctx) {
-    TDA_UNUSED(ctx);
-
-    printf("%" PRId32 "\n", val);
+// a result only an assert reads: NDEBUG drops the assert, and the variable would then be
+// set and never read. An unused parameter needs no macro in C23, only no name
+static void put_line(const char *line) {
+    const int written = puts(line);
+    assert(written >= 0);
+    TDA_UNUSED(written);
 }
-
 /// [unused]
 
 int main() {
@@ -31,8 +33,15 @@ int main() {
     size_t j = 3;
 
     TDA_SWAP(v[i++], v[j--]);
-    printf("%" PRId32 " %" PRId32 " %" PRId32 " %" PRId32 ", i=%zu j=%zu\n",
-           v[0], v[1], v[2], v[3], i, j); // 40 20 30 10, i=1 j=2
+    printf(
+        "%" PRId32 " %" PRId32 " %" PRId32 " %" PRId32 ", i=%zu j=%zu\n",
+        v[0],
+        v[1],
+        v[2],
+        v[3],
+        i,
+        j
+    ); // 40 20 30 10, i=1 j=2
 
     // through pointers, name the pointees: TDA_SWAP(pa, pb) also typechecks, but swaps the
     // two local pointers and leaves 'a' and 'b' alone
@@ -48,7 +57,7 @@ int main() {
     printf("%s\n", TDA_STRINGIFY(TDA_STATUS_OK)); // TDA_STATUS_OK
     /// [stringify]
 
-    on_each(7, nullptr);
+    put_line("done"); // done
 
     return 0;
 }

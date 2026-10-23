@@ -13,14 +13,14 @@ int main() {
     tda_Log log;
     tda_log_init(tda_al_default(), stdout, &log);
 
-    int32_t *xs = TDA_ALLOC_ZEROED(int32_t, TDA_AL(&log), 4); // [TDA] alloc_zeroed size = 16 align = 4 -> 0x...
-    if (xs) {
-        TDA_DEALLOC(int32_t, TDA_AL(&log), xs, 4); // [TDA] dealloc 0x... size = 16 align = 4
+    int32_t *nums = TDA_ALLOC_ZEROED(int32_t, TDA_AL(&log), 4); // [TDA] alloc_zeroed size = 16 align = 4 -> 0x...
+    if (nums) {
+        TDA_DEALLOC(int32_t, TDA_AL(&log), nums, 4); // [TDA] dealloc 0x... size = 16 align = 4
     }
 
     // the wrapped allocator must outlive the log, which passes every call on to it
     tda_log_deinit(&log);
     /// [wrap]
 
-    return xs ? 0 : 1;
+    return nums ? 0 : 1;
 }

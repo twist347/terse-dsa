@@ -24,6 +24,7 @@
 /// @par Example
 /// @snippet core/example_rng.c seed
 /// @snippet core/example_rng.c draw
+/// @snippet core/example_rng.c gen
 /// @snippet core/example_rng.c span
 /// @{
 

@@ -10,7 +10,7 @@ int main() {
     // the universe is fixed at construction: this set holds a subset of 0 .. 11
     tda_Al *al = tda_al_default();
 
-    tda_BitSet a = {};
+    tda_BitSet a;
     if (TDA_STATUS_IS_ERR(tda_bitset_init_len(12, al, &a))) {
         return 1;
     }
@@ -33,7 +33,8 @@ int main() {
     tda_bitset_set_to(&a, 4, true); // unlike flip, asking twice changes nothing
     tda_bitset_print(&a); // {0, 4, 7}
 
-    tda_bitset_reset(&a, 4);
+    tda_bitset_reset(&a, 4); // out again, whatever it was
+    tda_bitset_print(&a);    // {0, 7}
     /// [bits]
 
     /// [scan]
@@ -51,7 +52,7 @@ int main() {
     }
     /// [scan]
 
-    /// [set ops]
+    /// [set_ops]
     // the pairwise ops write into the left operand and only read the right; both must
     // have the same universe
     tda_BitSet b = {};
@@ -89,5 +90,5 @@ out:
     tda_bitset_deinit(&a);
 
     return rc;
-    /// [set ops]
+    /// [set_ops]
 }

@@ -17,7 +17,7 @@ int main() {
     // them one at a time
     tda_Al *al = tda_al_default();
 
-    tda_PQueue q = {};
+    tda_PQueue q;
     if (TDA_STATUS_IS_ERR(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, al, &q, 3, 1, 4, 1, 5))) {
         return 1;
     }
@@ -30,7 +30,8 @@ int main() {
     /// [serve]
     // a push takes O(log n), and the front is always the greatest
     int rc = 1;
-    tda_Vec v = {}; // taken from the queue below; declared here for the exit
+    tda_PQueue least = {};
+    tda_Vec v = {}; // taken from 'least' below; declared here for the exit
 
     if (TDA_STATUS_IS_ERR(TDA_PQUEUE_PUSH(int32_t, &q, 9))) {
         goto out;
@@ -49,7 +50,6 @@ int main() {
     /// [order]
     // the comparator belongs to the queue, not to a call, so a min-queue is the same type
     // built with a descending comparator
-    tda_PQueue least = {};
     if (TDA_STATUS_IS_ERR(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, al, &least, 3, 1, 4))) {
         goto out;
     }
@@ -58,8 +58,11 @@ int main() {
     // there is no writable access (no top_mut, no get, no mutable view): a write through
     // one could break the heap without the queue noticing
     const tda_Span view = tda_pqueue_to_span(&least);
-    printf("%zu elems, the least of them %" PRId32 "\n", view.len,
-           *TDA_SPAN_GET_AS(int32_t, view, 0)); // 3 elems, the least of them 1
+    printf(
+        "%zu elems, the least of them %" PRId32 "\n",
+        view.len,
+        *TDA_SPAN_GET_AS(int32_t, view, 0)
+    ); // 3 elems, the least of them 1
     /// [order]
 
     /// [into]
@@ -68,7 +71,7 @@ int main() {
     // place, with no allocation and no draining loop
     tda_pqueue_into_vec(&least, &v);
 
-    // the comparator does NOT travel with the elems, so name it again. The heap was built
+    // the comparator does not travel with the elems, so name it again. The heap was built
     // descending, so sorting under the same order puts the greatest first
     tda_span_sort_heap(tda_vec_to_span_mut(&v), tda_cmp_desc_i32, nullptr);
     tda_vec_print(&v, tda_fprint_i32); // [4, 3, 1]
@@ -77,6 +80,7 @@ int main() {
 out:
     // deinit of an inert value is a no-op, so this exit is safe from anywhere above
     tda_vec_deinit(&v);
+    tda_pqueue_deinit(&least);
     tda_pqueue_deinit(&q);
 
     return rc;

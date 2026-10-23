@@ -31,7 +31,7 @@
 /// @snippet ds/example_bitset.c build
 /// @snippet ds/example_bitset.c bits
 /// @snippet ds/example_bitset.c scan
-/// @snippet ds/example_bitset.c set ops
+/// @snippet ds/example_bitset.c set_ops
 /// @{
 
 /// A fixed set of indices, one bit each. A value the caller holds wherever it likes:

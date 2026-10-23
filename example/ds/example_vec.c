@@ -83,7 +83,7 @@ int main() {
     // 'out', and the status must be checked
     tda_Al *al = tda_al_default();
 
-    tda_Vec v = {};
+    tda_Vec v;
     if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, al, &v, 5, 3, 1))) {
         return 1;
     }
@@ -144,7 +144,8 @@ int main() {
     tda_vec_print(&v, tda_fprint_i32); // [1, 2, 4, 5]
 
     printf(
-        "%" PRId32 " .. %" PRId32 "\n", *TDA_VEC_FRONT_AS(int32_t, &v),
+        "%" PRId32 " .. %" PRId32 "\n",
+        *TDA_VEC_FRONT_AS(int32_t, &v),
         *TDA_VEC_BACK_AS(int32_t, &v)
     ); // 1 .. 5
 

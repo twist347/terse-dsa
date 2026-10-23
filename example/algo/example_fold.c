@@ -3,31 +3,23 @@
 #include "tda/algo/fold.h"
 #include "tda/core/print.h"
 #include "tda/core/span.h"
-#include "tda/core/util.h"
 
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 
 /// [ops]
-static void add_into(void *acc, const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void add_into(void *acc, const void *elem, void *) {
     *(int64_t *) acc += *(const int32_t *) elem;
 }
 
-static void add(void *dst, const void *a, const void *b, void *ctx) {
-    TDA_UNUSED(ctx);
-
-    *(int32_t *) dst = *(const int32_t *) a + *(const int32_t *) b;
+static void add(void *dst, const void *lhs, const void *rhs, void *) {
+    *(int32_t *) dst = *(const int32_t *) lhs + *(const int32_t *) rhs;
 }
 
-static void sub(void *dst, const void *a, const void *b, void *ctx) {
-    TDA_UNUSED(ctx);
-
-    *(int32_t *) dst = *(const int32_t *) a - *(const int32_t *) b;
+static void sub(void *dst, const void *lhs, const void *rhs, void *) {
+    *(int32_t *) dst = *(const int32_t *) lhs - *(const int32_t *) rhs;
 }
-
 /// [ops]
 
 int main() {

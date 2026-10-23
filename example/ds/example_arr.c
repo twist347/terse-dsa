@@ -24,7 +24,7 @@ int main() {
     // the arr is filled in through 'out', and the status must be checked
     tda_Al *al = tda_al_default();
 
-    tda_Arr a = {};
+    tda_Arr a;
     if (TDA_STATUS_IS_ERR(TDA_ARR_OF(int32_t, al, &a, 5, 3, 1, 4, 2))) {
         return 1;
     }
@@ -32,7 +32,7 @@ int main() {
 
     /// [compare]
     // two arrs are equal when they have the same length and the same bytes
-    tda_Arr twin = {};
+    tda_Arr twin;
     if (TDA_STATUS_IS_ERR(TDA_ARR_OF(int32_t, al, &twin, 5, 3, 1, 4, 2))) {
         tda_arr_deinit(&a);
         return 1;
@@ -58,8 +58,12 @@ int main() {
 
     /// [access]
     TDA_ARR_SET(int32_t, &a, 0, 0);
-    printf("%" PRId32 " .. %" PRId32 " over %zu elems\n", *TDA_ARR_FRONT_AS(int32_t, &a),
-           *TDA_ARR_BACK_AS(int32_t, &a), tda_arr_len(&a)); // 0 .. 5 over 5 elems
+    printf(
+        "%" PRId32 " .. %" PRId32 " over %zu elems\n",
+        *TDA_ARR_FRONT_AS(int32_t, &a),
+        *TDA_ARR_BACK_AS(int32_t, &a),
+        tda_arr_len(&a)
+    ); // 0 .. 5 over 5 elems
     /// [access]
 
     /// [copy]
@@ -105,11 +109,12 @@ int main() {
     tda_arr_move_assign(&shorter, &in_arena);
     printf("%zu <- %zu\n", tda_arr_len(&shorter), tda_arr_len(&in_arena)); // 5 <- 0
 
-    // swap exchanges the two arrs whole, lengths and allocators included, so a pointer
-    // into one now points into the other. 'shorter' now holds the arena's block and 'a'
-    // the default allocator's: each block goes along with its allocator, nothing is
-    // copied, and there is nothing to report
+    // swap exchanges the two arrs whole, lengths and allocators included: before it
+    // 'shorter' holds the arena's block, after it 'a' does. Each block goes along with its
+    // allocator, nothing is copied, and there is nothing to report
     tda_arr_swap(&a, &shorter);
+    tda_arr_print(&a, tda_fprint_i32);       // [0, 2, 3, 4, 5], in the arena
+    tda_arr_print(&shorter, tda_fprint_i32); // [0, 2, 3, 4, 5], on the default allocator
 
     rc = 0;
 out:

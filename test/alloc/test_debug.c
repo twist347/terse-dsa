@@ -130,7 +130,7 @@ static void test_an_over_aligned_block_keeps_its_alignment() {
     tda_Debug debug;
     tda_debug_init(&parent, &debug);
     tda_Al *al = TDA_AL(&debug);
-    const tda_Layout wide = {.size = 24, .align = 256};
+    constexpr tda_Layout wide = {.size = 24, .align = 256};
 
     unsigned char *p = tda_alloc(al, wide);
     TEST_ASSERT_NOT_NULL(p);

@@ -78,7 +78,7 @@ static void test_sort_orders_indices_by_keys_in_the_ctx() {
 
     tda_span_sort(TDA_SPAN_FROM_DATA_MUT(size_t, idx, 5), cmp_by_key, keys);
 
-    const size_t want[5] = {1, 4, 2, 0, 3};
+    constexpr size_t want[5] = {1, 4, 2, 0, 3};
     for (size_t i = 0; i < 5; ++i) {
         TEST_ASSERT_EQUAL_size_t(want[i], idx[i]);
     }
@@ -92,22 +92,22 @@ static void test_sort_stable_and_binary_search_take_it_too() {
     TDA_TEST_OK(tda_span_sort_stable(s, cmp_by_key, keys, tda_al_default()));
 
     // stable: equal keys keep their index order
-    const size_t want[6] = {1, 4, 3, 5, 0, 2};
+    constexpr size_t want[6] = {1, 4, 3, 5, 0, 2};
     for (size_t i = 0; i < 6; ++i) {
         TEST_ASSERT_EQUAL_size_t(want[i], idx[i]);
     }
 
     // the probe is an index too, here of a key of 2
-    const size_t probe = 3;
+    constexpr size_t probe = 3;
     size_t at;
     TEST_ASSERT_TRUE(tda_span_binary_search(tda_span_mut_to_span(s), &probe, cmp_by_key, keys, &at));
     TEST_ASSERT_EQUAL_INT32(2, keys[idx[at]]);
 }
 
 static void test_find_matches_under_the_ctx() {
-    const int32_t buf[4] = {1, 12, 23, 34};
+    constexpr int32_t buf[4] = {1, 12, 23, 34};
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 4);
-    const int32_t key = 44;
+    constexpr int32_t key = 44;
     int32_t ten = 10;
     int32_t eleven = 11;
 
@@ -150,15 +150,15 @@ static void test_the_ordering_algos_read_the_ctx() {
 
     tda_span_sort(s, cmp_by_key, KEYS);
     const tda_Span v = tda_span_mut_to_span(s);
-    const size_t probe = 2; // key 50
+    constexpr size_t probe = 2; // key 50
     TEST_ASSERT_EQUAL_size_t(4, tda_span_lower_bound(v, &probe, cmp_by_key, KEYS));
     TEST_ASSERT_EQUAL_size_t(0, tda_span_min_elem(v, cmp_by_key, KEYS));
 }
 
 // merging and set ops compare across two runs, both sorted under the ctx
 static void test_the_merging_algos_read_the_ctx() {
-    size_t a[4] = {3, 6, 0, 4};  // keys 10 30 70 80
-    size_t b[4] = {1, 5, 2, 7};  // keys 20 40 50 60
+    constexpr size_t a[4] = {3, 6, 0, 4};  // keys 10 30 70 80
+    constexpr size_t b[4] = {1, 5, 2, 7};  // keys 20 40 50 60
     size_t out[8];
 
     tda_span_merge(
@@ -190,7 +190,7 @@ static void test_the_merging_algos_read_the_ctx() {
         TEST_ASSERT_EQUAL_size_t(i, key_rank_of(out[i]));
     }
 
-    const size_t c[2] = {6, 4}; // keys 30 80
+    constexpr size_t c[2] = {6, 4}; // keys 30 80
     const size_t diff = tda_span_set_difference(
         TDA_SPAN_FROM_DATA_MUT(size_t, out, 8),
         TDA_SPAN_FROM_DATA(size_t, a, 4),
@@ -202,7 +202,7 @@ static void test_the_merging_algos_read_the_ctx() {
     TEST_ASSERT_EQUAL_size_t(3, out[0]);
     TEST_ASSERT_EQUAL_size_t(0, out[1]);
 
-    const size_t d[2] = {5, 4}; // keys 40 80
+    constexpr size_t d[2] = {5, 4}; // keys 40 80
     const size_t sym = tda_span_set_symmetric_difference(
         TDA_SPAN_FROM_DATA_MUT(size_t, out, 8),
         TDA_SPAN_FROM_DATA(size_t, a, 4),
@@ -210,7 +210,7 @@ static void test_the_merging_algos_read_the_ctx() {
         cmp_by_key,
         KEYS
     );
-    const size_t want[4] = {3, 6, 5, 0}; // keys 10 30 40 70
+    constexpr size_t want[4] = {3, 6, 5, 0}; // keys 10 30 40 70
     TEST_ASSERT_EQUAL_size_t(4, sym);
     for (size_t i = 0; i < 4; ++i) {
         TEST_ASSERT_EQUAL_size_t(want[i], out[i]);
@@ -219,7 +219,7 @@ static void test_the_merging_algos_read_the_ctx() {
 
 // the searches that walk one span against itself or against a second one
 static void test_the_searching_algos_read_the_ctx() {
-    const int32_t buf[5] = {1, 11, 21, 5, 15};
+    constexpr int32_t buf[5] = {1, 11, 21, 5, 15};
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 5);
     int32_t ten = 10;
     size_t at;
@@ -227,31 +227,31 @@ static void test_the_searching_algos_read_the_ctx() {
     TEST_ASSERT_TRUE(tda_span_find_run(s, &(int32_t){31}, 3, eq_mod, &ten, &at));
     TEST_ASSERT_EQUAL_size_t(0, at);
 
-    const int32_t set[1] = {25};
+    constexpr int32_t set[1] = {25};
     TEST_ASSERT_TRUE(tda_span_find_any_of(s, TDA_SPAN_FROM_DATA(int32_t, set, 1), eq_mod, &ten, &at));
     TEST_ASSERT_EQUAL_size_t(3, at);
 
     TEST_ASSERT_TRUE(tda_span_find_adjacent(tda_span_sub(s, 2, 3), eq_mod, &ten, &at));
     TEST_ASSERT_EQUAL_size_t(1, at); // 5 and 15
 
-    const int32_t sub[2] = {35, 45};
+    constexpr int32_t sub[2] = {35, 45};
     TEST_ASSERT_TRUE(tda_span_find_sub(s, TDA_SPAN_FROM_DATA(int32_t, sub, 2), eq_mod, &ten, &at));
     TEST_ASSERT_EQUAL_size_t(3, at);
     TEST_ASSERT_TRUE(tda_span_ends_with(s, TDA_SPAN_FROM_DATA(int32_t, sub, 2), eq_mod, &ten));
 
-    const int32_t other[5] = {31, 41, 51, 6, 15};
+    constexpr int32_t other[5] = {31, 41, 51, 6, 15};
     TEST_ASSERT_TRUE(tda_span_mismatch(s, TDA_SPAN_FROM_DATA(int32_t, other, 5), eq_mod, &ten, &at));
     TEST_ASSERT_EQUAL_size_t(3, at);
 
     // indices 0 and 1 compare by their keys, 70 and 20, not by themselves
-    const size_t lo[1] = {0};
-    const size_t hi[1] = {1};
+    constexpr size_t lo[1] = {0};
+    constexpr size_t hi[1] = {1};
     TEST_ASSERT_GREATER_THAN_INT(
         0,
         tda_span_cmp(TDA_SPAN_FROM_DATA(size_t, lo, 1), TDA_SPAN_FROM_DATA(size_t, hi, 1), cmp_by_key, KEYS)
     );
 
-    const size_t idx[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+    constexpr size_t idx[8] = {0, 1, 2, 3, 4, 5, 6, 7};
     const tda_Span v = TDA_SPAN_FROM_DATA(size_t, idx, 8);
     TEST_ASSERT_EQUAL_size_t(4, tda_span_max_elem(v, cmp_by_key, KEYS));
     const tda_MinMax mm = tda_span_minmax_elem(v, cmp_by_key, KEYS);
@@ -342,9 +342,9 @@ static void test_every_eq_by_passes_the_ctx() {
 static void test_remove_and_replace_match_under_the_ctx() {
     int32_t buf[5] = {1, 11, 2, 21, 3};
     int32_t ten = 10;
-    const int32_t one = 1;
-    const int32_t two = 2;
-    const int32_t zero = 0;
+    constexpr int32_t one = 1;
+    constexpr int32_t two = 2;
+    constexpr int32_t zero = 0;
 
     const size_t kept = tda_span_remove(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), &one, eq_mod, &ten);
     TEST_ASSERT_EQUAL_size_t(2, kept);
@@ -366,7 +366,7 @@ static int SWEEP;
 static size_t sweep_calls;
 static size_t sweep_wrong;
 
-static void seen(void *ctx) {
+static void seen(const void *ctx) {
     ++sweep_calls;
     sweep_wrong += ctx != &SWEEP;
 }
@@ -443,7 +443,7 @@ static void test_every_algo_hands_the_ctx_to_every_call() {
     const tda_SpanMut dst = TDA_SPAN_FROM_DATA_MUT(int32_t, out, 2 * SWEEP_N);
     void *ctx = &SWEEP;
     tda_Al *al = tda_al_default();
-    const int32_t key = 42;
+    constexpr int32_t key = 42;
     size_t at;
     sweep_calls = 0;
     sweep_wrong = 0;
@@ -668,7 +668,7 @@ static void test_pqueue_serves_by_weights_in_its_ctx() {
     }
 
     // greatest weight first
-    const size_t want[4] = {1, 3, 0, 2};
+    constexpr size_t want[4] = {1, 3, 0, 2};
     for (size_t i = 0; i < 4; ++i) {
         TEST_ASSERT_EQUAL_size_t(want[i], *TDA_PQUEUE_TOP_AS(size_t, &q));
         tda_pqueue_pop(&q);
@@ -679,7 +679,7 @@ static void test_pqueue_serves_by_weights_in_its_ctx() {
         TDA_TEST_OK(TDA_PQUEUE_PUSH(size_t, &q, i));
     }
     TDA_PQUEUE_REPLACE_TOP(size_t, &q, 2);
-    const size_t then[4] = {3, 0, 2, 2};
+    constexpr size_t then[4] = {3, 0, 2, 2};
     for (size_t i = 0; i < 4; ++i) {
         size_t got;
         TDA_PQUEUE_POP_TO(size_t, &q, &got);
@@ -692,7 +692,7 @@ static void test_pqueue_serves_by_weights_in_its_ctx() {
 // every constructor that orders what it is given orders it under the ctx
 static void test_pqueue_constructors_heapify_under_the_ctx() {
     int32_t weight[4] = {5, 50, 0, 20};
-    const size_t idx[4] = {0, 1, 2, 3};
+    constexpr size_t idx[4] = {0, 1, 2, 3};
     tda_Al *al = tda_al_default();
 
     tda_PQueue a = {};
@@ -731,8 +731,8 @@ static void test_pqueue_constructors_heapify_under_the_ctx() {
 // built from spans, 3 and 13 are one key, the later one winning
 static void test_hash_containers_from_spans_hash_under_the_ctx() {
     int32_t ten = 10;
-    const int32_t keys[3] = {3, 13, 4};
-    const int32_t vals[3] = {1, 2, 3};
+    constexpr int32_t keys[3] = {3, 13, 4};
+    constexpr int32_t vals[3] = {1, 2, 3};
 
     tda_HMap m = {};
     TDA_TEST_OK(tda_hmap_from_spans(
@@ -894,7 +894,7 @@ static void test_list_sorts_and_finds_under_the_ctx() {
 
     tda_list_sort(&l, cmp_by_key, keys);
 
-    const size_t want[4] = {3, 1, 2, 0};
+    constexpr size_t want[4] = {3, 1, 2, 0};
     size_t i = 0;
     TDA_LIST_FOR_EACH (node, &l) {
         TEST_ASSERT_EQUAL_size_t(want[i++], *TDA_LIST_NODE_ELEM_AS(size_t, &l, node));

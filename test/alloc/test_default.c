@@ -34,8 +34,8 @@ static void assert_ramp(const unsigned char *p, size_t n) {
 
 // the default allocator is a static singleton: every call returns the same object
 static void test_default_is_a_singleton() {
-    tda_Al *a = tda_al_default();
-    tda_Al *b = tda_al_default();
+    const tda_Al *a = tda_al_default();
+    const tda_Al *b = tda_al_default();
 
     TEST_ASSERT_NOT_NULL(a);
     TEST_ASSERT_EQUAL_PTR(a, b);
@@ -111,21 +111,21 @@ static void test_allocations_are_independent() {
 static void test_alloc_zeroed_zeroes_the_block() {
     tda_Al *al = tda_al_default();
 
-    const unsigned char *p = tda_alloc_zeroed(al, bytes(32));
+    unsigned char *p = tda_alloc_zeroed(al, bytes(32));
     TEST_ASSERT_NOT_NULL(p);
 
     for (size_t i = 0; i < 32; ++i) {
         TEST_ASSERT_EQUAL_UINT8(0, p[i]);
     }
 
-    tda_dealloc(al, (void *) p, bytes(32));
+    tda_dealloc(al, p, bytes(32));
 }
 
 // past malloc's alignment there is no calloc, so it is aligned_alloc and a memset
 static void test_alloc_zeroed_zeroes_an_over_aligned_block() {
     tda_Al *al = tda_al_default();
 
-    const unsigned char *p = tda_alloc_zeroed(al, tda_test_layout(300, 256));
+    unsigned char *p = tda_alloc_zeroed(al, tda_test_layout(300, 256));
     TEST_ASSERT_NOT_NULL(p);
     TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % 256);
 
@@ -133,7 +133,7 @@ static void test_alloc_zeroed_zeroes_an_over_aligned_block() {
         TEST_ASSERT_EQUAL_UINT8(0, p[i]);
     }
 
-    tda_dealloc(al, (void *) p, tda_test_layout(300, 256));
+    tda_dealloc(al, p, tda_test_layout(300, 256));
 }
 
 static void test_alloc_zeroed_zero_is_null() {
@@ -192,7 +192,7 @@ static void test_realloc_keeps_an_over_aligned_block_aligned() {
 // its alignment still comes back aligned, however it was made or resized
 static void test_a_block_shorter_than_its_alignment_is_aligned_anyway() {
     tda_Al *al = tda_al_default();
-    const size_t max = alignof(max_align_t);
+    constexpr size_t max = alignof(max_align_t);
 
     // the small ones too: some aligned_alloc refuse an alignment under a pointer's
     for (size_t align = 1; align <= max; align *= 2) {

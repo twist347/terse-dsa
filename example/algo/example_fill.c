@@ -3,17 +3,13 @@
 #include "tda/algo/fill.h"
 #include "tda/core/print.h"
 #include "tda/core/span.h"
-#include "tda/core/util.h"
 
 #include <stdint.h>
 
 /// [gen]
-static void squares(void *dst, size_t idx, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void squares(void *dst, size_t idx, void *) {
     *(int32_t *) dst = (int32_t) (idx * idx);
 }
-
 /// [gen]
 
 int main() {

@@ -142,7 +142,7 @@ static void test_swap_exchanges_through_dereferenced_pointers() {
 
 // a view is a struct of three fields; swapping must move all of them, not just data
 static void test_swap_exchanges_whole_spans() {
-    int32_t buf[4] = {1, 2, 3, 4};
+    constexpr int32_t buf[4] = {1, 2, 3, 4};
     tda_Span a = TDA_SPAN_FROM_DATA(int32_t, buf, 4);
     tda_Span b = tda_span_from_data(nullptr, 0, TDA_LAYOUT_OF(Pair));
 

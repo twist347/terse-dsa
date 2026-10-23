@@ -28,11 +28,11 @@ int main() {
     tda_span_mut_print(s, tda_fprint_i32); // [1, 2, 3, 4, 5]
 
     // stability needs a buffer, so the stable sort takes an allocator and can fail
-    const tda_SpanMut t = TDA_SPAN_OF_MUT(int32_t, 9, 7, 8);
-    if (TDA_STATUS_IS_ERR(tda_span_sort_stable(t, tda_cmp_i32, nullptr, tda_al_default()))) {
+    const tda_SpanMut stable = TDA_SPAN_OF_MUT(int32_t, 9, 7, 8);
+    if (TDA_STATUS_IS_ERR(tda_span_sort_stable(stable, tda_cmp_i32, nullptr, tda_al_default()))) {
         return 1;
     }
-    tda_span_mut_print(t, tda_fprint_i32); // [7, 8, 9]
+    tda_span_mut_print(stable, tda_fprint_i32); // [7, 8, 9]
     /// [sort]
 
     /// [argsort]
@@ -45,17 +45,17 @@ int main() {
     /// [argsort]
 
     /// [partial]
-    const tda_SpanMut u = TDA_SPAN_OF_MUT(int32_t, 5, 3, 8, 1, 9, 4, 2, 7, 6);
+    const tda_SpanMut partial = TDA_SPAN_OF_MUT(int32_t, 5, 3, 8, 1, 9, 4, 2, 7, 6);
 
     // only the three smallest are asked for, and only they come out in order
-    tda_span_partial_sort(u, 3, tda_cmp_i32, nullptr);
-    tda_span_mut_print(u, tda_fprint_i32); // [1, 2, 3, 4, 5, 9, 7, 6, 8]
+    tda_span_partial_sort(partial, 3, tda_cmp_i32, nullptr);
+    tda_span_mut_print(partial, tda_fprint_i32); // [1, 2, 3, 4, 5, 9, 7, 6, 8]
 
     // checks only: the prefix is sorted, the whole span is not
     printf(
         "%s, in order up to %zu\n",
-        tda_span_is_sorted(tda_span_mut_to_span(u), tda_cmp_i32, nullptr) ? "sorted" : "not sorted",
-        tda_span_is_sorted_until(tda_span_mut_to_span(u), tda_cmp_i32, nullptr)
+        tda_span_is_sorted(tda_span_mut_to_span(partial), tda_cmp_i32, nullptr) ? "sorted" : "not sorted",
+        tda_span_is_sorted_until(tda_span_mut_to_span(partial), tda_cmp_i32, nullptr)
     ); // not sorted, in order up to 6
     /// [partial]
 

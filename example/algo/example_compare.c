@@ -22,7 +22,8 @@ int main() {
     // dictionary order: the first differing pair decides, and a prefix orders first
     const tda_Span shorter = TDA_SPAN_OF(int32_t, 1, 2);
     printf(
-        "%d %d\n", tda_span_cmp(a, b, tda_cmp_i32, nullptr),
+        "%d %d\n",
+        tda_span_cmp(a, b, tda_cmp_i32, nullptr),
         tda_span_cmp(shorter, a, tda_cmp_i32, nullptr)
     ); // -1 -1
 
@@ -30,7 +31,8 @@ int main() {
     const tda_Span shuffled = TDA_SPAN_OF(int32_t, 3, 1, 2);
     const tda_Span skewed = TDA_SPAN_OF(int32_t, 3, 1, 1);
     printf(
-        "%d %d\n", tda_span_is_permutation(a, shuffled, tda_eq_i32, nullptr),
+        "%d %d\n",
+        tda_span_is_permutation(a, shuffled, tda_eq_i32, nullptr),
         tda_span_is_permutation(a, skewed, tda_eq_i32, nullptr)
     ); // 1 0
     /// [compare]

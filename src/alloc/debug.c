@@ -57,7 +57,7 @@ static void debug_dealloc(void *ctx, void *ptr, tda_Layout layout);
 /// other pointer or layout is reported, as being 'given back' or 'resized' to say which
 /// call did it. 'take' also takes the record out of the table
 [[nodiscard]]
-static BlockRecord checked_entry(tda_Debug *self, void *ptr, tda_Layout layout, bool take, const char *as);
+static BlockRecord checked_entry(tda_Debug *self, const void *ptr, tda_Layout layout, bool take, const char *as);
 
 /// writes "tda debug: ..." to stderr and aborts
 [[noreturn]]
@@ -288,7 +288,7 @@ static void debug_dealloc(void *ctx, void *ptr, tda_Layout layout) {
             (FreedBlock){.ptr = ptr, .layout = layout, .serial = entry.serial};
 }
 
-static BlockRecord checked_entry(tda_Debug *self, void *ptr, tda_Layout layout, bool take, const char *as) {
+static BlockRecord checked_entry(tda_Debug *self, const void *ptr, tda_Layout layout, bool take, const char *as) {
     BlockTable *table = &self->table_;
     const uintptr_t addr = (uintptr_t) ptr;
 

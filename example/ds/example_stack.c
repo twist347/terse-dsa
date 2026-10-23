@@ -13,10 +13,10 @@
 
 int main() {
     /// [build]
-    // pushed in the order given: the FIRST ends up at the bottom, the last on top
+    // pushed in the order given: the first ends up at the bottom, the last on top
     tda_Al *al = tda_al_default();
 
-    tda_Stack s = {};
+    tda_Stack s;
     if (TDA_STATUS_IS_ERR(TDA_STACK_OF(int32_t, al, &s, 1, 2, 3))) {
         return 1;
     }
@@ -59,7 +59,7 @@ int main() {
         goto out;
     }
 
-    const tda_Span view = tda_stack_to_span(&s); // bottom to top, so the top is LAST
+    const tda_Span view = tda_stack_to_span(&s); // bottom to top, so the top is last
 
     size_t idx;
     if (tda_span_find(view, &(int32_t){8}, tda_eq_i32, nullptr, &idx)) {

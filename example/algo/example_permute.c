@@ -5,18 +5,14 @@
 #include "tda/core/print.h"
 #include "tda/core/rng.h"
 #include "tda/core/span.h"
-#include "tda/core/util.h"
 
 #include <stdint.h>
 #include <stdio.h>
 
 /// [pred]
-static bool is_even(const void *elem, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static bool is_even(const void *elem, void *) {
     return *(const int32_t *) elem % 2 == 0;
 }
-
 /// [pred]
 
 int main() {
@@ -56,7 +52,14 @@ int main() {
     // the stable split needs a buffer, so it takes an allocator and can fail
     const tda_SpanMut stable = TDA_SPAN_OF_MUT(int32_t, 1, 2, 3, 4, 5, 6);
     size_t stable_boundary;
-    if (TDA_STATUS_IS_ERR(tda_span_partition_stable(stable, is_even, nullptr, tda_al_default(), &stable_boundary))) {
+    const tda_Status st = tda_span_partition_stable(
+        stable,
+        is_even,
+        nullptr,
+        tda_al_default(),
+        &stable_boundary
+    );
+    if (TDA_STATUS_IS_ERR(st)) {
         return 1;
     }
     printf("%zu even, ", stable_boundary);

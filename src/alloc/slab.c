@@ -63,7 +63,7 @@ static size_t class_of(tda_Layout layout);
 
 /// the chunk whose link is 'chunk', from its first byte
 [[nodiscard]]
-static unsigned char *chunk_start(const Chunk *chunk);
+static unsigned char *chunk_start(Chunk *chunk);
 
 [[nodiscard]]
 static tda_Layout chunk_layout();
@@ -173,7 +173,7 @@ static void *slab_alloc(void *ctx, tda_Layout layout) {
 static bool slab_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
 
-    tda_Slab *self = ctx;
+    const tda_Slab *self = ctx;
 
     const tda_Layout new_layout = {.size = new_size, .align = old.align};
     const size_t old_class = class_of(old);
@@ -190,7 +190,7 @@ static bool slab_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
 static void *slab_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
 
-    tda_Slab *self = ctx;
+    const tda_Slab *self = ctx;
 
     const tda_Layout new_layout = {.size = new_size, .align = old.align};
     if (class_of(old) == CLASS_COUNT && class_of(new_layout) == CLASS_COUNT) {
@@ -243,7 +243,7 @@ static size_t class_of(tda_Layout layout) {
     return CLASS_COUNT;
 }
 
-static unsigned char *chunk_start(const Chunk *chunk) {
+static unsigned char *chunk_start(Chunk *chunk) {
     return (unsigned char *) chunk - (CHUNK_BYTES - sizeof(Chunk));
 }
 
@@ -274,8 +274,8 @@ static bool owns_block(const tda_Slab *self, const void *ptr) {
     const uintptr_t addr = (uintptr_t) ptr;
 
     for (const Chunk *chunk = self->chunks_; chunk; chunk = chunk->next) {
-        const uintptr_t begin = (uintptr_t) chunk_start(chunk);
         const uintptr_t end = (uintptr_t) chunk;
+        const uintptr_t begin = end - (CHUNK_BYTES - sizeof(Chunk));
         if (addr >= begin && addr < end) {
             return true;
         }

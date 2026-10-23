@@ -6,15 +6,14 @@
 #include "tda/core/rng.h"
 #include "tda/core/span.h"
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 
 /// [gen]
 // a tda_Gen that draws its elem instead of computing it. The generator rides in 'ctx',
 // so algo needs no separate random fill
-static void gen_roll(void *dst, size_t idx, void *ctx) {
-    (void) idx;
-
+static void gen_roll(void *dst, size_t, void *ctx) {
     *(int32_t *) dst = tda_rng_i32_range(ctx, 1, 6);
 }
 /// [gen]
@@ -28,7 +27,7 @@ int main() {
     // two draws, two statements: argument evaluation order is unspecified
     const int32_t first = tda_rng_i32_range(&rng, 1, 6);
     const int32_t second = tda_rng_i32_range(&rng, 1, 6);
-    printf("%d %d\n", first, second); // 3 4
+    printf("%" PRId32 " %" PRId32 "\n", first, second); // 3 4
     /// [seed]
 
     /// [draw]
@@ -55,7 +54,7 @@ int main() {
 
     // a random elem is just a random index and a get
     const tda_Span rolled = tda_span_mut_to_span(all);
-    printf("%d\n", *(const int32_t *) tda_span_get(rolled, tda_rng_idx(&rng, 12))); // 5
+    printf("%" PRId32 "\n", *(const int32_t *) tda_span_get(rolled, tda_rng_idx(&rng, 12))); // 5
     /// [span]
 
     return 0;

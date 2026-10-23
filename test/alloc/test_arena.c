@@ -84,7 +84,7 @@ static void test_init_runs_on_a_parent_with_small_blocks_alignment() {
 
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(TDA_AL(&pool), 128, &arena));
-    void *p = tda_alloc(TDA_AL(&arena), tda_test_layout(8, 8));
+    const void *p = tda_alloc(TDA_AL(&arena), tda_test_layout(8, 8));
     TEST_ASSERT_NOT_NULL(p);
     TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % 8);
 
@@ -105,7 +105,7 @@ static void test_alloc_advances_by_the_size() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    void *p = tda_alloc(TDA_AL(&arena), bytes(1));
+    const void *p = tda_alloc(TDA_AL(&arena), bytes(1));
     TEST_ASSERT_NOT_NULL(p);
 
     const tda_ArenaStats st = tda_arena_stats(&arena);
@@ -122,7 +122,7 @@ static void test_every_block_has_the_alignment_asked_for() {
 
     for (size_t align = 1; align <= 4096; align *= 2) {
         TEST_ASSERT_NOT_NULL(tda_alloc(TDA_AL(&arena), bytes(3))); // knocks the offset off any grid
-        void *p = tda_alloc(TDA_AL(&arena), tda_test_layout(5, align));
+        const void *p = tda_alloc(TDA_AL(&arena), tda_test_layout(5, align));
         TEST_ASSERT_NOT_NULL(p);
         TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % align);
     }
@@ -136,8 +136,8 @@ static void test_alloc_pads_to_the_alignment_and_no_further() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    unsigned char *c1 = tda_alloc(TDA_AL(&arena), bytes(1));
-    unsigned char *c2 = tda_alloc(TDA_AL(&arena), bytes(1));
+    const unsigned char *c1 = tda_alloc(TDA_AL(&arena), bytes(1));
+    const unsigned char *c2 = tda_alloc(TDA_AL(&arena), bytes(1));
     int32_t *i = TDA_ALLOC(int32_t, TDA_AL(&arena), 1);
     TEST_ASSERT_EQUAL_PTR(c1 + 1, c2);
     TEST_ASSERT_EQUAL_PTR(c1 + 4, (unsigned char *) i); // from offset 2 to 4
@@ -291,7 +291,7 @@ static void test_realloc_grows_the_last_block_in_place() {
         p[i] = (unsigned char) (i + 1);
     }
 
-    unsigned char *q = tda_realloc(TDA_AL(&arena), p, bytes(16), 64);
+    const unsigned char *q = tda_realloc(TDA_AL(&arena), p, bytes(16), 64);
     TEST_ASSERT_EQUAL_PTR(p, q);
     for (size_t i = 0; i < 16; ++i) {
         TEST_ASSERT_EQUAL_UINT8((unsigned char) (i + 1), q[i]);
@@ -328,7 +328,7 @@ static void test_realloc_moves_a_block_that_is_not_the_last() {
     }
     TEST_ASSERT_NOT_NULL(tda_alloc(TDA_AL(&arena), bytes(16)));
 
-    unsigned char *q = tda_realloc(TDA_AL(&arena), p, bytes(16), 64);
+    const unsigned char *q = tda_realloc(TDA_AL(&arena), p, bytes(16), 64);
     TEST_ASSERT_NOT_NULL(q);
     TEST_ASSERT_TRUE(p != q);
     for (size_t i = 0; i < 16; ++i) {
@@ -403,7 +403,7 @@ static void test_reset_reclaims_everything() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
 
-    void *first = tda_alloc(TDA_AL(&arena), bytes(32));
+    const void *first = tda_alloc(TDA_AL(&arena), bytes(32));
     TEST_ASSERT_NOT_NULL(tda_alloc(TDA_AL(&arena), bytes(32)));
 
     tda_arena_reset(&arena);
@@ -434,12 +434,12 @@ static void test_rewind_takes_back_what_came_after_the_mark() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    void *kept = tda_alloc(TDA_AL(&arena), bytes(40));
+    const void *kept = tda_alloc(TDA_AL(&arena), bytes(40));
     TEST_ASSERT_NOT_NULL(kept);
     const tda_ArenaMark mark = tda_arena_mark(&arena);
     TEST_ASSERT_EQUAL_size_t(40, mark.offset_);
 
-    void *scratch = tda_alloc(TDA_AL(&arena), bytes(100));
+    const void *scratch = tda_alloc(TDA_AL(&arena), bytes(100));
     TEST_ASSERT_NOT_NULL(scratch);
     TEST_ASSERT_NOT_NULL(tda_alloc(TDA_AL(&arena), bytes(7)));
 
@@ -517,7 +517,7 @@ static void test_a_block_from_under_the_mark_moves_to_grow() {
 
     const tda_ArenaMark mark = tda_arena_mark(&arena);
 
-    unsigned char *grown = tda_realloc(TDA_AL(&arena), old, bytes(16), 64);
+    const unsigned char *grown = tda_realloc(TDA_AL(&arena), old, bytes(16), 64);
     TEST_ASSERT_NOT_NULL(grown);
     TEST_ASSERT_TRUE(grown != old);
     for (size_t i = 0; i < 16; ++i) {
@@ -643,7 +643,7 @@ static void test_init_buf_hands_out_the_whole_buffer() {
     TEST_ASSERT_EQUAL_size_t(sizeof(mem), st.cap);
     TEST_ASSERT_EQUAL_size_t(0, st.used);
 
-    void *p = tda_alloc(TDA_AL(&arena), bytes(16));
+    const void *p = tda_alloc(TDA_AL(&arena), bytes(16));
     TEST_ASSERT_EQUAL_PTR(mem, p);
 
     tda_arena_deinit(&arena);
@@ -656,7 +656,7 @@ static void test_init_buf_aligns_whatever_the_buffer() {
         tda_arena_init_buf(mem + off, sizeof(mem) - off, &arena);
 
         for (size_t size = 1; size <= 40; size += 13) {
-            void *p = tda_alloc(TDA_AL(&arena), tda_test_layout(size, ALIGNMENT));
+            const void *p = tda_alloc(TDA_AL(&arena), tda_test_layout(size, ALIGNMENT));
             TEST_ASSERT_NOT_NULL(p);
             TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) p % ALIGNMENT);
             TEST_ASSERT_TRUE(inside(p, size, mem + off, sizeof(mem) - off));

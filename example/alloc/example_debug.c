@@ -29,21 +29,21 @@ int main() {
     TDA_DEALLOC(int32_t, al, kept, 4);
 
     /// [oom]
-    // refuse the n-th request for each n in turn, until the operation needs no more: each
-    // run checks one refusal path of the push
+    // let n requests through and refuse the next, for n = 0, 1, 2, ... until the
+    // operation needs no more: each run checks one refusal path of the push
     for (size_t n = 0;; ++n) {
         tda_Vec v;
         tda_vec_init(TDA_LAYOUT_OF(int32_t), al, &v);
 
         tda_debug_fail_after(&debug, n);
         tda_Status st = TDA_STATUS_OK;
-        for (int32_t i = 0; i < 20 && st == TDA_STATUS_OK; ++i) {
+        for (int32_t i = 0; i < 20 && TDA_STATUS_IS_OK(st); ++i) {
             st = TDA_VEC_PUSH(int32_t, &v, i);
         }
         tda_debug_fail_after(&debug, SIZE_MAX);
 
         tda_vec_deinit(&v);
-        if (st == TDA_STATUS_OK) {
+        if (TDA_STATUS_IS_OK(st)) {
             break;
         }
     }

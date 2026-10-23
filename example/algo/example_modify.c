@@ -14,11 +14,10 @@ int main() {
     // return the new length; the tail is left unspecified
     const tda_SpanMut s = TDA_SPAN_OF_MUT(int32_t, 1, 1, 2, 2, 2, 3);
 
+    // unique compares only adjacent elems, so the result is a set only on a sorted span
     const size_t kept = tda_span_unique(s, tda_eq_i32, nullptr);
     printf("%zu kept, ", kept);
     tda_span_mut_print(tda_span_sub_mut(s, 0, kept), tda_fprint_i32); // 3 kept, [1, 2, 3]
-
-    // only adjacent elems are compared, so the result is a set only on a sorted span
 
     const size_t left = tda_span_remove(tda_span_sub_mut(s, 0, kept), &(int32_t){2}, tda_eq_i32, nullptr);
     printf("%zu left, ", left);

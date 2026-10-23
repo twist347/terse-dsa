@@ -1050,7 +1050,7 @@ static void test_a_run_of_extends_stays_amortized() {
 // against the same insert on a plain array
 static void test_insert_span_matches_a_plain_array_everywhere() {
     constexpr size_t cap = 8;
-    const int32_t run[3] = {-1, -2, -3};
+    constexpr int32_t run[3] = {-1, -2, -3};
 
     for (size_t head = 0; head < cap; ++head) {
         for (size_t len = 0; len <= cap; ++len) {
@@ -1752,7 +1752,7 @@ static void test_deinit_twice_is_noop() {
 // does, without asking it to be aligned
 static void test_insert_takes_an_unaligned_val() {
     alignas(int32_t) unsigned char raw[8] = {};
-    const int32_t val = 42;
+    constexpr int32_t val = 42;
     memcpy(raw + 1, &val, sizeof(val));
 
     tda_Deque x;

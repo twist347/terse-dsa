@@ -173,8 +173,8 @@ static void test_an_over_aligned_small_block_takes_a_class_it_divides() {
     tda_Al *al = TDA_AL(&slab);
 
     for (size_t align = 32; align <= SMALL_MAX; align *= 2) {
-        unsigned char *a = tda_alloc(al, tda_test_layout(20, align));
-        unsigned char *b = tda_alloc(al, tda_test_layout(20, align));
+        const unsigned char *a = tda_alloc(al, tda_test_layout(20, align));
+        const unsigned char *b = tda_alloc(al, tda_test_layout(20, align));
         TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) a % align);
         TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) b % align);
         TEST_ASSERT_EQUAL_size_t(align, (size_t) (b - a)); // the class is the alignment

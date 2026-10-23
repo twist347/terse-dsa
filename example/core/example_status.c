@@ -8,45 +8,47 @@
 #include <stdio.h>
 
 /// [propagate]
-// a fallible op returns the status and writes its result through a trailing 'out'
+// a fallible op returns the status and writes its results through trailing outs, only
+// on success: either both are built or neither is
 [[nodiscard]]
-static tda_Status two_arrs(tda_Al *al, tda_Arr *out) {
-    tda_Arr a = {};
-    tda_Status st = TDA_ARR_OF(int32_t, al, &a, 5, 3, 1);
+static tda_Status arr_and_copy(tda_Al *al, tda_Arr *out_arr, tda_Arr *out_copy) {
+    tda_Arr arr;
+    tda_Status st = TDA_ARR_OF(int32_t, al, &arr, 5, 3, 1);
     if (TDA_STATUS_IS_ERR(st)) {
         return st; // nothing is held yet, so return the error directly
     }
 
-    tda_Arr b = {};
-    st = tda_arr_copy(&a, &b);
+    tda_Arr copy;
+    st = tda_arr_copy(&arr, &copy);
     if (TDA_STATUS_IS_ERR(st)) {
-        goto fail; // 'a' is held and C has no defer, so fail through a goto
+        goto fail; // 'arr' is held and C has no defer, so fail through a goto
     }
-    tda_arr_deinit(&b);
 
-    *out = a; // 'out' is written only on success
+    *out_arr = arr;
+    *out_copy = copy;
     return TDA_STATUS_OK;
 
 fail:
-    tda_arr_deinit(&a);
+    tda_arr_deinit(&arr);
 
     return st;
 }
-
 /// [propagate]
 
 int main() {
     /// [report]
-    tda_Arr a = {};
-    const tda_Status st = two_arrs(tda_al_default(), &a);
+    tda_Arr arr;
+    tda_Arr copy;
+    const tda_Status st = arr_and_copy(tda_al_default(), &arr, &copy);
 
     printf("%s\n", tda_status_to_str(st)); // TDA_STATUS_OK
     if (TDA_STATUS_IS_ERR(st)) {
         return 1;
     }
 
-    tda_arr_print(&a, tda_fprint_i32); // [5, 3, 1]
-    tda_arr_deinit(&a);
+    tda_arr_print(&copy, tda_fprint_i32); // [5, 3, 1]
+    tda_arr_deinit(&copy);
+    tda_arr_deinit(&arr);
     /// [report]
 
     return 0;

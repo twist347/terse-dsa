@@ -17,23 +17,22 @@ typedef struct {
 } CountingCtx;
 
 static void *counting_alloc(void *ctx, tda_Layout layout) {
-    CountingCtx *c = ctx;
+    CountingCtx *self = ctx;
 
-    void *ptr = tda_alloc(c->parent, layout);
+    void *ptr = tda_alloc(self->parent, layout);
     if (ptr) {
-        c->live += layout.size;
+        self->live += layout.size;
     }
 
     return ptr;
 }
 
 static void counting_dealloc(void *ctx, void *ptr, tda_Layout layout) {
-    CountingCtx *c = ctx;
+    CountingCtx *self = ctx;
 
-    tda_dealloc(c->parent, ptr, layout);
-    c->live -= layout.size;
+    tda_dealloc(self->parent, ptr, layout);
+    self->live -= layout.size;
 }
-
 /// [custom]
 
 int main() {
@@ -42,15 +41,15 @@ int main() {
 
     // the macros take the layout from T, sizeof and alignof, and check the multiplication,
     // so a count that would overflow gives null instead of a wrapped size
-    int32_t *xs = TDA_ALLOC(int32_t, al, 4);
-    if (!xs) {
+    int32_t *nums = TDA_ALLOC(int32_t, al, 4);
+    if (!nums) {
         return 1;
     }
 
-    xs[0] = 7;
-    printf("%" PRId32 "\n", xs[0]); // 7
+    nums[0] = 7;
+    printf("%" PRId32 "\n", nums[0]); // 7
 
-    TDA_DEALLOC(int32_t, al, xs, 4);
+    TDA_DEALLOC(int32_t, al, nums, 4);
     /// [use]
 
     /// [wrap]

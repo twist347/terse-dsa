@@ -4,7 +4,6 @@
 #include "tda/core/cmp.h"
 #include "tda/core/hash.h"
 #include "tda/core/print.h"
-#include "tda/core/util.h"
 #include "tda/ds/hmap.h"
 
 #include <inttypes.h>
@@ -13,12 +12,9 @@
 
 /// [pred]
 // a test of one entry, key and value together; this one asks only the value
-static bool seen_more_than(const void *key, const void *val, void *ctx) {
-    TDA_UNUSED(key);
-
+static bool seen_more_than(const void *, const void *val, void *ctx) {
     return *(const int32_t *) val > *(const int32_t *) ctx;
 }
-
 /// [pred]
 
 int main() {
@@ -27,7 +23,7 @@ int main() {
     // equal under 'eq' must hash alike
     tda_Al *al = tda_al_default();
 
-    tda_HMap m = {};
+    tda_HMap m;
     TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &m);
 
     int rc = 1;
@@ -55,7 +51,8 @@ int main() {
     // a position reaches the key and value together, and removes without hashing again
     tda_HMapNode *node = tda_hmap_find_mut(&m, &(int32_t){1});
     printf(
-        "%" PRId32 " -> %" PRId32 "\n", *TDA_HMAP_NODE_KEY_AS(int32_t, &m, node),
+        "%" PRId32 " -> %" PRId32 "\n",
+        *TDA_HMAP_NODE_KEY_AS(int32_t, &m, node),
         *TDA_HMAP_NODE_VAL_AS(int32_t, &m, node)
     ); // 1 -> 12
 
@@ -77,7 +74,8 @@ int main() {
     }
 
     printf(
-        "1 seen %" PRId32 ", 3 seen %" PRId32 "\n", *TDA_HMAP_GET_AS(int32_t, int32_t, &m, 1),
+        "1 seen %" PRId32 ", 3 seen %" PRId32 "\n",
+        *TDA_HMAP_GET_AS(int32_t, int32_t, &m, 1),
         *TDA_HMAP_GET_AS(int32_t, int32_t, &m, 3)
     ); // 1 seen 2, 3 seen 3
     /// [count]

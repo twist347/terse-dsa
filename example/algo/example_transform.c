@@ -3,24 +3,18 @@
 #include "tda/algo/transform.h"
 #include "tda/core/print.h"
 #include "tda/core/span.h"
-#include "tda/core/util.h"
 
 #include <stdint.h>
 
 /// [ops]
-static void widen_and_square(void *dst, const void *src, void *ctx) {
-    TDA_UNUSED(ctx);
-
+static void widen_and_square(void *dst, const void *src, void *) {
     const int64_t v = *(const int32_t *) src;
     *(int64_t *) dst = v * v;
 }
 
-static void add(void *dst, const void *a, const void *b, void *ctx) {
-    TDA_UNUSED(ctx);
-
-    *(int32_t *) dst = *(const int32_t *) a + *(const int32_t *) b;
+static void add(void *dst, const void *lhs, const void *rhs, void *) {
+    *(int32_t *) dst = *(const int32_t *) lhs + *(const int32_t *) rhs;
 }
-
 /// [ops]
 
 int main() {

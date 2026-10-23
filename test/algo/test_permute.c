@@ -593,14 +593,14 @@ static void test_partition_stable_result_is_partitioned() {
 
 static void test_partition_stable_passes_the_ctx_through() {
     int32_t buf[5] = {1, 5, 2, 4, 3};
-    constexpr int32_t bound = 2;
+    int32_t bound = 2;
 
     size_t boundary = 999;
     TDA_TEST_OK(
         tda_span_partition_stable(
             TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5),
             tda_test_i32_greater_than,
-            (void *) &bound,
+            &bound,
             tda_al_default(),
             &boundary
         )
@@ -747,7 +747,7 @@ static void test_is_partitioned_on_uniform_and_empty_spans() {
 // both and comparing is the cheapest check for "same multiset".
 static void test_shuffle_keeps_every_elem() {
     int32_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    int32_t sorted[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    constexpr int32_t sorted[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
     tda_Rng rng = tda_rng_from_seed(1);
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, data, 10);
@@ -788,7 +788,7 @@ static void test_shuffle_reaches_every_order_equally_often() {
         ++seen[(size_t) (data[0] * 9 + data[1] * 3 + data[2])];
     }
 
-    const double expected = (double) TRIALS / 6.0;
+    constexpr double expected = (double) TRIALS / 6.0;
     for (size_t i = 0; i < 6; ++i) {
         TEST_ASSERT_DOUBLE_WITHIN(expected * 0.04, expected, (double) seen[ORDERS[i]]);
         seen[ORDERS[i]] = 0;
@@ -827,7 +827,7 @@ static void test_shuffle_moves_whole_elems() {
 
 static void test_shuffle_prefix_keeps_every_elem() {
     int32_t data[] = {1, 2, 3, 4, 5, 6, 7, 8};
-    int32_t sorted[] = {1, 2, 3, 4, 5, 6, 7, 8};
+    constexpr int32_t sorted[] = {1, 2, 3, 4, 5, 6, 7, 8};
 
     tda_Rng rng = tda_rng_from_seed(6);
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, data, 8);
@@ -861,7 +861,7 @@ static void test_shuffle_prefix_draws_from_the_whole_span() {
         ++seen[(size_t) data[0]];
     }
 
-    const double expected = (double) TRIALS / 5.0;
+    constexpr double expected = (double) TRIALS / 5.0;
     for (size_t i = 0; i < 5; ++i) {
         TEST_ASSERT_DOUBLE_WITHIN(expected * 0.04, expected, (double) seen[i]);
     }

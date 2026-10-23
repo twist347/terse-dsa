@@ -12,6 +12,10 @@
 ///
 /// For preconditions whose breach would be UB in release too. Each costs a branch, so
 /// use them for cheap checks only.
+///
+/// @par Example
+/// @snippet core/example_check.c check
+/// @snippet core/example_check.c hardened
 /// @{
 
 /// @name macro

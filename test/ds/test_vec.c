@@ -1109,7 +1109,7 @@ static void test_growing_alone_on_an_arena_costs_only_the_capacity() {
     TDA_VEC_INIT(int32_t, TDA_AL(&arena), &v);
 
     // counted from the first buffer, so the padding before it stays out
-    const int32_t zero = 0;
+    constexpr int32_t zero = 0;
     TDA_TEST_OK(tda_vec_push(&v, &zero));
     const size_t first_cap = tda_vec_cap(&v);
     const size_t before = tda_arena_stats(&arena).used;
@@ -2205,7 +2205,7 @@ static void test_print_writes_to_stdout() {
 // does, without asking it to be aligned
 static void test_insert_takes_an_unaligned_val() {
     alignas(int32_t) unsigned char raw[8] = {};
-    const int32_t val = 42;
+    constexpr int32_t val = 42;
     memcpy(raw + 1, &val, sizeof(val));
 
     tda_Vec x;

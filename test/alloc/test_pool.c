@@ -98,7 +98,7 @@ static void test_init_takes_the_alignment_from_the_layout() {
     TEST_ASSERT_EQUAL_size_t(64, st.block_align);
 
     for (size_t i = 0; i < 5; ++i) {
-        Wide *w = TDA_ALLOC(Wide, TDA_AL(&pool), 1);
+        const Wide *w = TDA_ALLOC(Wide, TDA_AL(&pool), 1);
         TEST_ASSERT_NOT_NULL(w);
         TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) w % 64);
     }
@@ -220,7 +220,7 @@ static void test_every_block_is_aligned() {
     TDA_TEST_OK(tda_pool_init(tda_al_default(), block(24), 4, &pool));
 
     for (size_t i = 0; i < 4; ++i) {
-        void *p = tda_alloc(TDA_AL(&pool), block(24));
+        const void *p = tda_alloc(TDA_AL(&pool), block(24));
         TEST_ASSERT_NOT_NULL(p);
         TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) p % ALIGNMENT);
     }
@@ -273,7 +273,7 @@ static void test_freed_block_is_reused_first() {
     tda_Pool pool;
     TDA_TEST_OK(tda_pool_init(tda_al_default(), block(32), 3, &pool));
 
-    void *a = tda_alloc(TDA_AL(&pool), block(32));
+    const void *a = tda_alloc(TDA_AL(&pool), block(32));
     void *b = tda_alloc(TDA_AL(&pool), block(32));
     TEST_ASSERT_NOT_NULL(a);
     TEST_ASSERT_NOT_NULL(b);
@@ -452,7 +452,7 @@ static void test_reset_frees_every_block() {
     tda_Pool pool;
     TDA_TEST_OK(tda_pool_init(tda_al_default(), block(32), 3, &pool));
 
-    void *first = tda_alloc(TDA_AL(&pool), block(32));
+    const void *first = tda_alloc(TDA_AL(&pool), block(32));
     TEST_ASSERT_NOT_NULL(tda_alloc(TDA_AL(&pool), block(32)));
     TEST_ASSERT_NOT_NULL(tda_alloc(TDA_AL(&pool), block(32)));
 
@@ -516,7 +516,7 @@ static void test_init_buf_fits_as_many_blocks_as_the_buffer_holds() {
     TEST_ASSERT_EQUAL_size_t(sizeof(mem) / st.block_size, st.blocks);
 
     for (size_t i = 0; i < st.blocks; ++i) {
-        void *p = tda_alloc(TDA_AL(&pool), block(32));
+        const void *p = tda_alloc(TDA_AL(&pool), block(32));
         TEST_ASSERT_NOT_NULL(p);
         TEST_ASSERT_TRUE(inside(p, 32, mem, sizeof(mem)));
     }

@@ -17,7 +17,7 @@ int main() {
     // the elems land front to back, in a ring that starts out unwrapped
     tda_Al *al = tda_al_default();
 
-    tda_Deque d = {};
+    tda_Deque d;
     if (TDA_STATUS_IS_ERR(TDA_DEQUE_OF(int32_t, al, &d, 3, 4, 5))) {
         return 1;
     }
@@ -39,7 +39,8 @@ int main() {
     tda_deque_print(&d, tda_fprint_i32); // [2, 3, 4, 5, 6]
 
     printf(
-        "%" PRId32 " .. %" PRId32 "\n", *TDA_DEQUE_FRONT_AS(int32_t, &d),
+        "%" PRId32 " .. %" PRId32 "\n",
+        *TDA_DEQUE_FRONT_AS(int32_t, &d),
         *TDA_DEQUE_BACK_AS(int32_t, &d)
     ); // 2 .. 6
 
@@ -52,13 +53,17 @@ int main() {
     /// [index]
     // an index counts from the front, so 0 is the front elem wherever the ring starts.
     // The seam stays hidden: the capacity says how much room there is, not where it wraps
-    printf("%" PRId32 " of %zu in room for %zu\n", *TDA_DEQUE_GET_AS(int32_t, &d, 0),
-           tda_deque_len(&d), tda_deque_cap(&d)); // 3 of 3 in room for 6
+    printf(
+        "%" PRId32 " of %zu in room for %zu\n",
+        *TDA_DEQUE_GET_AS(int32_t, &d, 0),
+        tda_deque_len(&d),
+        tda_deque_cap(&d)
+    ); // 3 of 3 in room for 6
 
     TDA_DEQUE_SET(int32_t, &d, 1, 9);
     tda_deque_print(&d, tda_fprint_i32); // [3, 9, 5]
 
-    // insert and remove are NOT what this type is for: they shift the shorter side, half
+    // insert and remove are not what this type is for: they shift the shorter side, half
     // a vec's cost but still O(n)
     if (TDA_STATUS_IS_ERR(TDA_DEQUE_INSERT(int32_t, &d, 1, 7))) {
         goto out;
@@ -78,18 +83,14 @@ int main() {
     /// [algo]
     // an algo that reads run by run takes the ring as it lies: at most two views, the
     // front run and the back one, nothing copied
-    tda_Span front, back;
+    tda_Span front;
+    tda_Span back;
     tda_deque_to_spans(&d, &front, &back);
 
-    const int32_t key = 9;
-    printf(
-        "%d\n", tda_span_contains(
-            front,
-            &key,
-            tda_eq_i32,
-            nullptr
-        ) || tda_span_contains(back, &key, tda_eq_i32, nullptr)
-    ); // 1
+    constexpr int32_t key = 9;
+    const bool found = tda_span_contains(front, &key, tda_eq_i32, nullptr)
+        || tda_span_contains(back, &key, tda_eq_i32, nullptr);
+    printf("%d\n", found); // 1
 
     // an algo that needs one run, like sort, goes through copies: out into a buffer of
     // exactly the right length, sort, and back

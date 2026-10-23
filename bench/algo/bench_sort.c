@@ -58,7 +58,7 @@ static void sort_stable(int32_t *a) {
 
 // guaranteed n log n whatever the shape, the floor quicksort has to beat
 static void sort_heap(int32_t *a) {
-    tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, a, LEN);
+    const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, a, LEN);
     tda_span_make_heap(s, tda_cmp_i32, nullptr);
     tda_span_sort_heap(s, tda_cmp_i32, nullptr);
 }

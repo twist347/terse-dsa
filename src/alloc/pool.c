@@ -194,7 +194,7 @@ static bool pool_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     TDA_UNUSED(ptr); // only the ownership check reads it, and a release build drops that
     TDA_UNUSED(old);
 
-    tda_Pool *self = ctx;
+    const tda_Pool *self = ctx;
     TDA_EXPECT(owns_block(self, ptr));
 
     return new_size <= self->block_size_;

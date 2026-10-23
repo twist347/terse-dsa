@@ -166,7 +166,7 @@ static void test_rng_u64_max_is_flat_over_a_bound_that_does_not_divide_the_width
         ++buckets[tda_rng_u64_max(&rng, 2)];
     }
 
-    const double expected = (double) TRIALS / 3.0;
+    constexpr double expected = (double) TRIALS / 3.0;
     for (size_t b = 0; b < 3; ++b) {
         TEST_ASSERT_DOUBLE_WITHIN(expected * 0.02, expected, (double) buckets[b]);
     }
@@ -187,7 +187,7 @@ static void test_rng_u64_max_rejects_where_the_range_does_not_fit() {
         even += (tda_rng_u64_max(&rng, max) & 1) == 0 ? 1 : 0;
     }
 
-    const double expected = (double) TRIALS / 2.0;
+    constexpr double expected = (double) TRIALS / 2.0;
     TEST_ASSERT_DOUBLE_WITHIN(expected * 0.02, expected, (double) even);
 }
 
@@ -205,7 +205,7 @@ static void test_rng_idx_covers_every_position() {
         ++buckets[idx];
     }
 
-    const double expected = (double) TRIALS / 4.0;
+    constexpr double expected = (double) TRIALS / 4.0;
     for (size_t b = 0; b < 4; ++b) {
         TEST_ASSERT_DOUBLE_WITHIN(expected * 0.02, expected, (double) buckets[b]);
     }
@@ -309,7 +309,7 @@ static void test_rng_f64_spreads_evenly() {
         ++buckets[(size_t) (tda_rng_f64(&rng) * 10.0)];
     }
 
-    const double expected = (double) TRIALS / 10.0;
+    constexpr double expected = (double) TRIALS / 10.0;
     for (size_t b = 0; b < 10; ++b) {
         TEST_ASSERT_DOUBLE_WITHIN(expected * 0.05, expected, (double) buckets[b]);
     }
@@ -374,7 +374,7 @@ static void test_rng_bool_is_a_fair_coin() {
         previous = val;
     }
 
-    const double expected = (double) TRIALS / 2.0;
+    constexpr double expected = (double) TRIALS / 2.0;
     TEST_ASSERT_DOUBLE_WITHIN(expected * 0.02, expected, (double) heads);
 
     // a run of 40 in 200000 flips is practically impossible, and a stuck top bit would

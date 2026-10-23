@@ -136,14 +136,14 @@ static void test_alloc_zeroed_is_forwarded() {
     tda_Log log;
     tda_log_init(&parent, log_stream, &log);
 
-    const unsigned char *p = tda_alloc_zeroed(TDA_AL(&log), bytes(32));
+    unsigned char *p = tda_alloc_zeroed(TDA_AL(&log), bytes(32));
     TEST_ASSERT_NOT_NULL(p);
     TEST_ASSERT_EQUAL_size_t(1, probe.zeroed_calls);
     for (size_t i = 0; i < 32; ++i) {
         TEST_ASSERT_EQUAL_UINT8(0, p[i]);
     }
 
-    tda_dealloc(TDA_AL(&log), (void *) p, bytes(32));
+    tda_dealloc(TDA_AL(&log), p, bytes(32));
     tda_log_deinit(&log);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }

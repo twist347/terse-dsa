@@ -15,8 +15,12 @@ int main() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, nums, 5);
 
     // the fields are public: a view owns nothing, so it has no invariant to protect
-    printf("%zu elems of %zu bytes, %zu in all\n", s.len, s.elem.size,
-           tda_span_bytes(tda_span_mut_to_span(s))); // 5 elems of 4 bytes, 20 in all
+    printf(
+        "%zu elems of %zu bytes, %zu in all\n",
+        s.len,
+        s.elem.size,
+        tda_span_bytes(tda_span_mut_to_span(s))
+    ); // 5 elems of 4 bytes, 20 in all
     /// [build]
 
     /// [access]

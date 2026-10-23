@@ -16,8 +16,13 @@ int main() {
     // the block asked for is a minimum: it is raised to what the free list needs, a
     // pointer; the stats report the real one
     const tda_PoolStats st = tda_pool_stats(&pool);
-    printf("%zu blocks of %zu bytes at %zu, %zu free\n", st.blocks, st.block_size,
-           st.block_align, st.free); // 3 blocks of 8 bytes at 8, 3 free — asked for 4 at 4
+    printf(
+        "%zu blocks of %zu bytes at %zu, %zu free\n",
+        st.blocks,
+        st.block_size,
+        st.block_align,
+        st.free
+    ); // 3 blocks of 8 bytes at 8, 3 free — asked for 4 at 4
     /// [build]
 
     /// [limits]

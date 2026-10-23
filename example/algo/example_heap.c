@@ -30,11 +30,11 @@ int main() {
 
     // pop: the largest goes to the back and the rest is a heap again
     tda_span_pop_heap(grown, tda_cmp_i32, nullptr);
+    const tda_Span rest = tda_span_sub(tda_span_mut_to_span(grown), 0, 5);
     printf(
-        "popped %" PRId32 ", %s\n", buf[5],
-        tda_span_is_heap(tda_span_sub(tda_span_mut_to_span(grown), 0, 5), tda_cmp_i32, nullptr)
-            ? "the rest is still a heap"
-            : "broken"
+        "popped %" PRId32 ", %s\n",
+        buf[5],
+        tda_span_is_heap(rest, tda_cmp_i32, nullptr) ? "the rest is still a heap" : "broken"
     ); // popped 9, the rest is still a heap
 
     // heapsort is just sort_heap on a heap

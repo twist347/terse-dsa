@@ -353,7 +353,7 @@ static void test_sample_reaches_every_pick_equally_often() {
         ++seen[dst[0]][dst[1]];
     }
 
-    const double expected = (double) TRIALS / 10.0;
+    constexpr double expected = (double) TRIALS / 10.0;
     for (size_t i = 0; i < 5; ++i) {
         for (size_t j = 0; j < 5; ++j) {
             if (i < j) {

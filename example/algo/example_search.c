@@ -12,7 +12,6 @@
 static bool greater_than(const void *elem, void *ctx) {
     return *(const int32_t *) elem > *(const int32_t *) ctx;
 }
-
 /// [pred]
 
 int main() {
@@ -34,16 +33,21 @@ int main() {
         printf("first over %" PRId32 " at %zu\n", bound, idx); // first over 3 at 0
     }
 
-    printf("%zu of them are over %" PRId32 "\n",
-           tda_span_count_if(nums, greater_than, &bound), bound); // 2 of them are over 3
+    printf(
+        "%zu of them are over %" PRId32 "\n",
+        tda_span_count_if(nums, greater_than, &bound),
+        bound
+    ); // 2 of them are over 3
 
-    // a miss is not an error, and it leaves 'idx' unchanged
-    printf("%s\n", tda_span_contains(nums, &(int32_t){7}, tda_eq_i32, nullptr) ? "7 is in" : "no 7");
+    // a miss is not an error: find returns false and leaves 'idx' unchanged, and contains
+    // asks the same question without the index
+    printf("%s\n", tda_span_contains(nums, &(int32_t){7}, tda_eq_i32, nullptr) ? "7 is in" : "no 7"); // no 7
 
     // starts_with and ends_with take the same equality as a find
     const tda_Span head = TDA_SPAN_OF(int32_t, 5, 3);
     printf(
-        "%d %d\n", tda_span_starts_with(nums, head, tda_eq_i32, nullptr),
+        "%d %d\n",
+        tda_span_starts_with(nums, head, tda_eq_i32, nullptr),
         tda_span_ends_with(nums, head, tda_eq_i32, nullptr)
     ); // 1 0
     /// [find]

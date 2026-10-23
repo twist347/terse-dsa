@@ -142,7 +142,7 @@ static void test_node_layout_fits_a_pool_to_the_list() {
         tda_List l = {};
         tda_list_init(elems[k], TDA_AL(&pool), &l);
 
-        unsigned char val[200] = {};
+        constexpr unsigned char val[200] = {};
         for (size_t i = 0; i < count; ++i) {
             TDA_TEST_OK(tda_list_push_back(&l, val));
         }
@@ -663,8 +663,8 @@ static void test_push_back_appends() {
 
 static void test_push_front_prepends() {
     tda_List l = make_list(0);
-    int32_t one = 1;
-    int32_t two = 2;
+    constexpr int32_t one = 1;
+    constexpr int32_t two = 2;
 
     TDA_TEST_OK(tda_list_push_front(&l, &one));
     TDA_TEST_OK(tda_list_push_front(&l, &two));

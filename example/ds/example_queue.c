@@ -17,14 +17,15 @@ int main() {
     // elems join in the order given, so the first in is the first served
     tda_Al *al = tda_al_default();
 
-    tda_Queue q = {};
+    tda_Queue q;
     if (TDA_STATUS_IS_ERR(TDA_QUEUE_OF(int32_t, al, &q, 1, 2, 3))) {
         return 1;
     }
 
     tda_queue_print(&q, tda_fprint_i32); // [1, 2, 3]
     printf(
-        "%" PRId32 " .. %" PRId32 "\n", *TDA_QUEUE_FRONT_AS(int32_t, &q),
+        "%" PRId32 " .. %" PRId32 "\n",
+        *TDA_QUEUE_FRONT_AS(int32_t, &q),
         *TDA_QUEUE_BACK_AS(int32_t, &q)
     ); // 1 .. 3
     /// [build]
@@ -60,8 +61,11 @@ int main() {
     tda_queue_copy_to_span(&q, dst);
     const tda_Span view = tda_span_mut_to_span(dst);
 
-    printf("%zu waiting, %zu of them 3\n", view.len,
-           tda_span_count(view, &(int32_t){3}, tda_eq_i32, nullptr)); // 3 waiting, 1 of them 3
+    printf(
+        "%zu waiting, %zu of them 3\n",
+        view.len,
+        tda_span_count(view, &(int32_t){3}, tda_eq_i32, nullptr)
+    ); // 3 waiting, 1 of them 3
 
     // and it is one way: sorting the copy says nothing about the queue, so there is no
     // copy_from_span to write it back

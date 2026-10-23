@@ -3,10 +3,28 @@
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 
 int main() {
+    /// [buf]
+    // no parent and no heap: the arena is a value on the stack, and the whole array is
+    // its block
+    unsigned char mem[256];
+    tda_Arena local;
+    tda_arena_init_buf(mem, sizeof(mem), &local);
+
+    int32_t *c = TDA_ALLOC(int32_t, TDA_AL(&local), 8);
+    printf(
+        "%s, %zu left\n",
+        c ? "taken from the array" : "no room",
+        tda_arena_stats(&local).free
+    ); // taken from the array, 224 left
+
+    tda_arena_deinit(&local); // returns nothing: the array was not borrowed
+    /// [buf]
+
     /// [build]
     // the block comes from the parent once and is handed out in pieces
     tda_Arena arena;
@@ -20,10 +38,18 @@ int main() {
     if (!a || !b) {
         goto out;
     }
+    for (int32_t i = 0; i < 4; ++i) {
+        a[i] = i;
+        b[i] = -i;
+    }
 
     const tda_ArenaStats st = tda_arena_stats(&arena);
-    printf("%zu of %zu used, %zu left\n", st.used, st.cap,
-           st.free); // 32 of 1024 used, 992 left
+    printf(
+        "%zu of %zu used, %zu left\n",
+        st.used,
+        st.cap,
+        st.free
+    ); // 32 of 1024 used, 992 left
     /// [build]
 
     /// [reset]
@@ -46,32 +72,23 @@ int main() {
     if (!kept || !scratch) {
         goto out;
     }
+    for (int32_t i = 0; i < 64; ++i) {
+        scratch[i] = i * i;
+    }
+    kept[0] = scratch[7]; // the result the phase keeps
     printf("%zu used with the scratch\n", tda_arena_stats(&arena).used); // 272
 
     tda_arena_rewind(&arena, mark); // 'scratch' is dead, 'kept' is not
-    printf("%zu used after the rewind\n", tda_arena_stats(&arena).used); // 16
+    printf(
+        "%zu used after the rewind, kept %" PRId32 "\n",
+        tda_arena_stats(&arena).used,
+        kept[0]
+    ); // 16 used after the rewind, kept 49
     /// [mark]
 
     rc = 0;
 out:
     tda_arena_deinit(&arena);
-
-    /// [buf]
-    // no parent and no heap: the arena is a value on the stack, and the whole array is
-    // its block
-    unsigned char mem[256];
-    tda_Arena local;
-    tda_arena_init_buf(mem, sizeof(mem), &local);
-
-    int32_t *c = TDA_ALLOC(int32_t, TDA_AL(&local), 8);
-    printf(
-        "%s, %zu left\n",
-        c ? "taken from the array" : "no room",
-        tda_arena_stats(&local).free
-    ); // taken from the array, 224 left
-
-    tda_arena_deinit(&local); // returns nothing: the array was not borrowed
-    /// [buf]
 
     return rc;
 }

@@ -181,8 +181,8 @@ static void test_hash_cstr_is_bytes_over_the_length() {
 /* ========== cstr ========== */
 
 static void test_hash_cstr_follows_content_not_address() {
-    char first[] = "hello";
-    char second[] = "hello";
+    constexpr char first[] = "hello";
+    constexpr char second[] = "hello";
     const char *a = first;
     const char *b = second;
     const char *c = "hellp";

@@ -51,7 +51,7 @@ static inline void tda_test_probe_fail_after_next(tda_TestProbe *self, size_t co
 /* ========== hooks ========== */
 
 [[nodiscard]]
-static inline bool tda_test_probe_refuses_(tda_TestProbe *self) {
+static inline bool tda_test_probe_refuses_(const tda_TestProbe *self) {
     return tda_test_probe_requests(self) > self->fail_after;
 }
 

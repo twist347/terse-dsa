@@ -36,13 +36,13 @@ static void wrong_align(tda_Al *al) {
 // the old size is what the copy reads, so it is checked before the copy
 static void realloc_wrong_size(tda_Al *al) {
     void *p = tda_alloc(al, bytes(8));
-    void *q = tda_realloc(al, p, bytes(64), 128);
+    const void *q = tda_realloc(al, p, bytes(64), 128);
     (void) q;
 }
 
 static void realloc_wrong_align(tda_Al *al) {
     void *p = tda_alloc(al, (tda_Layout){.size = 64, .align = 64});
-    void *q = tda_realloc(al, p, bytes(64), 128);
+    const void *q = tda_realloc(al, p, bytes(64), 128);
     (void) q;
 }
 
@@ -80,8 +80,8 @@ static void stale_realloc(tda_Al *al) {
 
 static void break_at(tda_Al *al) {
     tda_debug_break_at(&debug, 2);
-    void *p = tda_alloc(al, bytes(8));
-    void *q = tda_alloc(al, bytes(8));
+    const void *p = tda_alloc(al, bytes(8));
+    const void *q = tda_alloc(al, bytes(8));
     (void) p;
     (void) q;
 }
