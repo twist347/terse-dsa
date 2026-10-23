@@ -287,54 +287,54 @@ static void test_every_eq_by_passes_the_ctx() {
     int32_t ten = 10;
     tda_Al *al = tda_al_default();
 
-    tda_Arr *aa = nullptr;
-    tda_Arr *ab = nullptr;
+    tda_Arr aa = {};
+    tda_Arr ab = {};
     TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &aa, 1, 2));
     TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &ab, 11, 22));
-    TEST_ASSERT_TRUE(tda_arr_eq_by(aa, ab, eq_mod, &ten));
+    TEST_ASSERT_TRUE(tda_arr_eq_by(&aa, &ab, eq_mod, &ten));
 
-    tda_Vec *va = nullptr;
-    tda_Vec *vb = nullptr;
+    tda_Vec va = {};
+    tda_Vec vb = {};
     TDA_TEST_OK(TDA_VEC_OF(int32_t, al, &va, 1, 2));
     TDA_TEST_OK(TDA_VEC_OF(int32_t, al, &vb, 11, 22));
-    TEST_ASSERT_TRUE(tda_vec_eq_by(va, vb, eq_mod, &ten));
+    TEST_ASSERT_TRUE(tda_vec_eq_by(&va, &vb, eq_mod, &ten));
 
-    tda_Deque *da = nullptr;
-    tda_Deque *db = nullptr;
+    tda_Deque da = {};
+    tda_Deque db = {};
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al, &da, 1, 2));
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al, &db, 11, 22));
-    TEST_ASSERT_TRUE(tda_deque_eq_by(da, db, eq_mod, &ten));
+    TEST_ASSERT_TRUE(tda_deque_eq_by(&da, &db, eq_mod, &ten));
 
-    tda_List *la = nullptr;
-    tda_List *lb = nullptr;
+    tda_List la = {};
+    tda_List lb = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, al, &la, 1, 2));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, al, &lb, 11, 22));
-    TEST_ASSERT_TRUE(tda_list_eq_by(la, lb, eq_mod, &ten));
+    TEST_ASSERT_TRUE(tda_list_eq_by(&la, &lb, eq_mod, &ten));
 
-    tda_Queue *qa = nullptr;
-    tda_Queue *qb = nullptr;
+    tda_Queue qa = {};
+    tda_Queue qb = {};
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, al, &qa, 1, 2));
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, al, &qb, 11, 22));
-    TEST_ASSERT_TRUE(tda_queue_eq_by(qa, qb, eq_mod, &ten));
+    TEST_ASSERT_TRUE(tda_queue_eq_by(&qa, &qb, eq_mod, &ten));
 
-    tda_Stack *sa = nullptr;
-    tda_Stack *sb = nullptr;
+    tda_Stack sa = {};
+    tda_Stack sb = {};
     TDA_TEST_OK(TDA_STACK_OF(int32_t, al, &sa, 1, 2));
     TDA_TEST_OK(TDA_STACK_OF(int32_t, al, &sb, 11, 22));
-    TEST_ASSERT_TRUE(tda_stack_eq_by(sa, sb, eq_mod, &ten));
+    TEST_ASSERT_TRUE(tda_stack_eq_by(&sa, &sb, eq_mod, &ten));
 
-    tda_arr_drop(aa);
-    tda_arr_drop(ab);
-    tda_vec_drop(va);
-    tda_vec_drop(vb);
-    tda_deque_drop(da);
-    tda_deque_drop(db);
-    tda_list_drop(la);
-    tda_list_drop(lb);
-    tda_queue_drop(qa);
-    tda_queue_drop(qb);
-    tda_stack_drop(sa);
-    tda_stack_drop(sb);
+    tda_arr_deinit(&aa);
+    tda_arr_deinit(&ab);
+    tda_vec_deinit(&va);
+    tda_vec_deinit(&vb);
+    tda_deque_deinit(&da);
+    tda_deque_deinit(&db);
+    tda_list_deinit(&la);
+    tda_list_deinit(&lb);
+    tda_queue_deinit(&qa);
+    tda_queue_deinit(&qb);
+    tda_stack_deinit(&sa);
+    tda_stack_deinit(&sb);
 }
 
 // the key forms of remove and replace wrap the equality in a predicate, and its ctx
@@ -588,26 +588,26 @@ static void test_container_lookups_hand_the_ctx_on() {
     sweep_calls = 0;
     sweep_wrong = 0;
 
-    tda_HMap *a = nullptr;
-    tda_HMap *b = nullptr;
-    TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &a));
-    TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &b));
+    tda_HMap a = {};
+    tda_HMap b = {};
+    TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &a);
+    TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &b);
     for (int32_t i = 0; i < 10; ++i) {
-        TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, a, i, i, nullptr));
-        TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, b, i, i, nullptr));
+        TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &a, i, i, nullptr));
+        TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &b, i, i, nullptr));
     }
-    TEST_ASSERT_TRUE(tda_hmap_eq_by(a, b, eq_seen, ctx));
+    TEST_ASSERT_TRUE(tda_hmap_eq_by(&a, &b, eq_seen, ctx));
 
-    tda_List *l = nullptr;
+    tda_List l = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 5, 6, 7));
-    TEST_ASSERT_NOT_NULL(tda_list_find(l, &(int32_t){7}, eq_seen, ctx));
+    TEST_ASSERT_NOT_NULL(tda_list_find(&l, &(int32_t){7}, eq_seen, ctx));
 
     TEST_ASSERT_TRUE(sweep_calls > 0);
     TEST_ASSERT_EQUAL_size_t(0, sweep_wrong);
 
-    tda_hmap_drop(a);
-    tda_hmap_drop(b);
-    tda_list_drop(l);
+    tda_hmap_deinit(&a);
+    tda_hmap_deinit(&b);
+    tda_list_deinit(&l);
 }
 
 /* ========== containers that store a callback ========== */
@@ -615,78 +615,78 @@ static void test_container_lookups_hand_the_ctx_on() {
 // the map stores one ctx for its hasher and its equality: 3, 13 and 23 are one key
 static void test_hmap_hashes_and_matches_under_its_ctx() {
     int32_t ten = 10;
-    tda_HMap *m = nullptr;
-    TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_mod, eq_mod, &ten, tda_al_default(), &m));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(m));
+    tda_HMap m = {};
+    TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &ten, tda_al_default(), &m);
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(&m));
 
-    TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, m, 3, 100, nullptr));
-    TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, m, 13, 200, nullptr));
+    TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &m, 3, 100, nullptr));
+    TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &m, 13, 200, nullptr));
 
-    TEST_ASSERT_EQUAL_size_t(1, tda_hmap_len(m));
-    TEST_ASSERT_EQUAL_INT32(200, *TDA_HMAP_GET_AS(int32_t, int32_t, m, 23));
+    TEST_ASSERT_EQUAL_size_t(1, tda_hmap_len(&m));
+    TEST_ASSERT_EQUAL_INT32(200, *TDA_HMAP_GET_AS(int32_t, int32_t, &m, 23));
 
     // every other lookup hashes under it too
-    TEST_ASSERT_EQUAL_INT32(200, *(int32_t *) tda_hmap_get_mut(m, &(int32_t){33}));
-    TEST_ASSERT_NOT_NULL(tda_hmap_find(m, &(int32_t){43}));
-    TEST_ASSERT_NOT_NULL(tda_hmap_find_mut(m, &(int32_t){53}));
+    TEST_ASSERT_EQUAL_INT32(200, *(int32_t *) tda_hmap_get_mut(&m, &(int32_t){33}));
+    TEST_ASSERT_NOT_NULL(tda_hmap_find(&m, &(int32_t){43}));
+    TEST_ASSERT_NOT_NULL(tda_hmap_find_mut(&m, &(int32_t){53}));
     tda_HMapNode *node = nullptr;
-    TDA_TEST_OK(TDA_HMAP_GET_OR_INSERT(int32_t, int32_t, m, 63, 300, &node));
-    TEST_ASSERT_EQUAL_size_t(1, tda_hmap_len(m));
+    TDA_TEST_OK(TDA_HMAP_GET_OR_INSERT(int32_t, int32_t, &m, 63, 300, &node));
+    TEST_ASSERT_EQUAL_size_t(1, tda_hmap_len(&m));
 
     // a copy keeps the ctx, so it still sees one key, and removing any spelling of it
     // removes that key
-    tda_HMap *copy = nullptr;
-    TDA_TEST_OK(tda_hmap_copy(m, &copy));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(copy));
-    TEST_ASSERT_TRUE(TDA_HMAP_CONTAINS(int32_t, copy, 33));
-    TEST_ASSERT_TRUE(tda_hmap_remove(copy, &(int32_t){43}));
-    TEST_ASSERT_EQUAL_size_t(0, tda_hmap_len(copy));
+    tda_HMap copy = {};
+    TDA_TEST_OK(tda_hmap_copy(&m, &copy));
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(&copy));
+    TEST_ASSERT_TRUE(TDA_HMAP_CONTAINS(int32_t, &copy, 33));
+    TEST_ASSERT_TRUE(tda_hmap_remove(&copy, &(int32_t){43}));
+    TEST_ASSERT_EQUAL_size_t(0, tda_hmap_len(&copy));
 
-    tda_HMap *with_cap = nullptr;
-    TDA_TEST_OK(TDA_HMAP_NEW_CAP(int32_t, int32_t, 8, hash_mod, eq_mod, &ten, tda_al_default(), &with_cap));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(with_cap));
+    tda_HMap with_cap = {};
+    TDA_TEST_OK(TDA_HMAP_INIT_CAP(int32_t, int32_t, 8, hash_mod, eq_mod, &ten, tda_al_default(), &with_cap));
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(&with_cap));
 
-    tda_HSet *set = nullptr;
-    TDA_TEST_OK(TDA_HSET_NEW_CAP(int32_t, 8, hash_mod, eq_mod, &ten, tda_al_default(), &set));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(set));
+    tda_HSet set = {};
+    TDA_TEST_OK(TDA_HSET_INIT_CAP(int32_t, 8, hash_mod, eq_mod, &ten, tda_al_default(), &set));
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(&set));
 
-    tda_hset_drop(set);
-    tda_hmap_drop(with_cap);
-    tda_hmap_drop(copy);
-    tda_hmap_drop(m);
+    tda_hset_deinit(&set);
+    tda_hmap_deinit(&with_cap);
+    tda_hmap_deinit(&copy);
+    tda_hmap_deinit(&m);
 }
 
 // the queue serves by weights it does not hold
 static void test_pqueue_serves_by_weights_in_its_ctx() {
     int32_t weight[4] = {5, 50, 0, 20};
-    tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(size_t, cmp_by_key, weight, tda_al_default(), &q));
-    TEST_ASSERT_EQUAL_PTR(weight, tda_pqueue_cmp_ctx(q));
+    tda_PQueue q = {};
+    TDA_PQUEUE_INIT(size_t, cmp_by_key, weight, tda_al_default(), &q);
+    TEST_ASSERT_EQUAL_PTR(weight, tda_pqueue_cmp_ctx(&q));
 
     for (size_t i = 0; i < 4; ++i) {
-        TDA_TEST_OK(TDA_PQUEUE_PUSH(size_t, q, i));
+        TDA_TEST_OK(TDA_PQUEUE_PUSH(size_t, &q, i));
     }
 
     // greatest weight first
     const size_t want[4] = {1, 3, 0, 2};
     for (size_t i = 0; i < 4; ++i) {
-        TEST_ASSERT_EQUAL_size_t(want[i], *TDA_PQUEUE_TOP_AS(size_t, q));
-        tda_pqueue_pop(q);
+        TEST_ASSERT_EQUAL_size_t(want[i], *TDA_PQUEUE_TOP_AS(size_t, &q));
+        tda_pqueue_pop(&q);
     }
 
     // 2 of weight 0 takes the place of 1 of weight 50, then sinks
     for (size_t i = 0; i < 4; ++i) {
-        TDA_TEST_OK(TDA_PQUEUE_PUSH(size_t, q, i));
+        TDA_TEST_OK(TDA_PQUEUE_PUSH(size_t, &q, i));
     }
-    TDA_PQUEUE_REPLACE_TOP(size_t, q, 2);
+    TDA_PQUEUE_REPLACE_TOP(size_t, &q, 2);
     const size_t then[4] = {3, 0, 2, 2};
     for (size_t i = 0; i < 4; ++i) {
         size_t got;
-        TDA_PQUEUE_POP_TO(size_t, q, &got);
+        TDA_PQUEUE_POP_TO(size_t, &q, &got);
         TEST_ASSERT_EQUAL_size_t(then[i], got);
     }
 
-    tda_pqueue_drop(q);
+    tda_pqueue_deinit(&q);
 }
 
 // every constructor that orders what it is given orders it under the ctx
@@ -695,37 +695,37 @@ static void test_pqueue_constructors_heapify_under_the_ctx() {
     const size_t idx[4] = {0, 1, 2, 3};
     tda_Al *al = tda_al_default();
 
-    tda_PQueue *a = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW_CAP(size_t, 4, cmp_by_key, weight, al, &a));
-    TEST_ASSERT_EQUAL_PTR(weight, tda_pqueue_cmp_ctx(a));
+    tda_PQueue a = {};
+    TDA_TEST_OK(TDA_PQUEUE_INIT_CAP(size_t, 4, cmp_by_key, weight, al, &a));
+    TEST_ASSERT_EQUAL_PTR(weight, tda_pqueue_cmp_ctx(&a));
     for (size_t i = 0; i < 4; ++i) {
-        TDA_TEST_OK(TDA_PQUEUE_PUSH(size_t, a, i));
+        TDA_TEST_OK(TDA_PQUEUE_PUSH(size_t, &a, i));
     }
-    TEST_ASSERT_EQUAL_size_t(1, *TDA_PQUEUE_TOP_AS(size_t, a));
+    TEST_ASSERT_EQUAL_size_t(1, *TDA_PQUEUE_TOP_AS(size_t, &a));
 
-    tda_PQueue *b = nullptr;
+    tda_PQueue b = {};
     TDA_TEST_OK(tda_pqueue_from_data(idx, 4, TDA_LAYOUT_OF(size_t), cmp_by_key, weight, al, &b));
-    TEST_ASSERT_EQUAL_size_t(1, *TDA_PQUEUE_TOP_AS(size_t, b));
+    TEST_ASSERT_EQUAL_size_t(1, *TDA_PQUEUE_TOP_AS(size_t, &b));
 
-    tda_PQueue *c = nullptr;
+    tda_PQueue c = {};
     TDA_TEST_OK(tda_pqueue_from_span(TDA_SPAN_FROM_DATA(size_t, idx, 4), cmp_by_key, weight, al, &c));
-    TEST_ASSERT_EQUAL_size_t(1, *TDA_PQUEUE_TOP_AS(size_t, c));
-    tda_pqueue_pop(c);
-    TEST_ASSERT_EQUAL_size_t(3, *TDA_PQUEUE_TOP_AS(size_t, c));
+    TEST_ASSERT_EQUAL_size_t(1, *TDA_PQUEUE_TOP_AS(size_t, &c));
+    tda_pqueue_pop(&c);
+    TEST_ASSERT_EQUAL_size_t(3, *TDA_PQUEUE_TOP_AS(size_t, &c));
 
-    tda_PQueue *d = nullptr;
+    tda_PQueue d = {};
     TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(size_t, idx, 4, cmp_by_key, weight, al, &d));
-    TEST_ASSERT_EQUAL_PTR(weight, tda_pqueue_cmp_ctx(d));
+    TEST_ASSERT_EQUAL_PTR(weight, tda_pqueue_cmp_ctx(&d));
 
-    tda_PQueue *e = nullptr;
+    tda_PQueue e = {};
     TDA_TEST_OK(TDA_PQUEUE_OF(size_t, cmp_by_key, weight, al, &e, 0, 1, 2, 3));
-    TEST_ASSERT_EQUAL_PTR(weight, tda_pqueue_cmp_ctx(e));
+    TEST_ASSERT_EQUAL_PTR(weight, tda_pqueue_cmp_ctx(&e));
 
-    tda_pqueue_drop(a);
-    tda_pqueue_drop(b);
-    tda_pqueue_drop(c);
-    tda_pqueue_drop(d);
-    tda_pqueue_drop(e);
+    tda_pqueue_deinit(&a);
+    tda_pqueue_deinit(&b);
+    tda_pqueue_deinit(&c);
+    tda_pqueue_deinit(&d);
+    tda_pqueue_deinit(&e);
 }
 
 // built from spans, 3 and 13 are one key, the later one winning
@@ -734,7 +734,7 @@ static void test_hash_containers_from_spans_hash_under_the_ctx() {
     const int32_t keys[3] = {3, 13, 4};
     const int32_t vals[3] = {1, 2, 3};
 
-    tda_HMap *m = nullptr;
+    tda_HMap m = {};
     TDA_TEST_OK(tda_hmap_from_spans(
         TDA_SPAN_FROM_DATA(int32_t, keys, 3),
         TDA_SPAN_FROM_DATA(int32_t, vals, 3),
@@ -744,10 +744,10 @@ static void test_hash_containers_from_spans_hash_under_the_ctx() {
         tda_al_default(),
         &m
     ));
-    TEST_ASSERT_EQUAL_size_t(2, tda_hmap_len(m));
-    TEST_ASSERT_EQUAL_INT32(2, *TDA_HMAP_GET_AS(int32_t, int32_t, m, 23));
+    TEST_ASSERT_EQUAL_size_t(2, tda_hmap_len(&m));
+    TEST_ASSERT_EQUAL_INT32(2, *TDA_HMAP_GET_AS(int32_t, int32_t, &m, 23));
 
-    tda_HSet *s = nullptr;
+    tda_HSet s = {};
     TDA_TEST_OK(tda_hset_from_span(
         TDA_SPAN_FROM_DATA(int32_t, keys, 3),
         hash_mod,
@@ -756,10 +756,10 @@ static void test_hash_containers_from_spans_hash_under_the_ctx() {
         tda_al_default(),
         &s
     ));
-    TEST_ASSERT_EQUAL_size_t(2, tda_hset_len(s));
+    TEST_ASSERT_EQUAL_size_t(2, tda_hset_len(&s));
 
-    tda_hmap_drop(m);
-    tda_hset_drop(s);
+    tda_hmap_deinit(&m);
+    tda_hset_deinit(&s);
 }
 
 // each side is searched with its own hasher and ctx, so sets salted apart still compare
@@ -769,34 +769,34 @@ static void test_hash_containers_of_differing_seeds_meet() {
     tda_Hash seed_b = 0xabcd0000;
     tda_Al *al = tda_al_default();
 
-    tda_HSet *a = nullptr;
-    tda_HSet *b = nullptr;
-    TDA_TEST_OK(TDA_HSET_NEW(int32_t, hash_seeded, tda_eq_i32, &seed_a, al, &a));
-    TDA_TEST_OK(TDA_HSET_NEW(int32_t, hash_seeded, tda_eq_i32, &seed_b, al, &b));
-    tda_HMap *m = nullptr;
-    tda_HMap *n = nullptr;
-    TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_a, al, &m));
-    TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_b, al, &n));
+    tda_HSet a = {};
+    tda_HSet b = {};
+    TDA_HSET_INIT(int32_t, hash_seeded, tda_eq_i32, &seed_a, al, &a);
+    TDA_HSET_INIT(int32_t, hash_seeded, tda_eq_i32, &seed_b, al, &b);
+    tda_HMap m = {};
+    tda_HMap n = {};
+    TDA_HMAP_INIT(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_a, al, &m);
+    TDA_HMAP_INIT(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_b, al, &n);
 
     for (int32_t i = 0; i < 40; ++i) {
-        TDA_TEST_OK(TDA_HSET_INSERT(int32_t, a, i, nullptr));
-        TDA_TEST_OK(TDA_HSET_INSERT(int32_t, b, 39 - i, nullptr));
-        TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, m, i, i * 2, nullptr));
-        TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, n, 39 - i, (39 - i) * 2, nullptr));
+        TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &a, i, nullptr));
+        TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &b, 39 - i, nullptr));
+        TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &m, i, i * 2, nullptr));
+        TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &n, 39 - i, (39 - i) * 2, nullptr));
     }
-    TEST_ASSERT_TRUE(tda_hset_eq(a, b));
-    TEST_ASSERT_TRUE(tda_hmap_eq(m, n));
+    TEST_ASSERT_TRUE(tda_hset_eq(&a, &b));
+    TEST_ASSERT_TRUE(tda_hmap_eq(&m, &n));
 
-    TDA_TEST_OK(TDA_HSET_INSERT(int32_t, b, 40, nullptr));
-    TEST_ASSERT_FALSE(tda_hset_eq(a, b));
-    TDA_TEST_OK(tda_hset_union(a, b));
-    TEST_ASSERT_TRUE(tda_hset_eq(a, b));
-    TEST_ASSERT_EQUAL_PTR(&seed_a, tda_hset_key_ctx(a));
+    TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &b, 40, nullptr));
+    TEST_ASSERT_FALSE(tda_hset_eq(&a, &b));
+    TDA_TEST_OK(tda_hset_union(&a, &b));
+    TEST_ASSERT_TRUE(tda_hset_eq(&a, &b));
+    TEST_ASSERT_EQUAL_PTR(&seed_a, tda_hset_key_ctx(&a));
 
-    tda_hset_drop(a);
-    tda_hset_drop(b);
-    tda_hmap_drop(m);
-    tda_hmap_drop(n);
+    tda_hset_deinit(&a);
+    tda_hset_deinit(&b);
+    tda_hmap_deinit(&m);
+    tda_hmap_deinit(&n);
 }
 
 // every copy takes the ctx along with the hasher and the equality, every move hands it
@@ -806,130 +806,130 @@ static void test_hmap_and_hset_carry_their_ctx() {
     int32_t seven = 7;
     tda_Al *al = tda_al_default();
 
-    tda_HMap *m = nullptr;
-    tda_HMap *n = nullptr;
-    TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_mod, eq_mod, &ten, al, &m));
-    TDA_TEST_OK(TDA_HMAP_NEW(int32_t, int32_t, hash_mod, eq_mod, &seven, al, &n));
+    tda_HMap m = {};
+    tda_HMap n = {};
+    TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &ten, al, &m);
+    TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &seven, al, &n);
 
-    tda_HMap *c = nullptr;
-    TDA_TEST_OK(tda_hmap_copy_with(m, al, &c));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(c));
-    TDA_TEST_OK(tda_hmap_copy_assign(c, n));
-    TEST_ASSERT_EQUAL_PTR(&seven, tda_hmap_key_ctx(c));
+    tda_HMap c = {};
+    TDA_TEST_OK(tda_hmap_copy_with(&m, al, &c));
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(&c));
+    TDA_TEST_OK(tda_hmap_copy_assign(&c, &n));
+    TEST_ASSERT_EQUAL_PTR(&seven, tda_hmap_key_ctx(&c));
 
-    tda_hmap_swap(m, n);
-    TEST_ASSERT_EQUAL_PTR(&seven, tda_hmap_key_ctx(m));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(n));
-    TDA_TEST_OK(tda_hmap_move_assign(m, n));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(m));
+    tda_hmap_swap(&m, &n);
+    TEST_ASSERT_EQUAL_PTR(&seven, tda_hmap_key_ctx(&m));
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(&n));
+    tda_hmap_move_assign(&m, &n);
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(&m));
 
-    tda_HSet *s = nullptr;
-    tda_HSet *u = nullptr;
-    TDA_TEST_OK(TDA_HSET_NEW(int32_t, hash_mod, eq_mod, &ten, al, &s));
-    TDA_TEST_OK(TDA_HSET_NEW(int32_t, hash_mod, eq_mod, &seven, al, &u));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(s));
-    TDA_TEST_OK(TDA_HSET_INSERT(int32_t, s, 3, nullptr));
-    TDA_TEST_OK(TDA_HSET_INSERT(int32_t, s, 13, nullptr));
-    TEST_ASSERT_EQUAL_size_t(1, tda_hset_len(s));
+    tda_HSet s = {};
+    tda_HSet u = {};
+    TDA_HSET_INIT(int32_t, hash_mod, eq_mod, &ten, al, &s);
+    TDA_HSET_INIT(int32_t, hash_mod, eq_mod, &seven, al, &u);
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(&s));
+    TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &s, 3, nullptr));
+    TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &s, 13, nullptr));
+    TEST_ASSERT_EQUAL_size_t(1, tda_hset_len(&s));
 
-    tda_HSet *sc = nullptr;
-    TDA_TEST_OK(tda_hset_copy(s, &sc));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(sc));
-    tda_hset_swap(sc, u);
-    TEST_ASSERT_EQUAL_PTR(&seven, tda_hset_key_ctx(sc));
-    TDA_TEST_OK(tda_hset_move_assign(sc, u));
-    TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(sc));
+    tda_HSet sc = {};
+    TDA_TEST_OK(tda_hset_copy(&s, &sc));
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(&sc));
+    tda_hset_swap(&sc, &u);
+    TEST_ASSERT_EQUAL_PTR(&seven, tda_hset_key_ctx(&sc));
+    tda_hset_move_assign(&sc, &u);
+    TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(&sc));
 
-    tda_hmap_drop(c);
-    tda_hmap_drop(m);
-    tda_hmap_drop(n);
-    tda_hset_drop(s);
-    tda_hset_drop(u);
-    tda_hset_drop(sc);
+    tda_hmap_deinit(&c);
+    tda_hmap_deinit(&m);
+    tda_hmap_deinit(&n);
+    tda_hset_deinit(&s);
+    tda_hset_deinit(&u);
+    tda_hset_deinit(&sc);
 }
 
 // a move hands the comparator over with its ctx, and a swap trades both
 static void test_pqueue_ctx_travels_with_its_comparator() {
     int32_t a_ctx[1] = {0};
     int32_t b_ctx[1] = {0};
-    tda_PQueue *a = nullptr;
-    tda_PQueue *b = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(size_t, cmp_by_key, a_ctx, tda_al_default(), &a));
-    TDA_TEST_OK(TDA_PQUEUE_NEW(size_t, cmp_by_key, b_ctx, tda_al_default(), &b));
+    tda_PQueue a = {};
+    tda_PQueue b = {};
+    TDA_PQUEUE_INIT(size_t, cmp_by_key, a_ctx, tda_al_default(), &a);
+    TDA_PQUEUE_INIT(size_t, cmp_by_key, b_ctx, tda_al_default(), &b);
 
-    tda_pqueue_swap(a, b);
-    TEST_ASSERT_EQUAL_PTR(b_ctx, tda_pqueue_cmp_ctx(a));
-    TEST_ASSERT_EQUAL_PTR(a_ctx, tda_pqueue_cmp_ctx(b));
+    tda_pqueue_swap(&a, &b);
+    TEST_ASSERT_EQUAL_PTR(b_ctx, tda_pqueue_cmp_ctx(&a));
+    TEST_ASSERT_EQUAL_PTR(a_ctx, tda_pqueue_cmp_ctx(&b));
 
-    TDA_TEST_OK(tda_pqueue_move_assign(a, b));
-    TEST_ASSERT_EQUAL_PTR(a_ctx, tda_pqueue_cmp_ctx(a));
+    tda_pqueue_move_assign(&a, &b);
+    TEST_ASSERT_EQUAL_PTR(a_ctx, tda_pqueue_cmp_ctx(&a));
 
     // copies take the ctx of their source
-    tda_PQueue *c = nullptr;
-    TDA_TEST_OK(tda_pqueue_copy(a, &c));
-    TEST_ASSERT_EQUAL_PTR(a_ctx, tda_pqueue_cmp_ctx(c));
+    tda_PQueue c = {};
+    TDA_TEST_OK(tda_pqueue_copy(&a, &c));
+    TEST_ASSERT_EQUAL_PTR(a_ctx, tda_pqueue_cmp_ctx(&c));
 
     int32_t d_ctx[1] = {0};
-    tda_PQueue *d = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(size_t, cmp_by_key, d_ctx, tda_al_default(), &d));
-    tda_PQueue *e = nullptr;
-    TDA_TEST_OK(tda_pqueue_copy_with(d, tda_al_default(), &e));
-    TEST_ASSERT_EQUAL_PTR(d_ctx, tda_pqueue_cmp_ctx(e));
+    tda_PQueue d = {};
+    TDA_PQUEUE_INIT(size_t, cmp_by_key, d_ctx, tda_al_default(), &d);
+    tda_PQueue e = {};
+    TDA_TEST_OK(tda_pqueue_copy_with(&d, tda_al_default(), &e));
+    TEST_ASSERT_EQUAL_PTR(d_ctx, tda_pqueue_cmp_ctx(&e));
 
-    TDA_TEST_OK(tda_pqueue_copy_assign(c, d));
-    TEST_ASSERT_EQUAL_PTR(d_ctx, tda_pqueue_cmp_ctx(c));
+    TDA_TEST_OK(tda_pqueue_copy_assign(&c, &d));
+    TEST_ASSERT_EQUAL_PTR(d_ctx, tda_pqueue_cmp_ctx(&c));
 
-    tda_pqueue_drop(c);
-    tda_pqueue_drop(d);
-    tda_pqueue_drop(e);
+    tda_pqueue_deinit(&c);
+    tda_pqueue_deinit(&d);
+    tda_pqueue_deinit(&e);
 
-    tda_pqueue_drop(a);
-    tda_pqueue_drop(b);
+    tda_pqueue_deinit(&a);
+    tda_pqueue_deinit(&b);
 }
 
 static void test_list_sorts_and_finds_under_the_ctx() {
     int32_t keys[4] = {9, 7, 8, 6};
-    tda_List *l = nullptr;
+    tda_List l = {};
     TDA_TEST_OK(TDA_LIST_OF(size_t, tda_al_default(), &l, 0, 1, 2, 3));
 
-    tda_list_sort(l, cmp_by_key, keys);
+    tda_list_sort(&l, cmp_by_key, keys);
 
     const size_t want[4] = {3, 1, 2, 0};
     size_t i = 0;
-    TDA_LIST_FOR_EACH (node, l) {
-        TEST_ASSERT_EQUAL_size_t(want[i++], *TDA_LIST_NODE_ELEM_AS(size_t, l, node));
+    TDA_LIST_FOR_EACH (node, &l) {
+        TEST_ASSERT_EQUAL_size_t(want[i++], *TDA_LIST_NODE_ELEM_AS(size_t, &l, node));
     }
 
     // an equality with a ctx finds through the macro as through the function
     int32_t five = 5;
-    tda_List *n = nullptr;
+    tda_List n = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &n, 1, 2, 13));
-    const tda_ListNode *hit = TDA_LIST_FIND(int32_t, n, 8, eq_mod, &five);
+    const tda_ListNode *hit = TDA_LIST_FIND(int32_t, &n, 8, eq_mod, &five);
     TEST_ASSERT_NOT_NULL(hit);
-    TEST_ASSERT_EQUAL_INT32(13, *TDA_LIST_NODE_ELEM_AS(int32_t, n, hit));
-    TEST_ASSERT_EQUAL_PTR(hit, tda_list_find_mut(n, &(int32_t){18}, eq_mod, &five));
-    TEST_ASSERT_EQUAL_PTR(hit, TDA_LIST_FIND_MUT(int32_t, n, 3, eq_mod, &five));
+    TEST_ASSERT_EQUAL_INT32(13, *TDA_LIST_NODE_ELEM_AS(int32_t, &n, hit));
+    TEST_ASSERT_EQUAL_PTR(hit, tda_list_find_mut(&n, &(int32_t){18}, eq_mod, &five));
+    TEST_ASSERT_EQUAL_PTR(hit, TDA_LIST_FIND_MUT(int32_t, &n, 3, eq_mod, &five));
 
-    tda_list_drop(n);
-    tda_list_drop(l);
+    tda_list_deinit(&n);
+    tda_list_deinit(&l);
 }
 
 static void test_list_merges_under_the_ctx() {
-    tda_List *a = nullptr;
-    tda_List *b = nullptr;
+    tda_List a = {};
+    tda_List b = {};
     TDA_TEST_OK(TDA_LIST_OF(size_t, tda_al_default(), &a, 3, 6, 0, 4)); // keys 10 30 70 80
     TDA_TEST_OK(TDA_LIST_OF(size_t, tda_al_default(), &b, 1, 5, 2, 7)); // keys 20 40 50 60
 
-    TDA_TEST_OK(tda_list_merge(a, b, cmp_by_key, KEYS));
+    TDA_TEST_OK(tda_list_merge(&a, &b, cmp_by_key, KEYS));
 
     size_t i = 0;
-    TDA_LIST_FOR_EACH (node, a) {
-        TEST_ASSERT_EQUAL_size_t(i++, key_rank_of(*TDA_LIST_NODE_ELEM_AS(size_t, a, node)));
+    TDA_LIST_FOR_EACH (node, &a) {
+        TEST_ASSERT_EQUAL_size_t(i++, key_rank_of(*TDA_LIST_NODE_ELEM_AS(size_t, &a, node)));
     }
     TEST_ASSERT_EQUAL_size_t(8, i);
 
-    tda_list_drop(a);
-    tda_list_drop(b);
+    tda_list_deinit(&a);
+    tda_list_deinit(&b);
 }
 
 int main() {

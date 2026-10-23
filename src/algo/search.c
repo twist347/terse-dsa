@@ -4,10 +4,10 @@
 
 #include <assert.h>
 
-/* ========== private decls ========== */
+/* ========== internals ========== */
 
 /// whether 'sub' occurs in 's' at 'at'; the caller guarantees it fits
-static bool matches_at(tda_Span s, tda_Span sub, size_t at, tda_Eq eq, void *ctx);
+static bool matches_at(tda_Span s, tda_Span sub, size_t idx, tda_Eq eq, void *ctx);
 
 /// the first index whose elem orders after 'key' ('upper') or not before it (otherwise)
 [[nodiscard]]
@@ -163,6 +163,7 @@ bool tda_span_find_run(tda_Span s, const void *key, size_t count, tda_Eq eq, voi
             return true;
         }
     }
+
     return false;
 }
 
@@ -273,8 +274,9 @@ bool tda_span_binary_search(tda_Span s, const void *key, tda_Cmp cmp, void *ctx,
         return false;
     }
 
-    const void *p = tda_span_get(s, pos);
-    if (cmp(p, key, ctx) == 0) {
+    // the elem at pos is not less than 'key'; it is equal unless 'key' is less than it
+    const void *elem = tda_span_get(s, pos);
+    if (!(cmp(key, elem, ctx) < 0)) {
         *out_idx = pos;
         return true;
     }
@@ -408,16 +410,20 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx) {
     return out;
 }
 
-/* ========== private defs ========== */
+/* ========== internals ========== */
 
 static size_t bound(tda_Span s, const void *key, tda_Cmp cmp, void *ctx, bool upper) {
     size_t lo = 0, hi = s.len;
 
+    // asked only as "less", one way round for each bound, so a comparator that never
+    // answers "greater" works too: the lower bound passes every elem less than 'key',
+    // the upper every elem 'key' is not less than
     while (lo < hi) {
         const size_t mid = lo + (hi - lo) / 2;
-        const int c = cmp(tda_span_get(s, mid), key, ctx);
+        const void *elem = tda_span_get(s, mid);
+        const bool before = upper ? !(cmp(key, elem, ctx) < 0) : cmp(elem, key, ctx) < 0;
 
-        if (c < 0 || (upper && c == 0)) {
+        if (before) {
             lo = mid + 1;
         } else {
             hi = mid;
@@ -447,11 +453,11 @@ static size_t extreme(tda_Span s, tda_Cmp cmp, void *ctx, bool max) {
     return best;
 }
 
-static bool matches_at(tda_Span s, tda_Span sub, size_t at, tda_Eq eq, void *ctx) {
-    assert(at + sub.len <= s.len);
+static bool matches_at(tda_Span s, tda_Span sub, size_t idx, tda_Eq eq, void *ctx) {
+    assert(idx + sub.len <= s.len);
 
     for (size_t j = 0; j < sub.len; ++j) {
-        if (!eq(tda_span_get(s, at + j), tda_span_get(sub, j), ctx)) {
+        if (!eq(tda_span_get(s, idx + j), tda_span_get(sub, j), ctx)) {
             return false;
         }
     }

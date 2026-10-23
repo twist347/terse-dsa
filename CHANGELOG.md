@@ -2,12 +2,40 @@
 
 ## 2.0.0 — unreleased
 
-Three changes break the API, each for a fault that 1.x could not fix without breaking
-it: an allocator could not tell "not in place" from "out of memory", an elem aligned
-past `max_align_t` sat wherever malloc put it, and a comparator could depend on nothing
-but its operands. See "Migrating from 1.x" below.
+Four changes break the API, each for a fault that 1.x could not fix without breaking
+it: every container and allocator was a handle the library allocated, so even an empty
+one could fail to be made and none could live inside a struct of the caller's; an
+allocator could not tell "not in place" from "out of memory"; an elem aligned past
+`max_align_t` sat wherever malloc put it; and a comparator could depend on nothing but
+its operands.
 
 ### Changed
+
+- **Containers and allocators are values.** `tda_Vec`, `tda_HMap`, `tda_Arena` and the
+  rest are structs in their headers that the caller holds — on the stack, in a struct,
+  in another container — built in place by `init` and released by `deinit`, which leaves
+  `= {}`, the inert state, and takes it again as a no-op. Nothing is allocated for the
+  object itself: an empty container allocates nothing and its `init` returns `void`, an
+  adapter holds its inner container in place, and a list on a pool needs blocks of one
+  node, no longer of the list struct too. Every constructor still writes through `out`.
+  The fields end in `_` and belong to the type. A copy of the struct is a second owner,
+  which each type warns of. With the struct public, the accessors that only read or
+  index — `len`, `get`, `front`, `to_span` and kin — are `static inline` in the header,
+  so `TDA_VEC_GET_AS` in a loop runs about five times faster.
+- **The allocator is part of a container's value.** `move_assign` and `swap` carry it
+  along with the elems, as Rust's `Vec<T, A>` does, so both are O(1) and cannot fail
+  whatever the two allocators: `move_assign` returns `void`, and `swap` no longer asserts
+  that the allocators match. `copy_assign` keeps the target's.
+- **An allocator is a type of its own, built in place, and hands out its interface**:
+  `tda_arena_init(parent, cap, &arena)`, then `TDA_AL(&arena)` for the `tda_Al *`. The
+  names lose their `al_`: `tda_Arena`, `tda_Pool`, `tda_Slab`, `tda_Debug` and
+  `tda_Log`, `tda_arena_*` where it was `tda_al_arena_*`, and `tda_ArenaStats` where it
+  was `tda_AlArenaStats`. Its ops take it by its own type —
+  `tda_arena_mark(&arena)`, `tda_pool_stats(&pool)`, `tda_debug_fail_after(&debug, n)`
+  — so the compiler checks what used to be checked at run time. It must not move once built: its `tda_Al`
+  points back at it. `from_buf` is `init_buf`, since it lends memory rather than copying
+  anything in, and gives the whole buffer to the blocks, with no header carved from
+  its front.
 
 - **`tda_Al` takes Zig's hooks and a layout in every call.** The table is `alloc`,
   `alloc_zeroed`, `resize`, `remap` and `dealloc`, each given a `tda_Layout`, the size and
@@ -15,15 +43,16 @@ but its operands. See "Migrating from 1.x" below.
   and answers `bool`; `remap` may move it and answers null when it has no way cheaper
   than a copy. Before, one null from `realloc` meant both "not in place" and "out of
   memory". Only `alloc` and `dealloc` are required: a missing hook means "never", and
-  the wrappers make do. Null from `alloc` now means out of memory and nothing else; an
-  alignment an allocator was not built to give asserts.
+  the wrappers make do. Null from `alloc` now means the request cannot be met — out of
+  memory, or a size past a fixed-size allocator's block — and nothing else; an alignment
+  an allocator was not built to give asserts.
 - The wrappers follow: `tda_alloc(al, layout)`, `tda_alloc_zeroed`, `tda_resize`,
   `tda_remap`, `tda_realloc(al, ptr, old, new_size)` and `tda_dealloc(al, ptr, layout)`.
   `tda_realloc` tries `resize`, then `remap`, then alloc, copy and dealloc. The typed
   macros take the layout from the type: `TDA_ALLOC`, `TDA_ALLOC_ZEROED`, `TDA_REALLOC`,
   `TDA_DEALLOC`.
 - **Every container is built on the layout of its elem**, not its size:
-  `tda_vec_new(TDA_LAYOUT_OF(T), al, &v)`, and the typed macros pass it themselves.
+  `tda_vec_init(TDA_LAYOUT_OF(T), al, &v)`, and the typed macros pass it themselves.
   Buffers and nodes are aligned to it, so an elem with `alignas(64)` lands on a multiple
   of 64 in a vec, a deque, a list or an hmap, on any allocator. Each container has an
   `elem_layout` accessor (`key_layout` and `val_layout` for hmap, `key_layout` for hset),
@@ -53,9 +82,9 @@ but its operands. See "Migrating from 1.x" below.
 - `alloc/arena` aligns each block to what it asks for and rounds nothing up, so small
   blocks sit back to back; the cap is taken as given, and the whole block asks its
   parent for no alignment, so any parent serves it.
-- `alloc/pool` is built on a block layout, `tda_al_pool_new(parent, block, count)` and
-  `tda_al_pool_from_buf(buf, size, block)`, so it holds one type at that type's
-  alignment; `tda_AlPoolStats` reports `block_align`. A block given back with a layout
+- `alloc/pool` is built on a block layout, `tda_pool_init(parent, block, count, &pool)`
+  and `tda_pool_init_buf(buf, size, block, &pool)`, so it holds one type at that type's
+  alignment; `tda_PoolStats` reports `block_align`. A block given back with a layout
   past the pool's blocks fails `TDA_EXPECT`.
 - `alloc/slab` serves an alignment from the classes it divides, and passes one past
   512 to the parent.
@@ -66,6 +95,15 @@ but its operands. See "Migrating from 1.x" below.
   the new spelling.
 - `tda_hmap_eq`, `tda_hset_eq` and the set ops take containers whose key ctx differ, a
   seed each, as long as their equalities agree.
+- **A few names follow the new rules.** `tda_bitset_new` is `tda_bitset_init_len`, as
+  `tda_arr_init_len`, so a bare `init` never fails. The `elem_size`, `key_size` and
+  `val_size` accessors are gone: the layout accessors give the size with the alignment,
+  `tda_vec_elem_layout(&v).size`. `tda_hset_intersect` and `tda_bitset_intersect` are
+  `intersection`, as `tda_span_set_intersection` is.
+- `tda_list_remove` is `tda_list_remove_node`, as `insert_before` and `splice_node` name
+  the node they take. `tda_ArenaStats.available` is `free` and `tda_PoolStats.block_count`
+  is `blocks`, matching the `used` and `free` beside them. The state of `tda_Rng` and
+  the fields of `tda_ArenaMark` end in `_`, as every field nobody reads directly does.
 - `tda_bitset_clear` and `tda_bitset_clear_all` are now `tda_bitset_reset` and
   `tda_bitset_reset_all`. Everywhere else in the library clear empties a container;
   a bit is reset, as in `std::bitset`.
@@ -83,11 +121,37 @@ but its operands. See "Migrating from 1.x" below.
   `tda_layout_is_type` and `tda_layout_eq`, and checked arithmetic for building one:
   `tda_layout_ckd_array`, `tda_layout_ckd_extend` and `tda_layout_ckd_pad`, which lay
   out an array or a struct's members as C does.
-- `tda_list_block_layout`, the block a list needs from an allocator whose blocks are all
-  one layout, such as `alloc/pool`: the larger size and alignment of the list struct and
-  one node. Before, the struct was opaque and the node size unwritten, so the block was
-  found by trial.
+- `tda_list_node_layout`, the block a list needs from an allocator whose blocks are all
+  one layout, such as `alloc/pool`: the layout of one node. Before, the node size was
+  unwritten, so the block was found by trial.
+- `tda_vec_push_assume_cap`, `tda_vec_add_one` and `tda_vec_add_one_assume_cap`, as
+  Zig's `ArrayList` has them: after one `tda_vec_reserve`, a push into the reserved room
+  cannot fail and returns nothing to check, and `add_one` hands out the new elem's slot
+  to fill in place rather than copy a value in. `TDA_VEC_PUSH_ASSUME_CAP` and
+  `TDA_VEC_ADD_ONE_ASSUME_CAP_AS` are their typed forms.
+- `tda_span_split_at` and `tda_span_split_at_mut`, Rust's `split_at`: a view cut in two
+  at an index, in O(1).
 - `tda_pqueue_cmp_ctx`, `tda_hmap_key_ctx` and `tda_hset_key_ctx`.
+- `tda_debug_flush_quarantine`, to give the quarantined blocks back before the parent is
+  reset or rewound: an arena's reset would otherwise hand them out again while the
+  quarantine still watches them, and report the new owner's writes as misuse.
+- `TDA_AL(&x)`, the `tda_Al *` of a `tda_Arena`, `tda_Pool`, `tda_Slab`, `tda_Debug` or
+  `tda_Log`; any other type does not compile.
+- A moved or copied allocator is caught under `TDA_HARDENED` as well as under assert:
+  each of its own functions, `deinit` included, checks that its `tda_Al` still points
+  back at it.
+
+### Fixed
+
+- `tda_span_upper_bound`, `tda_span_equal_range` and `tda_span_binary_search` asked the
+  comparator for "equal" as well as "less", so one that never answers "greater", as a
+  C++ less-than, put the upper bound past larger elems and found keys that were not
+  there. So did `tda_span_inplace_merge` without a buffer, which bisects through them.
+  The bisecting ops now ask only "less", and `binary_search` reports the first of
+  equal elems.
+- `tda_vec_insert` and `tda_deque_insert` asserted that 'val' sat on the elem's
+  alignment, which push and set do not ask; a value read from a packed buffer now
+  inserts as it pushes.
 
 ### Documentation
 

@@ -4,6 +4,7 @@
 #include "tda/core/rng.h"
 
 #include "support/tagged.h"
+#include "support/status.h"
 
 #include <unity.h>
 
@@ -31,14 +32,14 @@ static void sorted_copy(int32_t *dst, const int32_t *src, size_t n) {
 // true when both hold the same elems in any order; a reordering algorithm must never
 // invent, drop or duplicate one
 static bool same_elems(const int32_t *a, const int32_t *b, size_t n) {
-    int32_t x[64];
-    int32_t y[64];
+    int32_t sorted_a[64];
+    int32_t sorted_b[64];
     TEST_ASSERT_TRUE(n <= 64);
 
-    sorted_copy(x, a, n);
-    sorted_copy(y, b, n);
+    sorted_copy(sorted_a, a, n);
+    sorted_copy(sorted_b, b, n);
 
-    return memcmp(x, y, n * sizeof(int32_t)) == 0;
+    return memcmp(sorted_a, sorted_b, n * sizeof(int32_t)) == 0;
 }
 
 /* ========== insertion_sort ========== */
@@ -354,60 +355,60 @@ static void test_sort_stable_stays_within_the_subspan() {
 }
 
 static void test_sort_stable_works_through_an_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
     int32_t buf[5] = {5, 4, 3, 2, 1};
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32, nullptr, arena)
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32, nullptr, TDA_AL(&arena))
     );
 
     constexpr int32_t want[5] = {1, 2, 3, 4, 5};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);
 
-    tda_al_arena_drop(arena);
+    tda_arena_deinit(&arena);
 }
 
 // the scratch buffer cannot be had: the error is reported and the span left alone
 static void test_sort_stable_reports_an_exhausted_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 16);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 16, &arena));
 
     int32_t buf[8] = {8, 7, 6, 5, 4, 3, 2, 1};
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_ERR_NO_MEM,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), tda_cmp_i32, nullptr, arena)
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), tda_cmp_i32, nullptr, TDA_AL(&arena))
     );
 
     constexpr int32_t want[8] = {8, 7, 6, 5, 4, 3, 2, 1};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 8);
 
-    tda_al_arena_drop(arena);
+    tda_arena_deinit(&arena);
 }
 
 // nothing to merge means nothing to allocate, so an allocator with no room must do
 static void test_sort_stable_of_empty_and_single_needs_no_scratch() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 16);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 16, &arena));
 
     int32_t buf[1] = {42};
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, nullptr, arena)
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, nullptr, TDA_AL(&arena))
     );
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, nullptr, arena)
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, nullptr, TDA_AL(&arena))
     );
 
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
-    TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_size_t(0, tda_arena_stats(&arena).used);
 
-    tda_al_arena_drop(arena);
+    tda_arena_deinit(&arena);
 }
 
 /* ========== partial_sort ========== */
@@ -558,7 +559,7 @@ static constexpr size_t SCALE_LIMIT = 3 * SCALE_N_LOG_N;
 
 static size_t cmp_calls = 0;
 
-static int cmp_i32_counting(const void *a, const void *b, void *) {
+static int cmp_counting_i32(const void *a, const void *b, void *) {
     ++cmp_calls;
 
     return tda_cmp_i32(a, b, nullptr);
@@ -571,14 +572,14 @@ static void test_sort_stays_n_log_n_on_ordered_input() {
         buf[i] = (int32_t) i;
     }
     cmp_calls = 0;
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting, nullptr);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_counting_i32, nullptr);
     TEST_ASSERT_LESS_THAN_size_t(SCALE_LIMIT, cmp_calls);
 
     for (size_t i = 0; i < SCALE_N; ++i) {
         buf[i] = (int32_t) (SCALE_N - i);
     }
     cmp_calls = 0;
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting, nullptr);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_counting_i32, nullptr);
     TEST_ASSERT_LESS_THAN_size_t(SCALE_LIMIT, cmp_calls);
 }
 
@@ -590,7 +591,7 @@ static void test_sort_stays_linear_on_equal_keys() {
     }
 
     cmp_calls = 0;
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting, nullptr);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_counting_i32, nullptr);
 
     TEST_ASSERT_LESS_THAN_size_t(8 * SCALE_N, cmp_calls);
 }
@@ -603,14 +604,14 @@ static void test_nth_elem_stays_linear() {
         buf[i] = (int32_t) i;
     }
     cmp_calls = 0;
-    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), SCALE_N / 2, cmp_i32_counting, nullptr);
+    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), SCALE_N / 2, cmp_counting_i32, nullptr);
     TEST_ASSERT_LESS_THAN_size_t(8 * SCALE_N, cmp_calls);
 
     for (size_t i = 0; i < SCALE_N; ++i) {
         buf[i] = 7;
     }
     cmp_calls = 0;
-    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), SCALE_N / 2, cmp_i32_counting, nullptr);
+    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), SCALE_N / 2, cmp_counting_i32, nullptr);
     TEST_ASSERT_LESS_THAN_size_t(8 * SCALE_N, cmp_calls);
 }
 

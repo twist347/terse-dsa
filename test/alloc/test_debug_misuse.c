@@ -20,6 +20,9 @@ static tda_Layout bytes(size_t size) {
     return (tda_Layout){.size = size, .align = 8};
 }
 
+// the allocator every case runs on; a case that needs its own ops reaches it here
+static tda_Debug debug;
+
 static void wrong_size(tda_Al *al) {
     void *p = tda_alloc(al, bytes(32));
     tda_dealloc(al, p, bytes(24));
@@ -64,7 +67,7 @@ static void write_after_free(tda_Al *al) {
     unsigned char *p = tda_alloc(al, bytes(32));
     tda_dealloc(al, p, bytes(32));
     p[5] = 0; // quarantined, so the parent has not got it back yet
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 static void stale_realloc(tda_Al *al) {
@@ -72,11 +75,11 @@ static void stale_realloc(tda_Al *al) {
     unsigned char *q = tda_realloc(al, p, bytes(8), 16);
     p[0] = 1; // the old block, kept across a growth
     tda_dealloc(al, q, bytes(16));
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 static void break_at(tda_Al *al) {
-    tda_al_debug_break_at(al, 2);
+    tda_debug_break_at(&debug, 2);
     void *p = tda_alloc(al, bytes(8));
     void *q = tda_alloc(al, bytes(8));
     (void) p;
@@ -104,10 +107,8 @@ int main(int argc, char **argv) {
         {"break_at", break_at},
     };
 
-    tda_Al *al = tda_al_debug_new(tda_al_default());
-    if (!al) {
-        return 2;
-    }
+    tda_debug_init(tda_al_default(), &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     signal(SIGABRT, on_abort);
 

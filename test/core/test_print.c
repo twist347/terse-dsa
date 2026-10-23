@@ -14,11 +14,11 @@ void tearDown() {
 
 // A printer writes to a stream, so a case reads one back. tmpfile is the only portable
 // choice: fmemopen is POSIX, and the library builds with extensions off.
-static void capture(char *buf, size_t cap, tda_FPrint fprint, const void *x) {
+static void capture(char *buf, size_t cap, tda_FPrint fprint, const void *val) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    fprint(stream, x);
+    fprint(stream, val);
     rewind(stream);
 
     const size_t n = fread(buf, 1, cap - 1, stream);
@@ -26,9 +26,9 @@ static void capture(char *buf, size_t cap, tda_FPrint fprint, const void *x) {
     fclose(stream);
 }
 
-static void assert_prints(const char *expected, tda_FPrint fprint, const void *x) {
+static void assert_prints(const char *expected, tda_FPrint fprint, const void *val) {
     char buf[64];
-    capture(buf, sizeof(buf), fprint, x);
+    capture(buf, sizeof(buf), fprint, val);
 
     TEST_ASSERT_EQUAL_STRING(expected, buf);
 }

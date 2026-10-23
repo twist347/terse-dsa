@@ -39,9 +39,9 @@ bool tda_span_eq_by(tda_Span a, tda_Span b, tda_Eq eq, void *ctx) {
     }
 
     for (size_t i = 0; i < a.len; ++i) {
-        const void *x = tda_span_get(a, i);
-        const void *y = tda_span_get(b, i);
-        if (!eq(x, y, ctx)) {
+        const void *lhs = tda_span_get(a, i);
+        const void *rhs = tda_span_get(b, i);
+        if (!eq(lhs, rhs, ctx)) {
             return false;
         }
     }

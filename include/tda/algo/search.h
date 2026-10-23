@@ -18,6 +18,10 @@
 /// The bound ops also bisect but answer where, not whether. A find writes 'out_idx' and
 /// returns whether it hit; a miss is not an error and leaves 'out_idx' unchanged.
 ///
+/// The bisecting ops ask 'cmp' only whether one value is less than another, so a
+/// comparator that never answers "greater", such as one carried over from a C++
+/// less-than, gives the same answers as a full one.
+///
 /// @par Example
 /// @snippet algo/example_search.c pred
 /// @snippet algo/example_search.c find
@@ -189,7 +193,7 @@ size_t tda_span_upper_bound(tda_Span s, const void *key, tda_Cmp cmp, void *ctx)
 /// @param key the value to look for
 /// @param cmp the order
 /// @param ctx passed to every call of 'cmp'; may be null
-/// @param[out] out_idx an index holding it, on a hit; with duplicates, no particular one
+/// @param[out] out_idx where it is, on a hit; with duplicates, the first of them
 /// @return whether it is there
 /// @bigo{log n}
 [[nodiscard]] TDA_API

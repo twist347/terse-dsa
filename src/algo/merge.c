@@ -33,28 +33,28 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *
     TDA_EXPECT(dst.len == a.len + b.len);
 
     size_t i = 0, j = 0;
-    size_t out = 0;
+    size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *l = tda_span_get(a, i);
-        const void *r = tda_span_get(b, j);
+        const void *lhs = tda_span_get(a, i);
+        const void *rhs = tda_span_get(b, j);
 
         // a tie takes from 'a', keeping equal elems in order; this is what makes
         // tda_span_sort_stable stable
-        if (!tda_right_goes_first(cmp, ctx, l, r)) {
-            out = tda_emit(dst, out, l);
+        if (!tda_right_goes_first(cmp, ctx, lhs, rhs)) {
+            write = tda_emit(dst, write, lhs);
             ++i;
         } else {
-            out = tda_emit(dst, out, r);
+            write = tda_emit(dst, write, rhs);
             ++j;
         }
     }
 
     // at most one of the two has elems left; either may be the one
-    out = tda_emit_rest(dst, out, a, i);
-    out = tda_emit_rest(dst, out, b, j);
+    write = tda_emit_rest(dst, write, a, i);
+    write = tda_emit_rest(dst, write, b, j);
 
-    assert(out == dst.len);
+    assert(write == dst.len);
 }
 
 /* ========== inplace merge ========== */
@@ -109,25 +109,25 @@ static void merge_in_place(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx) {
     }
 
     if (s.len == 2) {
-        const tda_Span cs = tda_span_mut_to_span(s);
-        if (tda_right_goes_first(cmp, ctx, tda_span_get(cs, 0), tda_span_get(cs, 1))) {
+        const tda_Span view = tda_span_mut_to_span(s);
+        if (tda_right_goes_first(cmp, ctx, tda_span_get(view, 0), tda_span_get(view, 1))) {
             tda_span_swap_elems(s, 0, 1);
         }
         return;
     }
 
-    const tda_Span cs = tda_span_mut_to_span(s);
+    const tda_Span view = tda_span_mut_to_span(s);
     size_t left_cut;
     size_t right_cut;
 
     if (left_len > right_len) {
         left_cut = left_len / 2;
-        const tda_Span right = tda_span_sub(cs, mid, right_len);
-        right_cut = mid + tda_span_lower_bound(right, tda_span_get(cs, left_cut), cmp, ctx);
+        const tda_Span right = tda_span_sub(view, mid, right_len);
+        right_cut = mid + tda_span_lower_bound(right, tda_span_get(view, left_cut), cmp, ctx);
     } else {
         right_cut = mid + right_len / 2;
-        const tda_Span left = tda_span_sub(cs, 0, mid);
-        left_cut = tda_span_upper_bound(left, tda_span_get(cs, right_cut), cmp, ctx);
+        const tda_Span left = tda_span_sub(view, 0, mid);
+        left_cut = tda_span_upper_bound(left, tda_span_get(view, right_cut), cmp, ctx);
     }
 
     // swap the two inner pieces; new_mid is the boundary between the two sub-merges
@@ -152,60 +152,60 @@ static void merge_buffered(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, vo
     const size_t elem_size = s.elem.size;
     const size_t left_len = mid;
     const size_t right_len = s.len - mid;
-    const tda_Span cs = tda_span_mut_to_span(s);
+    const tda_Span view = tda_span_mut_to_span(s);
 
     if (left_len <= right_len) {
-        memcpy(buf, tda_span_get(cs, 0), left_len * elem_size);
+        memcpy(buf, tda_span_get(view, 0), left_len * elem_size);
         const tda_Span parked = tda_span_from_data(buf, left_len, s.elem);
 
-        size_t w = 0;
-        size_t b = 0;
-        size_t r = mid;
+        size_t write = 0;
+        size_t parked_idx = 0;
+        size_t right_idx = mid;
 
-        while (b < left_len && r < s.len) {
+        while (parked_idx < left_len && right_idx < s.len) {
             // a tie keeps the buffered left run ahead of an equal elem on the right
-            const bool take_right = tda_right_goes_first(cmp, ctx, tda_span_get(parked, b), tda_span_get(cs, r));
+            const bool take_right = tda_right_goes_first(cmp, ctx, tda_span_get(parked, parked_idx), tda_span_get(view, right_idx));
 
-            memcpy(tda_span_get_mut(s, w), take_right ? tda_span_get(cs, r) : tda_span_get(parked, b), elem_size);
-            take_right ? ++r : ++b;
-            ++w;
+            memcpy(tda_span_get_mut(s, write), take_right ? tda_span_get(view, right_idx) : tda_span_get(parked, parked_idx), elem_size);
+            take_right ? ++right_idx : ++parked_idx;
+            ++write;
         }
 
-        while (b < left_len) {
-            memcpy(tda_span_get_mut(s, w), tda_span_get(parked, b), elem_size);
-            ++b;
-            ++w;
+        while (parked_idx < left_len) {
+            memcpy(tda_span_get_mut(s, write), tda_span_get(parked, parked_idx), elem_size);
+            ++parked_idx;
+            ++write;
         }
 
         return;
     }
 
-    memcpy(buf, tda_span_get(cs, mid), right_len * elem_size);
+    memcpy(buf, tda_span_get(view, mid), right_len * elem_size);
     const tda_Span parked = tda_span_from_data(buf, right_len, s.elem);
 
-    size_t w = s.len;
-    size_t l = mid;
-    size_t b = right_len;
+    size_t write = s.len;
+    size_t left_idx = mid;
+    size_t parked_idx = right_len;
 
-    while (l > 0 && b > 0) {
+    while (left_idx > 0 && parked_idx > 0) {
         // filling from the back, the left elem is placed only when the right one goes
         // before it, so on a tie the buffered right elem lands later and the left run
         // stays first
-        const bool take_left = tda_right_goes_first(cmp, ctx, tda_span_get(cs, l - 1), tda_span_get(parked, b - 1));
+        const bool take_left = tda_right_goes_first(cmp, ctx, tda_span_get(view, left_idx - 1), tda_span_get(parked, parked_idx - 1));
 
-        --w;
+        --write;
         if (take_left) {
-            --l;
-            memcpy(tda_span_get_mut(s, w), tda_span_get(cs, l), elem_size);
+            --left_idx;
+            memcpy(tda_span_get_mut(s, write), tda_span_get(view, left_idx), elem_size);
         } else {
-            --b;
-            memcpy(tda_span_get_mut(s, w), tda_span_get(parked, b), elem_size);
+            --parked_idx;
+            memcpy(tda_span_get_mut(s, write), tda_span_get(parked, parked_idx), elem_size);
         }
     }
 
-    while (b > 0) {
-        --b;
-        --w;
-        memcpy(tda_span_get_mut(s, w), tda_span_get(parked, b), elem_size);
+    while (parked_idx > 0) {
+        --parked_idx;
+        --write;
+        memcpy(tda_span_get_mut(s, write), tda_span_get(parked, parked_idx), elem_size);
     }
 }

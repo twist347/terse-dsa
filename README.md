@@ -18,44 +18,46 @@ The reference lives at [twist347.github.io/terse-dsa](https://twist347.github.io
 int main() {
     unsigned char mem[1024];
 
-    tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem)); // on the stack, no heap anywhere
-    if (!arena) {
-        return 1;
-    }
+    // the arena and the vec are values on the stack; the vec's elems live in 'mem'
+    tda_Arena arena;
+    tda_arena_init_buf(mem, sizeof(mem), &arena);
 
-    int rc = 1;
-    tda_Vec *vec = nullptr;
-    if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, arena, &vec, 5, 3, 1, 4, 2))) {
-        goto out; // the arena is held by now, so no bare return
+    tda_Vec vec;
+    if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, TDA_AL(&arena), &vec, 5, 3, 1, 4, 2))) {
+        return 1; // 'vec' is written only on success, and the arena holds no heap
     }
 
     // every comparator takes a ctx beside it; the ready-made ones need none
-    tda_span_sort(tda_vec_to_span_mut(vec), tda_cmp_i32, nullptr);
+    tda_span_sort(tda_vec_to_span_mut(&vec), tda_cmp_i32, nullptr);
 
     size_t idx;
-    if (tda_span_binary_search(tda_vec_to_span(vec), &(int32_t){4}, tda_cmp_i32, nullptr, &idx)) {
+    if (tda_span_binary_search(tda_vec_to_span(&vec), &(int32_t){4}, tda_cmp_i32, nullptr, &idx)) {
         printf("4 is at %zu\n", idx); // 4 is at 3
     }
-    rc = 0;
 
-out:
-    tda_vec_drop(vec);
-    tda_al_arena_drop(arena);
-    return rc;
+    tda_vec_deinit(&vec);
+    tda_arena_deinit(&arena);
+
+    return 0;
 }
 ```
 
 ## Design
 
-Two rules shape the whole API:
+Three rules shape the whole API:
 
 - **Memory is explicit and swappable.** Nothing allocates on its own — every container is
   handed a `tda_Al *` and uses only that. Swapping in an arena, a slab or a logging
   allocator is a one-line change at the call site. A pool hands out blocks of one size,
-  so of the containers only a list runs on it, with blocks of `tda_list_block_layout`; a
+  so of the containers only a list runs on it, with blocks of `tda_list_node_layout`; a
   slab keeps a pool per size class, and any container runs on it. Every request carries
   a size and an alignment, so an elem aligned past malloc's own lands aligned in any
   container, on any allocator.
+- **Containers and allocators are values.** A `tda_Vec` or a `tda_Arena` is a struct
+  the caller holds wherever it likes — on the stack, in a struct of its own — built in
+  place by an `init` and released by `deinit`. Nothing is allocated for the object
+  itself, so an empty container costs nothing and cannot fail to be made. A copy of the
+  struct would be a second owner, so a value changes hands through `move_assign`.
 - **Errors cannot be dropped.** A fallible operation returns `tda_Status` and writes its
   result through a trailing `out`; `[[nodiscard]]` makes ignoring it a warning every
   compiler raises unasked, and a compile error under `-Werror`. Broken preconditions are
@@ -200,24 +202,30 @@ target_link_libraries(app PRIVATE tda::tda)
 
 ## Allocators, in three rules
 
-A container is built on one `tda_Al *` and never touches another:
+A container keeps the `tda_Al *` it was built on, and the allocator is part of its value:
 
 - **A copy is born on its source's allocator** — `tda_vec_copy_with` names another one.
-- **An assignment keeps the target's.** On one allocator a move hands the block over and
-  cannot fail; across two it costs `n` and may return `TDA_STATUS_ERR_NO_MEM`, leaving
-  both sides as they were.
-- **`swap` wants both sides on one allocator** — it is O(1) and returns nothing, so a
-  mismatch is an `assert`, exactly as C++ leaves it undefined when
-  `propagate_on_container_swap` is false. Across two, copy with `copy_with` and hand the
-  results over with `move_assign`.
+- **A move carries the allocator along**, as Rust's `Vec<T, A>` does: the target takes
+  the block and the allocator it came from, the source is left empty on that allocator,
+  and nothing is copied, so it is O(1) and cannot fail on any two allocators.
+  `copy_assign` keeps the target's allocator.
+- **`swap` exchanges allocators too**, so each block still goes back to the one that made
+  it, whatever the two sides were built on.
+
+An allocator is a value as well — `tda_Arena`, `tda_Pool`, `tda_Slab` — and its
+`tda_Al` points back at it, so it must stay where it was built while anything uses it.
 
 ## What it does not do
 
-- **Elems are bytes.** A container copies `elem_size` bytes in and out, and drops them by
+- **Elems are bytes.** A container copies `elem.size` bytes in and out, and drops them by
   releasing the block — it never calls anything of yours. A `tda_Vec` of `strdup`ed
   `char *` leaks unless the caller frees them first.
+- **No elem has size 0.** Every layout a container or a span takes is a type's, with a
+  size above zero; Rust's zero-sized types have no C counterpart, and a set of nothing
+  is a counter.
 - **Nothing is thread-safe.** No container takes a lock; sharing one across threads is the
-  caller's problem.
+  caller's problem. So is an allocator under containers on several threads: each growth
+  reaches it, even when the containers themselves are never shared.
 
 ## License
 

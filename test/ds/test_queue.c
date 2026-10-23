@@ -33,12 +33,12 @@ static void push_int(tda_Queue *q, int32_t val) {
 
 // int32_t queue over the default allocator, filled one push at a time
 [[nodiscard]]
-static tda_Queue *make_queue(const int32_t *src, size_t n) {
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW(int32_t, tda_al_default(), &q));
+static tda_Queue make_queue(const int32_t *src, size_t n) {
+    tda_Queue q = {};
+    TDA_QUEUE_INIT(int32_t, tda_al_default(), &q);
 
     for (size_t i = 0; i < n; ++i) {
-        push_int(q, src[i]);
+        push_int(&q, src[i]);
     }
 
     return q;
@@ -46,8 +46,8 @@ static tda_Queue *make_queue(const int32_t *src, size_t n) {
 
 // the same elems handed over at once
 [[nodiscard]]
-static tda_Queue *make_queue_from(const int32_t *src, size_t n) {
-    tda_Queue *q = nullptr;
+static tda_Queue make_queue_from(const int32_t *src, size_t n) {
+    tda_Queue q = {};
     TDA_TEST_OK(TDA_QUEUE_FROM_DATA(int32_t, src, n, tda_al_default(), &q));
 
     return q;
@@ -57,23 +57,23 @@ static tda_Queue *make_queue_from(const int32_t *src, size_t n) {
 // The queue hides the ring, so the capacity is the proof: two pops free the two leading
 // slots and the two pushes after them fit without growing, which needs a wrap around
 [[nodiscard]]
-static tda_Queue *make_wrapped() {
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW_CAP(int32_t, 4, tda_al_default(), &q));
+static tda_Queue make_wrapped() {
+    tda_Queue q = {};
+    TDA_TEST_OK(TDA_QUEUE_INIT_CAP(int32_t, 4, tda_al_default(), &q));
 
-    push_int(q, 1);
-    push_int(q, 2);
-    push_int(q, 10);
-    push_int(q, 20);
+    push_int(&q, 1);
+    push_int(&q, 2);
+    push_int(&q, 10);
+    push_int(&q, 20);
 
-    tda_queue_pop(q);
-    tda_queue_pop(q);
+    tda_queue_pop(&q);
+    tda_queue_pop(&q);
 
-    push_int(q, 30);
-    push_int(q, 40);
+    push_int(&q, 30);
+    push_int(&q, 40);
 
-    TEST_ASSERT_EQUAL_size_t(4, tda_queue_cap(q));
-    TEST_ASSERT_EQUAL_size_t(4, tda_queue_len(q));
+    TEST_ASSERT_EQUAL_size_t(4, tda_queue_cap(&q));
+    TEST_ASSERT_EQUAL_size_t(4, tda_queue_len(&q));
 
     return q;
 }
@@ -106,107 +106,108 @@ static void assert_drains(tda_Queue *q, const int32_t *want, size_t n) {
 
 /* ========== lifetime ========== */
 
-static void test_new_starts_empty() {
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW(int32_t, tda_al_default(), &q));
+static void test_init_starts_empty() {
+    tda_Queue q = {};
+    TDA_QUEUE_INIT(int32_t, tda_al_default(), &q);
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(q));
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_queue_elem_size(q));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_queue_al(q));
+    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(&q));
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_queue_elem_layout(&q).size);
+    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_queue_al(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
-static void test_new_cap_reserves_without_length() {
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW_CAP(int32_t, 16, tda_al_default(), &q));
+static void test_init_cap_reserves_without_length() {
+    tda_Queue q = {};
+    TDA_TEST_OK(TDA_QUEUE_INIT_CAP(int32_t, 16, tda_al_default(), &q));
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(q));
-    TEST_ASSERT_EQUAL_size_t(16, tda_queue_cap(q));
+    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(&q));
+    TEST_ASSERT_EQUAL_size_t(16, tda_queue_cap(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // the queue takes them in the order written, so the first written is served first
 static void test_from_data_keeps_arrival_order() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
 
-    assert_elems(q, SPREAD, SPREAD_LEN);
-    TEST_ASSERT_EQUAL_INT32(SPREAD[0], *TDA_QUEUE_FRONT_AS(int32_t, q));
-    TEST_ASSERT_EQUAL_INT32(SPREAD[SPREAD_LEN - 1], *TDA_QUEUE_BACK_AS(int32_t, q));
+    assert_elems(&q, SPREAD, SPREAD_LEN);
+    TEST_ASSERT_EQUAL_INT32(SPREAD[0], *TDA_QUEUE_FRONT_AS(int32_t, &q));
+    TEST_ASSERT_EQUAL_INT32(SPREAD[SPREAD_LEN - 1], *TDA_QUEUE_BACK_AS(int32_t, &q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_from_data_empty_stays_empty() {
-    tda_Queue *q = nullptr;
+    tda_Queue q = {};
     TDA_TEST_OK(TDA_QUEUE_FROM_DATA(int32_t, nullptr, 0, tda_al_default(), &q));
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(q));
+    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_from_span_copies_the_view() {
     constexpr int32_t src[4] = {9, 8, 7, 6};
 
-    tda_Queue *q = nullptr;
+    tda_Queue q = {};
     TDA_TEST_OK(tda_queue_from_span(TDA_SPAN_FROM_DATA(int32_t, src, 4), tda_al_default(), &q));
 
-    assert_elems(q, src, 4);
+    assert_elems(&q, src, 4);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // an elem wider than a word must travel whole, not just its first field
 static void test_from_data_copies_whole_elems() {
     constexpr Pair src[3] = {{1, 10}, {2, 20}, {3, 30}};
 
-    tda_Queue *q = nullptr;
+    tda_Queue q = {};
     TDA_TEST_OK(TDA_QUEUE_FROM_DATA(Pair, src, 3, tda_al_default(), &q));
 
-    TEST_ASSERT_EQUAL_size_t(sizeof(Pair), tda_queue_elem_size(q));
+    TEST_ASSERT_EQUAL_size_t(sizeof(Pair), tda_queue_elem_layout(&q).size);
 
     Pair got[3];
-    tda_queue_copy_to_span(q, TDA_SPAN_FROM_DATA_MUT(Pair, got, 3));
+    tda_queue_copy_to_span(&q, TDA_SPAN_FROM_DATA_MUT(Pair, got, 3));
     for (size_t i = 0; i < 3; ++i) {
         TEST_ASSERT_EQUAL_INT64(src[i].a, got[i].a);
         TEST_ASSERT_EQUAL_INT64(src[i].b, got[i].b);
     }
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
-static void test_drop_null_is_noop() {
-    tda_queue_drop(nullptr);
+static void test_deinit_of_an_inert_value_is_noop() {
+    tda_Queue x = {};
+    tda_queue_deinit(&x);
+    tda_queue_deinit(&x);
 }
 
-// a filled queue holds three blocks (the deque, its buffer, and the header hiding the
-// deque) and drop must free all three. The default allocator would not notice a leak, so
-// a probe counts
-static void test_drop_hands_back_everything_it_took() {
+// a filled queue holds one block, the buffer of its deque, and deinit must free it. The
+// default allocator would not notice a leak, so a probe counts
+static void test_deinit_hands_back_everything() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Queue *q = nullptr;
+    tda_Queue q = {};
     TDA_TEST_OK(TDA_QUEUE_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, &al, &q));
-    TEST_ASSERT_EQUAL_size_t(3, probe.live);
+    TEST_ASSERT_EQUAL_size_t(1, probe.live);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
-    TEST_ASSERT_EQUAL_size_t(3, probe.dealloc_calls);
+    TEST_ASSERT_EQUAL_size_t(1, probe.dealloc_calls);
 }
 
 /* ========== fifo ========== */
 
 static void test_pushes_leave_in_the_order_they_arrived() {
-    tda_Queue *q = make_queue(SPREAD, SPREAD_LEN);
+    tda_Queue q = make_queue(SPREAD, SPREAD_LEN);
 
-    assert_drains(q, SPREAD, SPREAD_LEN);
+    assert_drains(&q, SPREAD, SPREAD_LEN);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // growth relocates every elem, so the order must survive a move of the whole ring; this
@@ -217,350 +218,350 @@ static void test_order_survives_growth() {
         want[i] = i * 3;
     }
 
-    tda_Queue *q = make_queue(want, 64);
+    tda_Queue q = make_queue(want, 64);
 
-    TEST_ASSERT_TRUE(tda_queue_cap(q) >= 64);
-    assert_drains(q, want, 64);
+    TEST_ASSERT_TRUE(tda_queue_cap(&q) >= 64);
+    assert_drains(&q, want, 64);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // the ring is reused as it empties: pushing and popping in step keeps the queue short
 // while far more elems than it holds pass through, so the buffer wraps many times
 static void test_pushing_and_popping_in_step_stays_in_order() {
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW(int32_t, tda_al_default(), &q));
+    tda_Queue q = {};
+    TDA_QUEUE_INIT(int32_t, tda_al_default(), &q);
 
-    push_int(q, 0);
-    push_int(q, 1);
-    push_int(q, 2);
+    push_int(&q, 0);
+    push_int(&q, 1);
+    push_int(&q, 2);
 
     for (int32_t i = 3; i < 100; ++i) {
-        TEST_ASSERT_EQUAL_INT32(i - 3, *TDA_QUEUE_FRONT_AS(int32_t, q));
-        tda_queue_pop(q);
-        push_int(q, i);
+        TEST_ASSERT_EQUAL_INT32(i - 3, *TDA_QUEUE_FRONT_AS(int32_t, &q));
+        tda_queue_pop(&q);
+        push_int(&q, i);
 
-        TEST_ASSERT_EQUAL_size_t(3, tda_queue_len(q));
-        TEST_ASSERT_EQUAL_INT32(i, *TDA_QUEUE_BACK_AS(int32_t, q));
+        TEST_ASSERT_EQUAL_size_t(3, tda_queue_len(&q));
+        TEST_ASSERT_EQUAL_INT32(i, *TDA_QUEUE_BACK_AS(int32_t, &q));
     }
 
     constexpr int32_t want[3] = {97, 98, 99};
-    assert_drains(q, want, 3);
+    assert_drains(&q, want, 3);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_pushes_after_a_full_drain_are_ordered_again() {
-    tda_Queue *q = make_queue(SPREAD, SPREAD_LEN);
-    assert_drains(q, SPREAD, SPREAD_LEN);
+    tda_Queue q = make_queue(SPREAD, SPREAD_LEN);
+    assert_drains(&q, SPREAD, SPREAD_LEN);
 
     constexpr int32_t again[4] = {41, 42, 43, 44};
     for (size_t i = 0; i < 4; ++i) {
-        push_int(q, again[i]);
+        push_int(&q, again[i]);
     }
-    assert_drains(q, again, 4);
+    assert_drains(&q, again, 4);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // equal elems are distinct: every copy pushed must come back
 static void test_duplicates_all_come_back() {
     constexpr int32_t src[6] = {7, 7, 7, 7, 7, 7};
 
-    tda_Queue *q = make_queue(src, 6);
+    tda_Queue q = make_queue(src, 6);
 
-    assert_drains(q, src, 6);
+    assert_drains(&q, src, 6);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_a_wrapped_queue_drains_in_order() {
-    tda_Queue *q = make_wrapped();
+    tda_Queue q = make_wrapped();
 
     constexpr int32_t want[4] = {10, 20, 30, 40};
-    assert_drains(q, want, 4);
+    assert_drains(&q, want, 4);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // the elem that has to move is the one that wrapped, so growing a split ring is where
 // the order is easiest to lose
 static void test_a_wrapped_queue_keeps_its_order_through_growth() {
-    tda_Queue *q = make_wrapped();
+    tda_Queue q = make_wrapped();
 
-    push_int(q, 50);
-    TEST_ASSERT_TRUE(tda_queue_cap(q) > 4);
+    push_int(&q, 50);
+    TEST_ASSERT_TRUE(tda_queue_cap(&q) > 4);
 
     constexpr int32_t want[5] = {10, 20, 30, 40, 50};
-    assert_drains(q, want, 5);
+    assert_drains(&q, want, 5);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // pop_to hands out what front + pop would have read, oldest first, across the seam
 static void test_pop_to_hands_the_front_out() {
-    tda_Queue *q = make_wrapped(); // 10, 20, 30, 40
+    tda_Queue q = make_wrapped(); // 10, 20, 30, 40
 
     int32_t out = -1;
-    tda_queue_pop_to(q, &out);
+    tda_queue_pop_to(&q, &out);
     TEST_ASSERT_EQUAL_INT32(10, out);
 
-    tda_queue_pop_to(q, &out);
+    tda_queue_pop_to(&q, &out);
     TEST_ASSERT_EQUAL_INT32(20, out);
 
-    assert_elems(q, (int32_t[]){30, 40}, 2);
-    TEST_ASSERT_EQUAL_size_t(4, tda_queue_cap(q));
+    assert_elems(&q, (int32_t[]){30, 40}, 2);
+    TEST_ASSERT_EQUAL_size_t(4, tda_queue_cap(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_pop_to_macro_moves_whole_elems() {
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW(Pair, tda_al_default(), &q));
-    TDA_TEST_OK(tda_queue_push(q, &(Pair){1, 2}));
-    TDA_TEST_OK(tda_queue_push(q, &(Pair){3, 4}));
+    tda_Queue q = {};
+    TDA_QUEUE_INIT(Pair, tda_al_default(), &q);
+    TDA_TEST_OK(tda_queue_push(&q, &(Pair){1, 2}));
+    TDA_TEST_OK(tda_queue_push(&q, &(Pair){3, 4}));
 
     Pair out = {0, 0};
-    TDA_QUEUE_POP_TO(Pair, q, &out);
+    TDA_QUEUE_POP_TO(Pair, &q, &out);
 
     TEST_ASSERT_EQUAL_INT64(1, out.a);
     TEST_ASSERT_EQUAL_INT64(2, out.b);
-    TEST_ASSERT_EQUAL_size_t(1, tda_queue_len(q));
+    TEST_ASSERT_EQUAL_size_t(1, tda_queue_len(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 /* ========== access ========== */
 
 static void test_front_reads_without_removing() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
 
-    TEST_ASSERT_EQUAL_INT32(SPREAD[0], *TDA_QUEUE_FRONT_AS(int32_t, q));
-    TEST_ASSERT_EQUAL_INT32(SPREAD[0], *TDA_QUEUE_FRONT_AS(int32_t, q));
-    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_len(q));
+    TEST_ASSERT_EQUAL_INT32(SPREAD[0], *TDA_QUEUE_FRONT_AS(int32_t, &q));
+    TEST_ASSERT_EQUAL_INT32(SPREAD[0], *TDA_QUEUE_FRONT_AS(int32_t, &q));
+    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_len(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_back_follows_the_last_push() {
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW(int32_t, tda_al_default(), &q));
+    tda_Queue q = {};
+    TDA_QUEUE_INIT(int32_t, tda_al_default(), &q);
 
     for (int32_t i = 0; i < 8; ++i) {
-        push_int(q, i);
-        TEST_ASSERT_EQUAL_INT32(i, *TDA_QUEUE_BACK_AS(int32_t, q));
-        TEST_ASSERT_EQUAL_INT32(0, *TDA_QUEUE_FRONT_AS(int32_t, q));
+        push_int(&q, i);
+        TEST_ASSERT_EQUAL_INT32(i, *TDA_QUEUE_BACK_AS(int32_t, &q));
+        TEST_ASSERT_EQUAL_INT32(0, *TDA_QUEUE_FRONT_AS(int32_t, &q));
     }
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // the elems have no order to break, so writing through an end is legal; the queue only
 // rules where they enter and leave
 static void test_the_ends_are_writable() {
-    tda_Queue *q = make_wrapped();
+    tda_Queue q = make_wrapped();
 
-    *TDA_QUEUE_FRONT_MUT_AS(int32_t, q) = -1;
-    *TDA_QUEUE_BACK_MUT_AS(int32_t, q) = -4;
+    *TDA_QUEUE_FRONT_MUT_AS(int32_t, &q) = -1;
+    *TDA_QUEUE_BACK_MUT_AS(int32_t, &q) = -4;
 
     constexpr int32_t want[4] = {-1, 20, 30, -4};
-    assert_elems(q, want, 4);
+    assert_elems(&q, want, 4);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // on a queue of one, both ends are the same elem
 static void test_front_and_back_meet_on_a_single_elem() {
-    tda_Queue *q = make_queue_from(SPREAD, 1);
+    tda_Queue q = make_queue_from(SPREAD, 1);
 
-    TEST_ASSERT_EQUAL_PTR(tda_queue_front(q), tda_queue_back(q));
-    TEST_ASSERT_EQUAL_PTR(tda_queue_front(q), tda_queue_front_mut(q));
+    TEST_ASSERT_EQUAL_PTR(tda_queue_front(&q), tda_queue_back(&q));
+    TEST_ASSERT_EQUAL_PTR(tda_queue_front(&q), tda_queue_front_mut(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 /* ========== info ========== */
 
 static void test_len_follows_push_and_pop() {
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW(int32_t, tda_al_default(), &q));
+    tda_Queue q = {};
+    TDA_QUEUE_INIT(int32_t, tda_al_default(), &q);
 
     for (size_t i = 0; i < 5; ++i) {
-        TEST_ASSERT_EQUAL_size_t(i, tda_queue_len(q));
-        push_int(q, (int32_t) i);
+        TEST_ASSERT_EQUAL_size_t(i, tda_queue_len(&q));
+        push_int(&q, (int32_t) i);
     }
     for (size_t i = 5; i > 0; --i) {
-        TEST_ASSERT_EQUAL_size_t(i, tda_queue_len(q));
-        tda_queue_pop(q);
+        TEST_ASSERT_EQUAL_size_t(i, tda_queue_len(&q));
+        tda_queue_pop(&q);
     }
-    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(q));
+    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // popping frees nothing: the room stays for the next push
 static void test_pop_leaves_the_capacity_alone() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
-    const size_t cap = tda_queue_cap(q);
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
+    const size_t cap = tda_queue_cap(&q);
 
-    tda_queue_pop(q);
-    tda_queue_pop(q);
+    tda_queue_pop(&q);
+    tda_queue_pop(&q);
 
-    TEST_ASSERT_EQUAL_size_t(cap, tda_queue_cap(q));
+    TEST_ASSERT_EQUAL_size_t(cap, tda_queue_cap(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 /* ========== mods ========== */
 
 static void test_clear_empties_without_giving_back_the_room() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
-    const size_t cap = tda_queue_cap(q);
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
+    const size_t cap = tda_queue_cap(&q);
 
-    tda_queue_clear(q);
+    tda_queue_clear(&q);
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(q));
-    TEST_ASSERT_EQUAL_size_t(cap, tda_queue_cap(q));
+    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(&q));
+    TEST_ASSERT_EQUAL_size_t(cap, tda_queue_cap(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // clearing a split ring must not leave the front pointing into its middle
 static void test_clear_leaves_a_usable_queue() {
-    tda_Queue *q = make_wrapped();
+    tda_Queue q = make_wrapped();
 
-    tda_queue_clear(q);
+    tda_queue_clear(&q);
 
     constexpr int32_t again[3] = {1, 2, 3};
     for (size_t i = 0; i < 3; ++i) {
-        push_int(q, again[i]);
+        push_int(&q, again[i]);
     }
-    assert_drains(q, again, 3);
+    assert_drains(&q, again, 3);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_reserve_grows_the_room_only() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
 
-    TDA_TEST_OK(tda_queue_reserve(q, 100));
+    TDA_TEST_OK(tda_queue_reserve(&q, 100));
 
-    TEST_ASSERT_TRUE(tda_queue_cap(q) >= 100);
-    assert_elems(q, SPREAD, SPREAD_LEN);
+    TEST_ASSERT_TRUE(tda_queue_cap(&q) >= 100);
+    assert_elems(&q, SPREAD, SPREAD_LEN);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_reserve_below_the_capacity_changes_nothing() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
-    const size_t cap = tda_queue_cap(q);
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
+    const size_t cap = tda_queue_cap(&q);
 
-    TDA_TEST_OK(tda_queue_reserve(q, 1));
+    TDA_TEST_OK(tda_queue_reserve(&q, 1));
 
-    TEST_ASSERT_EQUAL_size_t(cap, tda_queue_cap(q));
+    TEST_ASSERT_EQUAL_size_t(cap, tda_queue_cap(&q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_shrink_to_fit_keeps_the_order() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
-    TDA_TEST_OK(tda_queue_reserve(q, 100));
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
+    TDA_TEST_OK(tda_queue_reserve(&q, 100));
 
-    TDA_TEST_OK(tda_queue_shrink_to_fit(q));
+    TDA_TEST_OK(tda_queue_shrink_to_fit(&q));
 
-    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_cap(q));
-    assert_elems(q, SPREAD, SPREAD_LEN);
+    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_cap(&q));
+    assert_elems(&q, SPREAD, SPREAD_LEN);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // shrinking a split ring has to unwrap it into the smaller block
 static void test_shrink_to_fit_unwraps_what_it_moves() {
-    tda_Queue *q = make_wrapped();
-    tda_queue_pop(q);
+    tda_Queue q = make_wrapped();
+    tda_queue_pop(&q);
 
-    TDA_TEST_OK(tda_queue_shrink_to_fit(q));
+    TDA_TEST_OK(tda_queue_shrink_to_fit(&q));
 
-    TEST_ASSERT_EQUAL_size_t(3, tda_queue_cap(q));
+    TEST_ASSERT_EQUAL_size_t(3, tda_queue_cap(&q));
     constexpr int32_t want[3] = {20, 30, 40};
-    assert_elems(q, want, 3);
+    assert_elems(&q, want, 3);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 /* ========== copy ========== */
 
 static void test_copy_is_independent() {
-    tda_Queue *src = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue src = make_queue_from(SPREAD, SPREAD_LEN);
 
-    tda_Queue *dst = nullptr;
-    TDA_TEST_OK(tda_queue_copy(src, &dst));
+    tda_Queue dst = {};
+    TDA_TEST_OK(tda_queue_copy(&src, &dst));
 
-    tda_queue_pop(dst);
-    push_int(dst, 777);
+    tda_queue_pop(&dst);
+    push_int(&dst, 777);
 
-    assert_elems(src, SPREAD, SPREAD_LEN);
-    TEST_ASSERT_EQUAL_INT32(SPREAD[1], *TDA_QUEUE_FRONT_AS(int32_t, dst));
-    TEST_ASSERT_EQUAL_INT32(777, *TDA_QUEUE_BACK_AS(int32_t, dst));
+    assert_elems(&src, SPREAD, SPREAD_LEN);
+    TEST_ASSERT_EQUAL_INT32(SPREAD[1], *TDA_QUEUE_FRONT_AS(int32_t, &dst));
+    TEST_ASSERT_EQUAL_INT32(777, *TDA_QUEUE_BACK_AS(int32_t, &dst));
 
-    tda_queue_drop(src);
-    tda_queue_drop(dst);
+    tda_queue_deinit(&src);
+    tda_queue_deinit(&dst);
 }
 
 static void test_copy_inherits_the_allocator() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    tda_Queue *src = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, arena, &src, 5, 1, 3));
+    tda_Queue src = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, TDA_AL(&arena), &src, 5, 1, 3));
 
-    tda_Queue *dst = nullptr;
-    TDA_TEST_OK(tda_queue_copy(src, &dst));
+    tda_Queue dst = {};
+    TDA_TEST_OK(tda_queue_copy(&src, &dst));
 
-    TEST_ASSERT_EQUAL_PTR(arena, tda_queue_al(dst));
-    TEST_ASSERT_EQUAL_INT32(5, *TDA_QUEUE_FRONT_AS(int32_t, dst));
+    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_queue_al(&dst));
+    TEST_ASSERT_EQUAL_INT32(5, *TDA_QUEUE_FRONT_AS(int32_t, &dst));
 
-    tda_queue_drop(src);
-    tda_queue_drop(dst);
-    tda_al_arena_drop(arena);
+    tda_queue_deinit(&src);
+    tda_queue_deinit(&dst);
+    tda_arena_deinit(&arena);
 }
 
 static void test_copy_with_builds_on_the_given_allocator() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    tda_Queue *src = make_wrapped();
+    tda_Queue src = make_wrapped();
 
-    tda_Queue *dst = nullptr;
-    TDA_TEST_OK(tda_queue_copy_with(src, arena, &dst));
+    tda_Queue dst = {};
+    TDA_TEST_OK(tda_queue_copy_with(&src, TDA_AL(&arena), &dst));
 
-    TEST_ASSERT_EQUAL_PTR(arena, tda_queue_al(dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_queue_al(src));
-    TEST_ASSERT_TRUE(tda_queue_eq(src, dst));
+    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_queue_al(&dst));
+    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_queue_al(&src));
+    TEST_ASSERT_TRUE(tda_queue_eq(&src, &dst));
 
-    // the header uses the same allocator as the elems, so the copy outlives the source
-    tda_queue_drop(src);
-    TEST_ASSERT_EQUAL_INT32(10, *TDA_QUEUE_FRONT_AS(int32_t, dst));
+    // the copy owns its own block on its own allocator, so it outlives the source
+    tda_queue_deinit(&src);
+    TEST_ASSERT_EQUAL_INT32(10, *TDA_QUEUE_FRONT_AS(int32_t, &dst));
 
-    tda_queue_drop(dst);
-    tda_al_arena_drop(arena);
+    tda_queue_deinit(&dst);
+    tda_arena_deinit(&arena);
 }
 
 // the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
-    tda_test_arena_leave(arena, 0);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    tda_test_arena_leave(&arena, 0);
 
-    tda_Queue *src = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue src = make_queue_from(SPREAD, SPREAD_LEN);
 
-    tda_Queue *dst = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_copy_with(src, arena, &dst));
-    TEST_ASSERT_NULL(dst);
-    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_len(src));
+    tda_Queue dst = {};
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_copy_with(&src, TDA_AL(&arena), &dst));
+    TEST_ASSERT_NULL(dst.deque_.al_);
+    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_len(&src));
 
-    tda_queue_drop(src);
-    tda_al_arena_drop(arena);
+    tda_queue_deinit(&src);
+    tda_arena_deinit(&arena);
 }
 
 static void test_move_assign_hands_over_the_contents_on_one_allocator() {
@@ -568,328 +569,286 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Queue *src = nullptr;
+    tda_Queue src = {};
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, &al, &src, 1, 2, 3));
 
-    tda_Queue *dst = nullptr;
+    tda_Queue dst = {};
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, &al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_queue_move_assign(dst, src));
+    tda_queue_move_assign(&dst, &src);
 
     // nothing was allocated: the deque's ring changed hands
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
-    TEST_ASSERT_EQUAL_size_t(3, tda_queue_len(dst));
-    TEST_ASSERT_EQUAL_INT32(1, *TDA_QUEUE_FRONT_AS(int32_t, dst));
-    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(src));
+    TEST_ASSERT_EQUAL_size_t(3, tda_queue_len(&dst));
+    TEST_ASSERT_EQUAL_INT32(1, *TDA_QUEUE_FRONT_AS(int32_t, &dst));
+    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(&src));
 
-    tda_queue_drop(src);
-    tda_queue_drop(dst);
+    tda_queue_deinit(&src);
+    tda_queue_deinit(&dst);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-static void test_move_assign_across_allocators_empties_the_source() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
+// the allocator is part of the value: 'dst' takes the elems with the allocator they came
+// from
+static void test_move_assign_across_allocators_hands_the_allocator_over() {
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
     // a split ring must arrive in queue order, as in copy
-    tda_Queue *src = make_wrapped();
+    tda_Queue src = make_wrapped();
 
-    tda_Queue *dst = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, arena, &dst, 9));
+    tda_Queue dst = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, TDA_AL(&arena), &dst, 9));
 
-    TDA_TEST_OK(tda_queue_move_assign(dst, src));
+    tda_queue_move_assign(&dst, &src);
 
-    TEST_ASSERT_EQUAL_size_t(4, tda_queue_len(dst));
-    TEST_ASSERT_EQUAL_INT32(10, *TDA_QUEUE_FRONT_AS(int32_t, dst));
-    TEST_ASSERT_EQUAL_PTR(arena, tda_queue_al(dst));
+    TEST_ASSERT_EQUAL_size_t(4, tda_queue_len(&dst));
+    TEST_ASSERT_EQUAL_INT32(10, *TDA_QUEUE_FRONT_AS(int32_t, &dst));
+    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_queue_al(&dst));
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(src));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_queue_al(src));
+    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(&src));
+    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_queue_al(&src));
 
-    tda_queue_drop(src);
-    tda_queue_drop(dst);
-    tda_al_arena_drop(arena);
+    tda_queue_deinit(&src);
+    tda_queue_deinit(&dst);
+    tda_arena_deinit(&arena);
 }
 
-static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
+// nothing is allocated, so an exhausted allocator on either side cannot stop it
+static void test_move_assign_needs_no_memory() {
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    tda_Queue *dst = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, arena, &dst, 9));
-    tda_test_arena_leave(arena, 0);
+    tda_Queue dst = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, TDA_AL(&arena), &dst, 9));
+    tda_test_arena_leave(&arena, 0);
 
-    tda_Queue *src = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue src = make_queue_from(SPREAD, SPREAD_LEN);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_move_assign(dst, src));
+    tda_queue_move_assign(&dst, &src);
 
-    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_len(src));
-    TEST_ASSERT_EQUAL_size_t(1, tda_queue_len(dst));
-    TEST_ASSERT_EQUAL_INT32(9, *TDA_QUEUE_FRONT_AS(int32_t, dst));
+    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_len(&dst));
+    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(&src));
 
-    tda_queue_drop(src);
-    tda_queue_drop(dst);
-    tda_al_arena_drop(arena);
+    tda_queue_deinit(&src);
+    tda_queue_deinit(&dst);
+    tda_arena_deinit(&arena);
 }
 
 static void test_move_assign_of_itself_changes_nothing() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
 
-    TDA_TEST_OK(tda_queue_move_assign(q, q));
+    tda_queue_move_assign(&q, &q);
 
-    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_len(q));
-    TEST_ASSERT_EQUAL_INT32(SPREAD[0], *TDA_QUEUE_FRONT_AS(int32_t, q));
+    TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_queue_len(&q));
+    TEST_ASSERT_EQUAL_INT32(SPREAD[0], *TDA_QUEUE_FRONT_AS(int32_t, &q));
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // the copy of a split ring must come out in queue order, not buffer order
 static void test_copy_of_a_wrapped_queue_keeps_the_order() {
-    tda_Queue *src = make_wrapped();
+    tda_Queue src = make_wrapped();
 
-    tda_Queue *dst = nullptr;
-    TDA_TEST_OK(tda_queue_copy(src, &dst));
+    tda_Queue dst = {};
+    TDA_TEST_OK(tda_queue_copy(&src, &dst));
 
     constexpr int32_t want[4] = {10, 20, 30, 40};
-    assert_drains(dst, want, 4);
+    assert_drains(&dst, want, 4);
 
-    tda_queue_drop(src);
-    tda_queue_drop(dst);
+    tda_queue_deinit(&src);
+    tda_queue_deinit(&dst);
 }
 
 static void test_copy_of_empty_stays_empty() {
-    tda_Queue *src = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW(int32_t, tda_al_default(), &src));
+    tda_Queue src = {};
+    TDA_QUEUE_INIT(int32_t, tda_al_default(), &src);
 
-    tda_Queue *dst = nullptr;
-    TDA_TEST_OK(tda_queue_copy(src, &dst));
+    tda_Queue dst = {};
+    TDA_TEST_OK(tda_queue_copy(&src, &dst));
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(dst));
+    TEST_ASSERT_EQUAL_size_t(0, tda_queue_len(&dst));
 
-    tda_queue_drop(src);
-    tda_queue_drop(dst);
+    tda_queue_deinit(&src);
+    tda_queue_deinit(&dst);
 }
 
 static void test_copy_assign_overwrites_the_target() {
-    tda_Queue *src = make_queue_from(SPREAD, SPREAD_LEN);
-    tda_Queue *dst = make_wrapped();
+    tda_Queue src = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue dst = make_wrapped();
 
-    TDA_TEST_OK(tda_queue_copy_assign(dst, src));
+    TDA_TEST_OK(tda_queue_copy_assign(&dst, &src));
 
-    assert_elems(dst, SPREAD, SPREAD_LEN);
-    assert_elems(src, SPREAD, SPREAD_LEN);
+    assert_elems(&dst, SPREAD, SPREAD_LEN);
+    assert_elems(&src, SPREAD, SPREAD_LEN);
 
-    tda_queue_drop(src);
-    tda_queue_drop(dst);
+    tda_queue_deinit(&src);
+    tda_queue_deinit(&dst);
 }
 
-static void test_copy_assign_self_is_noop() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
+static void test_copy_assign_of_itself_changes_nothing() {
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
 
-    TDA_TEST_OK(tda_queue_copy_assign(q, q));
+    TDA_TEST_OK(tda_queue_copy_assign(&q, &q));
 
-    assert_elems(q, SPREAD, SPREAD_LEN);
+    assert_elems(&q, SPREAD, SPREAD_LEN);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 /* ========== copy to span ========== */
 
 static void test_copy_to_span_writes_front_to_back() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
 
     int32_t got[SPREAD_LEN];
-    tda_queue_copy_to_span(q, TDA_SPAN_FROM_DATA_MUT(int32_t, got, SPREAD_LEN));
+    tda_queue_copy_to_span(&q, TDA_SPAN_FROM_DATA_MUT(int32_t, got, SPREAD_LEN));
 
     TEST_ASSERT_EQUAL_INT32_ARRAY(SPREAD, got, SPREAD_LEN);
-    assert_elems(q, SPREAD, SPREAD_LEN);
+    assert_elems(&q, SPREAD, SPREAD_LEN);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // the contents are at most two runs in the buffer and exactly one run here
 static void test_copy_to_span_of_a_wrapped_queue_is_in_order() {
-    tda_Queue *q = make_wrapped();
+    tda_Queue q = make_wrapped();
 
     int32_t got[4];
-    tda_queue_copy_to_span(q, TDA_SPAN_FROM_DATA_MUT(int32_t, got, 4));
+    tda_queue_copy_to_span(&q, TDA_SPAN_FROM_DATA_MUT(int32_t, got, 4));
 
     constexpr int32_t want[4] = {10, 20, 30, 40};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, got, 4);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_copy_to_span_of_empty_writes_nothing() {
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW(int32_t, tda_al_default(), &q));
+    tda_Queue q = {};
+    TDA_QUEUE_INIT(int32_t, tda_al_default(), &q);
 
     int32_t got[2] = {11, 22};
-    tda_queue_copy_to_span(q, TDA_SPAN_FROM_DATA_MUT(int32_t, got, 0));
+    tda_queue_copy_to_span(&q, TDA_SPAN_FROM_DATA_MUT(int32_t, got, 0));
 
     TEST_ASSERT_EQUAL_INT32(11, got[0]);
     TEST_ASSERT_EQUAL_INT32(22, got[1]);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // why the bridge is one way: algo works on the copy, and the queue keeps the arrival
 // order that gives it its meaning
 static void test_the_copy_reaches_algo_and_the_queue_is_untouched() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
 
     int32_t got[SPREAD_LEN];
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, got, SPREAD_LEN);
-    tda_queue_copy_to_span(q, s);
+    tda_queue_copy_to_span(&q, s);
 
     TEST_ASSERT_EQUAL_size_t(2, tda_span_max_elem(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
 
     tda_span_sort(s, tda_cmp_i32, nullptr);
     TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
 
-    assert_elems(q, SPREAD, SPREAD_LEN);
+    assert_elems(&q, SPREAD, SPREAD_LEN);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 /* ========== swap ========== */
 
 static void test_swap_exchanges_the_elems() {
-    tda_Queue *a = nullptr;
-    tda_Queue *b = nullptr;
+    tda_Queue a = {};
+    tda_Queue b = {};
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, tda_al_default(), &a, 1, 2, 3));
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, tda_al_default(), &b, 10, 20));
 
-    tda_queue_swap(a, b);
+    tda_queue_swap(&a, &b);
 
     constexpr int32_t want_a[2] = {10, 20};
     constexpr int32_t want_b[3] = {1, 2, 3};
-    assert_elems(a, want_a, 2);
-    assert_elems(b, want_b, 3);
+    assert_elems(&a, want_a, 2);
+    assert_elems(&b, want_b, 3);
 
-    tda_queue_drop(a);
-    tda_queue_drop(b);
+    tda_queue_deinit(&a);
+    tda_queue_deinit(&b);
 }
 
-static void test_swap_self_is_noop() {
-    tda_Queue *q = make_queue_from(SPREAD, SPREAD_LEN);
+static void test_swap_of_itself_changes_nothing() {
+    tda_Queue q = make_queue_from(SPREAD, SPREAD_LEN);
 
-    tda_queue_swap(q, q);
+    tda_queue_swap(&q, &q);
 
-    assert_elems(q, SPREAD, SPREAD_LEN);
+    assert_elems(&q, SPREAD, SPREAD_LEN);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 /* ========== failures ========== */
 
-static void test_new_reports_an_exhausted_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 64);
-    TEST_ASSERT_NOT_NULL(arena);
-    tda_test_arena_leave(arena, 0);
-
-    tda_Queue *q = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_QUEUE_NEW(int32_t, arena, &q));
-    TEST_ASSERT_NULL(q);
-
-    tda_al_arena_drop(arena);
-}
-
 static void test_from_data_reports_an_exhausted_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 128);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 128, &arena));
 
-    tda_Queue *q = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_QUEUE_FROM_DATA(int32_t, SPREAD, 1000, arena, &q));
-    TEST_ASSERT_NULL(q);
+    tda_Queue q = {};
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_QUEUE_FROM_DATA(int32_t, SPREAD, 1000, TDA_AL(&arena), &q));
+    TEST_ASSERT_NULL(q.deque_.al_);
 
-    tda_al_arena_drop(arena);
+    tda_arena_deinit(&arena);
 }
 
 // a refused push must leave the queue exactly as it was, not a ring with a hole in it
 static void test_push_reports_an_exhausted_arena_and_changes_nothing() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
 
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, arena, &q, 5, 1, 3));
-    tda_test_arena_leave(arena, 0);
+    tda_Queue q = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, TDA_AL(&arena), &q, 5, 1, 3));
+    tda_test_arena_leave(&arena, 0);
 
     constexpr int32_t val = 100;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_push(q, &val));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_push(&q, &val));
 
     constexpr int32_t want[3] = {5, 1, 3};
-    assert_elems(q, want, 3);
+    assert_elems(&q, want, 3);
 
-    tda_queue_drop(q);
-    tda_al_arena_drop(arena);
+    tda_queue_deinit(&q);
+    tda_arena_deinit(&arena);
 }
 
 static void test_copy_reports_an_exhausted_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
 
-    tda_Queue *src = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, arena, &src, 5, 1, 3));
-    tda_test_arena_leave(arena, 0);
+    tda_Queue src = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, TDA_AL(&arena), &src, 5, 1, 3));
+    tda_test_arena_leave(&arena, 0);
 
-    tda_Queue *dst = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_copy(src, &dst));
-    TEST_ASSERT_NULL(dst);
+    tda_Queue dst = {};
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_copy(&src, &dst));
+    TEST_ASSERT_NULL(dst.deque_.al_);
 
-    tda_queue_drop(src);
-    tda_al_arena_drop(arena);
+    tda_queue_deinit(&src);
+    tda_arena_deinit(&arena);
 }
 
 static void test_reserve_reports_an_exhausted_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
 
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, arena, &q, 5, 1, 3));
-    tda_test_arena_leave(arena, 0);
+    tda_Queue q = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, TDA_AL(&arena), &q, 5, 1, 3));
+    tda_test_arena_leave(&arena, 0);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_reserve(q, 1000));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_reserve(&q, 1000));
 
     constexpr int32_t want[3] = {5, 1, 3};
-    assert_elems(q, want, 3);
+    assert_elems(&q, want, 3);
 
-    tda_queue_drop(q);
-    tda_al_arena_drop(arena);
-}
-
-// The queue is built in two steps, the deque and then the header hiding it. If the
-// second is refused the first must not be stranded: the probe counts what is still live,
-// where an arena would hide the leak by freeing everything at once
-static void test_a_refused_header_frees_the_deque() {
-    tda_TestProbe probe;
-    tda_test_probe_reset(&probe);
-    tda_Al al = tda_test_probe_full(&probe);
-
-    tda_test_probe_fail_after_next(&probe, 1);
-
-    tda_Queue *q = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_QUEUE_NEW(int32_t, &al, &q));
-
-    TEST_ASSERT_NULL(q);
-    TEST_ASSERT_EQUAL_size_t(0, probe.live);
-}
-
-// the same, one allocation later: from_data takes a buffer as well
-static void test_a_refused_header_frees_a_filled_deque() {
-    tda_TestProbe probe;
-    tda_test_probe_reset(&probe);
-    tda_Al al = tda_test_probe_full(&probe);
-
-    tda_test_probe_fail_after_next(&probe, 2);
-
-    tda_Queue *q = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_QUEUE_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, &al, &q));
-
-    TEST_ASSERT_NULL(q);
-    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+    tda_queue_deinit(&q);
+    tda_arena_deinit(&arena);
 }
 
 /* ========== compare ========== */
@@ -897,108 +856,108 @@ static void test_a_refused_header_frees_a_filled_deque() {
 static void test_eq_matches_the_same_elems() {
     constexpr int32_t src[3] = {7, 8, 9};
 
-    tda_Queue *a = make_queue(src, 3);
-    tda_Queue *b = make_queue_from(src, 3);
+    tda_Queue a = make_queue(src, 3);
+    tda_Queue b = make_queue_from(src, 3);
 
-    TEST_ASSERT_TRUE(tda_queue_eq(a, a));
-    TEST_ASSERT_TRUE(tda_queue_eq(a, b));
-    TEST_ASSERT_TRUE(tda_queue_eq(b, a));
-    TEST_ASSERT_TRUE(tda_queue_eq_by(a, b, tda_eq_i32, nullptr));
+    TEST_ASSERT_TRUE(tda_queue_eq(&a, &a));
+    TEST_ASSERT_TRUE(tda_queue_eq(&a, &b));
+    TEST_ASSERT_TRUE(tda_queue_eq(&b, &a));
+    TEST_ASSERT_TRUE(tda_queue_eq_by(&a, &b, tda_eq_i32, nullptr));
 
-    tda_queue_drop(a);
-    tda_queue_drop(b);
+    tda_queue_deinit(&a);
+    tda_queue_deinit(&b);
 }
 
 static void test_eq_parts_one_differing_elem() {
     constexpr int32_t lhs[3] = {7, 8, 9};
     constexpr int32_t rhs[3] = {7, 8, 99};
 
-    tda_Queue *a = make_queue(lhs, 3);
-    tda_Queue *b = make_queue(rhs, 3);
+    tda_Queue a = make_queue(lhs, 3);
+    tda_Queue b = make_queue(rhs, 3);
 
-    TEST_ASSERT_FALSE(tda_queue_eq(a, b));
-    TEST_ASSERT_FALSE(tda_queue_eq_by(a, b, tda_eq_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_queue_eq(&a, &b));
+    TEST_ASSERT_FALSE(tda_queue_eq_by(&a, &b, tda_eq_i32, nullptr));
 
-    tda_queue_drop(a);
-    tda_queue_drop(b);
+    tda_queue_deinit(&a);
+    tda_queue_deinit(&b);
 }
 
 static void test_eq_parts_different_lengths() {
     constexpr int32_t src[3] = {7, 8, 9};
 
-    tda_Queue *a = make_queue(src, 3);
-    tda_Queue *shorter = make_queue(src, 2);
+    tda_Queue a = make_queue(src, 3);
+    tda_Queue shorter = make_queue(src, 2);
 
-    TEST_ASSERT_FALSE(tda_queue_eq(a, shorter));
-    TEST_ASSERT_FALSE(tda_queue_eq(shorter, a));
+    TEST_ASSERT_FALSE(tda_queue_eq(&a, &shorter));
+    TEST_ASSERT_FALSE(tda_queue_eq(&shorter, &a));
 
-    tda_queue_drop(a);
-    tda_queue_drop(shorter);
+    tda_queue_deinit(&a);
+    tda_queue_deinit(&shorter);
 }
 
 static void test_eq_of_two_empties() {
     constexpr int32_t src[1] = {7};
 
-    tda_Queue *a = make_queue(src, 0);
-    tda_Queue *b = make_queue_from(src, 0);
-    tda_Queue *one = make_queue(src, 1);
+    tda_Queue a = make_queue(src, 0);
+    tda_Queue b = make_queue_from(src, 0);
+    tda_Queue one = make_queue(src, 1);
 
-    TEST_ASSERT_TRUE(tda_queue_eq(a, b));
-    TEST_ASSERT_TRUE(tda_queue_eq_by(a, b, tda_eq_i32, nullptr));
-    TEST_ASSERT_FALSE(tda_queue_eq(a, one));
+    TEST_ASSERT_TRUE(tda_queue_eq(&a, &b));
+    TEST_ASSERT_TRUE(tda_queue_eq_by(&a, &b, tda_eq_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_queue_eq(&a, &one));
 
-    tda_queue_drop(a);
-    tda_queue_drop(b);
-    tda_queue_drop(one);
+    tda_queue_deinit(&a);
+    tda_queue_deinit(&b);
+    tda_queue_deinit(&one);
 }
 
 // the ring under the queue may be split or not; the queue order is what is compared
 static void test_eq_ignores_where_the_ring_starts() {
     constexpr int32_t want[4] = {10, 20, 30, 40};
 
-    tda_Queue *straight = make_queue_from(want, 4);
-    tda_Queue *wrapped = make_wrapped();
+    tda_Queue straight = make_queue_from(want, 4);
+    tda_Queue wrapped = make_wrapped();
 
-    TEST_ASSERT_TRUE(tda_queue_eq(straight, wrapped));
-    TEST_ASSERT_TRUE(tda_queue_eq(wrapped, straight));
-    TEST_ASSERT_TRUE(tda_queue_eq_by(wrapped, straight, tda_eq_i32, nullptr));
+    TEST_ASSERT_TRUE(tda_queue_eq(&straight, &wrapped));
+    TEST_ASSERT_TRUE(tda_queue_eq(&wrapped, &straight));
+    TEST_ASSERT_TRUE(tda_queue_eq_by(&wrapped, &straight, tda_eq_i32, nullptr));
 
-    tda_queue_drop(straight);
-    tda_queue_drop(wrapped);
+    tda_queue_deinit(&straight);
+    tda_queue_deinit(&wrapped);
 }
 
 // a queue is compared front to back: the same elems in another order differ
 static void test_eq_is_order_sensitive() {
     constexpr int32_t src[3] = {7, 8, 9};
 
-    tda_Queue *a = make_queue(src, 3);
-    tda_Queue *b = make_queue(src, 3);
+    tda_Queue a = make_queue(src, 3);
+    tda_Queue b = make_queue(src, 3);
 
-    const int32_t front = *TDA_QUEUE_FRONT_AS(int32_t, b);
-    tda_queue_pop(b);
-    push_int(b, front);
+    const int32_t front = *TDA_QUEUE_FRONT_AS(int32_t, &b);
+    tda_queue_pop(&b);
+    push_int(&b, front);
 
-    TEST_ASSERT_EQUAL_size_t(tda_queue_len(a), tda_queue_len(b));
-    TEST_ASSERT_FALSE(tda_queue_eq(a, b));
+    TEST_ASSERT_EQUAL_size_t(tda_queue_len(&a), tda_queue_len(&b));
+    TEST_ASSERT_FALSE(tda_queue_eq(&a, &b));
 
-    tda_queue_drop(a);
-    tda_queue_drop(b);
+    tda_queue_deinit(&a);
+    tda_queue_deinit(&b);
 }
 
 static void test_eq_by_asks_the_equality() {
     constexpr Pair lhs[2] = {{1, 10}, {2, 20}};
     constexpr Pair rhs[2] = {{1, 70}, {2, 80}};
 
-    tda_Queue *a = nullptr;
-    tda_Queue *b = nullptr;
+    tda_Queue a = {};
+    tda_Queue b = {};
     TDA_TEST_OK(TDA_QUEUE_FROM_DATA(Pair, lhs, 2, tda_al_default(), &a));
     TDA_TEST_OK(TDA_QUEUE_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
-    TEST_ASSERT_FALSE(tda_queue_eq(a, b));
-    TEST_ASSERT_TRUE(tda_queue_eq_by(a, b, tda_test_pair_eq_a, nullptr));
+    TEST_ASSERT_FALSE(tda_queue_eq(&a, &b));
+    TEST_ASSERT_TRUE(tda_queue_eq_by(&a, &b, tda_test_pair_eq_a, nullptr));
 
-    tda_queue_drop(a);
-    tda_queue_drop(b);
+    tda_queue_deinit(&a);
+    tda_queue_deinit(&b);
 }
 
 /* ========== into ========== */
@@ -1006,55 +965,60 @@ static void test_eq_by_asks_the_equality() {
 // the deque was there all along, ring and all: taking it copies nothing
 static void test_into_deque_hands_the_elems_over() {
     constexpr int32_t want[4] = {10, 20, 30, 40};
-    tda_Queue *q = make_wrapped();
+    tda_Queue q = make_wrapped();
 
-    const size_t cap = tda_queue_cap(q);
-    tda_Deque *d = tda_queue_into_deque(q);
+    const size_t cap = tda_queue_cap(&q);
+    tda_Deque d;
+    tda_queue_into_deque(&q, &d);
 
-    TEST_ASSERT_EQUAL_size_t(4, tda_deque_len(d));
-    TEST_ASSERT_EQUAL_size_t(cap, tda_deque_cap(d));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_deque_al(d));
+    TEST_ASSERT_EQUAL_size_t(4, tda_deque_len(&d));
+    TEST_ASSERT_EQUAL_size_t(cap, tda_deque_cap(&d));
+    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_deque_al(&d));
 
     // the elems keep their queue order though the ring underneath is split
     for (size_t i = 0; i < 4; ++i) {
-        TEST_ASSERT_EQUAL_INT32(want[i], *TDA_DEQUE_GET_AS(int32_t, d, i));
+        TEST_ASSERT_EQUAL_INT32(want[i], *TDA_DEQUE_GET_AS(int32_t, &d, i));
     }
 
-    tda_deque_drop(d);
+    tda_deque_deinit(&d);
 }
 
 static void test_into_deque_of_an_empty_queue() {
     constexpr int32_t src[1] = {7};
-    tda_Queue *q = make_queue(src, 0);
+    tda_Queue q = make_queue(src, 0);
 
-    tda_Deque *d = tda_queue_into_deque(q);
+    tda_Deque d;
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_deque_len(d));
+    tda_queue_into_deque(&q, &d);
 
-    tda_deque_drop(d);
+    TEST_ASSERT_EQUAL_size_t(0, tda_deque_len(&d));
+
+    tda_deque_deinit(&d);
 }
 
-static void test_into_deque_releases_the_header_alone() {
+// the adapter owns no block of its own: handing its deque over allocates and frees
+// nothing, and leaves the adapter inert
+static void test_into_deque_allocates_nothing() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Queue *q = nullptr;
-    TDA_TEST_OK(TDA_QUEUE_NEW(int32_t, &al, &q));
-
-    // the constructor's last block is the adapter's header, so into must free that, with
-    // the size it was taken with
-    const size_t header = probe.last_alloc.size;
-
-    TDA_TEST_OK(TDA_QUEUE_PUSH(int32_t, q, 1));
+    tda_Queue s;
+    TDA_QUEUE_INIT(int32_t, &al, &s);
+    TDA_TEST_OK(TDA_QUEUE_PUSH(int32_t, &s, 1));
+    const size_t requests = tda_test_probe_requests(&probe);
     const size_t live = probe.live;
 
-    tda_Deque *d = tda_queue_into_deque(q);
+    tda_Deque inner;
+    tda_queue_into_deque(&s, &inner);
 
-    TEST_ASSERT_EQUAL_size_t(live - 1, probe.live);
-    TEST_ASSERT_EQUAL_size_t(header, probe.last_dealloc.size);
+    TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
+    TEST_ASSERT_EQUAL_size_t(live, probe.live);
+    TEST_ASSERT_EQUAL_size_t(1, tda_deque_len(&inner));
+    TEST_ASSERT_NULL(s.deque_.al_);
 
-    tda_deque_drop(d);
+    tda_queue_deinit(&s);
+    tda_deque_deinit(&inner);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
@@ -1077,53 +1041,145 @@ static void assert_prints(const char *expected, const tda_Queue *q) {
 }
 
 static void test_fprint_writes_the_elems() {
-    tda_Queue *q = nullptr;
+    tda_Queue q = {};
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, tda_al_default(), &q, 5, 3, 1));
 
-    assert_prints("[5, 3, 1]\n", q);
+    assert_prints("[5, 3, 1]\n", &q);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_fprint_of_a_single_elem_has_no_separator() {
-    tda_Queue *q = nullptr;
+    tda_Queue q = {};
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, tda_al_default(), &q, 7));
 
-    assert_prints("[7]\n", q);
+    assert_prints("[7]\n", &q);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 static void test_fprint_of_an_empty_queue() {
-    tda_Queue *q = make_queue(nullptr, 0);
+    tda_Queue q = make_queue(nullptr, 0);
 
-    assert_prints("[]\n", q);
+    assert_prints("[]\n", &q);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
 }
 
 // the stdout twin cannot be captured portably, so a case only checks that it runs and
 // reaches the same printer
 static void test_print_writes_to_stdout() {
     constexpr int32_t src[3] = {1, 2, 3};
-    tda_Queue *q = make_queue(src, 3);
+    tda_Queue q = make_queue(src, 3);
 
-    tda_queue_print(q, tda_fprint_i32);
+    tda_queue_print(&q, tda_fprint_i32);
 
-    tda_queue_drop(q);
+    tda_queue_deinit(&q);
+}
+
+// each side keeps the allocator its elems came from, and each is given back to it
+static void test_swap_across_allocators_carries_each_allocator() {
+    tda_TestProbe pa;
+    tda_TestProbe pb;
+    tda_test_probe_reset(&pa);
+    tda_test_probe_reset(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa);
+    tda_Al al_b = tda_test_probe_full(&pb);
+
+    tda_Queue a = {};
+    tda_Queue b = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, &al_a, &a, 1, 2));
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, &al_b, &b, 3, 4, 5));
+
+    tda_queue_swap(&a, &b);
+
+    TEST_ASSERT_EQUAL_PTR(&al_b, tda_queue_al(&a));
+    TEST_ASSERT_EQUAL_PTR(&al_a, tda_queue_al(&b));
+    TEST_ASSERT_EQUAL_size_t(3, tda_queue_len(&a));
+
+    tda_queue_deinit(&a);
+    TEST_ASSERT_EQUAL_size_t(0, pb.live);
+    tda_queue_deinit(&b);
+    TEST_ASSERT_EQUAL_size_t(0, pa.live);
+}
+
+// deinit leaves the inert state, so a second one is safe
+static void test_deinit_twice_is_noop() {
+    tda_Queue x = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, tda_al_default(), &x, 1, 2));
+
+    tda_queue_deinit(&x);
+    TEST_ASSERT_NULL(x.deque_.al_);
+
+    tda_queue_deinit(&x);
+}
+
+// a refused build leaves 'out' untouched and nothing allocated behind
+static void test_from_data_reports_a_refused_block() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+    tda_test_probe_fail_after_next(&probe, 0);
+
+    tda_Queue x = {};
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_QUEUE_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, &al, &x));
+
+    TEST_ASSERT_NULL(x.deque_.al_);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+// a refused growth leaves the elems as they were
+static void test_push_reports_a_refused_growth() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Queue x = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, &al, &x, 1));
+
+    tda_test_probe_fail_after_next(&probe, 0);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_QUEUE_PUSH(int32_t, &x, 9));
+    TEST_ASSERT_EQUAL_size_t(1, tda_queue_len(&x));
+
+    probe.fail_after = SIZE_MAX;
+    tda_queue_deinit(&x);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+// a refused copy_assign leaves the target exactly as it was
+static void test_copy_assign_reports_a_refused_block_and_changes_nothing() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Queue small = {};
+    TDA_TEST_OK(TDA_QUEUE_OF(int32_t, &al, &small, 1));
+    tda_Queue big = {};
+    TDA_TEST_OK(TDA_QUEUE_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, tda_al_default(), &big));
+
+    tda_test_probe_fail_after_next(&probe, 0);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_queue_copy_assign(&small, &big));
+
+    TEST_ASSERT_EQUAL_size_t(1, tda_queue_len(&small));
+
+    probe.fail_after = SIZE_MAX;
+    tda_queue_deinit(&small);
+    tda_queue_deinit(&big);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
 int main() {
     UNITY_BEGIN();
 
-    RUN_TEST(test_new_starts_empty);
-    RUN_TEST(test_new_cap_reserves_without_length);
+    RUN_TEST(test_init_starts_empty);
+    RUN_TEST(test_init_cap_reserves_without_length);
     RUN_TEST(test_from_data_keeps_arrival_order);
     RUN_TEST(test_from_data_empty_stays_empty);
     RUN_TEST(test_from_span_copies_the_view);
     RUN_TEST(test_from_data_copies_whole_elems);
-    RUN_TEST(test_drop_null_is_noop);
-    RUN_TEST(test_drop_hands_back_everything_it_took);
+    RUN_TEST(test_deinit_of_an_inert_value_is_noop);
+    RUN_TEST(test_deinit_twice_is_noop);
+    RUN_TEST(test_deinit_hands_back_everything);
 
     RUN_TEST(test_pushes_leave_in_the_order_they_arrived);
     RUN_TEST(test_order_survives_growth);
@@ -1155,13 +1211,13 @@ int main() {
     RUN_TEST(test_copy_with_builds_on_the_given_allocator);
     RUN_TEST(test_copy_with_reports_an_exhausted_target_arena);
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
-    RUN_TEST(test_move_assign_across_allocators_empties_the_source);
-    RUN_TEST(test_move_assign_across_allocators_reports_an_exhausted_arena);
+    RUN_TEST(test_move_assign_across_allocators_hands_the_allocator_over);
+    RUN_TEST(test_move_assign_needs_no_memory);
     RUN_TEST(test_move_assign_of_itself_changes_nothing);
     RUN_TEST(test_copy_of_a_wrapped_queue_keeps_the_order);
     RUN_TEST(test_copy_of_empty_stays_empty);
     RUN_TEST(test_copy_assign_overwrites_the_target);
-    RUN_TEST(test_copy_assign_self_is_noop);
+    RUN_TEST(test_copy_assign_of_itself_changes_nothing);
 
     RUN_TEST(test_copy_to_span_writes_front_to_back);
     RUN_TEST(test_copy_to_span_of_a_wrapped_queue_is_in_order);
@@ -1169,15 +1225,11 @@ int main() {
     RUN_TEST(test_the_copy_reaches_algo_and_the_queue_is_untouched);
 
     RUN_TEST(test_swap_exchanges_the_elems);
-    RUN_TEST(test_swap_self_is_noop);
-
-    RUN_TEST(test_new_reports_an_exhausted_arena);
+    RUN_TEST(test_swap_of_itself_changes_nothing);
     RUN_TEST(test_from_data_reports_an_exhausted_arena);
     RUN_TEST(test_push_reports_an_exhausted_arena_and_changes_nothing);
     RUN_TEST(test_copy_reports_an_exhausted_arena);
     RUN_TEST(test_reserve_reports_an_exhausted_arena);
-    RUN_TEST(test_a_refused_header_frees_the_deque);
-    RUN_TEST(test_a_refused_header_frees_a_filled_deque);
 
 
     RUN_TEST(test_eq_matches_the_same_elems);
@@ -1191,12 +1243,18 @@ int main() {
 
     RUN_TEST(test_into_deque_hands_the_elems_over);
     RUN_TEST(test_into_deque_of_an_empty_queue);
-    RUN_TEST(test_into_deque_releases_the_header_alone);
+    RUN_TEST(test_into_deque_allocates_nothing);
 
     RUN_TEST(test_fprint_writes_the_elems);
     RUN_TEST(test_fprint_of_a_single_elem_has_no_separator);
     RUN_TEST(test_fprint_of_an_empty_queue);
     RUN_TEST(test_print_writes_to_stdout);
+
+    RUN_TEST(test_swap_across_allocators_carries_each_allocator);
+
+    RUN_TEST(test_from_data_reports_a_refused_block);
+    RUN_TEST(test_push_reports_a_refused_growth);
+    RUN_TEST(test_copy_assign_reports_a_refused_block_and_changes_nothing);
 
     return UNITY_END();
 }

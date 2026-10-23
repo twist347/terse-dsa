@@ -12,74 +12,59 @@
 
 /* ========== internals ========== */
 
-#define ASSERT_ARR(a)                                                      \
-    (assert(a),                                                            \
-     assert(tda_layout_is_type((a)->elem)),                                \
-     assert((a)->len == 0 || (a)->data),                                   \
-     assert(!(a)->data || (a)->len > 0),                                   \
-     assert(!(a)->data || tda_ptr_is_aligned((a)->data, (a)->elem.align)), \
-     assert((a)->al))
-
-struct tda_Arr {
-    void *data;
-    size_t len;
-    tda_Layout elem;
-    tda_Al *al;
-};
+#define ASSERT_ARR(a)                                                         \
+    (assert(a),                                                               \
+     assert(tda_layout_is_type((a)->elem_)),                                  \
+     assert((a)->len_ == 0 || (a)->data_),                                    \
+     assert(!(a)->data_ || (a)->len_ > 0),                                    \
+     assert(!(a)->data_ || tda_ptr_is_aligned((a)->data_, (a)->elem_.align)), \
+     assert((a)->al_))
 
 [[nodiscard]]
-static tda_Status new_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al *al, tda_Arr **out);
-
-static void set_fields(tda_Arr *obj, void *data, size_t len, tda_Layout elem, tda_Al *al);
+static tda_Status init_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out);
 
 /// the block as it was allocated: len elems at the elem's alignment
 [[nodiscard]]
-static tda_Layout data_layout(const tda_Arr *self);
-
-/// frees the block, leaving an empty arr on the same allocator
-static void release_data(tda_Arr *self);
+static tda_Layout block_layout(const tda_Arr *self);
 
 [[nodiscard]]
 static size_t len_bytes(const tda_Arr *self);
 
 [[nodiscard]]
-static const unsigned char *arr_offset(const tda_Arr *self, size_t idx);
-
-[[nodiscard]]
-static unsigned char *arr_offset_mut(tda_Arr *self, size_t idx);
+static unsigned char *elem_at_mut(tda_Arr *self, size_t idx);
 
 /* ========== lifetime ========== */
 
-tda_Status tda_arr_new_len(size_t len, tda_Layout elem, tda_Al *al, tda_Arr **out) {
+tda_Status tda_arr_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out) {
     assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
-    return new_impl(true, len, elem, al, out);
+    return init_impl(true, len, elem, al, out);
 }
 
-tda_Status tda_arr_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Arr **out) {
+tda_Status tda_arr_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out) {
     assert(data || len == 0);
     assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
-    tda_Arr *arr;
-    const tda_Status st = new_impl(false, len, elem, al, &arr);
+    tda_Arr obj;
+    const tda_Status st = init_impl(false, len, elem, al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
     if (len > 0) {
-        memcpy(arr->data, data, len_bytes(arr));
+        memcpy(obj.data_, data, len_bytes(&obj));
     }
 
-    *out = arr;
+    *out = obj;
 
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_arr_from_span(tda_Span s, tda_Al *al, tda_Arr **out) {
+tda_Status tda_arr_from_span(tda_Span s, tda_Al *al, tda_Arr *out) {
     TDA_SPAN_ASSERT(s);
     assert(al);
     assert(out);
@@ -87,27 +72,30 @@ tda_Status tda_arr_from_span(tda_Span s, tda_Al *al, tda_Arr **out) {
     return tda_arr_from_data(s.data, s.len, s.elem, al, out);
 }
 
-void tda_arr_drop(tda_Arr *self) {
-    if (!self) {
+void tda_arr_deinit(tda_Arr *self) {
+    assert(self);
+
+    // the inert state, never initialized or already released
+    if (!self->al_) {
+        assert(!self->data_);
         return;
     }
 
     ASSERT_ARR(self);
 
-    tda_Al *al_copy = self->al;
-    tda_dealloc(al_copy, self->data, data_layout(self));
-    TDA_DEALLOC(tda_Arr, al_copy, self, 1);
+    tda_dealloc(self->al_, self->data_, block_layout(self));
+    *self = (tda_Arr){};
 }
 
 /* ========== copy ========== */
 
-tda_Status tda_arr_copy(const tda_Arr *self, tda_Arr **out) {
+tda_Status tda_arr_copy(const tda_Arr *self, tda_Arr *out) {
     ASSERT_ARR(self);
 
-    return tda_arr_copy_with(self, self->al, out);
+    return tda_arr_copy_with(self, self->al_, out);
 }
 
-tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr **out) {
+tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr *out) {
     ASSERT_ARR(self);
     assert(al);
 
@@ -117,7 +105,7 @@ tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr **out) {
 tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-    TDA_EXPECT(tda_layout_eq(self->elem, other->elem));
+    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -127,17 +115,17 @@ tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
     const size_t other_bytes = len_bytes(other);
 
     if (self_bytes != other_bytes) {
-        void *new_data = tda_realloc(self->al, self->data, data_layout(self), other_bytes);
-        if (other_bytes > 0 && !new_data) {
+        void *ptr = tda_realloc(self->al_, self->data_, block_layout(self), other_bytes);
+        if (other_bytes > 0 && !ptr) {
             return TDA_STATUS_ERR_NO_MEM;
         }
 
-        self->data = new_data;
-        self->len = other->len;
+        self->data_ = ptr;
+        self->len_ = other->len_;
     }
 
     if (other_bytes > 0) {
-        memcpy(self->data, other->data, other_bytes);
+        memcpy(self->data_, other->data_, other_bytes);
     }
 
     ASSERT_ARR(self);
@@ -145,41 +133,22 @@ tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
+void tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-    TDA_EXPECT(tda_layout_eq(self->elem, other->elem));
+    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
 
     if (self == other) {
-        return TDA_STATUS_OK;
+        return;
     }
 
-    // one allocator: swap the blocks, then release what 'self' held from 'other'
-    if (self->al == other->al) {
-        TDA_SWAP(*self, *other);
-        release_data(other);
-
-        ASSERT_ARR(self);
-        ASSERT_ARR(other);
-
-        return TDA_STATUS_OK;
-    }
-
-    // two allocators: build the copy first, so a refusal changes nothing
-    tda_Arr *obj;
-    const tda_Status st = tda_arr_copy_with(other, self->al, &obj);
-    if (TDA_STATUS_IS_ERR(st)) {
-        return st;
-    }
-
-    TDA_SWAP(*self, *obj);
-    tda_arr_drop(obj);
-    release_data(other);
+    // the allocator goes along with the block, and 'other' is left empty on it
+    tda_arr_deinit(self);
+    *self = *other;
+    *other = (tda_Arr){.elem_ = self->elem_, .al_ = self->al_};
 
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-
-    return TDA_STATUS_OK;
 }
 
 /* ========== compare ========== */
@@ -199,100 +168,14 @@ bool tda_arr_eq_by(const tda_Arr *a, const tda_Arr *b, tda_Eq eq, void *ctx) {
     return tda_span_eq_by(tda_arr_to_span(a), tda_arr_to_span(b), eq, ctx);
 }
 
-/* ========== info ========== */
-
-size_t tda_arr_len(const tda_Arr *self) {
-    ASSERT_ARR(self);
-
-    return self->len;
-}
-
-size_t tda_arr_elem_size(const tda_Arr *self) {
-    ASSERT_ARR(self);
-
-    return self->elem.size;
-}
-
-tda_Layout tda_arr_elem_layout(const tda_Arr *self) {
-    ASSERT_ARR(self);
-
-    return self->elem;
-}
-
-size_t tda_arr_bytes(const tda_Arr *self) {
-    ASSERT_ARR(self);
-
-    return len_bytes(self);
-}
-
-tda_Al *tda_arr_al(const tda_Arr *self) {
-    ASSERT_ARR(self);
-
-    return self->al;
-}
-
 /* ========== access ========== */
-
-const void *tda_arr_front(const tda_Arr *self) {
-    ASSERT_ARR(self);
-    TDA_EXPECT(self->len > 0);
-
-    return arr_offset(self, 0);
-}
-
-void *tda_arr_front_mut(tda_Arr *self) {
-    ASSERT_ARR(self);
-    TDA_EXPECT(self->len > 0);
-
-    return arr_offset_mut(self, 0);
-}
-
-const void *tda_arr_back(const tda_Arr *self) {
-    ASSERT_ARR(self);
-    TDA_EXPECT(self->len > 0);
-
-    return arr_offset(self, self->len - 1);
-}
-
-void *tda_arr_back_mut(tda_Arr *self) {
-    ASSERT_ARR(self);
-    TDA_EXPECT(self->len > 0);
-
-    return arr_offset_mut(self, self->len - 1);
-}
-
-const void *tda_arr_get(const tda_Arr *self, size_t idx) {
-    ASSERT_ARR(self);
-    TDA_EXPECT(idx < self->len);
-
-    return arr_offset(self, idx);
-}
-
-void *tda_arr_get_mut(tda_Arr *self, size_t idx) {
-    ASSERT_ARR(self);
-    TDA_EXPECT(idx < self->len);
-
-    return arr_offset_mut(self, idx);
-}
 
 void tda_arr_set(tda_Arr *self, size_t idx, const void *val) {
     ASSERT_ARR(self);
     assert(val);
-    TDA_EXPECT(idx < self->len);
+    TDA_EXPECT(idx < self->len_);
 
-    memmove(arr_offset_mut(self, idx), val, self->elem.size);
-}
-
-const void *tda_arr_data(const tda_Arr *self) {
-    ASSERT_ARR(self);
-
-    return self->data;
-}
-
-void *tda_arr_data_mut(tda_Arr *self) {
-    ASSERT_ARR(self);
-
-    return self->data;
+    memmove(elem_at_mut(self, idx), val, self->elem_.size);
 }
 
 /* ========== mods ========== */
@@ -300,8 +183,7 @@ void *tda_arr_data_mut(tda_Arr *self) {
 void tda_arr_swap(tda_Arr *self, tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-    TDA_EXPECT(tda_layout_eq(self->elem, other->elem));
-    TDA_EXPECT(self->al == other->al);
+    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
 
     if (self == other) {
         return;
@@ -317,20 +199,6 @@ void tda_arr_swap_elems(tda_Arr *self, size_t i, size_t j) {
     ASSERT_ARR(self);
 
     tda_span_swap_elems(tda_arr_to_span_mut(self), i, j);
-}
-
-/* ========== to span ========== */
-
-tda_SpanMut tda_arr_to_span_mut(tda_Arr *self) {
-    ASSERT_ARR(self);
-
-    return tda_span_from_data_mut(self->data, self->len, self->elem);
-}
-
-tda_Span tda_arr_to_span(const tda_Arr *self) {
-    ASSERT_ARR(self);
-
-    return tda_span_from_data(self->data, self->len, self->elem);
 }
 
 /* ========== print ========== */
@@ -352,67 +220,38 @@ void tda_arr_print(const tda_Arr *self, tda_FPrint fprint) {
 
 /* ========== internals ========== */
 
-static tda_Status new_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al *al, tda_Arr **out) {
+static tda_Status init_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out) {
     assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
-    tda_Arr *obj = TDA_ALLOC(tda_Arr, al, 1);
-    if (!obj) {
-        return TDA_STATUS_ERR_NO_MEM;
-    }
-
-    void *data = nullptr;
-
+    tda_Arr obj = {.len_ = len, .elem_ = elem, .al_ = al};
     if (len > 0) {
         tda_Layout block;
         if (tda_layout_ckd_array(&block, elem, len)) {
-            goto fail;
+            return TDA_STATUS_ERR_NO_MEM;
         }
-        data = zeroed ? tda_alloc_zeroed(al, block) : tda_alloc(al, block);
-        if (!data) {
-            goto fail;
+        obj.data_ = zeroed ? tda_alloc_zeroed(al, block) : tda_alloc(al, block);
+        if (!obj.data_) {
+            return TDA_STATUS_ERR_NO_MEM;
         }
     }
 
-    set_fields(obj, data, len, elem, al);
-
-    ASSERT_ARR(obj);
-
     *out = obj;
+
+    ASSERT_ARR(out);
+
     return TDA_STATUS_OK;
-
-fail:
-    TDA_DEALLOC(tda_Arr, al, obj, 1);
-
-    return TDA_STATUS_ERR_NO_MEM;
 }
 
-static void set_fields(tda_Arr *obj, void *data, size_t len, tda_Layout elem, tda_Al *al) {
-    obj->data = data;
-    obj->len = len;
-    obj->elem = elem;
-    obj->al = al;
-}
-
-static tda_Layout data_layout(const tda_Arr *self) {
-    return (tda_Layout){.size = len_bytes(self), .align = self->elem.align};
-}
-
-static void release_data(tda_Arr *self) {
-    tda_dealloc(self->al, self->data, data_layout(self));
-    self->data = nullptr;
-    self->len = 0;
+static tda_Layout block_layout(const tda_Arr *self) {
+    return (tda_Layout){.size = len_bytes(self), .align = self->elem_.align};
 }
 
 static size_t len_bytes(const tda_Arr *self) {
-    return self->len * self->elem.size;
+    return self->len_ * self->elem_.size;
 }
 
-static const unsigned char *arr_offset(const tda_Arr *self, size_t idx) {
-    return tda_byte_offset(self->data, self->elem.size, idx);
-}
-
-static unsigned char *arr_offset_mut(tda_Arr *self, size_t idx) {
-    return tda_byte_offset_mut(self->data, self->elem.size, idx);
+static unsigned char *elem_at_mut(tda_Arr *self, size_t idx) {
+    return tda_byte_offset_mut(self->data_, self->elem_.size, idx);
 }

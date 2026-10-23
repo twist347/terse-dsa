@@ -2,6 +2,7 @@
 
 #include "tda/alloc/alloc.h"
 #include "tda/alloc/default.h"
+#include "tda/core/check.h"
 #include "tda/core/hash.h"
 #include "tda/core/util.h"
 
@@ -28,39 +29,19 @@ static constexpr size_t GUARD_SIZE = 16;
 // memory that is still checked
 static constexpr size_t QUARANTINE_LEN = 64;
 
+// the header sizes the quarantine without seeing this one
+static_assert(QUARANTINE_LEN == TDA_DEBUG_QUARANTINE_);
+
 static constexpr size_t TABLE_MIN_CAP = 64;
 
-typedef struct {
-    uintptr_t addr; // 0 marks an empty slot; an allocator never hands out null
-    tda_Layout layout;
-    uint64_t serial;
-} Entry;
+// the record of one live block; laid out in the header, so the struct has a size
+typedef tda_DebugEntry_ BlockRecord;
 
 // open addressing over the block addresses, linear probing, at most half full
-typedef struct {
-    Entry *slots;
-    size_t cap;
-    size_t len;
-} Table;
+typedef tda_DebugTable_ BlockTable;
 
-typedef struct {
-    void *ptr;
-    tda_Layout layout;
-    uint64_t serial;
-} Freed;
-
-typedef struct {
-    tda_Al *parent;
-    Table table;
-    Freed quarantine[QUARANTINE_LEN]; // a ring; 'quarantine_len' oldest-first from 'head'
-    size_t quarantine_head;
-    size_t quarantine_len;
-    size_t live_bytes;
-    size_t peak_bytes;
-    uint64_t requests;
-    size_t fail_after; // requests let through before refusing starts
-    uint64_t break_at;
-} DebugCtx;
+// a block given back and held in the quarantine
+typedef tda_DebugFreed_ FreedBlock;
 
 [[nodiscard]]
 static void *debug_alloc(void *ctx, tda_Layout layout);
@@ -76,7 +57,7 @@ static void debug_dealloc(void *ctx, void *ptr, tda_Layout layout);
 /// other pointer or layout is reported, as being 'given back' or 'resized' to say which
 /// call did it. 'take' also takes the record out of the table
 [[nodiscard]]
-static Entry checked_entry(DebugCtx *debug_ctx, void *ptr, tda_Layout layout, bool take, const char *as);
+static BlockRecord checked_entry(tda_Debug *self, void *ptr, tda_Layout layout, bool take, const char *as);
 
 /// writes "tda debug: ..." to stderr and aborts
 [[noreturn]]
@@ -84,14 +65,14 @@ static void report(const char *fmt, ...);
 
 /// the next serial, after the break and refusal checks; 0 means refuse the request
 [[nodiscard]]
-static uint64_t next_serial(DebugCtx *debug_ctx);
+static uint64_t next_serial(tda_Debug *self);
 
 /// the i-th quarantined block, oldest first
 [[nodiscard]]
-static Freed *quarantined(DebugCtx *debug_ctx, size_t i);
+static FreedBlock *quarantined(tda_Debug *self, size_t i);
 
 /// moves the oldest quarantined block back to the parent, checking its fill
-static void release_oldest(DebugCtx *debug_ctx);
+static void release_oldest(tda_Debug *self);
 
 /// whether 'n' bytes at 'ptr' all equal 'fill'
 [[nodiscard]]
@@ -108,112 +89,108 @@ static tda_Layout parent_layout(tda_Layout layout);
 
 /// the slot a probe for 'addr' starts from
 [[nodiscard]]
-static size_t table_home(const Table *table, uintptr_t addr);
+static size_t table_home(const BlockTable *table, uintptr_t addr);
 
 /// the slot where 'addr' is, or the empty slot where it would go
 [[nodiscard]]
-static size_t table_probe(const Table *table, uintptr_t addr);
+static size_t table_probe(const BlockTable *table, uintptr_t addr);
 
 /// records a new block; false when the table could not grow
 [[nodiscard]]
-static bool table_insert(Table *table, Entry entry);
+static bool table_insert(BlockTable *table, BlockRecord entry);
 
 /// takes the entry for 'addr' out; false when there is none
 [[nodiscard]]
-static bool table_take(Table *table, uintptr_t addr, Entry *out);
+static bool table_take(BlockTable *table, uintptr_t addr, BlockRecord *out);
 
-#define ASSERT_DEBUG(al)                 \
-    (assert(al),                         \
-     assert((al)->alloc == debug_alloc), \
-     assert((al)->ctx))
+// the ctx check is how a moved or copied allocator gets caught, so it stays under
+// TDA_HARDENED
+#define ASSERT_DEBUG(d)                     \
+    (assert(d),                             \
+     assert((d)->al_.alloc == debug_alloc), \
+     TDA_EXPECT((d)->al_.ctx == (d)))
 
 /* ========== lifetime ========== */
 
-tda_Al *tda_al_debug_new(tda_Al *parent) {
+void tda_debug_init(tda_Al *parent, tda_Debug *out) {
     assert(parent);
-
-    DebugCtx *debug_ctx = TDA_ALLOC(DebugCtx, parent, 1);
-    if (!debug_ctx) {
-        return nullptr;
-    }
-
-    tda_Al *obj = TDA_ALLOC(tda_Al, parent, 1);
-    if (!obj) {
-        TDA_DEALLOC(DebugCtx, parent, debug_ctx, 1);
-        return nullptr;
-    }
-
-    *debug_ctx = (DebugCtx){.parent = parent, .fail_after = SIZE_MAX};
+    assert(out);
 
     // no resize, and a remap that only checks: every growth moves, through the wrapper's
     // alloc, copy and dealloc, so every block passes the checks
-    *obj = (tda_Al){
-        .ctx = debug_ctx,
-        .alloc = debug_alloc,
-        .alloc_zeroed = nullptr,
-        .resize = nullptr,
-        .remap = debug_remap,
-        .dealloc = debug_dealloc,
+    *out = (tda_Debug){
+        .al_ = {
+            .ctx = out,
+            .alloc = debug_alloc,
+            .remap = debug_remap,
+            .dealloc = debug_dealloc,
+        },
+        .parent_ = parent,
+        .fail_after_ = SIZE_MAX,
     };
-
-    return obj;
 }
 
-void tda_al_debug_drop(tda_Al *self) {
-    if (!self) {
+void tda_debug_deinit(tda_Debug *self) {
+    assert(self);
+
+    // the inert state, never filled in or already released
+    if (!self->al_.alloc) {
         return;
     }
 
     ASSERT_DEBUG(self);
 
-    DebugCtx *debug_ctx = self->ctx;
-    while (debug_ctx->quarantine_len > 0) {
-        release_oldest(debug_ctx);
+    tda_debug_flush_quarantine(self);
+
+    TDA_DEALLOC(BlockRecord, tda_al_default(), self->table_.slots, self->table_.cap);
+
+    *self = (tda_Debug){};
+}
+
+/* ========== quarantine ========== */
+
+void tda_debug_flush_quarantine(tda_Debug *self) {
+    ASSERT_DEBUG(self);
+
+    while (self->quarantine_len_ > 0) {
+        release_oldest(self);
     }
-
-    TDA_DEALLOC(Entry, tda_al_default(), debug_ctx->table.slots, debug_ctx->table.cap);
-
-    tda_Al *parent = debug_ctx->parent;
-    TDA_DEALLOC(DebugCtx, parent, debug_ctx, 1);
-    TDA_DEALLOC(tda_Al, parent, self, 1);
 }
 
 /* ========== stats ========== */
 
-tda_AlDebugStats tda_al_debug_stats(const tda_Al *self) {
+tda_DebugStats tda_debug_stats(const tda_Debug *self) {
     ASSERT_DEBUG(self);
 
-    const DebugCtx *debug_ctx = self->ctx;
 
-    return (tda_AlDebugStats){
-        .live_blocks = debug_ctx->table.len,
-        .live_bytes = debug_ctx->live_bytes,
-        .peak_bytes = debug_ctx->peak_bytes,
-        .requests = debug_ctx->requests,
+    return (tda_DebugStats){
+        .live_blocks = self->table_.len,
+        .live_bytes = self->live_bytes_,
+        .peak_bytes = self->peak_bytes_,
+        .requests = self->requests_,
     };
 }
 
-size_t tda_al_debug_fprint_leaks(const tda_Al *self, FILE *stream) {
+size_t tda_debug_fprint_leaks(const tda_Debug *self, FILE *stream) {
     ASSERT_DEBUG(self);
     assert(stream);
 
-    const DebugCtx *debug_ctx = self->ctx;
-    const Table *table = &debug_ctx->table;
+    const BlockTable *table = &self->table_;
 
     for (size_t i = 0; i < table->cap; ++i) {
-        const Entry *e = &table->slots[i];
-        if (e->addr != 0) {
+        const BlockRecord *entry = &table->slots[i];
+        if (entry->addr != 0) {
             fprintf(
                 stream,
                 "tda debug: leak: block #%llu, %zu bytes at %p\n",
-                (unsigned long long) e->serial, e->layout.size, (void *) e->addr
+                (unsigned long long) entry->serial, entry->layout.size, (void *) entry->addr
             );
         }
     }
     fprintf(
         stream,
         "tda debug: %zu leaked, %zu bytes\n",
-        table->len, debug_ctx->live_bytes
+        table->len, self->live_bytes_
     );
 
     return table->len;
@@ -221,20 +198,18 @@ size_t tda_al_debug_fprint_leaks(const tda_Al *self, FILE *stream) {
 
 /* ========== fault injection ========== */
 
-void tda_al_debug_fail_after(tda_Al *self, size_t n) {
+void tda_debug_fail_after(tda_Debug *self, size_t count) {
     ASSERT_DEBUG(self);
 
-    DebugCtx *debug_ctx = self->ctx;
 
     size_t at;
-    debug_ctx->fail_after = ckd_add(&at, (size_t) debug_ctx->requests, n) ? SIZE_MAX : at;
+    self->fail_after_ = ckd_add(&at, (size_t) self->requests_, count) ? SIZE_MAX : at;
 }
 
-void tda_al_debug_break_at(tda_Al *self, uint64_t serial) {
+void tda_debug_break_at(tda_Debug *self, uint64_t serial) {
     ASSERT_DEBUG(self);
 
-    DebugCtx *debug_ctx = self->ctx;
-    debug_ctx->break_at = serial;
+    self->break_at_ = serial;
 }
 
 /* ========== internals ========== */
@@ -243,9 +218,9 @@ static void *debug_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
     assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
-    DebugCtx *debug_ctx = ctx;
+    tda_Debug *self = ctx;
 
-    const uint64_t serial = next_serial(debug_ctx);
+    const uint64_t serial = next_serial(self);
     if (serial == 0) {
         return nullptr;
     }
@@ -255,23 +230,23 @@ static void *debug_alloc(void *ctx, tda_Layout layout) {
         return nullptr;
     }
 
-    unsigned char *block = tda_alloc(debug_ctx->parent, with_guard);
+    unsigned char *block = tda_alloc(self->parent_, with_guard);
     if (!block) {
         return nullptr;
     }
 
-    const Entry entry = {.addr = (uintptr_t) block, .layout = layout, .serial = serial};
-    if (!table_insert(&debug_ctx->table, entry)) {
-        tda_dealloc(debug_ctx->parent, block, with_guard);
+    const BlockRecord entry = {.addr = (uintptr_t) block, .layout = layout, .serial = serial};
+    if (!table_insert(&self->table_, entry)) {
+        tda_dealloc(self->parent_, block, with_guard);
         return nullptr;
     }
 
     memset(block, FILL_NEW, layout.size);
     memset(block + layout.size, FILL_GUARD, GUARD_SIZE);
 
-    debug_ctx->live_bytes += layout.size;
-    if (debug_ctx->live_bytes > debug_ctx->peak_bytes) {
-        debug_ctx->peak_bytes = debug_ctx->live_bytes;
+    self->live_bytes_ += layout.size;
+    if (self->live_bytes_ > self->peak_bytes_) {
+        self->peak_bytes_ = self->live_bytes_;
     }
 
     return block;
@@ -281,7 +256,7 @@ static void *debug_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) 
     assert(ctx);
     TDA_UNUSED(new_size);
 
-    [[maybe_unused]] const Entry entry = checked_entry(ctx, ptr, old, false, "resized");
+    [[maybe_unused]] const BlockRecord entry = checked_entry(ctx, ptr, old, false, "resized");
 
     return nullptr;
 }
@@ -290,9 +265,9 @@ static void debug_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     assert(ctx);
     assert(ptr); // tda_dealloc takes null itself
 
-    DebugCtx *debug_ctx = ctx;
+    tda_Debug *self = ctx;
 
-    const Entry entry = checked_entry(debug_ctx, ptr, layout, true, "given back");
+    const BlockRecord entry = checked_entry(self, ptr, layout, true, "given back");
 
     unsigned char *block = ptr;
     if (!all_equal(block + layout.size, GUARD_SIZE, FILL_GUARD)) {
@@ -302,30 +277,30 @@ static void debug_dealloc(void *ctx, void *ptr, tda_Layout layout) {
         );
     }
 
-    debug_ctx->live_bytes -= layout.size;
+    self->live_bytes_ -= layout.size;
     memset(block, FILL_FREED, parent_layout(layout).size);
 
-    if (debug_ctx->quarantine_len == QUARANTINE_LEN) {
-        release_oldest(debug_ctx);
+    if (self->quarantine_len_ == QUARANTINE_LEN) {
+        release_oldest(self);
     }
-    ++debug_ctx->quarantine_len;
-    *quarantined(debug_ctx, debug_ctx->quarantine_len - 1) =
-            (Freed){.ptr = ptr, .layout = layout, .serial = entry.serial};
+    ++self->quarantine_len_;
+    *quarantined(self, self->quarantine_len_ - 1) =
+            (FreedBlock){.ptr = ptr, .layout = layout, .serial = entry.serial};
 }
 
-static Entry checked_entry(DebugCtx *debug_ctx, void *ptr, tda_Layout layout, bool take, const char *as) {
-    Table *table = &debug_ctx->table;
+static BlockRecord checked_entry(tda_Debug *self, void *ptr, tda_Layout layout, bool take, const char *as) {
+    BlockTable *table = &self->table_;
     const uintptr_t addr = (uintptr_t) ptr;
 
-    Entry entry;
+    BlockRecord entry;
     const bool found = take
         ? table_take(table, addr, &entry)
         : table->cap > 0 && (entry = table->slots[table_probe(table, addr)]).addr != 0;
     if (!found) {
-        for (size_t i = 0; i < debug_ctx->quarantine_len; ++i) {
-            const Freed *f = quarantined(debug_ctx, i);
-            if (f->ptr == ptr) {
-                const unsigned long long serial = f->serial;
+        for (size_t i = 0; i < self->quarantine_len_; ++i) {
+            const FreedBlock *freed = quarantined(self, i);
+            if (freed->ptr == ptr) {
+                const unsigned long long serial = freed->serial;
                 report("block #%llu at %p freed twice", serial, ptr);
             }
         }
@@ -354,41 +329,41 @@ static void report(const char *fmt, ...) {
     abort();
 }
 
-static uint64_t next_serial(DebugCtx *debug_ctx) {
-    const uint64_t serial = ++debug_ctx->requests;
+static uint64_t next_serial(tda_Debug *self) {
+    const uint64_t serial = ++self->requests_;
 
-    if (serial == debug_ctx->break_at) {
+    if (serial == self->break_at_) {
         report("break at block #%llu", (unsigned long long) serial);
     }
-    if (serial > debug_ctx->fail_after) {
+    if (serial > self->fail_after_) {
         return 0;
     }
 
     return serial;
 }
 
-static Freed *quarantined(DebugCtx *debug_ctx, size_t i) {
-    assert(i < debug_ctx->quarantine_len);
+static FreedBlock *quarantined(tda_Debug *self, size_t i) {
+    assert(i < self->quarantine_len_);
 
-    return &debug_ctx->quarantine[(debug_ctx->quarantine_head + i) % QUARANTINE_LEN];
+    return &self->quarantine_[(self->quarantine_head_ + i) % QUARANTINE_LEN];
 }
 
-static void release_oldest(DebugCtx *debug_ctx) {
-    assert(debug_ctx->quarantine_len > 0);
+static void release_oldest(tda_Debug *self) {
+    assert(self->quarantine_len_ > 0);
 
-    const Freed f = *quarantined(debug_ctx, 0);
-    debug_ctx->quarantine_head = (debug_ctx->quarantine_head + 1) % QUARANTINE_LEN;
-    --debug_ctx->quarantine_len;
+    const FreedBlock freed = *quarantined(self, 0);
+    self->quarantine_head_ = (self->quarantine_head_ + 1) % QUARANTINE_LEN;
+    --self->quarantine_len_;
 
-    const tda_Layout with_guard = parent_layout(f.layout);
-    if (!all_equal(f.ptr, with_guard.size, FILL_FREED)) {
+    const tda_Layout with_guard = parent_layout(freed.layout);
+    if (!all_equal(freed.ptr, with_guard.size, FILL_FREED)) {
         report(
             "block #%llu at %p (%zu bytes) was written after it was freed",
-            (unsigned long long) f.serial, f.ptr, f.layout.size
+            (unsigned long long) freed.serial, freed.ptr, freed.layout.size
         );
     }
 
-    tda_dealloc(debug_ctx->parent, f.ptr, with_guard);
+    tda_dealloc(self->parent_, freed.ptr, with_guard);
 }
 
 static bool all_equal(const unsigned char *ptr, size_t n, unsigned char fill) {
@@ -415,7 +390,7 @@ static tda_Layout parent_layout(tda_Layout layout) {
     return out;
 }
 
-static size_t table_home(const Table *table, uintptr_t addr) {
+static size_t table_home(const BlockTable *table, uintptr_t addr) {
     assert(table->cap > 0);
 
     // the low bits of a block address are zeros of its alignment; the mixer spreads the
@@ -425,7 +400,7 @@ static size_t table_home(const Table *table, uintptr_t addr) {
     return (size_t) tda_hash_u64(&key, nullptr) & (table->cap - 1);
 }
 
-static size_t table_probe(const Table *table, uintptr_t addr) {
+static size_t table_probe(const BlockTable *table, uintptr_t addr) {
     size_t i = table_home(table, addr);
     while (table->slots[i].addr != 0 && table->slots[i].addr != addr) {
         i = (i + 1) & (table->cap - 1);
@@ -434,24 +409,24 @@ static size_t table_probe(const Table *table, uintptr_t addr) {
     return i;
 }
 
-static bool table_insert(Table *table, Entry entry) {
+static bool table_insert(BlockTable *table, BlockRecord entry) {
     assert(entry.addr != 0);
 
     if (2 * (table->len + 1) > table->cap) {
         const size_t new_cap = table->cap ? 2 * table->cap : TABLE_MIN_CAP;
-        Entry *slots = TDA_ALLOC_ZEROED(Entry, tda_al_default(), new_cap);
+        BlockRecord *slots = TDA_ALLOC_ZEROED(BlockRecord, tda_al_default(), new_cap);
         if (!slots) {
             return false;
         }
 
-        const Table old = *table;
-        *table = (Table){.slots = slots, .cap = new_cap, .len = old.len};
+        const BlockTable old = *table;
+        *table = (BlockTable){.slots = slots, .cap = new_cap, .len = old.len};
         for (size_t i = 0; i < old.cap; ++i) {
             if (old.slots[i].addr != 0) {
                 table->slots[table_probe(table, old.slots[i].addr)] = old.slots[i];
             }
         }
-        TDA_DEALLOC(Entry, tda_al_default(), old.slots, old.cap);
+        TDA_DEALLOC(BlockRecord, tda_al_default(), old.slots, old.cap);
     }
 
     const size_t i = table_probe(table, entry.addr);
@@ -463,7 +438,7 @@ static bool table_insert(Table *table, Entry entry) {
     return true;
 }
 
-static bool table_take(Table *table, uintptr_t addr, Entry *out) {
+static bool table_take(BlockTable *table, uintptr_t addr, BlockRecord *out) {
     if (table->cap == 0) {
         return false;
     }
@@ -474,7 +449,7 @@ static bool table_take(Table *table, uintptr_t addr, Entry *out) {
     }
 
     *out = table->slots[hole];
-    table->slots[hole] = (Entry){};
+    table->slots[hole] = (BlockRecord){};
     --table->len;
 
     // backward shift: pull later entries of the run into the hole when their home slot
@@ -485,7 +460,7 @@ static bool table_take(Table *table, uintptr_t addr, Entry *out) {
         // distance from home to i against distance from hole to i, both around the ring
         if (((i - home) & mask) >= ((i - hole) & mask)) {
             table->slots[hole] = table->slots[i];
-            table->slots[i] = (Entry){};
+            table->slots[i] = (BlockRecord){};
             hole = i;
         }
     }

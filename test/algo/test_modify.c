@@ -18,10 +18,10 @@ void tearDown() {
 // "within one" is deliberately not transitive: 1~2 and 2~3, but 1 !~ 3.
 // That tells comparing against the last kept elem apart from comparing
 // against the previous one read
-static bool eq_within_one(const void *a, const void *b, void *) {
-    const int32_t x = *(const int32_t *) a;
-    const int32_t y = *(const int32_t *) b;
-    const int32_t d = x > y ? x - y : y - x;
+static bool eq_within_one(const void *lhs, const void *rhs, void *) {
+    const int32_t a = *(const int32_t *) lhs;
+    const int32_t b = *(const int32_t *) rhs;
+    const int32_t d = a > b ? a - b : b - a;
 
     return d <= 1;
 }

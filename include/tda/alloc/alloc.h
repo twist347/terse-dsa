@@ -35,8 +35,8 @@
 /// fallible op returns no tda_Status; [[nodiscard]] on the pointer catches the same
 /// dropped check. A request for 0 bytes gives null and is not an error.
 ///
-/// An allocator over another borrows it: the parent outlives the child, and they drop in
-/// reverse order of building.
+/// An allocator over another borrows it: the parent outlives the child, and they are
+/// released in reverse order of building.
 ///
 /// @par Example
 /// @snippet alloc/example_alloc.c use
@@ -48,8 +48,8 @@
 typedef struct {
     void *ctx; ///< implementation state, passed to every callback
 
-    /// 'layout.size' bytes, uninitialized, aligned to 'layout.align', or null when out of
-    /// memory. The size is never 0. Required.
+    /// 'layout.size' bytes, uninitialized, aligned to 'layout.align', or null when the
+    /// request cannot be met. The size is never 0. Required.
     void *(*alloc)(void *ctx, tda_Layout layout);
 
     /// as alloc, zeroed. Optional: null means alloc and memset.
@@ -75,7 +75,7 @@ typedef struct {
 /// a block of 'layout', uninitialized
 /// @param al the allocator
 /// @param layout its size, of which 0 gives null and is not an error, and its alignment
-/// @return the block, or null; for a non-zero size, null means out of memory
+/// @return the block, or null; for a non-zero size, null means the request cannot be met
 /// @bigo{1} on top of al->alloc
 [[nodiscard]] TDA_API
 void *tda_alloc(tda_Al *al, tda_Layout layout);
@@ -136,6 +136,28 @@ void tda_dealloc(tda_Al *al, void *ptr, tda_Layout layout);
 
 /// @name macros
 /// @{
+
+/// @cond
+// the five allocators TDA_AL knows, declared here so the macro needs none of their headers
+struct tda_Arena;
+struct tda_Pool;
+struct tda_Slab;
+struct tda_Debug;
+struct tda_Log;
+/// @endcond
+
+/// the allocator interface of a tda_Arena, tda_Pool, tda_Slab, tda_Debug or tda_Log, to
+/// hand to a container or a wrapper: `TDA_ALLOC(int32_t, TDA_AL(&arena), 4)`
+/// @param al a pointer to one of the five; any other type does not compile
+/// @return a tda_Al * into '*a', valid while it stays where it is
+/// @bigo{1}
+#define TDA_AL(al)                      \
+    _Generic((al),                      \
+        struct tda_Arena *: &(al)->al_, \
+        struct tda_Pool *: &(al)->al_,  \
+        struct tda_Slab *: &(al)->al_,  \
+        struct tda_Debug *: &(al)->al_, \
+        struct tda_Log *: &(al)->al_)
 
 /// @cond
 // what the macros expand to; a function evaluates each argument once, while a macro

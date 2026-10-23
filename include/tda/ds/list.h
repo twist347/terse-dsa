@@ -33,7 +33,7 @@
 /// tda_list_copy_from_span. A node cannot change owner without moving, so the ops that
 /// take nodes from another list (splice, splice_node, merge) relink only on one
 /// allocator. Across two they copy the elems into new nodes and free the old ones, and
-/// positions borrowed from 'src' die. swap takes one allocator only.
+/// positions borrowed from 'src' die. swap trades the allocators along with the nodes.
 ///
 /// @par Example
 /// @snippet ds/example_list.c build
@@ -42,28 +42,39 @@
 /// @snippet ds/example_list.c relink
 /// @{
 
-/// Owning list whose positions never move.
-/// Opaque: made by a constructor, released by tda_list_drop
-typedef struct tda_List tda_List;
-
 /// A position in the list.
 /// Borrowed from the list; valid until its elem is removed, cleared, assigned over or
-/// dropped with the list
+/// released with the list
 typedef struct tda_ListNode tda_ListNode;
+
+/// Owning list whose positions never move. A value the caller holds wherever it likes:
+/// an init or a from_ fills it in, tda_list_deinit releases its nodes. `= {}` is the
+/// inert state, which tda_list_deinit accepts and every other op asserts.
+///
+/// The fields belong to the list: read and change them only through the functions here.
+/// No node points back at the struct, so it can be moved as bytes.
+///
+/// @warning a copy of the struct is a second owner of the same nodes: releasing both
+///          frees them twice. Pass a pointer, and hand a list over with
+///          tda_list_move_assign.
+typedef struct tda_List {
+    tda_ListNode *head_; ///< the front node; null while the list is empty
+    tda_ListNode *tail_; ///< the back node; null while the list is empty
+    size_t len_;         ///< how many elems it holds
+    tda_Layout elem_;    ///< the layout of one elem
+    tda_Al *al_;         ///< where the nodes come from; moves along with the list
+} tda_List;
 
 /// @name lifetime
 /// @{
 
-/// an empty list
+/// an empty list; allocates nothing, so it cannot fail
 /// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
-/// @param[out] out the new list, written only on success
-/// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated, or a node of this
-///         elem size would not fit in size_t
+/// @param[out] out the new list
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Status tda_list_new(tda_Layout elem, tda_Al *al, tda_List **out);
+TDA_API
+void tda_list_init(tda_Layout elem, tda_Al *al, tda_List *out);
 
 /// a list holding a copy of 'len' elems read from 'data', front to back
 /// @param data the elems to copy in; may be null only when len is 0
@@ -72,27 +83,27 @@ tda_Status tda_list_new(tda_Layout elem, tda_Al *al, tda_List **out);
 /// @param al the allocator
 /// @param[out] out the new list, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header or any node cannot be allocated;
+/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated;
 ///         nothing is leaked
 /// @bigo{n}, one allocation per elem
 [[nodiscard]] TDA_API
-tda_Status tda_list_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_List **out);
+tda_Status tda_list_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_List *out);
 
 /// a list holding a copy of the elems 's' views
 /// @param s the view to copy; the elem layout is the span's
 /// @param al the allocator
 /// @param[out] out the new list, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header or any node cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_list_from_span(tda_Span s, tda_Al *al, tda_List **out);
+tda_Status tda_list_from_span(tda_Span s, tda_Al *al, tda_List *out);
 
-/// releases every node and the list through the allocator it was built with
-/// @param self null is a no-op
+/// releases what the list holds and leaves it inert, `= {}`
+/// @param self a list, or an inert one, for which this is a no-op
 /// @bigo{n}
 TDA_API
-void tda_list_drop(tda_List *self);
+void tda_list_deinit(tda_List *self);
 
 /// @}
 
@@ -103,20 +114,20 @@ void tda_list_drop(tda_List *self);
 /// @param self the list to copy
 /// @param[out] out the new list, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header or any node cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_list_copy(const tda_List *self, tda_List **out);
+tda_Status tda_list_copy(const tda_List *self, tda_List *out);
 
 /// a new list with the same elems in the same order, on 'al'
 /// @param self the list to copy
 /// @param al the allocator for the copy
 /// @param[out] out the new list, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header or any node cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List **out);
+tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List *out);
 
 /// overwrites the elems of 'self' with those of 'other', reusing its nodes and allocating
 /// or releasing the difference
@@ -128,17 +139,13 @@ tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List **out);
 [[nodiscard]] TDA_API
 tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other);
 
-/// moves the elems of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same elem layout; its old elems are released, its
-///                     allocator kept
-/// @param[in,out] other emptied on success and still usable; may be 'self'
-/// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and a node cannot be
-///         allocated; both are left unchanged
-/// @bigo{k} on one allocator, for the k old nodes of 'self' freed one by one; k + n
-///         across two, where the elems are copied and borrowed positions do not survive
-[[nodiscard]] TDA_API
-tda_Status tda_list_move_assign(tda_List *self, tda_List *other);
+/// releases the elems of 'self' and hands it everything 'other' holds, its allocator
+/// included, leaving 'other' empty on that allocator
+/// @param[in,out] self must have the same elem layout
+/// @param[in,out] other emptied and still usable; may be 'self'
+/// @bigo{1}
+TDA_API
+void tda_list_move_assign(tda_List *self, tda_List *other);
 
 /// @}
 
@@ -172,42 +179,45 @@ bool tda_list_eq_by(const tda_List *a, const tda_List *b, tda_Eq eq, void *ctx);
 /// @param self the list
 /// @return the length, stored, not counted
 /// @bigo{1}
-[[nodiscard]] TDA_API
-size_t tda_list_len(const tda_List *self);
+[[nodiscard]]
+static inline size_t tda_list_len(const tda_List *self) {
+    assert(self);
+    assert(self->al_);
 
-/// the size of one elem
-/// @param self the list
-/// @return elem.size, the size of the elem layout
-/// @bigo{1}
-[[nodiscard]] TDA_API
-size_t tda_list_elem_size(const tda_List *self);
+    return self->len_;
+}
 
 /// the layout of one elem, as the list was built with
 /// @param self the list
 /// @return the size and the alignment; every elem is aligned to it
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Layout tda_list_elem_layout(const tda_List *self);
+[[nodiscard]]
+static inline tda_Layout tda_list_elem_layout(const tda_List *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->elem_;
+}
 
 /// the allocator the list was built with
 /// @param self the list
 /// @return the allocator, borrowed
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Al *tda_list_al(const tda_List *self);
+[[nodiscard]]
+static inline tda_Al *tda_list_al(const tda_List *self) {
+    assert(self);
+    assert(self->al_);
 
-/// the smallest block that holds both the list struct and one node, for an allocator
-/// whose blocks are all one layout, such as alloc/pool
-/// @param elem the layout of one elem, asserted to be a type's and one tda_list_new
-///             accepts
-/// @return the larger size and the larger alignment of the two; under it tda_list_new or
-///         the first push fails
-/// @note a node of an elem smaller than about four pointers is smaller than the struct,
-///       so every node of such a list leaves part of its block unused; alloc/slab sizes
-///       the two apart
+    return self->al_;
+}
+
+/// the layout of one node, the block for an allocator whose blocks are all one layout,
+/// such as alloc/pool
+/// @param elem the layout of one elem, asserted to be a type's
+/// @return the links and the elem after them, padded so a pool of them tiles
 /// @bigo{1}
 [[nodiscard]] TDA_API
-tda_Layout tda_list_block_layout(tda_Layout elem);
+tda_Layout tda_list_node_layout(tda_Layout elem);
 
 /// @}
 
@@ -245,23 +255,43 @@ void *tda_list_back_mut(tda_List *self);
 /// @param self the list
 /// @return the node, or null while the list is empty
 /// @bigo{1}
-[[nodiscard]] TDA_API
-const tda_ListNode *tda_list_front_node(const tda_List *self);
+[[nodiscard]]
+static inline const tda_ListNode *tda_list_front_node(const tda_List *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->head_;
+}
 
 /// the position of the front elem, to write through
 /// @copydetails tda_list_front_node
-[[nodiscard]] TDA_API
-tda_ListNode *tda_list_front_node_mut(tda_List *self);
+[[nodiscard]]
+static inline tda_ListNode *tda_list_front_node_mut(tda_List *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->head_;
+}
 
 /// the position of the back elem
 /// @copydetails tda_list_front_node
-[[nodiscard]] TDA_API
-const tda_ListNode *tda_list_back_node(const tda_List *self);
+[[nodiscard]]
+static inline const tda_ListNode *tda_list_back_node(const tda_List *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->tail_;
+}
 
 /// the position of the back elem, to write through
 /// @copydetails tda_list_front_node
-[[nodiscard]] TDA_API
-tda_ListNode *tda_list_back_node_mut(tda_List *self);
+[[nodiscard]]
+static inline tda_ListNode *tda_list_back_node_mut(tda_List *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->tail_;
+}
 
 /// the first node from the front whose elem is equal to 'key'
 /// @param self the list
@@ -367,7 +397,7 @@ tda_Status tda_list_insert_after(tda_List *self, tda_ListNode *at, const void *v
 ///             here, other positions are untouched
 /// @bigo{1}
 TDA_API
-void tda_list_remove(tda_List *self, tda_ListNode *node);
+void tda_list_remove_node(tda_List *self, tda_ListNode *node);
 
 /// drops every elem and releases every node
 /// @param self the list
@@ -402,10 +432,9 @@ tda_Status tda_list_splice_back(tda_List *self, tda_List *src);
 
 /// exchanges the contents of two lists
 /// @param self one list
-/// @param other must have the same elem layout and allocator; the nodes do not move, so
-///              borrowed positions stay valid
-/// @note a node belongs to the allocator that made it. Across allocators use
-///       tda_list_copy_with, then tda_list_move_assign
+/// @param other must have the same elem layout; the nodes do not move, so borrowed
+///              positions stay valid. Each side keeps the allocator its nodes came from,
+///              so the two may differ
 /// @bigo{1}
 TDA_API
 void tda_list_swap(tda_List *self, tda_List *other);
@@ -506,31 +535,31 @@ void tda_list_print(const tda_List *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// returns 'self' after checking TDA_LAYOUT_OF(T), so a macro evaluates its handle
-// once; _Generic keeps the handle's constness
+// returns 'self' after checking TDA_LAYOUT_OF(T), so a macro evaluates its pointer
+// once; _Generic keeps the pointer's constness
 [[nodiscard]]
-static inline const tda_List *tda_list_typed_c_(const tda_List *self, [[maybe_unused]] tda_Layout elem) {
+static inline const tda_List *tda_list_typed_(const tda_List *self, [[maybe_unused]] tda_Layout elem) {
     TDA_EXPECT(tda_layout_eq(tda_list_elem_layout(self), elem));
     return self;
 }
 
 [[nodiscard]]
-static inline tda_List *tda_list_typed_(tda_List *self, [[maybe_unused]] tda_Layout elem) {
+static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda_Layout elem) {
     TDA_EXPECT(tda_layout_eq(tda_list_elem_layout(self), elem));
     return self;
 }
 
 #define TDA_LIST_TYPED_(T, self) \
-    _Generic((self), const tda_List *: tda_list_typed_c_, tda_List *: tda_list_typed_)((self), TDA_LAYOUT_OF(T))
+    _Generic((self), const tda_List *: tda_list_typed_, tda_List *: tda_list_typed_mut_)((self), TDA_LAYOUT_OF(T))
 /// @endcond
 
-/// tda_list_new with TDA_LAYOUT_OF(T)
+/// tda_list_init with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new list is written
 /// @bigo{1}
-#define TDA_LIST_NEW(T, al, out) \
-    tda_list_new(TDA_LAYOUT_OF(T), (al), (out))
+#define TDA_LIST_INIT(T, al, out) \
+    tda_list_init(TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_list_from_data with TDA_LAYOUT_OF(T)
 /// @param T the elem type
@@ -585,7 +614,7 @@ static inline tda_List *tda_list_typed_(tda_List *self, [[maybe_unused]] tda_Lay
 /// for (tda_ListNode *node = tda_list_front_node_mut(l), *next; node; node = next) {
 ///     next = tda_list_node_next_mut(node);
 ///     if (drop_it(node)) {
-///         tda_list_remove(l, node);
+///         tda_list_remove_node(l, node);
 ///     }
 /// }
 /// @endcode
@@ -596,25 +625,25 @@ static inline tda_List *tda_list_typed_(tda_List *self, [[maybe_unused]] tda_Lay
 
 /// the same walk over positions that may be written through
 /// @copydetails TDA_LIST_FOR_EACH
-#define TDA_LIST_FOR_EACH_MUT(node, self)                         \
-    for (tda_ListNode *node = tda_list_front_node_mut(self);      \
-         node;                                                    \
+#define TDA_LIST_FOR_EACH_MUT(node, self)                    \
+    for (tda_ListNode *node = tda_list_front_node_mut(self); \
+         node;                                               \
          node = tda_list_node_next_mut(node))
 
 /// tda_list_find from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; scalars only, as 'key' becomes a compound literal
 /// @param self the list
-/// @param val the value looked for
+/// @param key the value looked for
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null
 /// @bigo{n}
-#define TDA_LIST_FIND(T, self, val, eq, ctx) \
-    tda_list_find(TDA_LIST_TYPED_(T, self), &(T){ (val) }, (eq), (ctx))
+#define TDA_LIST_FIND(T, self, key, eq, ctx) \
+    tda_list_find(TDA_LIST_TYPED_(T, self), &(T){ (key) }, (eq), (ctx))
 
 /// tda_list_find_mut from a value rather than an address
 /// @copydetails TDA_LIST_FIND
-#define TDA_LIST_FIND_MUT(T, self, val, eq, ctx) \
-    tda_list_find_mut(TDA_LIST_TYPED_(T, self), &(T){ (val) }, (eq), (ctx))
+#define TDA_LIST_FIND_MUT(T, self, key, eq, ctx) \
+    tda_list_find_mut(TDA_LIST_TYPED_(T, self), &(T){ (key) }, (eq), (ctx))
 
 /// tda_list_node_elem as a const T *
 /// @param T the elem type

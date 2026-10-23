@@ -17,25 +17,21 @@ static constexpr size_t WORD_BITS = 64;
 // the words are uint64_t, sized by sizeof elsewhere; the two spellings must agree
 static_assert(WORD_BITS == sizeof(uint64_t) * CHAR_BIT);
 
+// the inline bit ops in the header divide by 64 themselves
+static_assert(WORD_BITS == 64);
+
 // The bits above the last live one are not part of the set, and every read here counts on
 // them being clear: count sums whole words, any tests whole words, find_next trusts the
 // first one bit it sees. Only the ops that touch a whole word at once can dirty them,
 // set_all and flip_all, and both end with clear_tail. The pairwise ops cannot: | & ^ and
 // &~ of two clear tails is a clear tail.
-#define ASSERT_BITSET(b)                                                                     \
-    (assert(b),                                                                              \
-    assert((b)->nwords == words_for((b)->nbits)),                                            \
-    assert((b)->nwords > 0 || !(b)->words),                                                  \
-    assert((b)->nwords == 0 || (b)->words),                                                  \
-    assert((b)->nwords == 0 || ((b)->words[(b)->nwords - 1] & ~tail_mask((b)->nbits)) == 0), \
-    assert((b)->al))
-
-struct tda_BitSet {
-    uint64_t *words;
-    size_t nbits;
-    size_t nwords;
-    tda_Al *al;
-};
+#define ASSERT_BITSET(b)                                                                         \
+    (assert(b),                                                                                  \
+    assert((b)->nwords_ == words_for((b)->nbits_)),                                              \
+    assert((b)->nwords_ > 0 || !(b)->words_),                                                    \
+    assert((b)->nwords_ == 0 || (b)->words_),                                                    \
+    assert((b)->nwords_ == 0 || ((b)->words_[(b)->nwords_ - 1] & ~tail_mask((b)->nbits_)) == 0), \
+    assert((b)->al_))
 
 [[nodiscard]]
 static size_t words_for(size_t nbits);
@@ -44,14 +40,8 @@ static size_t words_for(size_t nbits);
 [[nodiscard]]
 static size_t words_bytes(const tda_BitSet *self);
 
-/// frees the words, leaving an empty universe on the same allocator
-static void release_words(tda_BitSet *self);
-
 [[nodiscard]]
 static size_t word_of(size_t idx);
-
-[[nodiscard]]
-static uint64_t bit_of(size_t idx);
 
 /// the live bits of the last word; all of them when nbits lands on a word boundary
 [[nodiscard]]
@@ -87,71 +77,61 @@ static bool find_prev_impl(const tda_BitSet *self, bool clear, size_t from, size
 
 /* ========== lifetime ========== */
 
-tda_Status tda_bitset_new(size_t nbits, tda_Al *al, tda_BitSet **out) {
+tda_Status tda_bitset_init_len(size_t nbits, tda_Al *al, tda_BitSet *out) {
     assert(al);
     assert(out);
 
-    tda_BitSet *obj = TDA_ALLOC(tda_BitSet, al, 1);
-    if (!obj) {
-        return TDA_STATUS_ERR_NO_MEM;
-    }
-
-    const size_t nwords = words_for(nbits);
-    uint64_t *words = nullptr;
-
-    if (nwords > 0) {
-        words = TDA_ALLOC_ZEROED(uint64_t, al, nwords);
-        if (!words) {
-            TDA_DEALLOC(tda_BitSet, al, obj, 1);
+    tda_BitSet obj = {.nbits_ = nbits, .nwords_ = words_for(nbits), .al_ = al};
+    if (obj.nwords_ > 0) {
+        obj.words_ = TDA_ALLOC_ZEROED(uint64_t, al, obj.nwords_);
+        if (!obj.words_) {
             return TDA_STATUS_ERR_NO_MEM;
         }
     }
 
-    obj->words = words;
-    obj->nbits = nbits;
-    obj->nwords = nwords;
-    obj->al = al;
-
-    ASSERT_BITSET(obj);
-
     *out = obj;
+
+    ASSERT_BITSET(out);
 
     return TDA_STATUS_OK;
 }
 
-void tda_bitset_drop(tda_BitSet *self) {
-    if (!self) {
+void tda_bitset_deinit(tda_BitSet *self) {
+    assert(self);
+
+    // the inert state, never initialized or already released
+    if (!self->al_) {
+        assert(!self->words_);
         return;
     }
 
     ASSERT_BITSET(self);
 
-    tda_Al *al_copy = self->al;
-    TDA_DEALLOC(uint64_t, al_copy, self->words, self->nwords);
-    TDA_DEALLOC(tda_BitSet, al_copy, self, 1);
+    TDA_DEALLOC(uint64_t, self->al_, self->words_, self->nwords_);
+    *self = (tda_BitSet){};
 }
 
 /* ========== copy ========== */
 
-tda_Status tda_bitset_copy(const tda_BitSet *self, tda_BitSet **out) {
+tda_Status tda_bitset_copy(const tda_BitSet *self, tda_BitSet *out) {
     ASSERT_BITSET(self);
 
-    return tda_bitset_copy_with(self, self->al, out);
+    return tda_bitset_copy_with(self, self->al_, out);
 }
 
-tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al *al, tda_BitSet **out) {
+tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al *al, tda_BitSet *out) {
     ASSERT_BITSET(self);
     assert(al);
     assert(out);
 
-    tda_BitSet *copy;
-    const tda_Status st = tda_bitset_new(self->nbits, al, &copy);
+    tda_BitSet copy;
+    const tda_Status st = tda_bitset_init_len(self->nbits_, al, &copy);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    if (self->nwords > 0) {
-        memcpy(copy->words, self->words, words_bytes(self));
+    if (self->nwords_ > 0) {
+        memcpy(copy.words_, self->words_, words_bytes(self));
     }
 
     *out = copy;
@@ -167,21 +147,21 @@ tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other) {
         return TDA_STATUS_OK;
     }
 
-    if (self->nwords != other->nwords) {
-        uint64_t *new_words = TDA_REALLOC(uint64_t, self->al, self->words, self->nwords, other->nwords);
+    if (self->nwords_ != other->nwords_) {
+        uint64_t *new_words = TDA_REALLOC(uint64_t, self->al_, self->words_, self->nwords_, other->nwords_);
         // a new_size of 0 hands the block back and answers null, which is not a failure
-        if (other->nwords > 0 && !new_words) {
+        if (other->nwords_ > 0 && !new_words) {
             return TDA_STATUS_ERR_NO_MEM;
         }
 
-        self->words = new_words;
-        self->nwords = other->nwords;
+        self->words_ = new_words;
+        self->nwords_ = other->nwords_;
     }
 
-    self->nbits = other->nbits;
+    self->nbits_ = other->nbits_;
 
-    if (other->nwords > 0) {
-        memcpy(self->words, other->words, words_bytes(other));
+    if (other->nwords_ > 0) {
+        memcpy(self->words_, other->words_, words_bytes(other));
     }
 
     ASSERT_BITSET(self);
@@ -189,46 +169,26 @@ tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other) {
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other) {
+void tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
 
     if (self == other) {
-        return TDA_STATUS_OK;
+        return;
     }
 
-    // one allocator: swap the words, then release what 'self' held from 'other'
-    if (self->al == other->al) {
-        TDA_SWAP(*self, *other);
-        release_words(other);
-
-        ASSERT_BITSET(self);
-        ASSERT_BITSET(other);
-
-        return TDA_STATUS_OK;
-    }
-
-    // two allocators: build the copy first, so a refusal changes nothing
-    tda_BitSet *obj;
-    const tda_Status st = tda_bitset_copy_with(other, self->al, &obj);
-    if (TDA_STATUS_IS_ERR(st)) {
-        return st;
-    }
-
-    TDA_SWAP(*self, *obj);
-    tda_bitset_drop(obj);
-    release_words(other);
+    // the allocator goes along with the words, and 'other' is left empty on it
+    tda_bitset_deinit(self);
+    *self = *other;
+    *other = (tda_BitSet){.al_ = self->al_};
 
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-
-    return TDA_STATUS_OK;
 }
 
 void tda_bitset_swap(tda_BitSet *self, tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->al == other->al);
 
     if (self == other) {
         return;
@@ -241,34 +201,6 @@ void tda_bitset_swap(tda_BitSet *self, tda_BitSet *other) {
 }
 
 /* ========== one bit ========== */
-
-bool tda_bitset_test(const tda_BitSet *self, size_t idx) {
-    ASSERT_BITSET(self);
-    TDA_EXPECT(idx < self->nbits);
-
-    return (self->words[word_of(idx)] & bit_of(idx)) != 0;
-}
-
-void tda_bitset_set(tda_BitSet *self, size_t idx) {
-    ASSERT_BITSET(self);
-    TDA_EXPECT(idx < self->nbits);
-
-    self->words[word_of(idx)] |= bit_of(idx);
-}
-
-void tda_bitset_reset(tda_BitSet *self, size_t idx) {
-    ASSERT_BITSET(self);
-    TDA_EXPECT(idx < self->nbits);
-
-    self->words[word_of(idx)] &= ~bit_of(idx);
-}
-
-void tda_bitset_flip(tda_BitSet *self, size_t idx) {
-    ASSERT_BITSET(self);
-    TDA_EXPECT(idx < self->nbits);
-
-    self->words[word_of(idx)] ^= bit_of(idx);
-}
 
 void tda_bitset_set_to(tda_BitSet *self, size_t idx, bool val) {
     if (val) {
@@ -284,8 +216,8 @@ void tda_bitset_set_all(tda_BitSet *self) {
     ASSERT_BITSET(self);
 
     // a byte of ones is a word of ones, and memset over no bytes wants a real pointer
-    if (self->nwords > 0) {
-        memset(self->words, 0xFF, words_bytes(self));
+    if (self->nwords_ > 0) {
+        memset(self->words_, 0xFF, words_bytes(self));
     }
 
     clear_tail(self);
@@ -294,16 +226,16 @@ void tda_bitset_set_all(tda_BitSet *self) {
 void tda_bitset_reset_all(tda_BitSet *self) {
     ASSERT_BITSET(self);
 
-    if (self->nwords > 0) {
-        memset(self->words, 0, words_bytes(self));
+    if (self->nwords_ > 0) {
+        memset(self->words_, 0, words_bytes(self));
     }
 }
 
 void tda_bitset_flip_all(tda_BitSet *self) {
     ASSERT_BITSET(self);
 
-    for (size_t w = 0; w < self->nwords; ++w) {
-        self->words[w] = ~self->words[w];
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        self->words_[w] = ~self->words_[w];
     }
 
     clear_tail(self);
@@ -315,8 +247,8 @@ size_t tda_bitset_count(const tda_BitSet *self) {
     ASSERT_BITSET(self);
 
     size_t count = 0;
-    for (size_t w = 0; w < self->nwords; ++w) {
-        count += tda_bit_count(self->words[w]);
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        count += tda_bit_count(self->words_[w]);
     }
 
     return count;
@@ -325,8 +257,8 @@ size_t tda_bitset_count(const tda_BitSet *self) {
 bool tda_bitset_any(const tda_BitSet *self) {
     ASSERT_BITSET(self);
 
-    for (size_t w = 0; w < self->nwords; ++w) {
-        if (self->words[w] != 0) {
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        if (self->words_[w] != 0) {
             return true;
         }
     }
@@ -337,9 +269,9 @@ bool tda_bitset_any(const tda_BitSet *self) {
 bool tda_bitset_all(const tda_BitSet *self) {
     ASSERT_BITSET(self);
 
-    for (size_t w = 0; w < self->nwords; ++w) {
-        const uint64_t want = w + 1 == self->nwords ? tail_mask(self->nbits) : ~UINT64_C(0);
-        if (self->words[w] != want) {
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        const uint64_t want = w + 1 == self->nwords_ ? tail_mask(self->nbits_) : ~UINT64_C(0);
+        if (self->words_[w] != want) {
             return false;
         }
     }
@@ -351,18 +283,6 @@ bool tda_bitset_none(const tda_BitSet *self) {
     ASSERT_BITSET(self);
 
     return !tda_bitset_any(self);
-}
-
-size_t tda_bitset_len(const tda_BitSet *self) {
-    ASSERT_BITSET(self);
-
-    return self->nbits;
-}
-
-tda_Al *tda_bitset_al(const tda_BitSet *self) {
-    ASSERT_BITSET(self);
-
-    return self->al;
 }
 
 /* ========== scan ========== */
@@ -405,60 +325,60 @@ bool tda_bitset_eq(const tda_BitSet *a, const tda_BitSet *b) {
         return true;
     }
 
-    if (a->nbits != b->nbits) {
+    if (a->nbits_ != b->nbits_) {
         return false;
     }
 
-    return a->nwords == 0 || memcmp(a->words, b->words, words_bytes(a)) == 0;
+    return a->nwords_ == 0 || memcmp(a->words_, b->words_, words_bytes(a)) == 0;
 }
 
 void tda_bitset_union(tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits == other->nbits);
+    TDA_EXPECT(self->nbits_ == other->nbits_);
 
-    for (size_t w = 0; w < self->nwords; ++w) {
-        self->words[w] |= other->words[w];
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        self->words_[w] |= other->words_[w];
     }
 }
 
-void tda_bitset_intersect(tda_BitSet *self, const tda_BitSet *other) {
+void tda_bitset_intersection(tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits == other->nbits);
+    TDA_EXPECT(self->nbits_ == other->nbits_);
 
-    for (size_t w = 0; w < self->nwords; ++w) {
-        self->words[w] &= other->words[w];
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        self->words_[w] &= other->words_[w];
     }
 }
 
 void tda_bitset_difference(tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits == other->nbits);
+    TDA_EXPECT(self->nbits_ == other->nbits_);
 
-    for (size_t w = 0; w < self->nwords; ++w) {
-        self->words[w] &= ~other->words[w];
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        self->words_[w] &= ~other->words_[w];
     }
 }
 
 void tda_bitset_symmetric_difference(tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits == other->nbits);
+    TDA_EXPECT(self->nbits_ == other->nbits_);
 
-    for (size_t w = 0; w < self->nwords; ++w) {
-        self->words[w] ^= other->words[w];
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        self->words_[w] ^= other->words_[w];
     }
 }
 
 bool tda_bitset_is_subset(const tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits == other->nbits);
+    TDA_EXPECT(self->nbits_ == other->nbits_);
 
-    for (size_t w = 0; w < self->nwords; ++w) {
-        if ((self->words[w] & ~other->words[w]) != 0) {
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        if ((self->words_[w] & ~other->words_[w]) != 0) {
             return false;
         }
     }
@@ -469,10 +389,10 @@ bool tda_bitset_is_subset(const tda_BitSet *self, const tda_BitSet *other) {
 bool tda_bitset_intersects(const tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits == other->nbits);
+    TDA_EXPECT(self->nbits_ == other->nbits_);
 
-    for (size_t w = 0; w < self->nwords; ++w) {
-        if ((self->words[w] & other->words[w]) != 0) {
+    for (size_t w = 0; w < self->nwords_; ++w) {
+        if ((self->words_[w] & other->words_[w]) != 0) {
             return true;
         }
     }
@@ -512,25 +432,14 @@ static size_t words_for(size_t nbits) {
     return nbits / WORD_BITS + (nbits % WORD_BITS != 0);
 }
 
-static void release_words(tda_BitSet *self) {
-    TDA_DEALLOC(uint64_t, self->al, self->words, self->nwords);
-    self->words = nullptr;
-    self->nbits = 0;
-    self->nwords = 0;
-}
-
 static size_t words_bytes(const tda_BitSet *self) {
     assert(self);
 
-    return self->nwords * sizeof(uint64_t);
+    return self->nwords_ * sizeof(uint64_t);
 }
 
 static size_t word_of(size_t idx) {
     return idx / WORD_BITS;
-}
-
-static uint64_t bit_of(size_t idx) {
-    return UINT64_C(1) << (idx % WORD_BITS);
 }
 
 static uint64_t tail_mask(size_t nbits) {
@@ -543,8 +452,8 @@ static uint64_t tail_mask(size_t nbits) {
 static void clear_tail(tda_BitSet *self) {
     assert(self);
 
-    if (self->nwords > 0) {
-        self->words[self->nwords - 1] &= tail_mask(self->nbits);
+    if (self->nwords_ > 0) {
+        self->words_[self->nwords_ - 1] &= tail_mask(self->nbits_);
     }
 }
 
@@ -565,19 +474,19 @@ static size_t idx_of_last_one(size_t w, uint64_t word) {
 }
 
 static bool find_next_impl(const tda_BitSet *self, bool clear, size_t from, size_t *out_idx) {
-    if (from >= self->nbits) {
+    if (from >= self->nbits_) {
         return false;
     }
 
     const uint64_t flip = clear ? ~UINT64_C(0) : 0;
     size_t w = word_of(from);
-    uint64_t word = word_from(self->words[w] ^ flip, from);
+    uint64_t word = word_from(self->words_[w] ^ flip, from);
 
     for (;;) {
         if (word != 0) {
             // with the tail kept clear, only a complement can find a one past nbits
             const size_t idx = idx_of_first_one(w, word);
-            if (idx >= self->nbits) {
+            if (idx >= self->nbits_) {
                 return false;
             }
 
@@ -585,26 +494,26 @@ static bool find_next_impl(const tda_BitSet *self, bool clear, size_t from, size
             return true;
         }
 
-        if (++w == self->nwords) {
+        if (++w == self->nwords_) {
             return false;
         }
 
-        word = self->words[w] ^ flip;
+        word = self->words_[w] ^ flip;
     }
 }
 
 static bool find_prev_impl(const tda_BitSet *self, bool clear, size_t from, size_t *out_idx) {
-    if (self->nbits == 0) {
+    if (self->nbits_ == 0) {
         return false;
     }
 
-    if (from >= self->nbits) {
-        from = self->nbits - 1;
+    if (from >= self->nbits_) {
+        from = self->nbits_ - 1;
     }
 
     const uint64_t flip = clear ? ~UINT64_C(0) : 0;
     size_t w = word_of(from);
-    uint64_t word = word_upto(self->words[w] ^ flip, from);
+    uint64_t word = word_upto(self->words_[w] ^ flip, from);
 
     for (;;) {
         if (word != 0) {
@@ -616,6 +525,6 @@ static bool find_prev_impl(const tda_BitSet *self, bool clear, size_t from, size
             return false;
         }
 
-        word = self->words[--w] ^ flip;
+        word = self->words_[--w] ^ flip;
     }
 }

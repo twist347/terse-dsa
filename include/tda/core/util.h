@@ -19,13 +19,13 @@
 /// @{
 
 /// the inner step of TDA_STRINGIFY; the extra level makes the argument expand first
-/// @param x the tokens to spell
-#define TDA_STRINGIFY_(x)   #x
+/// @param tokens the tokens to spell
+#define TDA_STRINGIFY_(tokens) #tokens
 
 /// the argument as a string literal, expanded first: TDA_STRINGIFY(TDA_STATUS_OK) is
 /// "TDA_STATUS_OK", not "st"
-/// @param x the tokens to spell
-#define TDA_STRINGIFY(x)    TDA_STRINGIFY_(x)
+/// @param tokens the tokens to spell
+#define TDA_STRINGIFY(tokens) TDA_STRINGIFY_(tokens)
 
 /// the innermost step of TDA_LINE_NAME_, which pastes without expanding
 /// @param a the left tokens

@@ -48,11 +48,11 @@ static void fill_reversed(int32_t *a) {
     }
 }
 
-static void sort_tda(int32_t *a) {
+static void sort_quick(int32_t *a) {
     tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, a, LEN), tda_cmp_i32, nullptr);
 }
 
-static void sort_tda_stable(int32_t *a) {
+static void sort_stable(int32_t *a) {
     (void) tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, a, LEN), tda_cmp_i32, nullptr, tda_al_default());
 }
 
@@ -68,44 +68,44 @@ static void sort_libc(int32_t *a) {
 }
 
 // only the copy and the sort are timed, and both sorters pay for the copy
-#define BENCH_SORT(NAME, FILL, SORT)          \
-    UBENCH_EX(sort, NAME) {                   \
-        int32_t *src = malloc(BYTES);         \
-        int32_t *work = malloc(BYTES);        \
-        if (!src || !work) {                  \
-            free(work);                       \
-            free(src);                        \
-            return;                           \
-        }                                     \
-        FILL(src);                            \
-                                              \
-        UBENCH_DO_BENCHMARK() {               \
-            memcpy(work, src, BYTES);         \
-            SORT(work);                       \
-            UBENCH_DO_NOTHING(work);          \
-        }                                     \
-                                              \
-        free(work);                           \
-        free(src);                            \
+#define BENCH_SORT(NAME, FILL, SORT)   \
+    UBENCH_EX(sort, NAME) {            \
+        int32_t *src = malloc(BYTES);  \
+        int32_t *work = malloc(BYTES); \
+        if (!src || !work) {           \
+            free(work);                \
+            free(src);                 \
+            return;                    \
+        }                              \
+        FILL(src);                     \
+                                       \
+        UBENCH_DO_BENCHMARK() {        \
+            memcpy(work, src, BYTES);  \
+            SORT(work);                \
+            UBENCH_DO_NOTHING(work);   \
+        }                              \
+                                       \
+        free(work);                    \
+        free(src);                     \
     }
 
-BENCH_SORT(random_tda, fill_random, sort_tda)
-BENCH_SORT(random_stable, fill_random, sort_tda_stable)
+BENCH_SORT(random_quick, fill_random, sort_quick)
+BENCH_SORT(random_stable, fill_random, sort_stable)
 BENCH_SORT(random_heap, fill_random, sort_heap)
 BENCH_SORT(random_libc, fill_random, sort_libc)
 
-BENCH_SORT(few_unique_tda, fill_few_unique, sort_tda)
-BENCH_SORT(few_unique_stable, fill_few_unique, sort_tda_stable)
+BENCH_SORT(few_unique_quick, fill_few_unique, sort_quick)
+BENCH_SORT(few_unique_stable, fill_few_unique, sort_stable)
 BENCH_SORT(few_unique_heap, fill_few_unique, sort_heap)
 BENCH_SORT(few_unique_libc, fill_few_unique, sort_libc)
 
-BENCH_SORT(sorted_tda, fill_sorted, sort_tda)
-BENCH_SORT(sorted_stable, fill_sorted, sort_tda_stable)
+BENCH_SORT(sorted_quick, fill_sorted, sort_quick)
+BENCH_SORT(sorted_stable, fill_sorted, sort_stable)
 BENCH_SORT(sorted_heap, fill_sorted, sort_heap)
 BENCH_SORT(sorted_libc, fill_sorted, sort_libc)
 
-BENCH_SORT(reversed_tda, fill_reversed, sort_tda)
-BENCH_SORT(reversed_stable, fill_reversed, sort_tda_stable)
+BENCH_SORT(reversed_quick, fill_reversed, sort_quick)
+BENCH_SORT(reversed_stable, fill_reversed, sort_stable)
 BENCH_SORT(reversed_heap, fill_reversed, sort_heap)
 BENCH_SORT(reversed_libc, fill_reversed, sort_libc)
 

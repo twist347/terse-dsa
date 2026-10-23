@@ -15,8 +15,8 @@ typedef struct {
     int32_t age;
 } Person;
 
-static void fprint_person(FILE *stream, const void *x) {
-    const Person *p = x;
+static void fprint_person(FILE *stream, const void *val) {
+    const Person *p = val;
 
     fprintf(stream, "%s(%" PRId32 ")", p->name, p->age);
 }

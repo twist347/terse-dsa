@@ -27,7 +27,7 @@ typedef void (*tda_Gen)(void *dst, size_t idx, void *ctx);
 /// Produces the elem written to 'dst' from the one at 'src'.
 typedef void (*tda_UnOp)(void *dst, const void *src, void *ctx);
 
-/// Combines two elems into 'dst': 'dst' is written, 'a' and 'b' are read.
-typedef void (*tda_BinOp)(void *dst, const void *a, const void *b, void *ctx);
+/// Combines two elems into 'dst': 'dst' is written, 'lhs' and 'rhs' are read.
+typedef void (*tda_BinOp)(void *dst, const void *lhs, const void *rhs, void *ctx);
 
 /// @}

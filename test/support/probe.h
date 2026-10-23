@@ -41,11 +41,11 @@ static inline void tda_test_probe_reset(tda_TestProbe *self) {
     *self = (tda_TestProbe){.fail_after = SIZE_MAX};
 }
 
-/// lets the next 'n' requests through and refuses the one after them
-static inline void tda_test_probe_fail_after_next(tda_TestProbe *self, size_t n) {
+/// lets the next 'count' requests through and refuses the one after them
+static inline void tda_test_probe_fail_after_next(tda_TestProbe *self, size_t count) {
     assert(self);
 
-    self->fail_after = tda_test_probe_requests(self) + n;
+    self->fail_after = tda_test_probe_requests(self) + count;
 }
 
 /* ========== hooks ========== */

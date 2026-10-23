@@ -60,12 +60,12 @@ void tda_span_insertion_sort(tda_SpanMut s, tda_Cmp cmp, void *ctx) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
 
-    const tda_Span cs = tda_span_mut_to_span(s);
+    const tda_Span view = tda_span_mut_to_span(s);
 
     // too big to set aside: every step is a swap
     if (s.elem.size > INSERTION_HELD_MAX) {
         for (size_t i = 1; i < s.len; ++i) {
-            const size_t j = insertion_slot(cs, i, cmp, ctx);
+            const size_t j = insertion_slot(view, i, cmp, ctx);
             for (size_t k = i; k > j; --k) {
                 tda_span_swap_elems(s, k - 1, k);
             }
@@ -77,12 +77,12 @@ void tda_span_insertion_sort(tda_SpanMut s, tda_Cmp cmp, void *ctx) {
     // three-move swap per step
     unsigned char held[INSERTION_HELD_MAX];
     for (size_t i = 1; i < s.len; ++i) {
-        const size_t j = insertion_slot(cs, i, cmp, ctx);
+        const size_t j = insertion_slot(view, i, cmp, ctx);
         if (j == i) {
             continue;
         }
-        memcpy(held, tda_span_get(cs, i), s.elem.size);
-        memmove(tda_span_get_mut(s, j + 1), tda_span_get(cs, j), (i - j) * s.elem.size);
+        memcpy(held, tda_span_get(view, i), s.elem.size);
+        memmove(tda_span_get_mut(s, j + 1), tda_span_get(view, j), (i - j) * s.elem.size);
         memcpy(tda_span_get_mut(s, j), held, s.elem.size);
     }
 }
@@ -190,9 +190,9 @@ void tda_span_nth_elem(tda_SpanMut s, size_t nth, tda_Cmp cmp, void *ctx) {
 
         const size_t pivot_idx = ninther(tda_span_mut_to_span(s), left, right, cmp, ctx);
 
-        const Split p = partition3(s, left, right, pivot_idx, cmp, ctx);
-        const size_t lt = p.lt;
-        const size_t gt = p.gt;
+        const Split split = partition3(s, left, right, pivot_idx, cmp, ctx);
+        const size_t lt = split.lt;
+        const size_t gt = split.gt;
 
         if (nth < lt) {
             right = lt - 1;
@@ -269,7 +269,7 @@ static Split partition3(tda_SpanMut s, size_t left, size_t right, size_t pivot_i
 
     tda_span_swap_elems(s, left, pivot_idx);
 
-    const tda_Span v = tda_span_mut_to_span(s);
+    const tda_Span view = tda_span_mut_to_span(s);
 
     size_t lo = left;
     size_t i = left + 1;
@@ -280,7 +280,7 @@ static Split partition3(tda_SpanMut s, size_t left, size_t right, size_t pivot_i
     // s[lo] is a copy of the pivot value and can be read instead of buffering it.
     // That matters here, where the elem size is only known at runtime.
     while (i <= hi) {
-        const int c = cmp(tda_span_get(v, i), tda_span_get(v, lo), ctx);
+        const int c = cmp(tda_span_get(view, i), tda_span_get(view, lo), ctx);
 
         if (c < 0) {
             tda_span_swap_elems(s, i, lo);
@@ -340,9 +340,9 @@ static void quicksort(tda_SpanMut s, size_t left, size_t right, size_t depth, td
 
         // three-way, so a run of equal keys is settled in one pass. A two-way split
         // peels those off one elem at a time, which is quadratic on repeated keys.
-        const Split p = partition3(s, left, right, pivot_idx, cmp, ctx);
-        const size_t lt = p.lt;
-        const size_t gt = p.gt;
+        const Split split = partition3(s, left, right, pivot_idx, cmp, ctx);
+        const size_t lt = split.lt;
+        const size_t gt = split.gt;
 
         // recurse into the shorter side and loop on the longer one: the recursion then
         // halves its range every time, so the stack stays O(log n) whatever the data

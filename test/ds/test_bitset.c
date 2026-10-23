@@ -25,21 +25,21 @@ void tearDown() {
 static constexpr size_t SEAMS[] = {0, 1, 63, 64, 65, 127, 128, 129, 200};
 
 [[nodiscard]]
-static tda_BitSet *make_bitset(size_t nbits, const size_t *members, size_t n) {
-    tda_BitSet *b = nullptr;
-    TDA_TEST_OK(tda_bitset_new(nbits, tda_al_default(), &b));
+static tda_BitSet make_bitset(size_t nbits, const size_t *members, size_t n) {
+    tda_BitSet b = {};
+    TDA_TEST_OK(tda_bitset_init_len(nbits, tda_al_default(), &b));
 
     for (size_t i = 0; i < n; ++i) {
-        tda_bitset_set(b, members[i]);
+        tda_bitset_set(&b, members[i]);
     }
 
     return b;
 }
 
 [[nodiscard]]
-static tda_BitSet *make_full(size_t nbits) {
-    tda_BitSet *b = make_bitset(nbits, nullptr, 0);
-    tda_bitset_set_all(b);
+static tda_BitSet make_full(size_t nbits) {
+    tda_BitSet b = make_bitset(nbits, nullptr, 0);
+    tda_bitset_set_all(&b);
 
     return b;
 }
@@ -104,53 +104,55 @@ static void assert_prints(const char *expected, const tda_BitSet *b) {
 
 /* ========== lifetime ========== */
 
-static void test_new_sets_len_and_allocator() {
-    tda_BitSet *b = nullptr;
-    TDA_TEST_OK(tda_bitset_new(100, tda_al_default(), &b));
+static void test_init_sets_len_and_allocator() {
+    tda_BitSet b = {};
+    TDA_TEST_OK(tda_bitset_init_len(100, tda_al_default(), &b));
 
-    TEST_ASSERT_EQUAL_size_t(100, tda_bitset_len(b));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_bitset_al(b));
+    TEST_ASSERT_EQUAL_size_t(100, tda_bitset_len(&b));
+    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_bitset_al(&b));
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
-static void test_new_starts_with_nothing_in_it() {
+static void test_init_starts_with_nothing_in_it() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
-        tda_BitSet *b = make_bitset(SEAMS[s], nullptr, 0);
+        tda_BitSet b = make_bitset(SEAMS[s], nullptr, 0);
 
-        assert_members(b, SEAMS[s], nullptr, 0);
+        assert_members(&b, SEAMS[s], nullptr, 0);
 
-        tda_bitset_drop(b);
+        tda_bitset_deinit(&b);
     }
 }
 
 // an empty universe is a valid set: it is both empty and full
 static void test_an_empty_universe_is_full_and_empty_at_once() {
-    tda_BitSet *b = make_bitset(0, nullptr, 0);
+    tda_BitSet b = make_bitset(0, nullptr, 0);
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_bitset_len(b));
-    TEST_ASSERT_EQUAL_size_t(0, tda_bitset_count(b));
-    TEST_ASSERT_FALSE(tda_bitset_any(b));
-    TEST_ASSERT_TRUE(tda_bitset_none(b));
-    TEST_ASSERT_TRUE(tda_bitset_all(b));
+    TEST_ASSERT_EQUAL_size_t(0, tda_bitset_len(&b));
+    TEST_ASSERT_EQUAL_size_t(0, tda_bitset_count(&b));
+    TEST_ASSERT_FALSE(tda_bitset_any(&b));
+    TEST_ASSERT_TRUE(tda_bitset_none(&b));
+    TEST_ASSERT_TRUE(tda_bitset_all(&b));
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
-static void test_drop_null_is_noop() {
-    tda_bitset_drop(nullptr);
+static void test_deinit_of_an_inert_value_is_noop() {
+    tda_BitSet x = {};
+    tda_bitset_deinit(&x);
+    tda_bitset_deinit(&x);
 }
 
-static void test_drop_hands_back_everything_it_took() {
+static void test_deinit_hands_back_everything() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_BitSet *b = nullptr;
-    TDA_TEST_OK(tda_bitset_new(200, &al, &b));
-    TEST_ASSERT_EQUAL_size_t(2, probe.live); // the header and the words
+    tda_BitSet b = {};
+    TDA_TEST_OK(tda_bitset_init_len(200, &al, &b));
+    TEST_ASSERT_EQUAL_size_t(1, probe.live); // the words
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
@@ -159,11 +161,11 @@ static void test_an_empty_universe_owns_no_words() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_BitSet *b = nullptr;
-    TDA_TEST_OK(tda_bitset_new(0, &al, &b));
-    TEST_ASSERT_EQUAL_size_t(1, probe.live); // the header alone
+    tda_BitSet b = {};
+    TDA_TEST_OK(tda_bitset_init_len(0, &al, &b));
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
@@ -171,88 +173,88 @@ static void test_an_empty_universe_owns_no_words() {
 
 static void test_set_and_test_roundtrip() {
     constexpr size_t want[] = {0, 5, 64, 128};
-    tda_BitSet *b = make_bitset(200, want, 4);
+    tda_BitSet b = make_bitset(200, want, 4);
 
-    assert_members(b, 200, want, 4);
+    assert_members(&b, 200, want, 4);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_reset_takes_one_out() {
     constexpr size_t start[] = {0, 5, 64, 128};
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *b = make_bitset(200, start, 4);
+    tda_BitSet b = make_bitset(200, start, 4);
 
-    tda_bitset_reset(b, 5);
-    assert_members(b, 200, want, 3);
+    tda_bitset_reset(&b, 5);
+    assert_members(&b, 200, want, 3);
 
-    tda_bitset_reset(b, 5); // resetting what is already out changes nothing
-    assert_members(b, 200, want, 3);
+    tda_bitset_reset(&b, 5); // resetting what is already out changes nothing
+    assert_members(&b, 200, want, 3);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_flip_toggles_one() {
     constexpr size_t none[] = {0};
     constexpr size_t one[] = {70};
-    tda_BitSet *b = make_bitset(200, nullptr, 0);
+    tda_BitSet b = make_bitset(200, nullptr, 0);
 
-    tda_bitset_flip(b, 70);
-    assert_members(b, 200, one, 1);
+    tda_bitset_flip(&b, 70);
+    assert_members(&b, 200, one, 1);
 
-    tda_bitset_flip(b, 70);
-    assert_members(b, 200, none, 0);
+    tda_bitset_flip(&b, 70);
+    assert_members(&b, 200, none, 0);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_set_to_writes_both_ways() {
     constexpr size_t one[] = {9};
-    tda_BitSet *b = make_bitset(200, nullptr, 0);
+    tda_BitSet b = make_bitset(200, nullptr, 0);
 
-    tda_bitset_set_to(b, 9, true);
-    assert_members(b, 200, one, 1);
+    tda_bitset_set_to(&b, 9, true);
+    assert_members(&b, 200, one, 1);
 
-    tda_bitset_set_to(b, 9, true); // idempotent, not a toggle
-    assert_members(b, 200, one, 1);
+    tda_bitset_set_to(&b, 9, true); // idempotent, not a toggle
+    assert_members(&b, 200, one, 1);
 
-    tda_bitset_set_to(b, 9, false);
-    assert_members(b, 200, one, 0);
+    tda_bitset_set_to(&b, 9, false);
+    assert_members(&b, 200, one, 0);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 // neighbouring bits share a word and must not disturb each other
 static void test_one_bit_leaves_the_rest_of_its_word_alone() {
-    tda_BitSet *b = make_bitset(200, nullptr, 0);
+    tda_BitSet b = make_bitset(200, nullptr, 0);
 
     for (size_t i = 0; i < 200; ++i) {
-        tda_bitset_set(b, i);
-        TEST_ASSERT_EQUAL_size_t(i + 1, tda_bitset_count(b));
+        tda_bitset_set(&b, i);
+        TEST_ASSERT_EQUAL_size_t(i + 1, tda_bitset_count(&b));
 
         for (size_t j = 0; j <= i; ++j) {
-            TEST_ASSERT_TRUE(tda_bitset_test(b, j));
+            TEST_ASSERT_TRUE(tda_bitset_test(&b, j));
         }
         for (size_t j = i + 1; j < 200; ++j) {
-            TEST_ASSERT_FALSE(tda_bitset_test(b, j));
+            TEST_ASSERT_FALSE(tda_bitset_test(&b, j));
         }
     }
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_the_bits_at_the_word_seams() {
     constexpr size_t want[] = {63, 64, 65};
-    tda_BitSet *b = make_bitset(129, want, 3);
+    tda_BitSet b = make_bitset(129, want, 3);
 
-    assert_members(b, 129, want, 3);
+    assert_members(&b, 129, want, 3);
 
     // and the last index, the one the tail mask guards
     constexpr size_t seam[] = {63, 64, 65, 128};
-    tda_bitset_set(b, 128);
-    assert_members(b, 129, seam, 4);
+    tda_bitset_set(&b, 128);
+    assert_members(&b, 129, seam, 4);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 /* ========== all bits ========== */
@@ -261,29 +263,29 @@ static void test_set_all_fills_the_universe() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
 
-        tda_BitSet *b = make_full(nbits);
+        tda_BitSet b = make_full(nbits);
 
         // a dirty tail would make the count exceed the universe
-        TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_count(b));
-        TEST_ASSERT_TRUE(tda_bitset_all(b));
-        TEST_ASSERT_EQUAL_INT(nbits > 0, tda_bitset_any(b));
+        TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_count(&b));
+        TEST_ASSERT_TRUE(tda_bitset_all(&b));
+        TEST_ASSERT_EQUAL_INT(nbits > 0, tda_bitset_any(&b));
 
         for (size_t i = 0; i < nbits; ++i) {
-            TEST_ASSERT_TRUE(tda_bitset_test(b, i));
+            TEST_ASSERT_TRUE(tda_bitset_test(&b, i));
         }
 
-        tda_bitset_drop(b);
+        tda_bitset_deinit(&b);
     }
 }
 
 static void test_reset_all_empties_the_set() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
-        tda_BitSet *b = make_full(SEAMS[s]);
+        tda_BitSet b = make_full(SEAMS[s]);
 
-        tda_bitset_reset_all(b);
-        assert_members(b, SEAMS[s], nullptr, 0);
+        tda_bitset_reset_all(&b);
+        assert_members(&b, SEAMS[s], nullptr, 0);
 
-        tda_bitset_drop(b);
+        tda_bitset_deinit(&b);
     }
 }
 
@@ -291,134 +293,134 @@ static void test_flip_all_is_the_complement() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
 
-        tda_BitSet *b = make_bitset(nbits, nullptr, 0);
+        tda_BitSet b = make_bitset(nbits, nullptr, 0);
         for (size_t i = 0; i < nbits; i += 2) {
-            tda_bitset_set(b, i);
+            tda_bitset_set(&b, i);
         }
-        const size_t was = tda_bitset_count(b);
+        const size_t was = tda_bitset_count(&b);
 
-        tda_bitset_flip_all(b);
+        tda_bitset_flip_all(&b);
 
         // the complement holds the other 'nbits' - 'was' bits and nothing above them
-        TEST_ASSERT_EQUAL_size_t(nbits - was, tda_bitset_count(b));
+        TEST_ASSERT_EQUAL_size_t(nbits - was, tda_bitset_count(&b));
         for (size_t i = 0; i < nbits; ++i) {
-            TEST_ASSERT_EQUAL_INT(i % 2 != 0, tda_bitset_test(b, i));
+            TEST_ASSERT_EQUAL_INT(i % 2 != 0, tda_bitset_test(&b, i));
         }
 
-        tda_bitset_drop(b);
+        tda_bitset_deinit(&b);
     }
 }
 
 static void test_flip_all_twice_changes_nothing() {
     constexpr size_t want[] = {0, 63, 64, 128};
-    tda_BitSet *b = make_bitset(129, want, 4);
+    tda_BitSet b = make_bitset(129, want, 4);
 
-    tda_bitset_flip_all(b);
-    tda_bitset_flip_all(b);
-    assert_members(b, 129, want, 4);
+    tda_bitset_flip_all(&b);
+    tda_bitset_flip_all(&b);
+    assert_members(&b, 129, want, 4);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_the_whole_set_ops_survive_an_empty_universe() {
-    tda_BitSet *b = make_bitset(0, nullptr, 0);
+    tda_BitSet b = make_bitset(0, nullptr, 0);
 
-    tda_bitset_set_all(b);
-    TEST_ASSERT_TRUE(tda_bitset_all(b));
-    TEST_ASSERT_FALSE(tda_bitset_any(b));
+    tda_bitset_set_all(&b);
+    TEST_ASSERT_TRUE(tda_bitset_all(&b));
+    TEST_ASSERT_FALSE(tda_bitset_any(&b));
 
-    tda_bitset_flip_all(b);
-    tda_bitset_reset_all(b);
-    assert_members(b, 0, nullptr, 0);
+    tda_bitset_flip_all(&b);
+    tda_bitset_reset_all(&b);
+    assert_members(&b, 0, nullptr, 0);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 /* ========== scan ========== */
 
 static void test_find_next_walks_the_members() {
     constexpr size_t want[] = {0, 1, 63, 64, 127, 128, 199};
-    tda_BitSet *b = make_bitset(200, want, 7);
+    tda_BitSet b = make_bitset(200, want, 7);
 
-    assert_members(b, 200, want, 7); // the walk is checked in there against every bit
+    assert_members(&b, 200, want, 7); // the walk is checked in there against every bit
 
     // from a start that is not a member, the next member is found
     size_t idx;
-    TEST_ASSERT_TRUE(tda_bitset_find_next(b, 2, &idx));
+    TEST_ASSERT_TRUE(tda_bitset_find_next(&b, 2, &idx));
     TEST_ASSERT_EQUAL_size_t(63, idx);
-    TEST_ASSERT_TRUE(tda_bitset_find_next(b, 129, &idx));
+    TEST_ASSERT_TRUE(tda_bitset_find_next(&b, 129, &idx));
     TEST_ASSERT_EQUAL_size_t(199, idx);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_find_next_from_past_the_end_is_a_miss() {
     constexpr size_t want[] = {0, 5};
-    tda_BitSet *b = make_bitset(65, want, 2);
+    tda_BitSet b = make_bitset(65, want, 2);
 
     size_t idx = 12345;
-    TEST_ASSERT_FALSE(tda_bitset_find_next(b, 65, &idx));
-    TEST_ASSERT_FALSE(tda_bitset_find_next(b, 66, &idx));
-    TEST_ASSERT_FALSE(tda_bitset_find_next(b, SIZE_MAX, &idx));
+    TEST_ASSERT_FALSE(tda_bitset_find_next(&b, 65, &idx));
+    TEST_ASSERT_FALSE(tda_bitset_find_next(&b, 66, &idx));
+    TEST_ASSERT_FALSE(tda_bitset_find_next(&b, SIZE_MAX, &idx));
     TEST_ASSERT_EQUAL_size_t(12345, idx); // a miss writes nothing
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_find_next_on_an_empty_set_is_a_miss() {
-    tda_BitSet *b = make_bitset(200, nullptr, 0);
+    tda_BitSet b = make_bitset(200, nullptr, 0);
 
     size_t idx = 12345;
-    TEST_ASSERT_FALSE(tda_bitset_find_next(b, 0, &idx));
+    TEST_ASSERT_FALSE(tda_bitset_find_next(&b, 0, &idx));
     TEST_ASSERT_EQUAL_size_t(12345, idx);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_find_next_clear_walks_the_gaps() {
     constexpr size_t members[] = {0, 1, 2, 64, 65};
-    tda_BitSet *b = make_bitset(200, members, 5);
+    tda_BitSet b = make_bitset(200, members, 5);
 
     size_t idx;
-    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(b, 0, &idx));
+    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(&b, 0, &idx));
     TEST_ASSERT_EQUAL_size_t(3, idx);
-    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(b, 64, &idx));
+    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(&b, 64, &idx));
     TEST_ASSERT_EQUAL_size_t(66, idx);
-    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(b, 199, &idx));
+    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(&b, 199, &idx));
     TEST_ASSERT_EQUAL_size_t(199, idx);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 // the complement of a full last word has ones above nbits, and none of them is an index
 static void test_find_next_clear_misses_on_a_full_set() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
-        tda_BitSet *b = make_full(SEAMS[s]);
+        tda_BitSet b = make_full(SEAMS[s]);
 
         size_t idx = 12345;
         for (size_t from = 0; from <= SEAMS[s]; ++from) {
-            TEST_ASSERT_FALSE(tda_bitset_find_next_clear(b, from, &idx));
+            TEST_ASSERT_FALSE(tda_bitset_find_next_clear(&b, from, &idx));
         }
         TEST_ASSERT_EQUAL_size_t(12345, idx);
 
-        tda_bitset_drop(b);
+        tda_bitset_deinit(&b);
     }
 }
 
 static void test_find_next_clear_on_an_empty_set_answers_the_start() {
-    tda_BitSet *b = make_bitset(129, nullptr, 0);
+    tda_BitSet b = make_bitset(129, nullptr, 0);
 
     size_t idx;
-    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(b, 0, &idx));
+    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(&b, 0, &idx));
     TEST_ASSERT_EQUAL_size_t(0, idx);
-    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(b, 64, &idx));
+    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(&b, 64, &idx));
     TEST_ASSERT_EQUAL_size_t(64, idx);
-    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(b, 128, &idx));
+    TEST_ASSERT_TRUE(tda_bitset_find_next_clear(&b, 128, &idx));
     TEST_ASSERT_EQUAL_size_t(128, idx);
 
-    TEST_ASSERT_FALSE(tda_bitset_find_next_clear(b, 129, &idx));
+    TEST_ASSERT_FALSE(tda_bitset_find_next_clear(&b, 129, &idx));
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 // one member at the far end of each universe, so the scans cross whole empty words
@@ -430,17 +432,17 @@ static void test_the_scans_cross_whole_words() {
         }
 
         const size_t last = nbits - 1;
-        tda_BitSet *b = make_bitset(nbits, &last, 1);
+        tda_BitSet b = make_bitset(nbits, &last, 1);
 
         size_t idx;
-        TEST_ASSERT_TRUE(tda_bitset_find_next(b, 0, &idx));
+        TEST_ASSERT_TRUE(tda_bitset_find_next(&b, 0, &idx));
         TEST_ASSERT_EQUAL_size_t(last, idx);
 
-        tda_bitset_flip_all(b);
-        TEST_ASSERT_TRUE(tda_bitset_find_next_clear(b, 0, &idx));
+        tda_bitset_flip_all(&b);
+        TEST_ASSERT_TRUE(tda_bitset_find_next_clear(&b, 0, &idx));
         TEST_ASSERT_EQUAL_size_t(last, idx);
 
-        tda_bitset_drop(b);
+        tda_bitset_deinit(&b);
     }
 }
 
@@ -451,14 +453,14 @@ static void test_find_prev_matches_a_walk_down_everywhere() {
         const size_t nbits = SEAMS[s];
 
         for (size_t pattern = 0; pattern < 5; ++pattern) {
-            tda_BitSet *b = make_bitset(nbits, nullptr, 0);
+            tda_BitSet b = make_bitset(nbits, nullptr, 0);
             for (size_t i = 0; i < nbits; ++i) {
                 const bool member = pattern == 1                   // full
                                     || (pattern == 2 && i % 3 == 0) // spread
                                     || (pattern == 3 && i == 0)     // the first alone
                                     || (pattern == 4 && i >= 64 && i < 128); // one word
                 if (member) {
-                    tda_bitset_set(b, i);
+                    tda_bitset_set(&b, i);
                 }
             }
 
@@ -471,7 +473,7 @@ static void test_find_prev_matches_a_walk_down_everywhere() {
                     bool want_hit = false;
                     size_t want_idx = 0;
                     for (size_t i = start + 1; nbits > 0 && i > 0; --i) {
-                        if (tda_bitset_test(b, i - 1) != (bool) clear) {
+                        if (tda_bitset_test(&b, i - 1) != (bool) clear) {
                             want_hit = true;
                             want_idx = i - 1;
                             break;
@@ -479,14 +481,14 @@ static void test_find_prev_matches_a_walk_down_everywhere() {
                     }
 
                     size_t idx = 12345;
-                    const bool hit = clear ? tda_bitset_find_prev_clear(b, from, &idx)
-                                           : tda_bitset_find_prev(b, from, &idx);
+                    const bool hit = clear ? tda_bitset_find_prev_clear(&b, from, &idx)
+                                           : tda_bitset_find_prev(&b, from, &idx);
                     TEST_ASSERT_EQUAL_INT(want_hit, hit);
                     TEST_ASSERT_EQUAL_size_t(want_hit ? want_idx : 12345, idx);
                 }
             }
 
-            tda_bitset_drop(b);
+            tda_bitset_deinit(&b);
         }
     }
 }
@@ -494,13 +496,13 @@ static void test_find_prev_matches_a_walk_down_everywhere() {
 // bits above the universe are not gaps, though they are ones once complemented
 static void test_find_prev_clear_misses_on_a_full_set() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
-        tda_BitSet *b = make_full(SEAMS[s]);
+        tda_BitSet b = make_full(SEAMS[s]);
 
         size_t idx = 12345;
-        TEST_ASSERT_FALSE(tda_bitset_find_prev_clear(b, SIZE_MAX, &idx));
+        TEST_ASSERT_FALSE(tda_bitset_find_prev_clear(&b, SIZE_MAX, &idx));
         TEST_ASSERT_EQUAL_size_t(12345, idx);
 
-        tda_bitset_drop(b);
+        tda_bitset_deinit(&b);
     }
 }
 
@@ -508,61 +510,61 @@ static void test_find_prev_clear_misses_on_a_full_set() {
 
 static void test_copy_is_independent() {
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *b = make_bitset(129, want, 3);
+    tda_BitSet b = make_bitset(129, want, 3);
 
-    tda_BitSet *copy = nullptr;
-    TDA_TEST_OK(tda_bitset_copy(b, &copy));
+    tda_BitSet copy = {};
+    TDA_TEST_OK(tda_bitset_copy(&b, &copy));
 
-    assert_members(copy, 129, want, 3);
-    TEST_ASSERT_TRUE(tda_bitset_eq(b, copy));
-    TEST_ASSERT_EQUAL_PTR(tda_bitset_al(b), tda_bitset_al(copy));
+    assert_members(&copy, 129, want, 3);
+    TEST_ASSERT_TRUE(tda_bitset_eq(&b, &copy));
+    TEST_ASSERT_EQUAL_PTR(tda_bitset_al(&b), tda_bitset_al(&copy));
 
-    tda_bitset_reset(copy, 64);
-    TEST_ASSERT_FALSE(tda_bitset_eq(b, copy));
-    assert_members(b, 129, want, 3);
+    tda_bitset_reset(&copy, 64);
+    TEST_ASSERT_FALSE(tda_bitset_eq(&b, &copy));
+    assert_members(&b, 129, want, 3);
 
-    tda_bitset_drop(b);
-    tda_bitset_drop(copy);
+    tda_bitset_deinit(&b);
+    tda_bitset_deinit(&copy);
 }
 
 static void test_copy_with_builds_on_the_given_allocator() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *src = make_bitset(129, want, 3);
+    tda_BitSet src = make_bitset(129, want, 3);
 
-    tda_BitSet *dst = nullptr;
-    TDA_TEST_OK(tda_bitset_copy_with(src, arena, &dst));
+    tda_BitSet dst = {};
+    TDA_TEST_OK(tda_bitset_copy_with(&src, TDA_AL(&arena), &dst));
 
-    TEST_ASSERT_EQUAL_PTR(arena, tda_bitset_al(dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_bitset_al(src));
-    TEST_ASSERT_TRUE(tda_bitset_eq(src, dst));
+    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_bitset_al(&dst));
+    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_bitset_al(&src));
+    TEST_ASSERT_TRUE(tda_bitset_eq(&src, &dst));
 
     // the copy outlives the source, so it owns its words
-    tda_bitset_drop(src);
-    assert_members(dst, 129, want, 3);
+    tda_bitset_deinit(&src);
+    assert_members(&dst, 129, want, 3);
 
-    tda_bitset_drop(dst);
-    tda_al_arena_drop(arena);
+    tda_bitset_deinit(&dst);
+    tda_arena_deinit(&arena);
 }
 
 // the words come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
-    tda_test_arena_leave(arena, 0);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    tda_test_arena_leave(&arena, 0);
 
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *src = make_bitset(129, want, 3);
+    tda_BitSet src = make_bitset(129, want, 3);
 
-    tda_BitSet *dst = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy_with(src, arena, &dst));
-    TEST_ASSERT_NULL(dst);
-    assert_members(src, 129, want, 3);
+    tda_BitSet dst = {};
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy_with(&src, TDA_AL(&arena), &dst));
+    TEST_ASSERT_NULL(dst.al_);
+    assert_members(&src, 129, want, 3);
 
-    tda_bitset_drop(src);
-    tda_al_arena_drop(arena);
+    tda_bitset_deinit(&src);
+    tda_arena_deinit(&arena);
 }
 
 static void test_move_assign_hands_over_the_contents_on_one_allocator() {
@@ -570,94 +572,97 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_BitSet *src = nullptr;
-    TDA_TEST_OK(tda_bitset_new(129, &al, &src));
-    tda_bitset_set(src, 0);
-    tda_bitset_set(src, 128);
+    tda_BitSet src = {};
+    TDA_TEST_OK(tda_bitset_init_len(129, &al, &src));
+    tda_bitset_set(&src, 0);
+    tda_bitset_set(&src, 128);
 
-    tda_BitSet *dst = nullptr;
-    TDA_TEST_OK(tda_bitset_new(8, &al, &dst));
-    tda_bitset_set(dst, 3);
+    tda_BitSet dst = {};
+    TDA_TEST_OK(tda_bitset_init_len(8, &al, &dst));
+    tda_bitset_set(&dst, 3);
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_bitset_move_assign(dst, src));
+    tda_bitset_move_assign(&dst, &src);
 
     // no allocation: the words and the universe are handed over
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
-    assert_members(dst, 129, (const size_t[]){0, 128}, 2);
-    TEST_ASSERT_EQUAL_size_t(0, tda_bitset_len(src));
+    assert_members(&dst, 129, (const size_t[]){0, 128}, 2);
+    TEST_ASSERT_EQUAL_size_t(0, tda_bitset_len(&src));
 
-    tda_bitset_drop(src);
-    tda_bitset_drop(dst);
+    tda_bitset_deinit(&src);
+    tda_bitset_deinit(&dst);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-static void test_move_assign_across_allocators_empties_the_source() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
+// the allocator is part of the value: 'dst' takes the elems with the allocator they came
+// from
+static void test_move_assign_across_allocators_hands_the_allocator_over() {
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *src = make_bitset(129, want, 3);
+    tda_BitSet src = make_bitset(129, want, 3);
 
-    tda_BitSet *dst = nullptr;
-    TDA_TEST_OK(tda_bitset_new(8, arena, &dst));
-    tda_bitset_set(dst, 3);
+    tda_BitSet dst = {};
+    TDA_TEST_OK(tda_bitset_init_len(8, TDA_AL(&arena), &dst));
+    tda_bitset_set(&dst, 3);
 
-    TDA_TEST_OK(tda_bitset_move_assign(dst, src));
+    tda_bitset_move_assign(&dst, &src);
 
-    assert_members(dst, 129, want, 3);
-    TEST_ASSERT_EQUAL_PTR(arena, tda_bitset_al(dst));
+    assert_members(&dst, 129, want, 3);
+    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_bitset_al(&dst));
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_bitset_len(src));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_bitset_al(src));
+    TEST_ASSERT_EQUAL_size_t(0, tda_bitset_len(&src));
+    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_bitset_al(&src));
 
-    tda_bitset_drop(src);
-    tda_bitset_drop(dst);
-    tda_al_arena_drop(arena);
+    tda_bitset_deinit(&src);
+    tda_bitset_deinit(&dst);
+    tda_arena_deinit(&arena);
 }
 
-static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(arena);
+// nothing is allocated, so an exhausted allocator on either side cannot stop it
+static void test_move_assign_needs_no_memory() {
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    tda_BitSet *dst = nullptr;
-    TDA_TEST_OK(tda_bitset_new(8, arena, &dst));
-    tda_bitset_set(dst, 3);
-    tda_test_arena_leave(arena, 0);
+    tda_BitSet dst = {};
+    TDA_TEST_OK(tda_bitset_init_len(8, TDA_AL(&arena), &dst));
+    tda_bitset_set(&dst, 3);
+    tda_test_arena_leave(&arena, 0);
 
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *src = make_bitset(129, want, 3);
+    tda_BitSet src = make_bitset(129, want, 3);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_move_assign(dst, src));
+    tda_bitset_move_assign(&dst, &src);
 
-    assert_members(src, 129, want, 3);
-    assert_members(dst, 8, (const size_t[]){3}, 1);
+    assert_members(&dst, 129, want, 3);
+    assert_members(&src, 0, nullptr, 0);
 
-    tda_bitset_drop(src);
-    tda_bitset_drop(dst);
-    tda_al_arena_drop(arena);
+    tda_bitset_deinit(&src);
+    tda_bitset_deinit(&dst);
+    tda_arena_deinit(&arena);
 }
 
 static void test_move_assign_of_itself_changes_nothing() {
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *b = make_bitset(129, want, 3);
+    tda_BitSet b = make_bitset(129, want, 3);
 
-    TDA_TEST_OK(tda_bitset_move_assign(b, b));
+    tda_bitset_move_assign(&b, &b);
 
-    assert_members(b, 129, want, 3);
+    assert_members(&b, 129, want, 3);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_for_each_walks_the_members_in_order() {
     // members on both sides of a word seam, so the walk crosses it
     constexpr size_t want[] = {0, 63, 64, 128};
-    tda_BitSet *b = make_bitset(129, want, 4);
+    tda_BitSet b = make_bitset(129, want, 4);
 
     size_t seen[4];
     size_t n = 0;
-    TDA_BITSET_FOR_EACH(idx, b) {
+    TDA_BITSET_FOR_EACH(idx, &b) {
         TEST_ASSERT_TRUE(n < 4);
         seen[n++] = idx;
     }
@@ -665,21 +670,21 @@ static void test_for_each_walks_the_members_in_order() {
     TEST_ASSERT_EQUAL_size_t(4, n);
     TEST_ASSERT_EQUAL_size_t_ARRAY(want, seen, 4);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_for_each_over_an_empty_set_runs_no_body() {
-    tda_BitSet *b = make_bitset(129, nullptr, 0);
+    tda_BitSet b = make_bitset(129, nullptr, 0);
 
     size_t n = 0;
-    TDA_BITSET_FOR_EACH(idx, b) {
+    TDA_BITSET_FOR_EACH(idx, &b) {
         TDA_UNUSED(idx);
         ++n;
     }
 
     TEST_ASSERT_EQUAL_size_t(0, n);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static const tda_BitSet *counted(const tda_BitSet *b, size_t *calls) {
@@ -690,11 +695,11 @@ static const tda_BitSet *counted(const tda_BitSet *b, size_t *calls) {
 
 static void test_for_each_reads_its_bitset_once() {
     constexpr size_t want[] = {1, 70, 128};
-    tda_BitSet *b = make_bitset(129, want, 3);
+    tda_BitSet b = make_bitset(129, want, 3);
 
     size_t calls = 0;
     size_t n = 0;
-    TDA_BITSET_FOR_EACH(idx, counted(b, &calls)) {
+    TDA_BITSET_FOR_EACH(idx, counted(&b, &calls)) {
         TDA_UNUSED(idx);
         ++n;
     }
@@ -702,7 +707,7 @@ static void test_for_each_reads_its_bitset_once() {
     TEST_ASSERT_EQUAL_size_t(3, n);
     TEST_ASSERT_EQUAL_size_t(1, calls);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_swap_exchanges_the_contents() {
@@ -710,152 +715,152 @@ static void test_swap_exchanges_the_contents() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_BitSet *a = nullptr;
-    TDA_TEST_OK(tda_bitset_new(129, &al, &a));
-    tda_bitset_set(a, 128);
+    tda_BitSet a = {};
+    TDA_TEST_OK(tda_bitset_init_len(129, &al, &a));
+    tda_bitset_set(&a, 128);
 
-    tda_BitSet *b = nullptr;
-    TDA_TEST_OK(tda_bitset_new(8, &al, &b));
-    tda_bitset_set(b, 3);
+    tda_BitSet b = {};
+    TDA_TEST_OK(tda_bitset_init_len(8, &al, &b));
+    tda_bitset_set(&b, 3);
 
     const size_t requests = tda_test_probe_requests(&probe);
-    tda_bitset_swap(a, b);
+    tda_bitset_swap(&a, &b);
 
     // the words are swapped in place, with no allocation
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
     // the lengths swap along with the members
-    assert_members(a, 8, (const size_t[]){3}, 1);
-    assert_members(b, 129, (const size_t[]){128}, 1);
+    assert_members(&a, 8, (const size_t[]){3}, 1);
+    assert_members(&b, 129, (const size_t[]){128}, 1);
 
-    tda_bitset_drop(a);
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&a);
+    tda_bitset_deinit(&b);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
 static void test_swap_of_itself_changes_nothing() {
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *b = make_bitset(129, want, 3);
+    tda_BitSet b = make_bitset(129, want, 3);
 
-    tda_bitset_swap(b, b);
+    tda_bitset_swap(&b, &b);
 
-    assert_members(b, 129, want, 3);
+    assert_members(&b, 129, want, 3);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_copy_of_an_empty_universe() {
-    tda_BitSet *b = make_bitset(0, nullptr, 0);
+    tda_BitSet b = make_bitset(0, nullptr, 0);
 
-    tda_BitSet *copy = nullptr;
-    TDA_TEST_OK(tda_bitset_copy(b, &copy));
+    tda_BitSet copy = {};
+    TDA_TEST_OK(tda_bitset_copy(&b, &copy));
 
-    assert_members(copy, 0, nullptr, 0);
-    TEST_ASSERT_TRUE(tda_bitset_eq(b, copy));
+    assert_members(&copy, 0, nullptr, 0);
+    TEST_ASSERT_TRUE(tda_bitset_eq(&b, &copy));
 
-    tda_bitset_drop(b);
-    tda_bitset_drop(copy);
+    tda_bitset_deinit(&b);
+    tda_bitset_deinit(&copy);
 }
 
 static void test_copy_assign_grow_shrink_empty() {
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *src = make_bitset(129, want, 3);
+    tda_BitSet src = make_bitset(129, want, 3);
 
     // grow: 65 -> 129
-    tda_BitSet *dst = make_full(65);
-    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
-    assert_members(dst, 129, want, 3);
-    tda_bitset_drop(dst);
+    tda_BitSet dst = make_full(65);
+    TDA_TEST_OK(tda_bitset_copy_assign(&dst, &src));
+    assert_members(&dst, 129, want, 3);
+    tda_bitset_deinit(&dst);
 
     // shrink: 200 -> 129
     dst = make_full(200);
-    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
-    assert_members(dst, 129, want, 3);
-    tda_bitset_drop(dst);
+    TDA_TEST_OK(tda_bitset_copy_assign(&dst, &src));
+    assert_members(&dst, 129, want, 3);
+    tda_bitset_deinit(&dst);
 
     // same size, no resize at all
     dst = make_full(129);
-    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
-    assert_members(dst, 129, want, 3);
-    tda_bitset_drop(dst);
+    TDA_TEST_OK(tda_bitset_copy_assign(&dst, &src));
+    assert_members(&dst, 129, want, 3);
+    tda_bitset_deinit(&dst);
 
     // down to an empty universe: the words are freed
-    tda_BitSet *empty = make_bitset(0, nullptr, 0);
+    tda_BitSet empty = make_bitset(0, nullptr, 0);
     dst = make_full(129);
-    TDA_TEST_OK(tda_bitset_copy_assign(dst, empty));
-    assert_members(dst, 0, nullptr, 0);
+    TDA_TEST_OK(tda_bitset_copy_assign(&dst, &empty));
+    assert_members(&dst, 0, nullptr, 0);
 
     // and back up from one
-    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
-    assert_members(dst, 129, want, 3);
+    TDA_TEST_OK(tda_bitset_copy_assign(&dst, &src));
+    assert_members(&dst, 129, want, 3);
 
-    tda_bitset_drop(dst);
-    tda_bitset_drop(empty);
-    tda_bitset_drop(src);
+    tda_bitset_deinit(&dst);
+    tda_bitset_deinit(&empty);
+    tda_bitset_deinit(&src);
 }
 
-static void test_copy_assign_self_is_noop() {
+static void test_copy_assign_of_itself_changes_nothing() {
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *b = make_bitset(129, want, 3);
+    tda_BitSet b = make_bitset(129, want, 3);
 
-    TDA_TEST_OK(tda_bitset_copy_assign(b, b));
-    assert_members(b, 129, want, 3);
+    TDA_TEST_OK(tda_bitset_copy_assign(&b, &b));
+    assert_members(&b, 129, want, 3);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_copy_assign_keeps_the_target_allocator() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 4096);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 4096, &arena));
 
-    tda_BitSet *dst = nullptr;
-    TDA_TEST_OK(tda_bitset_new(65, arena, &dst));
+    tda_BitSet dst = {};
+    TDA_TEST_OK(tda_bitset_init_len(65, TDA_AL(&arena), &dst));
 
     constexpr size_t want[] = {0, 128};
-    tda_BitSet *src = make_bitset(129, want, 2);
+    tda_BitSet src = make_bitset(129, want, 2);
 
-    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
-    assert_members(dst, 129, want, 2);
-    TEST_ASSERT_EQUAL_PTR(arena, tda_bitset_al(dst));
+    TDA_TEST_OK(tda_bitset_copy_assign(&dst, &src));
+    assert_members(&dst, 129, want, 2);
+    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_bitset_al(&dst));
 
-    tda_bitset_drop(dst);
-    tda_bitset_drop(src);
-    tda_al_arena_drop(arena);
+    tda_bitset_deinit(&dst);
+    tda_bitset_deinit(&src);
+    tda_arena_deinit(&arena);
 }
 
 /* ========== set ops ========== */
 
 static void test_eq_matches_the_same_members() {
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet *a = make_bitset(129, want, 3);
-    tda_BitSet *b = make_bitset(129, want, 3);
+    tda_BitSet a = make_bitset(129, want, 3);
+    tda_BitSet b = make_bitset(129, want, 3);
 
-    TEST_ASSERT_TRUE(tda_bitset_eq(a, a));
-    TEST_ASSERT_TRUE(tda_bitset_eq(a, b));
-    TEST_ASSERT_TRUE(tda_bitset_eq(b, a));
+    TEST_ASSERT_TRUE(tda_bitset_eq(&a, &a));
+    TEST_ASSERT_TRUE(tda_bitset_eq(&a, &b));
+    TEST_ASSERT_TRUE(tda_bitset_eq(&b, &a));
 
-    tda_bitset_flip(b, 7);
-    TEST_ASSERT_FALSE(tda_bitset_eq(a, b));
-    TEST_ASSERT_FALSE(tda_bitset_eq(b, a));
+    tda_bitset_flip(&b, 7);
+    TEST_ASSERT_FALSE(tda_bitset_eq(&a, &b));
+    TEST_ASSERT_FALSE(tda_bitset_eq(&b, &a));
 
-    tda_bitset_drop(a);
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&a);
+    tda_bitset_deinit(&b);
 }
 
 // a different universe compares unequal; it is not asserted
 static void test_eq_parts_different_universes() {
-    tda_BitSet *a = make_bitset(64, nullptr, 0);
-    tda_BitSet *b = make_bitset(65, nullptr, 0);
-    tda_BitSet *empty = make_bitset(0, nullptr, 0);
+    tda_BitSet a = make_bitset(64, nullptr, 0);
+    tda_BitSet b = make_bitset(65, nullptr, 0);
+    tda_BitSet empty = make_bitset(0, nullptr, 0);
 
-    TEST_ASSERT_FALSE(tda_bitset_eq(a, b));
-    TEST_ASSERT_FALSE(tda_bitset_eq(b, a));
-    TEST_ASSERT_FALSE(tda_bitset_eq(a, empty));
-    TEST_ASSERT_TRUE(tda_bitset_eq(empty, empty));
+    TEST_ASSERT_FALSE(tda_bitset_eq(&a, &b));
+    TEST_ASSERT_FALSE(tda_bitset_eq(&b, &a));
+    TEST_ASSERT_FALSE(tda_bitset_eq(&a, &empty));
+    TEST_ASSERT_TRUE(tda_bitset_eq(&empty, &empty));
 
-    tda_bitset_drop(a);
-    tda_bitset_drop(b);
-    tda_bitset_drop(empty);
+    tda_bitset_deinit(&a);
+    tda_bitset_deinit(&b);
+    tda_bitset_deinit(&empty);
 }
 
 static void test_union_adds_the_other_members() {
@@ -863,31 +868,31 @@ static void test_union_adds_the_other_members() {
     constexpr size_t rhs[] = {64, 128};
     constexpr size_t want[] = {0, 64, 128};
 
-    tda_BitSet *a = make_bitset(129, lhs, 2);
-    tda_BitSet *b = make_bitset(129, rhs, 2);
+    tda_BitSet a = make_bitset(129, lhs, 2);
+    tda_BitSet b = make_bitset(129, rhs, 2);
 
-    tda_bitset_union(a, b);
-    assert_members(a, 129, want, 3);
-    assert_members(b, 129, rhs, 2); // the other side is read, never written
+    tda_bitset_union(&a, &b);
+    assert_members(&a, 129, want, 3);
+    assert_members(&b, 129, rhs, 2); // the other side is read, never written
 
-    tda_bitset_drop(a);
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&a);
+    tda_bitset_deinit(&b);
 }
 
-static void test_intersect_keeps_what_both_hold() {
+static void test_intersection_keeps_what_both_hold() {
     constexpr size_t lhs[] = {0, 64};
     constexpr size_t rhs[] = {64, 128};
     constexpr size_t want[] = {64};
 
-    tda_BitSet *a = make_bitset(129, lhs, 2);
-    tda_BitSet *b = make_bitset(129, rhs, 2);
+    tda_BitSet a = make_bitset(129, lhs, 2);
+    tda_BitSet b = make_bitset(129, rhs, 2);
 
-    tda_bitset_intersect(a, b);
-    assert_members(a, 129, want, 1);
-    assert_members(b, 129, rhs, 2);
+    tda_bitset_intersection(&a, &b);
+    assert_members(&a, 129, want, 1);
+    assert_members(&b, 129, rhs, 2);
 
-    tda_bitset_drop(a);
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&a);
+    tda_bitset_deinit(&b);
 }
 
 static void test_difference_drops_what_the_other_holds() {
@@ -895,15 +900,15 @@ static void test_difference_drops_what_the_other_holds() {
     constexpr size_t rhs[] = {64, 128};
     constexpr size_t want[] = {0};
 
-    tda_BitSet *a = make_bitset(129, lhs, 2);
-    tda_BitSet *b = make_bitset(129, rhs, 2);
+    tda_BitSet a = make_bitset(129, lhs, 2);
+    tda_BitSet b = make_bitset(129, rhs, 2);
 
-    tda_bitset_difference(a, b);
-    assert_members(a, 129, want, 1);
-    assert_members(b, 129, rhs, 2);
+    tda_bitset_difference(&a, &b);
+    assert_members(&a, 129, want, 1);
+    assert_members(&b, 129, rhs, 2);
 
-    tda_bitset_drop(a);
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&a);
+    tda_bitset_deinit(&b);
 }
 
 static void test_symmetric_difference_keeps_what_exactly_one_holds() {
@@ -911,37 +916,37 @@ static void test_symmetric_difference_keeps_what_exactly_one_holds() {
     constexpr size_t rhs[] = {64, 128};
     constexpr size_t want[] = {0, 128};
 
-    tda_BitSet *a = make_bitset(129, lhs, 2);
-    tda_BitSet *b = make_bitset(129, rhs, 2);
+    tda_BitSet a = make_bitset(129, lhs, 2);
+    tda_BitSet b = make_bitset(129, rhs, 2);
 
-    tda_bitset_symmetric_difference(a, b);
-    assert_members(a, 129, want, 2);
-    assert_members(b, 129, rhs, 2);
+    tda_bitset_symmetric_difference(&a, &b);
+    assert_members(&a, 129, want, 2);
+    assert_members(&b, 129, rhs, 2);
 
-    tda_bitset_drop(a);
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&a);
+    tda_bitset_deinit(&b);
 }
 
 // every pairwise op with the same set on both sides gives the expected result
 static void test_the_pairwise_ops_on_one_set() {
     constexpr size_t want[] = {0, 64, 128};
 
-    tda_BitSet *b = make_bitset(129, want, 3);
-    tda_bitset_union(b, b);
-    assert_members(b, 129, want, 3);
-    tda_bitset_intersect(b, b);
-    assert_members(b, 129, want, 3);
-    tda_bitset_drop(b);
+    tda_BitSet b = make_bitset(129, want, 3);
+    tda_bitset_union(&b, &b);
+    assert_members(&b, 129, want, 3);
+    tda_bitset_intersection(&b, &b);
+    assert_members(&b, 129, want, 3);
+    tda_bitset_deinit(&b);
 
     b = make_bitset(129, want, 3);
-    tda_bitset_difference(b, b);
-    assert_members(b, 129, nullptr, 0);
-    tda_bitset_drop(b);
+    tda_bitset_difference(&b, &b);
+    assert_members(&b, 129, nullptr, 0);
+    tda_bitset_deinit(&b);
 
     b = make_bitset(129, want, 3);
-    tda_bitset_symmetric_difference(b, b);
-    assert_members(b, 129, nullptr, 0);
-    tda_bitset_drop(b);
+    tda_bitset_symmetric_difference(&b, &b);
+    assert_members(&b, 129, nullptr, 0);
+    tda_bitset_deinit(&b);
 }
 
 // no pairwise op may dirty the tail, whatever the operands
@@ -949,21 +954,21 @@ static void test_the_pairwise_ops_keep_the_tail_clear() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
 
-        tda_BitSet *a = make_full(nbits);
-        tda_BitSet *b = make_full(nbits);
+        tda_BitSet a = make_full(nbits);
+        tda_BitSet b = make_full(nbits);
 
-        tda_bitset_union(a, b);
-        TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_count(a));
+        tda_bitset_union(&a, &b);
+        TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_count(&a));
 
-        tda_bitset_symmetric_difference(a, b);
-        TEST_ASSERT_EQUAL_size_t(0, tda_bitset_count(a));
+        tda_bitset_symmetric_difference(&a, &b);
+        TEST_ASSERT_EQUAL_size_t(0, tda_bitset_count(&a));
 
-        tda_bitset_flip_all(a);
-        tda_bitset_intersect(a, b);
-        TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_count(a));
+        tda_bitset_flip_all(&a);
+        tda_bitset_intersection(&a, &b);
+        TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_count(&a));
 
-        tda_bitset_drop(a);
-        tda_bitset_drop(b);
+        tda_bitset_deinit(&a);
+        tda_bitset_deinit(&b);
     }
 }
 
@@ -971,19 +976,19 @@ static void test_is_subset() {
     constexpr size_t few[] = {0, 64};
     constexpr size_t many[] = {0, 64, 128};
 
-    tda_BitSet *small = make_bitset(129, few, 2);
-    tda_BitSet *big = make_bitset(129, many, 3);
-    tda_BitSet *empty = make_bitset(129, nullptr, 0);
+    tda_BitSet small = make_bitset(129, few, 2);
+    tda_BitSet big = make_bitset(129, many, 3);
+    tda_BitSet empty = make_bitset(129, nullptr, 0);
 
-    TEST_ASSERT_TRUE(tda_bitset_is_subset(small, big));
-    TEST_ASSERT_FALSE(tda_bitset_is_subset(big, small));
-    TEST_ASSERT_TRUE(tda_bitset_is_subset(small, small));
-    TEST_ASSERT_TRUE(tda_bitset_is_subset(empty, big)); // the empty set is in everything
-    TEST_ASSERT_FALSE(tda_bitset_is_subset(big, empty));
+    TEST_ASSERT_TRUE(tda_bitset_is_subset(&small, &big));
+    TEST_ASSERT_FALSE(tda_bitset_is_subset(&big, &small));
+    TEST_ASSERT_TRUE(tda_bitset_is_subset(&small, &small));
+    TEST_ASSERT_TRUE(tda_bitset_is_subset(&empty, &big)); // the empty set is in everything
+    TEST_ASSERT_FALSE(tda_bitset_is_subset(&big, &empty));
 
-    tda_bitset_drop(small);
-    tda_bitset_drop(big);
-    tda_bitset_drop(empty);
+    tda_bitset_deinit(&small);
+    tda_bitset_deinit(&big);
+    tda_bitset_deinit(&empty);
 }
 
 static void test_intersects() {
@@ -991,155 +996,142 @@ static void test_intersects() {
     constexpr size_t shares[] = {64, 128};
     constexpr size_t apart[] = {1, 128};
 
-    tda_BitSet *a = make_bitset(129, lhs, 2);
-    tda_BitSet *b = make_bitset(129, shares, 2);
-    tda_BitSet *c = make_bitset(129, apart, 2);
-    tda_BitSet *empty = make_bitset(129, nullptr, 0);
+    tda_BitSet a = make_bitset(129, lhs, 2);
+    tda_BitSet b = make_bitset(129, shares, 2);
+    tda_BitSet c = make_bitset(129, apart, 2);
+    tda_BitSet empty = make_bitset(129, nullptr, 0);
 
-    TEST_ASSERT_TRUE(tda_bitset_intersects(a, b));
-    TEST_ASSERT_TRUE(tda_bitset_intersects(b, a));
-    TEST_ASSERT_FALSE(tda_bitset_intersects(a, c));
-    TEST_ASSERT_FALSE(tda_bitset_intersects(c, a));
-    TEST_ASSERT_FALSE(tda_bitset_intersects(a, empty));
-    TEST_ASSERT_TRUE(tda_bitset_intersects(a, a));
+    TEST_ASSERT_TRUE(tda_bitset_intersects(&a, &b));
+    TEST_ASSERT_TRUE(tda_bitset_intersects(&b, &a));
+    TEST_ASSERT_FALSE(tda_bitset_intersects(&a, &c));
+    TEST_ASSERT_FALSE(tda_bitset_intersects(&c, &a));
+    TEST_ASSERT_FALSE(tda_bitset_intersects(&a, &empty));
+    TEST_ASSERT_TRUE(tda_bitset_intersects(&a, &a));
 
-    tda_bitset_drop(a);
-    tda_bitset_drop(b);
-    tda_bitset_drop(c);
-    tda_bitset_drop(empty);
+    tda_bitset_deinit(&a);
+    tda_bitset_deinit(&b);
+    tda_bitset_deinit(&c);
+    tda_bitset_deinit(&empty);
 }
 
 static void test_the_set_ops_survive_an_empty_universe() {
-    tda_BitSet *a = make_bitset(0, nullptr, 0);
-    tda_BitSet *b = make_bitset(0, nullptr, 0);
+    tda_BitSet a = make_bitset(0, nullptr, 0);
+    tda_BitSet b = make_bitset(0, nullptr, 0);
 
-    tda_bitset_union(a, b);
-    tda_bitset_intersect(a, b);
-    tda_bitset_difference(a, b);
-    tda_bitset_symmetric_difference(a, b);
+    tda_bitset_union(&a, &b);
+    tda_bitset_intersection(&a, &b);
+    tda_bitset_difference(&a, &b);
+    tda_bitset_symmetric_difference(&a, &b);
 
-    TEST_ASSERT_TRUE(tda_bitset_eq(a, b));
-    TEST_ASSERT_TRUE(tda_bitset_is_subset(a, b));
-    TEST_ASSERT_FALSE(tda_bitset_intersects(a, b));
+    TEST_ASSERT_TRUE(tda_bitset_eq(&a, &b));
+    TEST_ASSERT_TRUE(tda_bitset_is_subset(&a, &b));
+    TEST_ASSERT_FALSE(tda_bitset_intersects(&a, &b));
 
-    tda_bitset_drop(a);
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&a);
+    tda_bitset_deinit(&b);
 }
 
 /* ========== print ========== */
 
 static void test_fprint_writes_the_members() {
     constexpr size_t want[] = {0, 3, 64, 69};
-    tda_BitSet *b = make_bitset(129, want, 4);
+    tda_BitSet b = make_bitset(129, want, 4);
 
-    assert_prints("{0, 3, 64, 69}\n", b);
+    assert_prints("{0, 3, 64, 69}\n", &b);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_fprint_of_an_empty_set() {
-    tda_BitSet *b = make_bitset(129, nullptr, 0);
-    assert_prints("{}\n", b);
-    tda_bitset_drop(b);
+    tda_BitSet b = make_bitset(129, nullptr, 0);
+    assert_prints("{}\n", &b);
+    tda_bitset_deinit(&b);
 
     b = make_bitset(0, nullptr, 0);
-    assert_prints("{}\n", b);
-    tda_bitset_drop(b);
+    assert_prints("{}\n", &b);
+    tda_bitset_deinit(&b);
 }
 
 static void test_fprint_shows_no_bit_above_the_universe() {
-    tda_BitSet *b = make_full(65);
+    tda_BitSet b = make_full(65);
 
     assert_prints(
         "{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, "
         "22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, "
         "42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, "
         "62, 63, 64}\n",
-        b
+        &b
     );
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 // stdout cannot be captured portably, so this only checks that the stdout variant runs
 static void test_print_writes_to_stdout() {
     constexpr size_t members[] = {0, 3};
-    tda_BitSet *b = make_bitset(8, members, 2);
+    tda_BitSet b = make_bitset(8, members, 2);
 
-    tda_bitset_print(b);
+    tda_bitset_print(&b);
 
-    tda_bitset_drop(b);
+    tda_bitset_deinit(&b);
 }
 
 /* ========== allocation failure ========== */
 
-static void test_new_reports_a_refused_header() {
+static void test_refused_words_leave_nothing_behind() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
     tda_test_probe_fail_after_next(&probe, 0);
 
-    tda_BitSet *b = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_new(200, &al, &b));
+    tda_BitSet b = {};
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_init_len(200, &al, &b));
 
-    TEST_ASSERT_NULL(b);
-    TEST_ASSERT_EQUAL_size_t(0, probe.live);
-}
-
-static void test_refused_words_free_the_header() {
-    tda_TestProbe probe;
-    tda_test_probe_reset(&probe);
-    tda_Al al = tda_test_probe_full(&probe);
-    tda_test_probe_fail_after_next(&probe, 1); // the header passes, the words are refused
-
-    tda_BitSet *b = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_new(200, &al, &b));
-
-    TEST_ASSERT_NULL(b);
+    TEST_ASSERT_NULL(b.al_);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
 static void test_copy_reports_an_exhausted_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 512);
-    TEST_ASSERT_NOT_NULL(arena);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 512, &arena));
 
-    tda_BitSet *src = nullptr;
-    TDA_TEST_OK(tda_bitset_new(200, arena, &src));
-    tda_bitset_set(src, 7);
-    tda_test_arena_leave(arena, 0);
+    tda_BitSet src = {};
+    TDA_TEST_OK(tda_bitset_init_len(200, TDA_AL(&arena), &src));
+    tda_bitset_set(&src, 7);
+    tda_test_arena_leave(&arena, 0);
 
-    tda_BitSet *copy = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy(src, &copy));
-    TEST_ASSERT_NULL(copy);
+    tda_BitSet copy = {};
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy(&src, &copy));
+    TEST_ASSERT_NULL(copy.al_);
 
     // the source is unchanged
     constexpr size_t want[] = {7};
-    assert_members(src, 200, want, 1);
+    assert_members(&src, 200, want, 1);
 
-    tda_al_arena_drop(arena);
+    tda_arena_deinit(&arena);
 }
 
-static void test_copy_assign_leaves_the_target_untouched_on_failure() {
+static void test_copy_assign_reports_a_refused_block_and_changes_nothing() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
     constexpr size_t kept[] = {0, 64};
-    tda_BitSet *dst = nullptr;
-    TDA_TEST_OK(tda_bitset_new(65, &al, &dst));
-    tda_bitset_set(dst, 0);
-    tda_bitset_set(dst, 64);
+    tda_BitSet dst = {};
+    TDA_TEST_OK(tda_bitset_init_len(65, &al, &dst));
+    tda_bitset_set(&dst, 0);
+    tda_bitset_set(&dst, 64);
 
-    tda_BitSet *src = make_bitset(200, nullptr, 0);
+    tda_BitSet src = make_bitset(200, nullptr, 0);
 
     // the resize is copy_assign's only request, so the next refusal hits it
     tda_test_probe_fail_after_next(&probe, 0);
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy_assign(dst, src));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_bitset_copy_assign(&dst, &src));
 
-    assert_members(dst, 65, kept, 2);
+    assert_members(&dst, 65, kept, 2);
 
-    tda_bitset_drop(dst);
-    tda_bitset_drop(src);
+    tda_bitset_deinit(&dst);
+    tda_bitset_deinit(&src);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
@@ -1149,30 +1141,71 @@ static void test_copy_assign_of_the_same_universe_never_allocates() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_BitSet *dst = nullptr;
-    TDA_TEST_OK(tda_bitset_new(129, &al, &dst));
+    tda_BitSet dst = {};
+    TDA_TEST_OK(tda_bitset_init_len(129, &al, &dst));
     const size_t before = tda_test_probe_requests(&probe);
 
     constexpr size_t want[] = {0, 128};
-    tda_BitSet *src = make_bitset(129, want, 2);
+    tda_BitSet src = make_bitset(129, want, 2);
 
-    TDA_TEST_OK(tda_bitset_copy_assign(dst, src));
+    TDA_TEST_OK(tda_bitset_copy_assign(&dst, &src));
 
     TEST_ASSERT_EQUAL_size_t(before, tda_test_probe_requests(&probe));
-    assert_members(dst, 129, want, 2);
+    assert_members(&dst, 129, want, 2);
 
-    tda_bitset_drop(dst);
-    tda_bitset_drop(src);
+    tda_bitset_deinit(&dst);
+    tda_bitset_deinit(&src);
+}
+
+// each side keeps the allocator its elems came from, and each is given back to it
+static void test_swap_across_allocators_carries_each_allocator() {
+    tda_TestProbe pa;
+    tda_TestProbe pb;
+    tda_test_probe_reset(&pa);
+    tda_test_probe_reset(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa);
+    tda_Al al_b = tda_test_probe_full(&pb);
+
+    tda_BitSet a = {};
+    tda_BitSet b = {};
+    TDA_TEST_OK(tda_bitset_init_len(64, &al_a, &a));
+    TDA_TEST_OK(tda_bitset_init_len(200, &al_b, &b));
+    tda_bitset_set(&b, 1);
+    tda_bitset_set(&b, 2);
+    tda_bitset_set(&b, 3);
+
+    tda_bitset_swap(&a, &b);
+
+    TEST_ASSERT_EQUAL_PTR(&al_b, tda_bitset_al(&a));
+    TEST_ASSERT_EQUAL_PTR(&al_a, tda_bitset_al(&b));
+    TEST_ASSERT_EQUAL_size_t(3, tda_bitset_count(&a));
+
+    tda_bitset_deinit(&a);
+    TEST_ASSERT_EQUAL_size_t(0, pb.live);
+    tda_bitset_deinit(&b);
+    TEST_ASSERT_EQUAL_size_t(0, pa.live);
+}
+
+// deinit leaves the inert state, so a second one is safe
+static void test_deinit_twice_is_noop() {
+    tda_BitSet x = {};
+    TDA_TEST_OK(tda_bitset_init_len(100, tda_al_default(), &x));
+
+    tda_bitset_deinit(&x);
+    TEST_ASSERT_NULL(x.al_);
+
+    tda_bitset_deinit(&x);
 }
 
 int main() {
     UNITY_BEGIN();
 
-    RUN_TEST(test_new_sets_len_and_allocator);
-    RUN_TEST(test_new_starts_with_nothing_in_it);
+    RUN_TEST(test_init_sets_len_and_allocator);
+    RUN_TEST(test_init_starts_with_nothing_in_it);
     RUN_TEST(test_an_empty_universe_is_full_and_empty_at_once);
-    RUN_TEST(test_drop_null_is_noop);
-    RUN_TEST(test_drop_hands_back_everything_it_took);
+    RUN_TEST(test_deinit_of_an_inert_value_is_noop);
+    RUN_TEST(test_deinit_twice_is_noop);
+    RUN_TEST(test_deinit_hands_back_everything);
     RUN_TEST(test_an_empty_universe_owns_no_words);
 
     RUN_TEST(test_set_and_test_roundtrip);
@@ -1202,8 +1235,8 @@ int main() {
     RUN_TEST(test_copy_with_builds_on_the_given_allocator);
     RUN_TEST(test_copy_with_reports_an_exhausted_target_arena);
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
-    RUN_TEST(test_move_assign_across_allocators_empties_the_source);
-    RUN_TEST(test_move_assign_across_allocators_reports_an_exhausted_arena);
+    RUN_TEST(test_move_assign_across_allocators_hands_the_allocator_over);
+    RUN_TEST(test_move_assign_needs_no_memory);
     RUN_TEST(test_move_assign_of_itself_changes_nothing);
     RUN_TEST(test_for_each_walks_the_members_in_order);
     RUN_TEST(test_for_each_over_an_empty_set_runs_no_body);
@@ -1213,13 +1246,13 @@ int main() {
     RUN_TEST(test_swap_of_itself_changes_nothing);
     RUN_TEST(test_copy_of_an_empty_universe);
     RUN_TEST(test_copy_assign_grow_shrink_empty);
-    RUN_TEST(test_copy_assign_self_is_noop);
+    RUN_TEST(test_copy_assign_of_itself_changes_nothing);
     RUN_TEST(test_copy_assign_keeps_the_target_allocator);
 
     RUN_TEST(test_eq_matches_the_same_members);
     RUN_TEST(test_eq_parts_different_universes);
     RUN_TEST(test_union_adds_the_other_members);
-    RUN_TEST(test_intersect_keeps_what_both_hold);
+    RUN_TEST(test_intersection_keeps_what_both_hold);
     RUN_TEST(test_difference_drops_what_the_other_holds);
     RUN_TEST(test_symmetric_difference_keeps_what_exactly_one_holds);
     RUN_TEST(test_the_pairwise_ops_on_one_set);
@@ -1232,12 +1265,12 @@ int main() {
     RUN_TEST(test_fprint_of_an_empty_set);
     RUN_TEST(test_fprint_shows_no_bit_above_the_universe);
     RUN_TEST(test_print_writes_to_stdout);
-
-    RUN_TEST(test_new_reports_a_refused_header);
-    RUN_TEST(test_refused_words_free_the_header);
+    RUN_TEST(test_refused_words_leave_nothing_behind);
     RUN_TEST(test_copy_reports_an_exhausted_arena);
-    RUN_TEST(test_copy_assign_leaves_the_target_untouched_on_failure);
+    RUN_TEST(test_copy_assign_reports_a_refused_block_and_changes_nothing);
     RUN_TEST(test_copy_assign_of_the_same_universe_never_allocates);
+
+    RUN_TEST(test_swap_across_allocators_carries_each_allocator);
 
     return UNITY_END();
 }

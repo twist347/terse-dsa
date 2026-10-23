@@ -27,8 +27,9 @@
 /// the elems may wrap around the ring.
 ///
 /// Pointers are not stable. An op that may reallocate (push, reserve, shrink_to_fit,
-/// copy_assign, move_assign, swap) moves every elem, and a pop ends the one it takes.
-/// For stable positions use ds/list.
+/// copy_assign) moves every elem, move_assign releases the old block, and a pop ends the
+/// one it takes. swap moves no elem: a pointer stays valid but points into the other
+/// one. For stable positions use ds/list.
 ///
 /// @par Example
 /// @snippet ds/example_queue.c build
@@ -37,22 +38,23 @@
 /// @snippet ds/example_queue.c into
 /// @{
 
-/// Owning first in first out queue.
-/// Opaque: made by a constructor, released by tda_queue_drop
-typedef struct tda_Queue tda_Queue;
+/// Owning first in first out queue. A value the caller holds, like tda_Deque, whose
+/// rules it follows: an init or a from_ fills it in, tda_queue_deinit releases it,
+/// `= {}` is inert, and a copy of the struct is a second owner of the same block.
+typedef struct tda_Queue {
+    tda_Deque deque_; ///< holds the elems, front first
+} tda_Queue;
 
 /// @name lifetime
 /// @{
 
-/// an empty queue that owns no block yet
+/// an empty queue that owns no block yet; allocates nothing, so it cannot fail
 /// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
-/// @param[out] out the new queue, written only on success
-/// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header or the deque cannot be allocated
+/// @param[out] out the new queue
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Status tda_queue_new(tda_Layout elem, tda_Al *al, tda_Queue **out);
+TDA_API
+void tda_queue_init(tda_Layout elem, tda_Al *al, tda_Queue *out);
 
 /// an empty queue with room for 'cap' elems before the first growth
 /// @param cap how many elems to make room for
@@ -64,7 +66,7 @@ tda_Status tda_queue_new(tda_Layout elem, tda_Al *al, tda_Queue **out);
 ///         cap * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_queue_new_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Queue **out);
+tda_Status tda_queue_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Queue *out);
 
 /// a queue holding a copy of 'len' elems read from 'data', pushed in order
 /// @param data 'data[0]' is served first; may be null only when len is 0
@@ -77,7 +79,7 @@ tda_Status tda_queue_new_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Queue 
 ///         len * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_queue_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Queue **out);
+tda_Status tda_queue_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Queue *out);
 
 /// a queue holding a copy of the elems 's' views
 /// @param s the view to copy; its first elem is served first; the elem layout is the span's
@@ -87,21 +89,21 @@ tda_Status tda_queue_from_data(const void *data, size_t len, tda_Layout elem, td
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_queue_from_span(tda_Span s, tda_Al *al, tda_Queue **out);
+tda_Status tda_queue_from_span(tda_Span s, tda_Al *al, tda_Queue *out);
 
-/// releases the elems and the queue through the allocator it was built with
-/// @param self null is a no-op
+/// releases what the queue holds and leaves it inert, `= {}`
+/// @param self a queue, or an inert one, for which this is a no-op
 /// @bigo{1}
 TDA_API
-void tda_queue_drop(tda_Queue *self);
+void tda_queue_deinit(tda_Queue *self);
 
-/// releases the queue and returns the deque that held its elems
-/// @param self consumed and must not be used again; not null
-/// @return the deque, elems front to back, with the same capacity and allocator; nothing
-///         is copied, so this cannot fail
+/// hands over the deque that holds the elems, leaving the queue inert
+/// @param self the queue; inert afterwards
+/// @param[out] out the deque, elems front to back, with the same capacity and
+///                 allocator; nothing is copied, so this cannot fail
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Deque *tda_queue_into_deque(tda_Queue *self);
+TDA_API
+void tda_queue_into_deque(tda_Queue *self, tda_Deque *out);
 
 /// @}
 
@@ -112,20 +114,20 @@ tda_Deque *tda_queue_into_deque(tda_Queue *self);
 /// @param self the queue to copy
 /// @param[out] out the new queue, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_queue_copy(const tda_Queue *self, tda_Queue **out);
+tda_Status tda_queue_copy(const tda_Queue *self, tda_Queue *out);
 
 /// a new queue with the same elems in the same order, on 'al'
 /// @param self the queue to copy
 /// @param al the allocator for the copy
 /// @param[out] out the new queue, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue **out);
+tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue *out);
 
 /// overwrites the elems of 'self' with those of 'other', growing the block if needed
 /// @param[in,out] self must have the same elem layout; keeps its allocator
@@ -136,16 +138,13 @@ tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue **ou
 [[nodiscard]] TDA_API
 tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other);
 
-/// moves the elems of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same elem layout; its old elems are released, its
-///                     allocator kept
-/// @param[in,out] other emptied on success and still usable; may be 'self'
-/// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and the copy cannot be
-///         allocated; both are left unchanged
-/// @bigo{1} on one allocator, n across two
-[[nodiscard]] TDA_API
-tda_Status tda_queue_move_assign(tda_Queue *self, tda_Queue *other);
+/// releases the elems of 'self' and hands it everything 'other' holds, its allocator
+/// included, leaving 'other' empty on that allocator
+/// @param[in,out] self must have the same elem layout
+/// @param[in,out] other emptied and still usable; may be 'self'
+/// @bigo{1}
+TDA_API
+void tda_queue_move_assign(tda_Queue *self, tda_Queue *other);
 
 /// copies every elem into 'dst' front to back; the only way to hand the elems to algo
 /// @param self the queue
@@ -186,36 +185,45 @@ bool tda_queue_eq_by(const tda_Queue *a, const tda_Queue *b, tda_Eq eq, void *ct
 /// @param self the queue
 /// @return the length
 /// @bigo{1}
-[[nodiscard]] TDA_API
-size_t tda_queue_len(const tda_Queue *self);
+[[nodiscard]]
+static inline size_t tda_queue_len(const tda_Queue *self) {
+    assert(self);
+
+    return tda_deque_len(&self->deque_);
+}
 
 /// how many elems fit before the block must grow
 /// @param self the queue
 /// @return the capacity
 /// @bigo{1}
-[[nodiscard]] TDA_API
-size_t tda_queue_cap(const tda_Queue *self);
+[[nodiscard]]
+static inline size_t tda_queue_cap(const tda_Queue *self) {
+    assert(self);
 
-/// the size of one elem
-/// @param self the queue
-/// @return elem.size, the size of the elem layout
-/// @bigo{1}
-[[nodiscard]] TDA_API
-size_t tda_queue_elem_size(const tda_Queue *self);
+    return tda_deque_cap(&self->deque_);
+}
 
 /// the layout of one elem, as the queue was built with
 /// @param self the queue
 /// @return the size and the alignment; every elem is aligned to it
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Layout tda_queue_elem_layout(const tda_Queue *self);
+[[nodiscard]]
+static inline tda_Layout tda_queue_elem_layout(const tda_Queue *self) {
+    assert(self);
+
+    return tda_deque_elem_layout(&self->deque_);
+}
 
 /// the allocator the queue was built with
 /// @param self the queue
 /// @return the allocator, borrowed
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Al *tda_queue_al(const tda_Queue *self);
+[[nodiscard]]
+static inline tda_Al *tda_queue_al(const tda_Queue *self) {
+    assert(self);
+
+    return tda_deque_al(&self->deque_);
+}
 
 /// @}
 
@@ -226,25 +234,45 @@ tda_Al *tda_queue_al(const tda_Queue *self);
 /// @param self asserts the queue is not empty
 /// @return valid until the queue next changes
 /// @bigo{1}
-[[nodiscard]] TDA_API
-const void *tda_queue_front(const tda_Queue *self);
+[[nodiscard]]
+static inline const void *tda_queue_front(const tda_Queue *self) {
+    assert(self);
+    TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
+
+    return tda_deque_front(&self->deque_);
+}
 
 /// the front elem, to write through; writing an elem does not break the queue order
 /// @copydetails tda_queue_front
-[[nodiscard]] TDA_API
-void *tda_queue_front_mut(tda_Queue *self);
+[[nodiscard]]
+static inline void *tda_queue_front_mut(tda_Queue *self) {
+    assert(self);
+    TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
+
+    return tda_deque_front_mut(&self->deque_);
+}
 
 /// the elem pushed most recently
 /// @param self asserts the queue is not empty
 /// @return valid until the queue next changes
 /// @bigo{1}
-[[nodiscard]] TDA_API
-const void *tda_queue_back(const tda_Queue *self);
+[[nodiscard]]
+static inline const void *tda_queue_back(const tda_Queue *self) {
+    assert(self);
+    TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
+
+    return tda_deque_back(&self->deque_);
+}
 
 /// the back elem, to write through
 /// @copydetails tda_queue_back
-[[nodiscard]] TDA_API
-void *tda_queue_back_mut(tda_Queue *self);
+[[nodiscard]]
+static inline void *tda_queue_back_mut(tda_Queue *self) {
+    assert(self);
+    TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
+
+    return tda_deque_back_mut(&self->deque_);
+}
 
 /// @}
 
@@ -299,9 +327,8 @@ tda_Status tda_queue_shrink_to_fit(tda_Queue *self);
 
 /// exchanges the contents of two queues
 /// @param[in,out] self one queue
-/// @param[in,out] other must have the same elem layout and allocator; may be 'self'
-/// @note a block belongs to the allocator that made it. Across allocators use
-///       tda_queue_copy_with, then tda_queue_move_assign
+/// @param[in,out] other must have the same elem layout; may be 'self'. Each
+///                      side keeps the allocator its elems came from, so the two may differ
 /// @bigo{1}
 TDA_API
 void tda_queue_swap(tda_Queue *self, tda_Queue *other);
@@ -332,40 +359,40 @@ void tda_queue_print(const tda_Queue *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// returns 'self' after checking TDA_LAYOUT_OF(T), so a macro evaluates its handle
-// once; _Generic keeps the handle's constness
+// returns 'self' after checking TDA_LAYOUT_OF(T), so a macro evaluates its pointer
+// once; _Generic keeps the pointer's constness
 [[nodiscard]]
-static inline const tda_Queue *tda_queue_typed_c_(const tda_Queue *self, [[maybe_unused]] tda_Layout elem) {
+static inline const tda_Queue *tda_queue_typed_(const tda_Queue *self, [[maybe_unused]] tda_Layout elem) {
     TDA_EXPECT(tda_layout_eq(tda_queue_elem_layout(self), elem));
     return self;
 }
 
 [[nodiscard]]
-static inline tda_Queue *tda_queue_typed_(tda_Queue *self, [[maybe_unused]] tda_Layout elem) {
+static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] tda_Layout elem) {
     TDA_EXPECT(tda_layout_eq(tda_queue_elem_layout(self), elem));
     return self;
 }
 
 #define TDA_QUEUE_TYPED_(T, self) \
-    _Generic((self), const tda_Queue *: tda_queue_typed_c_, tda_Queue *: tda_queue_typed_)((self), TDA_LAYOUT_OF(T))
+    _Generic((self), const tda_Queue *: tda_queue_typed_, tda_Queue *: tda_queue_typed_mut_)((self), TDA_LAYOUT_OF(T))
 /// @endcond
 
-/// tda_queue_new with TDA_LAYOUT_OF(T)
+/// tda_queue_init with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new queue is written
 /// @bigo{1}
-#define TDA_QUEUE_NEW(T, al, out) \
-    tda_queue_new(TDA_LAYOUT_OF(T), (al), (out))
+#define TDA_QUEUE_INIT(T, al, out) \
+    tda_queue_init(TDA_LAYOUT_OF(T), (al), (out))
 
-/// tda_queue_new_cap with TDA_LAYOUT_OF(T)
+/// tda_queue_init_cap with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param cap how many elems to make room for
 /// @param al the allocator
 /// @param[out] out where the new queue is written
 /// @bigo{n}
-#define TDA_QUEUE_NEW_CAP(T, cap, al, out) \
-    tda_queue_new_cap((cap), TDA_LAYOUT_OF(T), (al), (out))
+#define TDA_QUEUE_INIT_CAP(T, cap, al, out) \
+    tda_queue_init_cap((cap), TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_queue_from_data with TDA_LAYOUT_OF(T)
 /// @param T the elem type

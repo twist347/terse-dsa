@@ -1122,6 +1122,35 @@ static void test_find_adjacent_agrees_with_a_run_of_two() {
     TEST_ASSERT_EQUAL_size_t(by_adj, by_run);
 }
 
+// a comparator carried over from a C++ less-than: it never answers "greater"
+static int cmp_less_only_i32(const void *lhs, const void *rhs, void *ctx) {
+    TDA_UNUSED(ctx);
+
+    return *(const int32_t *) lhs < *(const int32_t *) rhs ? -1 : 0;
+}
+
+// the bisecting ops ask only "less", so a comparator without "greater" answers the same
+static void test_the_bisecting_ops_take_a_less_only_comparator() {
+    constexpr int32_t buf[7] = {1, 3, 3, 3, 5, 7, 9};
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 7);
+
+    TEST_ASSERT_EQUAL_size_t(1, tda_span_lower_bound(s, &(int32_t){3}, cmp_less_only_i32, nullptr));
+    TEST_ASSERT_EQUAL_size_t(4, tda_span_upper_bound(s, &(int32_t){3}, cmp_less_only_i32, nullptr));
+
+    const tda_Range r = tda_span_equal_range(s, &(int32_t){3}, cmp_less_only_i32, nullptr);
+    TEST_ASSERT_EQUAL_size_t(1, r.lo);
+    TEST_ASSERT_EQUAL_size_t(4, r.hi);
+
+    size_t idx = 99;
+    TEST_ASSERT_TRUE(tda_span_binary_search(s, &(int32_t){7}, cmp_less_only_i32, nullptr, &idx));
+    TEST_ASSERT_EQUAL_size_t(5, idx);
+
+    // 4 sorts before 5, which a "0 means equal" reading would take for a hit
+    idx = 99;
+    TEST_ASSERT_FALSE(tda_span_binary_search(s, &(int32_t){4}, cmp_less_only_i32, nullptr, &idx));
+    TEST_ASSERT_EQUAL_size_t(99, idx);
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -1225,6 +1254,8 @@ int main() {
     RUN_TEST(test_partition_point_matches_a_linear_scan);
     RUN_TEST(test_partition_point_generalizes_lower_bound);
     RUN_TEST(test_partition_point_agrees_with_partition);
+
+    RUN_TEST(test_the_bisecting_ops_take_a_less_only_comparator);
 
     return UNITY_END();
 }

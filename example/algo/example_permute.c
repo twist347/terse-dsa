@@ -46,21 +46,21 @@ int main() {
     /// [shuffle]
 
     /// [partition]
-    const tda_SpanMut t = TDA_SPAN_OF_MUT(int32_t, 1, 2, 3, 4, 5, 6);
+    const tda_SpanMut fast = TDA_SPAN_OF_MUT(int32_t, 1, 2, 3, 4, 5, 6);
 
     // the fast split swaps elems, so neither side keeps its original order
-    const size_t at = tda_span_partition(t, is_even, nullptr);
-    printf("%zu even, ", at);
-    tda_span_mut_print(t, tda_fprint_i32); // 3 even, [2, 4, 6, 1, 5, 3]
+    const size_t fast_boundary = tda_span_partition(fast, is_even, nullptr);
+    printf("%zu even, ", fast_boundary);
+    tda_span_mut_print(fast, tda_fprint_i32); // 3 even, [2, 4, 6, 1, 5, 3]
 
     // the stable split needs a buffer, so it takes an allocator and can fail
-    const tda_SpanMut u = TDA_SPAN_OF_MUT(int32_t, 1, 2, 3, 4, 5, 6);
-    size_t boundary;
-    if (TDA_STATUS_IS_ERR(tda_span_partition_stable(u, is_even, nullptr, tda_al_default(), &boundary))) {
+    const tda_SpanMut stable = TDA_SPAN_OF_MUT(int32_t, 1, 2, 3, 4, 5, 6);
+    size_t stable_boundary;
+    if (TDA_STATUS_IS_ERR(tda_span_partition_stable(stable, is_even, nullptr, tda_al_default(), &stable_boundary))) {
         return 1;
     }
-    printf("%zu even, ", boundary);
-    tda_span_mut_print(u, tda_fprint_i32); // 3 even, [2, 4, 6, 1, 3, 5]
+    printf("%zu even, ", stable_boundary);
+    tda_span_mut_print(stable, tda_fprint_i32); // 3 even, [2, 4, 6, 1, 3, 5]
     /// [partition]
 
     return 0;

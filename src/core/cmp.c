@@ -94,20 +94,20 @@ DEFINE_FLOAT_ALL(f64, double)
 
 /* ========== cstr ========== */
 
-static int cmp_cstr(const char *a, const char *b) {
-    if (a == b) {
+static int cmp_cstr(const char *lhs, const char *rhs) {
+    if (lhs == rhs) {
         return 0; // both null, or the same string
     }
-    if (!a) {
+    if (!lhs) {
         return -1;
     }
-    if (!b) {
+    if (!rhs) {
         return 1;
     }
 
-    const int c = strcmp(a, b);
+    const int c = strcmp(lhs, rhs);
 
-    return (c > 0) - (c < 0); // strcmp only promises a sign, so narrow it to -1/0/+1
+    return (c > 0) - (c < 0); // strcmp only promises lhs sign, so narrow it to -1/0/+1
 }
 
 DEFINE_EQ(cstr, const char *)

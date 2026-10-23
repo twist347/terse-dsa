@@ -14,7 +14,7 @@
 /// asked, with the operands swapped for a descending walk, so a comparator that never
 /// answers "greater" (a < b ? -1 : 0) still works
 [[nodiscard]]
-static bool goes_before(tda_Span v, tda_Cmp cmp, void *ctx, bool asc, size_t i, size_t j);
+static bool goes_before(tda_Span s, tda_Cmp cmp, void *ctx, bool asc, size_t i, size_t j);
 
 [[nodiscard]]
 static bool permute_step(tda_SpanMut s, tda_Cmp cmp, void *ctx, bool asc);
@@ -206,9 +206,9 @@ void tda_span_shuffle_prefix(tda_SpanMut s, size_t count, tda_Rng *rng) {
 
 /* ========== internals ========== */
 
-static bool goes_before(tda_Span v, tda_Cmp cmp, void *ctx, bool asc, size_t i, size_t j) {
-    const void *lhs = tda_span_get(v, i);
-    const void *rhs = tda_span_get(v, j);
+static bool goes_before(tda_Span s, tda_Cmp cmp, void *ctx, bool asc, size_t i, size_t j) {
+    const void *lhs = tda_span_get(s, i);
+    const void *rhs = tda_span_get(s, j);
 
     return asc ? cmp(lhs, rhs, ctx) < 0 : cmp(rhs, lhs, ctx) < 0;
 }
@@ -218,10 +218,10 @@ static bool permute_step(tda_SpanMut s, tda_Cmp cmp, void *ctx, bool asc) {
         return false;
     }
 
-    const tda_Span v = tda_span_mut_to_span(s);
+    const tda_Span view = tda_span_mut_to_span(s);
 
     size_t pivot = s.len - 1;
-    while (pivot > 0 && !goes_before(v, cmp, ctx, asc, pivot - 1, pivot)) {
+    while (pivot > 0 && !goes_before(view, cmp, ctx, asc, pivot - 1, pivot)) {
         --pivot;
     }
 
@@ -234,7 +234,7 @@ static bool permute_step(tda_SpanMut s, tda_Cmp cmp, void *ctx, bool asc) {
     // this asks the question that stopped the loop above, so pivot + 1 answers it at the
     // latest; the bound guards against a comparator that answers differently twice
     size_t mate = s.len - 1;
-    while (mate > pivot + 1 && !goes_before(v, cmp, ctx, asc, pivot, mate)) {
+    while (mate > pivot + 1 && !goes_before(view, cmp, ctx, asc, pivot, mate)) {
         --mate;
     }
 

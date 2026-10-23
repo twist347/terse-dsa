@@ -16,7 +16,8 @@
 ///
 /// Three values would break that law if hashed as raw bytes, so they are canonicalized:
 /// -0.0 hashes as +0.0, every NaN hashes as one quiet NaN, and a null string hashes as a
-/// value of its own rather than as "". These are the three distinctions core/cmp keeps.
+/// value of its own rather than as "". core/cmp calls -0.0 and +0.0 equal, every NaN
+/// equal to every other, and null different from "", and the hashes follow it.
 ///
 /// tda_hash_bytes and tda_hash_combine are the two that are not tda_Hasher; a hasher for
 /// your own struct is built out of them.

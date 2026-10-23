@@ -8,10 +8,10 @@
 #include <stdio.h>
 
 /// [unused]
-static void on_each(void *ctx, int32_t x) {
+static void on_each(int32_t val, void *ctx) {
     TDA_UNUSED(ctx);
 
-    printf("%" PRId32 "\n", x);
+    printf("%" PRId32 "\n", val);
 }
 
 /// [unused]
@@ -48,7 +48,7 @@ int main() {
     printf("%s\n", TDA_STRINGIFY(TDA_STATUS_OK)); // TDA_STATUS_OK
     /// [stringify]
 
-    on_each(nullptr, 7);
+    on_each(7, nullptr);
 
     return 0;
 }

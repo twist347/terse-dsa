@@ -17,7 +17,7 @@
 
 /// the default allocator
 /// @return a static singleton, the same pointer on every call; it lives for the whole
-///         program and has no drop
+///         program and has no deinit
 [[nodiscard]] TDA_API
 tda_Al *tda_al_default();
 

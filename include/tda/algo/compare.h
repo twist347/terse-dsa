@@ -32,7 +32,8 @@ bool tda_span_eq(tda_Span a, tda_Span b);
 /// whether the two hold equal elems under 'eq'
 /// @param a one span
 /// @param b the other
-/// @param eq the equality
+/// @param eq the equality; reflexive, since two views of the same elems are equal
+///           without asking it
 /// @param ctx passed to every call of 'eq'; may be null
 /// @return whether the lengths match and every pair does
 /// @bigo{n}; stops at the first unequal pair
@@ -42,7 +43,8 @@ bool tda_span_eq_by(tda_Span a, tda_Span b, tda_Eq eq, void *ctx);
 /// where the two first differ
 /// @param a one span
 /// @param b the other
-/// @param eq the equality
+/// @param eq the equality; reflexive, since two views of the same elems do not differ
+///           without asking it
 /// @param ctx passed to every call of 'eq'; may be null
 /// @param[out] out_idx the first index where they differ, written only when they do
 /// @return whether they differ anywhere in their common prefix

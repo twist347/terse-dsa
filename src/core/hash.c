@@ -25,7 +25,7 @@ static constexpr uint32_t NAN_CANON_32 = UINT32_C(0x7fc00000);
 static constexpr uint64_t NAN_CANON_64 = UINT64_C(0x7ff8000000000000);
 
 [[nodiscard]]
-static tda_Hash hash_mix_u64(uint64_t x);
+static tda_Hash hash_mix_u64(uint64_t val);
 
 // every integer type is the same operation: read it, widen it, mix it. Widening a signed
 // type sign-extends, which is a bijection into uint64_t, so equal values stay equal and
@@ -115,14 +115,14 @@ tda_Hash tda_hash_bytes(const void *data, size_t len) {
     assert(data || len == 0);
 
     const unsigned char *bytes = data;
-    uint64_t h = FNV_OFFSET_BASIS_64;
+    uint64_t hash = FNV_OFFSET_BASIS_64;
 
     for (size_t i = 0; i < len; ++i) {
-        h ^= bytes[i];
-        h *= FNV_PRIME_64;
+        hash ^= bytes[i];
+        hash *= FNV_PRIME_64;
     }
 
-    return hash_mix_u64(h);
+    return hash_mix_u64(hash);
 }
 
 /* ========== str ========== */
@@ -144,23 +144,23 @@ tda_Hash tda_hash_cstr(const void *val, void *) {
 /* ========== combine ========== */
 
 tda_Hash tda_hash_combine(tda_Hash a, tda_Hash b) {
-    tda_Hash v = a;
-    v ^= b + HASH_GOLDEN_64 + (v << 6) + (v >> 2);
+    tda_Hash hash = a;
+    hash ^= b + HASH_GOLDEN_64 + (hash << 6) + (hash >> 2);
 
-    return hash_mix_u64(v);
+    return hash_mix_u64(hash);
 }
 
 /* ========== internals ========== */
 
-static tda_Hash hash_mix_u64(uint64_t x) {
-    x ^= HASH_SEED_64; // fmix64 maps 0 to 0, and 0 is the most common key there is
-    x ^= x >> 33;
-    x *= FMIX64_C1;
-    x ^= x >> 33;
-    x *= FMIX64_C2;
-    x ^= x >> 33;
+static tda_Hash hash_mix_u64(uint64_t val) {
+    val ^= HASH_SEED_64; // fmix64 maps 0 to 0, and 0 is the most common key there is
+    val ^= val >> 33;
+    val *= FMIX64_C1;
+    val ^= val >> 33;
+    val *= FMIX64_C2;
+    val ^= val >> 33;
 
-    return x;
+    return val;
 }
 
 #undef DEFINE_HASH_INT

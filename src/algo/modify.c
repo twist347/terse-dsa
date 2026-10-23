@@ -15,9 +15,9 @@ typedef struct {
 
 [[nodiscard]]
 static bool key_matches(const void *elem, void *ctx) {
-    const KeyMatch *self = ctx;
+    const KeyMatch *match = ctx;
 
-    return self->eq(elem, self->key, self->ctx);
+    return match->eq(elem, match->key, match->ctx);
 }
 
 /* ========== unique ========== */

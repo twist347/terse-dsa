@@ -23,7 +23,7 @@
 /// [[nodiscard]] makes ignoring that length a warning (an error under -Werror).
 ///
 /// @par Example
-/// @snippet algo/example_modify.c drop
+/// @snippet algo/example_modify.c modify
 /// @{
 
 /// @name unique

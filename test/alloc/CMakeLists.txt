@@ -31,3 +31,16 @@ foreach(entry IN LISTS debug_misuse_cases)
     set_tests_properties(test_alloc_debug_misuse_${name} PROPERTIES
         PASS_REGULAR_EXPRESSION "tda debug: .*${report}")
 endforeach()
+
+# a copied allocator caught by the first of its own functions; skipped where the check
+# is compiled out, under NDEBUG without TDA_HARDENED
+add_executable(test_alloc_moved test_moved.c)
+target_link_libraries(test_alloc_moved PRIVATE tda::tda)
+target_compile_options(test_alloc_moved PRIVATE ${TDA_WARNINGS})
+
+foreach(name IN ITEMS arena pool slab debug log)
+    add_test(NAME test_alloc_moved_${name} COMMAND test_alloc_moved ${name})
+    set_tests_properties(test_alloc_moved_${name} PROPERTIES
+        PASS_REGULAR_EXPRESSION "al_\\.ctx == "
+        SKIP_RETURN_CODE 77)
+endforeach()

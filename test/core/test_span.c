@@ -79,7 +79,7 @@ static void test_for_each_over_an_empty_view_runs_no_body() {
 }
 
 // the view is taken once: a walk over tda_span_sub of a call would otherwise redo it
-static void test_for_each_evaluates_the_view_once() {
+static void test_for_each_reads_its_view_once() {
     constexpr int32_t buf[4] = {1, 2, 3, 4};
 
     int32_t total = 0;
@@ -120,7 +120,7 @@ static void test_for_each_mut_writes_through_the_view() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(((int32_t[]){10, 20, 30}), buf, 3);
 }
 
-static void test_new_keeps_fields() {
+static void test_from_data_keeps_fields() {
     constexpr int32_t buf[3] = {10, 20, 30};
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 3);
 
@@ -130,7 +130,7 @@ static void test_new_keeps_fields() {
 }
 
 // a null view is legal only while empty, and elem_size is still set
-static void test_new_empty_over_null() {
+static void test_from_data_empty_over_null() {
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, nullptr, 0);
 
     TEST_ASSERT_NULL(s.data);
@@ -338,6 +338,59 @@ static void test_sub_mut_writes_reach_the_source() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 4);
 }
 
+static void test_split_at_cuts_into_head_and_tail() {
+    const tda_Span s = TDA_SPAN_OF(Pair, {1, 2}, {3, 4}, {5, 6});
+
+    tda_Span head;
+    tda_Span tail;
+    tda_span_split_at(s, 1, &head, &tail);
+
+    TEST_ASSERT_EQUAL_PTR(s.data, head.data);
+    TEST_ASSERT_EQUAL_size_t(1, head.len);
+    TEST_ASSERT_EQUAL_size_t(2, tail.len);
+    TEST_ASSERT_EQUAL_INT64(3, TDA_SPAN_GET_AS(Pair, tail, 0)->a);
+    TEST_ASSERT_TRUE(tda_layout_eq(s.elem, tail.elem));
+}
+
+// 0 and len are both legal and leave one side empty, the other the whole view
+static void test_split_at_either_end_leaves_one_side_empty() {
+    const tda_Span s = TDA_SPAN_OF(int32_t, 0, 1, 2);
+    tda_Span head;
+    tda_Span tail;
+
+    tda_span_split_at(s, 0, &head, &tail);
+    TEST_ASSERT_EQUAL_size_t(0, head.len);
+    TEST_ASSERT_EQUAL_size_t(3, tail.len);
+
+    tda_span_split_at(s, 3, &head, &tail);
+    TEST_ASSERT_EQUAL_size_t(3, head.len);
+    TEST_ASSERT_EQUAL_size_t(0, tail.len);
+}
+
+static void test_split_at_of_null_view_stays_null() {
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, nullptr, 0);
+    tda_Span head;
+    tda_Span tail;
+
+    tda_span_split_at(s, 0, &head, &tail);
+    TEST_ASSERT_NULL(head.data);
+    TEST_ASSERT_NULL(tail.data);
+}
+
+// the halves are disjoint views of the same memory, each writable on its own
+static void test_split_at_mut_writes_reach_the_source() {
+    int32_t buf[4] = {0, 1, 2, 3};
+    tda_SpanMut head;
+    tda_SpanMut tail;
+    tda_span_split_at_mut(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 2, &head, &tail);
+
+    TDA_SPAN_SET(int32_t, head, 1, 11);
+    TDA_SPAN_SET(int32_t, tail, 0, 22);
+
+    constexpr int32_t want[4] = {0, 11, 22, 3};
+    TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 4);
+}
+
 /* ========== mods ========== */
 
 static void test_swap_elems() {
@@ -415,12 +468,12 @@ int main() {
 
     RUN_TEST(test_for_each_binds_every_elem_in_order);
     RUN_TEST(test_for_each_over_an_empty_view_runs_no_body);
-    RUN_TEST(test_for_each_evaluates_the_view_once);
+    RUN_TEST(test_for_each_reads_its_view_once);
     RUN_TEST(test_for_each_nests);
     RUN_TEST(test_for_each_mut_writes_through_the_view);
 
-    RUN_TEST(test_new_keeps_fields);
-    RUN_TEST(test_new_empty_over_null);
+    RUN_TEST(test_from_data_keeps_fields);
+    RUN_TEST(test_from_data_empty_over_null);
     RUN_TEST(test_mut_to_span_preserves_view);
     RUN_TEST(test_mut_to_span_shares_the_memory);
 
@@ -444,6 +497,10 @@ int main() {
     RUN_TEST(test_sub_of_null_view_stays_null);
     RUN_TEST(test_sub_mut_of_null_view_stays_null);
     RUN_TEST(test_sub_mut_writes_reach_the_source);
+    RUN_TEST(test_split_at_cuts_into_head_and_tail);
+    RUN_TEST(test_split_at_either_end_leaves_one_side_empty);
+    RUN_TEST(test_split_at_of_null_view_stays_null);
+    RUN_TEST(test_split_at_mut_writes_reach_the_source);
 
     RUN_TEST(test_swap_elems);
     RUN_TEST(test_swap_elems_same_index_is_noop);

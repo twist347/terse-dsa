@@ -5,6 +5,7 @@
 #include "tda/ds/vec.h"
 
 #include "support/probe.h"
+#include "support/status.h"
 
 #include <unity.h>
 
@@ -51,34 +52,29 @@ static bool all_bytes(const void *ptr, size_t n, unsigned char fill) {
 
 /* ========== lifetime ========== */
 
-static void test_new_takes_two_blocks_and_drop_returns_them() {
-    tda_Al *al = tda_al_debug_new(&parent);
-    TEST_ASSERT_NOT_NULL(al);
-    TEST_ASSERT_EQUAL_size_t(2, probe.live);
+// the debug is a value the caller holds, so it takes nothing of its own from the parent
+static void test_init_takes_nothing() {
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+    TEST_ASSERT_NOT_NULL(TDA_AL(&debug));
 
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
-static void test_new_cleans_up_after_a_failing_parent() {
-    tda_test_probe_fail_after_next(&probe, 0);
-    TEST_ASSERT_NULL(tda_al_debug_new(&parent));
-    TEST_ASSERT_EQUAL_size_t(0, probe.live);
-
-    tda_test_probe_reset(&probe);
-    tda_test_probe_fail_after_next(&probe, 1);
-    TEST_ASSERT_NULL(tda_al_debug_new(&parent));
-    TEST_ASSERT_EQUAL_size_t(0, probe.live);
-}
-
-static void test_drop_null_is_noop() {
-    tda_al_debug_drop(nullptr);
+static void test_deinit_of_an_inert_debug_is_noop() {
+    tda_Debug debug = {};
+    tda_debug_deinit(&debug);
+    tda_debug_deinit(&debug);
 }
 
 /* ========== alloc and dealloc ========== */
 
 static void test_a_new_block_is_filled_and_guarded() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     unsigned char *p = tda_alloc(al, bytes(24));
     TEST_ASSERT_NOT_NULL(p);
@@ -88,12 +84,14 @@ static void test_a_new_block_is_filled_and_guarded() {
     TEST_ASSERT_TRUE(all_bytes(p + 24, GUARD, 0xFD));
 
     tda_dealloc(al, p, bytes(24));
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 // the block is still the parent's while quarantined, so reading it here is defined
 static void test_a_freed_block_is_poisoned_and_held_back() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     unsigned char *p = tda_alloc(al, bytes(24));
     tda_dealloc(al, p, bytes(24));
@@ -103,12 +101,14 @@ static void test_a_freed_block_is_poisoned_and_held_back() {
 
     // the drop flushes the quarantine; the size that reaches the parent is checked where
     // the quarantine overflows, below
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
 static void test_the_quarantine_gives_back_the_oldest_when_full() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     void *first = tda_alloc(al, bytes(8));
     tda_dealloc(al, first, bytes(8));
@@ -121,13 +121,15 @@ static void test_the_quarantine_gives_back_the_oldest_when_full() {
     TEST_ASSERT_EQUAL_size_t(1, probe.dealloc_calls);
     TEST_ASSERT_EQUAL_size_t(8 + GUARD, probe.last_dealloc.size);
 
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
 // the block reaches the parent with its own alignment both ways, the guard on its size
 static void test_an_over_aligned_block_keeps_its_alignment() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
     const tda_Layout wide = {.size = 24, .align = 256};
 
     unsigned char *p = tda_alloc(al, wide);
@@ -145,11 +147,13 @@ static void test_an_over_aligned_block_keeps_its_alignment() {
     TEST_ASSERT_EQUAL_size_t(24 + GUARD, probe.last_dealloc.size);
     TEST_ASSERT_EQUAL_size_t(256, probe.last_dealloc.align);
 
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 static void test_alloc_zeroed_zeroes_the_block() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     unsigned char *p = tda_alloc_zeroed(al, bytes(24));
     TEST_ASSERT_NOT_NULL(p);
@@ -157,13 +161,15 @@ static void test_alloc_zeroed_zeroes_the_block() {
     TEST_ASSERT_TRUE(all_bytes(p + 24, GUARD, 0xFD));
 
     tda_dealloc(al, p, bytes(24));
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 // a realloc that could grow in place moves anyway, so a pointer kept across it is stale:
 // with no resize and no remap, the wrapper's copy is the only way
 static void test_realloc_always_moves_and_poisons_the_old_block() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     unsigned char *p = tda_alloc(al, bytes(4));
     memcpy(p, "abcd", 4);
@@ -176,37 +182,43 @@ static void test_realloc_always_moves_and_poisons_the_old_block() {
     TEST_ASSERT_TRUE(all_bytes(p, 4, 0xDD));
 
     tda_dealloc(al, q, bytes(8));
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 static void test_a_refused_parent_records_nothing() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
     tda_test_probe_fail_after_next(&probe, 0);
 
     TEST_ASSERT_NULL(tda_alloc(al, bytes(16)));
 
-    const tda_AlDebugStats st = tda_al_debug_stats(al);
+    const tda_DebugStats st = tda_debug_stats(&debug);
     TEST_ASSERT_EQUAL_size_t(0, st.live_blocks);
     TEST_ASSERT_EQUAL_UINT64(1, st.requests);
 
     tda_test_probe_reset(&probe);
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 static void test_a_size_the_guard_would_overflow_is_refused() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
     const size_t calls = probe.alloc_calls;
 
     TEST_ASSERT_NULL(tda_alloc(al, bytes(SIZE_MAX - 4)));
     TEST_ASSERT_EQUAL_size_t(calls, probe.alloc_calls);
 
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 // many live blocks freed in a shuffled order: the table grows several times and every
 // removal shifts a run back, and a lost entry would end the run with a false report
 static void test_the_table_survives_growth_and_any_free_order() {
-    tda_Al *al = tda_al_debug_new(tda_al_default());
+    tda_Debug debug;
+    tda_debug_init(tda_al_default(), &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     enum { N = 2000 };
     static void *blocks[N];
@@ -216,7 +228,7 @@ static void test_the_table_survives_growth_and_any_free_order() {
         TEST_ASSERT_NOT_NULL(blocks[i]);
         order[i] = i;
     }
-    TEST_ASSERT_EQUAL_size_t(N, tda_al_debug_stats(al).live_blocks);
+    TEST_ASSERT_EQUAL_size_t(N, tda_debug_stats(&debug).live_blocks);
 
     tda_Rng rng = tda_rng_from_seed(7);
     for (size_t i = N; i > 1; --i) {
@@ -230,36 +242,40 @@ static void test_the_table_survives_growth_and_any_free_order() {
         tda_dealloc(al, blocks[k], bytes(1 + k % 40));
     }
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_al_debug_stats(al).live_blocks);
-    TEST_ASSERT_EQUAL_size_t(0, tda_al_debug_stats(al).live_bytes);
-    tda_al_debug_drop(al);
+    TEST_ASSERT_EQUAL_size_t(0, tda_debug_stats(&debug).live_blocks);
+    TEST_ASSERT_EQUAL_size_t(0, tda_debug_stats(&debug).live_bytes);
+    tda_debug_deinit(&debug);
 }
 
 // an arena reuses nothing, so the quarantine must not confuse it
 static void test_over_an_arena() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), 4096);
-    tda_Al *al = tda_al_debug_new(arena);
-    TEST_ASSERT_NOT_NULL(al);
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 4096, &arena));
+    tda_Debug debug;
+    tda_debug_init(TDA_AL(&arena), &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     void *p = tda_alloc(al, bytes(100));
     TEST_ASSERT_NOT_NULL(p);
     tda_dealloc(al, p, bytes(100));
 
-    tda_al_debug_drop(al);
-    tda_al_arena_drop(arena);
+    tda_debug_deinit(&debug);
+    tda_arena_deinit(&arena);
 }
 
 /* ========== stats ========== */
 
 static void test_stats_count_live_peak_and_requests() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     void *a = tda_alloc(al, bytes(10));
     void *b = tda_alloc(al, bytes(30));
     tda_dealloc(al, a, bytes(10));
     void *c = tda_alloc(al, bytes(5));
 
-    const tda_AlDebugStats st = tda_al_debug_stats(al);
+    const tda_DebugStats st = tda_debug_stats(&debug);
     TEST_ASSERT_EQUAL_size_t(2, st.live_blocks);
     TEST_ASSERT_EQUAL_size_t(35, st.live_bytes);
     TEST_ASSERT_EQUAL_size_t(40, st.peak_bytes);
@@ -267,20 +283,22 @@ static void test_stats_count_live_peak_and_requests() {
 
     tda_dealloc(al, b, bytes(30));
     tda_dealloc(al, c, bytes(5));
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 static void test_leaks_are_listed_by_serial() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_al_debug_fprint_leaks(al, stream));
+    TEST_ASSERT_EQUAL_size_t(0, tda_debug_fprint_leaks(&debug, stream));
 
     void *a = tda_alloc(al, bytes(12));
     void *b = tda_alloc(al, bytes(7));
     tda_dealloc(al, a, bytes(12));
-    TEST_ASSERT_EQUAL_size_t(1, tda_al_debug_fprint_leaks(al, stream));
+    TEST_ASSERT_EQUAL_size_t(1, tda_debug_fprint_leaks(&debug, stream));
 
     char text[512] = {0};
     rewind(stream);
@@ -292,15 +310,17 @@ static void test_leaks_are_listed_by_serial() {
 
     fclose(stream);
     tda_dealloc(al, b, bytes(7));
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 /* ========== fault injection ========== */
 
 static void test_fail_after_refuses_every_later_request_until_turned_off() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
 
-    tda_al_debug_fail_after(al, 1);
+    tda_debug_fail_after(&debug, 1);
     void *a = tda_alloc(al, bytes(8));
     TEST_ASSERT_NOT_NULL(a);
     TEST_ASSERT_NULL(tda_alloc(al, bytes(8)));
@@ -309,63 +329,128 @@ static void test_fail_after_refuses_every_later_request_until_turned_off() {
 
     tda_dealloc(al, a, bytes(8)); // giving back still works
 
-    tda_al_debug_fail_after(al, SIZE_MAX);
+    tda_debug_fail_after(&debug, SIZE_MAX);
     void *b = tda_alloc(al, bytes(8));
     TEST_ASSERT_NOT_NULL(b);
 
     tda_dealloc(al, b, bytes(8));
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 // the use the refusal is for: fail each request of an operation in turn and check that
 // a refused push leaves the vec as it was and leaks nothing
 static void test_fail_after_walks_the_oom_paths_of_a_push() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
 
     for (size_t n = 0;; ++n) {
-        tda_Vec *v = nullptr;
-        if (tda_vec_new(TDA_LAYOUT_OF(int32_t), al, &v) != TDA_STATUS_OK) {
-            continue;
-        }
+        tda_Vec v;
+        tda_vec_init(TDA_LAYOUT_OF(int32_t), al, &v);
 
-        tda_al_debug_fail_after(al, n);
+        tda_debug_fail_after(&debug, n);
         bool all_in = true;
         for (int32_t i = 0; i < 100 && all_in; ++i) {
-            const size_t len = tda_vec_len(v);
-            if (TDA_VEC_PUSH(int32_t, v, i) != TDA_STATUS_OK) {
-                TEST_ASSERT_EQUAL_size_t(len, tda_vec_len(v));
+            const size_t len = tda_vec_len(&v);
+            if (TDA_VEC_PUSH(int32_t, &v, i) != TDA_STATUS_OK) {
+                TEST_ASSERT_EQUAL_size_t(len, tda_vec_len(&v));
                 all_in = false;
             }
         }
-        tda_al_debug_fail_after(al, SIZE_MAX);
+        tda_debug_fail_after(&debug, SIZE_MAX);
 
-        tda_vec_drop(v);
-        TEST_ASSERT_EQUAL_size_t(0, tda_al_debug_stats(al).live_blocks);
+        tda_vec_deinit(&v);
+        TEST_ASSERT_EQUAL_size_t(0, tda_debug_stats(&debug).live_blocks);
         if (all_in) {
             break;
         }
     }
 
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
 }
 
 static void test_break_at_zero_is_off() {
-    tda_Al *al = tda_al_debug_new(&parent);
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
 
-    tda_al_debug_break_at(al, 0);
+    tda_debug_break_at(&debug, 0);
     void *p = tda_alloc(al, bytes(4));
     TEST_ASSERT_NOT_NULL(p);
 
     tda_dealloc(al, p, bytes(4));
-    tda_al_debug_drop(al);
+    tda_debug_deinit(&debug);
+}
+
+// deinit leaves the inert state, so a second one is safe
+static void test_deinit_twice_is_noop() {
+    tda_Debug x = {};
+    tda_debug_init(tda_al_default(), &x);
+    void *p = tda_alloc(TDA_AL(&x), (tda_Layout){.size = 16, .align = 8});
+    TEST_ASSERT_NOT_NULL(p);
+    tda_dealloc(TDA_AL(&x), p, (tda_Layout){.size = 16, .align = 8});
+
+    tda_debug_deinit(&x);
+    TEST_ASSERT_NULL(x.al_.alloc);
+
+    tda_debug_deinit(&x);
+}
+
+// the quarantine holds blocks the arena underneath still owns; flushed first, a reset
+// that hands them out again is no misuse
+static void test_flush_quarantine_lets_the_parent_reset() {
+    tda_Arena arena;
+    TDA_TEST_OK(tda_arena_init(tda_al_default(), 4096, &arena));
+    tda_Debug debug;
+    tda_debug_init(TDA_AL(&arena), &debug);
+    tda_Al *al = TDA_AL(&debug);
+
+    for (int round = 0; round < 3; ++round) {
+        unsigned char *p = tda_alloc(al, bytes(16));
+        TEST_ASSERT_NOT_NULL(p);
+        tda_dealloc(al, p, bytes(16));
+
+        tda_debug_flush_quarantine(&debug);
+        tda_arena_reset(&arena);
+
+        // the reused memory is written by its new owner, then the quarantine turns over
+        unsigned char *q = tda_alloc(TDA_AL(&arena), bytes(256));
+        TEST_ASSERT_NOT_NULL(q);
+        memset(q, 7, 256);
+        for (int i = 0; i < 80; ++i) {
+            void *r = tda_alloc(al, bytes(16));
+            tda_dealloc(al, r, bytes(16));
+        }
+        tda_debug_flush_quarantine(&debug);
+        tda_arena_reset(&arena);
+    }
+
+    tda_debug_deinit(&debug);
+    tda_arena_deinit(&arena);
+}
+
+// flushing gives every quarantined block back to the parent at once
+static void test_flush_quarantine_returns_every_block() {
+    tda_Debug debug;
+    tda_debug_init(&parent, &debug);
+    tda_Al *al = TDA_AL(&debug);
+
+    for (int i = 0; i < 5; ++i) {
+        tda_dealloc(al, tda_alloc(al, bytes(8)), bytes(8));
+    }
+    TEST_ASSERT_EQUAL_size_t(5, probe.live);
+
+    tda_debug_flush_quarantine(&debug);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+
+    tda_debug_deinit(&debug);
 }
 
 int main() {
     UNITY_BEGIN();
 
-    RUN_TEST(test_new_takes_two_blocks_and_drop_returns_them);
-    RUN_TEST(test_new_cleans_up_after_a_failing_parent);
-    RUN_TEST(test_drop_null_is_noop);
+    RUN_TEST(test_init_takes_nothing);
+    RUN_TEST(test_deinit_of_an_inert_debug_is_noop);
 
     RUN_TEST(test_a_new_block_is_filled_and_guarded);
     RUN_TEST(test_a_freed_block_is_poisoned_and_held_back);
@@ -384,6 +469,11 @@ int main() {
     RUN_TEST(test_fail_after_refuses_every_later_request_until_turned_off);
     RUN_TEST(test_fail_after_walks_the_oom_paths_of_a_push);
     RUN_TEST(test_break_at_zero_is_off);
+
+    RUN_TEST(test_deinit_twice_is_noop);
+
+    RUN_TEST(test_flush_quarantine_lets_the_parent_reset);
+    RUN_TEST(test_flush_quarantine_returns_every_block);
 
     return UNITY_END();
 }

@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 int main() {
-    /// [drop]
+    /// [modify]
     // a span cannot resize, so ops that drop elems pack the kept ones to the front and
     // return the new length; the tail is left unspecified
     const tda_SpanMut s = TDA_SPAN_OF_MUT(int32_t, 1, 1, 2, 2, 2, 3);
@@ -25,10 +25,10 @@ int main() {
     tda_span_mut_print(tda_span_sub_mut(s, 0, left), tda_fprint_i32); // 2 left, [1, 3]
 
     // replace keeps the length, so it returns nothing
-    const tda_SpanMut t = TDA_SPAN_OF_MUT(int32_t, 1, 2, 1, 3);
-    tda_span_replace(t, &(int32_t){1}, &(int32_t){9}, tda_eq_i32, nullptr);
-    tda_span_mut_print(t, tda_fprint_i32); // [9, 2, 9, 3]
-    /// [drop]
+    const tda_SpanMut repl = TDA_SPAN_OF_MUT(int32_t, 1, 2, 1, 3);
+    tda_span_replace(repl, &(int32_t){1}, &(int32_t){9}, tda_eq_i32, nullptr);
+    tda_span_mut_print(repl, tda_fprint_i32); // [9, 2, 9, 3]
+    /// [modify]
 
     return 0;
 }

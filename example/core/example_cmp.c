@@ -25,8 +25,8 @@ static int cmp_person_by_age(const void *lhs, const void *rhs, void *) {
     return tda_cmp_i32(&a->age, &b->age, nullptr);
 }
 
-static void fprint_person(FILE *stream, const void *x) {
-    const Person *p = x;
+static void fprint_person(FILE *stream, const void *val) {
+    const Person *p = val;
 
     fprintf(stream, "%s(%" PRId32 ")", p->name, p->age);
 }

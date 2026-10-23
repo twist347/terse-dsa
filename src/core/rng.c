@@ -49,7 +49,7 @@ tda_Rng tda_rng_from_seed(uint64_t seed) {
     // and at most one of them can be zero. The all-zero state xoshiro must never hold is
     // unreachable for any seed.
     for (size_t i = 0; i < 4; ++i) {
-        obj.s[i] = splitmix64(&state);
+        obj.s_[i] = splitmix64(&state);
     }
 
     return obj;
@@ -140,7 +140,8 @@ int32_t tda_rng_i32_range(tda_Rng *self, int32_t lo, int32_t hi) {
     assert(lo <= hi);
 
     // the width is computed in unsigned, where INT32_MIN..INT32_MAX fits without
-    // overflow; C23 defines the conversion back as the two's-complement wrap needed here
+    // overflow. The conversion back of a value past INT32_MAX is implementation-defined,
+    // and every compiler the library builds with wraps it, as this needs
     const uint32_t width = (uint32_t) hi - (uint32_t) lo;
 
     return (int32_t) ((uint32_t) lo + tda_rng_u32_max(self, width));
@@ -227,21 +228,21 @@ static uint64_t rotl64(uint64_t val, int count) {
 
 static uint64_t next_u64(tda_Rng *self) {
     // a zeroed struct is the one state xoshiro cannot leave; the bounded draws would hang
-    assert((self->s[0] | self->s[1] | self->s[2] | self->s[3]) != 0);
+    assert((self->s_[0] | self->s_[1] | self->s_[2] | self->s_[3]) != 0);
 
     // xoshiro256++. The state advances by a linear step (shift, xor, rotate), which
     // gives the period and nothing else. The ++ scrambler in front, a rotate-add over
     // two words, is what makes the output look random. The plain xoshiro256 underneath
     // has weak low bits, and the scrambler fixes them.
-    const uint64_t result = rotl64(self->s[0] + self->s[3], 23) + self->s[0];
-    const uint64_t tmp = self->s[1] << 17;
+    const uint64_t result = rotl64(self->s_[0] + self->s_[3], 23) + self->s_[0];
+    const uint64_t tmp = self->s_[1] << 17;
 
-    self->s[2] ^= self->s[0];
-    self->s[3] ^= self->s[1];
-    self->s[1] ^= self->s[2];
-    self->s[0] ^= self->s[3];
-    self->s[2] ^= tmp;
-    self->s[3] = rotl64(self->s[3], 45);
+    self->s_[2] ^= self->s_[0];
+    self->s_[3] ^= self->s_[1];
+    self->s_[1] ^= self->s_[2];
+    self->s_[0] ^= self->s_[3];
+    self->s_[2] ^= tmp;
+    self->s_[3] = rotl64(self->s_[3], 45);
 
     return result;
 }

@@ -31,14 +31,14 @@ static void sorted_copy(int32_t *dst, const int32_t *src, size_t n) {
 
 // a rearranging op must never invent, drop or duplicate an elem
 static bool same_elems(const int32_t *a, const int32_t *b, size_t n) {
-    int32_t x[64];
-    int32_t y[64];
+    int32_t sorted_a[64];
+    int32_t sorted_b[64];
     TEST_ASSERT_TRUE(n <= 64);
 
-    sorted_copy(x, a, n);
-    sorted_copy(y, b, n);
+    sorted_copy(sorted_a, a, n);
+    sorted_copy(sorted_b, b, n);
 
-    return memcmp(x, y, n * sizeof(int32_t)) == 0;
+    return memcmp(sorted_a, sorted_b, n * sizeof(int32_t)) == 0;
 }
 
 // walks every permutation of {1..n} and hands each to 'check'. next_permutation only
@@ -349,7 +349,7 @@ static constexpr size_t SCALE_N = 65536;
 
 static size_t cmp_calls = 0;
 
-static int cmp_i32_counting(const void *a, const void *b, void *) {
+static int cmp_counting_i32(const void *a, const void *b, void *) {
     ++cmp_calls;
 
     return tda_cmp_i32(a, b, nullptr);
@@ -370,7 +370,7 @@ static void test_make_heap_stays_linear() {
     }
 
     cmp_calls = 0;
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting, nullptr);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_counting_i32, nullptr);
 
     TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, SCALE_N), tda_cmp_i32, nullptr));
     TEST_ASSERT_LESS_THAN_size_t(4 * SCALE_N, cmp_calls);
@@ -386,7 +386,7 @@ static void test_sort_heap_stays_n_log_n() {
     tda_span_make_heap(s, tda_cmp_i32, nullptr);
 
     cmp_calls = 0;
-    tda_span_sort_heap(s, cmp_i32_counting, nullptr);
+    tda_span_sort_heap(s, cmp_counting_i32, nullptr);
 
     TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
     TEST_ASSERT_LESS_THAN_size_t(3 * SCALE_N * 16, cmp_calls);

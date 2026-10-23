@@ -239,8 +239,8 @@ typedef struct {
     const char *name;
 } Rec;
 
-static tda_Hash hash_rec(const void *x, void *) {
-    const Rec *rec = x;
+static tda_Hash hash_rec(const void *key, void *) {
+    const Rec *rec = key;
 
     return tda_hash_combine(tda_hash_i32(&rec->id, nullptr), tda_hash_cstr(&rec->name, nullptr));
 }

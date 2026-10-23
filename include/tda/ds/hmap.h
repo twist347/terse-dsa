@@ -32,11 +32,11 @@
 ///
 /// An entry never moves. Growing reallocates the bucket array and relinks the nodes, so a
 /// borrowed node survives inserts, growth and the removal of other entries. It is
-/// invalidated only when its own entry is removed, cleared, assigned over or dropped with
+/// invalidated only when its own entry is removed, cleared, assigned over or released with
 /// the map. This is why a position is a node and not a slot index.
 ///
 /// The iteration order is unspecified and may change on any insert that grows. A walk
-/// (and so clear, copy, eq, print and drop) visits every bucket as well as every entry,
+/// (and so clear, copy, eq, print and deinit) visits every bucket as well as every entry,
 /// so a map that grew and then emptied walks as slowly as when full, until
 /// tda_hmap_shrink_to_fit gives the buckets back.
 ///
@@ -48,15 +48,37 @@
 /// @snippet ds/example_hmap.c walk
 /// @{
 
-/// Owning hash map from type-erased keys to type-erased values.
-/// Opaque: made by a constructor, released by tda_hmap_drop
-typedef struct tda_HMap tda_HMap;
-
 /// A position in the map.
-/// Borrowed, and valid until its own entry is removed, cleared, assigned over or dropped
+/// Borrowed, and valid until its own entry is removed, cleared, assigned over or released
 /// with the map. The key is read-only: a changed key would sit in the wrong bucket, and
 /// the map could not notice
 typedef struct tda_HMapNode tda_HMapNode;
+
+/// Owning hash map from type-erased keys to type-erased values. A value the caller holds
+/// wherever it likes: an init or a from_ fills it in, tda_hmap_deinit releases its
+/// entries. `= {}` is the inert state, which tda_hmap_deinit accepts and every other op
+/// asserts.
+///
+/// The fields belong to the map: read and change them only through the functions here.
+/// No entry points back at the struct, so it can be moved as bytes.
+///
+/// @warning a copy of the struct is a second owner of the same entries: releasing both
+///          frees them twice. Pass a pointer, and hand a map over with
+///          tda_hmap_move_assign.
+typedef struct tda_HMap {
+    tda_HMapNode **buckets_; ///< the chains; null while bucket_count_ is 0
+    size_t bucket_count_;    ///< a power of two, or 0 while the map owns none
+    size_t len_;             ///< how many entries it holds
+    tda_Layout key_;         ///< the layout of one key
+    tda_Layout val_;         ///< the layout of one value; size 0 for a set's map
+    size_t key_offset_;      ///< where in a node the key starts
+    size_t val_offset_;      ///< where in a node the value starts
+    tda_Layout node_;        ///< the layout of one node: header, key, value
+    tda_Hasher hasher_;      ///< the hash the keys are placed by
+    tda_Eq eq_;              ///< the equality the keys are matched by
+    void *ctx_;              ///< passed to both: they agree on what a key is
+    tda_Al *al_;             ///< where the entries come from; moves along with the map
+} tda_HMap;
 
 /// A test of one entry, key and value together; the map's tda_Pred
 typedef bool (*tda_EntryPred)(const void *key, const void *val, void *ctx);
@@ -64,24 +86,21 @@ typedef bool (*tda_EntryPred)(const void *key, const void *val, void *ctx);
 /// @name lifetime
 /// @{
 
-/// an empty map that owns no buckets yet
+/// an empty map that owns no buckets yet; allocates nothing, so it cannot fail
 /// @param key the layout of one key, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param val the layout of one value, asserted to be a type's (for none, use ds/hset)
 /// @param hasher the hash the keys are placed by, fixed for the life of the map
 /// @param eq the equality the keys are matched by; must agree with 'hasher'
 /// @param ctx passed to every call of 'hasher' and 'eq'; may be null
 /// @param al used for every later allocation
-/// @param[out] out the new map, written only on success
-/// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated, or a node of
-///         these layouts would not fit in size_t
+/// @param[out] out the new map
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Status tda_hmap_new(
+TDA_API
+void tda_hmap_init(
     tda_Layout key, tda_Layout val,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
     tda_Al *al,
-    tda_HMap **out
+    tda_HMap *out
 );
 
 /// an empty map with room for 'cap' entries before the first growth
@@ -97,12 +116,12 @@ tda_Status tda_hmap_new(
 /// @retval TDA_STATUS_ERR_NO_MEM when the buckets cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_hmap_new_cap(
+tda_Status tda_hmap_init_cap(
     size_t cap,
     tda_Layout key, tda_Layout val,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
     tda_Al *al,
-    tda_HMap **out
+    tda_HMap *out
 );
 
 /// a map holding keys[i] -> vals[i], with the key and value layouts of the two spans
@@ -124,14 +143,14 @@ tda_Status tda_hmap_from_spans(
     tda_Eq eq,
     void *ctx,
     tda_Al *al,
-    tda_HMap **out
+    tda_HMap *out
 );
 
-/// releases every node, the buckets and the map through the allocator it was built with
-/// @param self null is a no-op
+/// releases what the map holds and leaves it inert, `= {}`
+/// @param self a map, or an inert one, for which this is a no-op
 /// @bigo{n}
 TDA_API
-void tda_hmap_drop(tda_HMap *self);
+void tda_hmap_deinit(tda_HMap *self);
 
 /// @}
 
@@ -145,7 +164,7 @@ void tda_hmap_drop(tda_HMap *self);
 /// @retval TDA_STATUS_ERR_NO_MEM when the buckets or any node cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_hmap_copy(const tda_HMap *self, tda_HMap **out);
+tda_Status tda_hmap_copy(const tda_HMap *self, tda_HMap *out);
 
 /// a new map with the same entries, hasher, equality and ctx, on 'al'
 /// @param self the map to copy
@@ -155,7 +174,7 @@ tda_Status tda_hmap_copy(const tda_HMap *self, tda_HMap **out);
 /// @retval TDA_STATUS_ERR_NO_MEM when the buckets or any node cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap **out);
+tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap *out);
 
 /// overwrites the entries, hasher, equality and ctx of 'self' with those of 'other'
 /// @param[in,out] self must have the same key and value layouts; keeps its allocator
@@ -166,17 +185,13 @@ tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap **out);
 [[nodiscard]] TDA_API
 tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other);
 
-/// moves the entries, hasher, equality and ctx of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same key and value layouts; its old entries are
-///                     released, its allocator kept
-/// @param[in,out] other emptied on success and still usable; may be 'self'
-/// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and the copy cannot be
-///         allocated; both are left unchanged
-/// @bigo{k} on one allocator, for the k old entries of 'self' freed one by one; k + n
-///          across two, where the entries are rebuilt and borrowed nodes do not survive
-[[nodiscard]] TDA_API
-tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other);
+/// releases the entries of 'self' and hands it everything 'other' holds, its allocator,
+/// hasher, equality and ctx included, leaving 'other' empty on that allocator
+/// @param[in,out] self must have the same key and value layouts
+/// @param[in,out] other emptied and still usable; may be 'self'
+/// @bigo{1}
+TDA_API
+void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other);
 
 /// @}
 
@@ -187,72 +202,98 @@ tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other);
 /// @param self the map
 /// @return the entry count
 /// @bigo{1}
-[[nodiscard]] TDA_API
-size_t tda_hmap_len(const tda_HMap *self);
+[[nodiscard]]
+static inline size_t tda_hmap_len(const tda_HMap *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->len_;
+}
 
 /// how many buckets the entries are spread over
 /// @param self the map
-/// @return the bucket count: a power of two, or 0 while the map has never held anything
+/// @return the bucket count: a power of two, or 0 while the map owns none
 /// @bigo{1}
-[[nodiscard]] TDA_API
-size_t tda_hmap_bucket_count(const tda_HMap *self);
+[[nodiscard]]
+static inline size_t tda_hmap_bucket_count(const tda_HMap *self) {
+    assert(self);
+    assert(self->al_);
 
-/// the size of one key
-/// @param self the map
-/// @return the size of the key layout
-/// @bigo{1}
-[[nodiscard]] TDA_API
-size_t tda_hmap_key_size(const tda_HMap *self);
-
-/// the size of one value
-/// @param self the map
-/// @return the size of the value layout
-/// @bigo{1}
-[[nodiscard]] TDA_API
-size_t tda_hmap_val_size(const tda_HMap *self);
+    return self->bucket_count_;
+}
 
 /// the layout of one key, as the map was built with
 /// @param self the map
 /// @return the size and the alignment; every key is aligned to it
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Layout tda_hmap_key_layout(const tda_HMap *self);
+[[nodiscard]]
+static inline tda_Layout tda_hmap_key_layout(const tda_HMap *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->key_;
+}
 
 /// the layout of one value, as the map was built with
 /// @param self the map
 /// @return the size and the alignment; every value is aligned to it
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Layout tda_hmap_val_layout(const tda_HMap *self);
+[[nodiscard]]
+static inline tda_Layout tda_hmap_val_layout(const tda_HMap *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->val_;
+}
 
 /// the allocator the map was built with
 /// @param self the map
 /// @return the allocator, borrowed
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Al *tda_hmap_al(const tda_HMap *self);
+[[nodiscard]]
+static inline tda_Al *tda_hmap_al(const tda_HMap *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->al_;
+}
 
 /// the hash the keys are placed by
 /// @param self the map
 /// @return the hasher given at construction
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Hasher tda_hmap_hasher(const tda_HMap *self);
+[[nodiscard]]
+static inline tda_Hasher tda_hmap_hasher(const tda_HMap *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->hasher_;
+}
 
 /// the equality the keys are matched by
 /// @param self the map
 /// @return the equality given at construction. Named key_eq because tda_hmap_eq
 ///         compares whole maps and values have no equality of their own
 /// @bigo{1}
-[[nodiscard]] TDA_API
-tda_Eq tda_hmap_key_eq(const tda_HMap *self);
+[[nodiscard]]
+static inline tda_Eq tda_hmap_key_eq(const tda_HMap *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->eq_;
+}
 
 /// the ctx the hasher and the key equality are called with
 /// @param self the map
 /// @return the ctx given at construction, borrowed
 /// @bigo{1}
-[[nodiscard]] TDA_API
-void *tda_hmap_key_ctx(const tda_HMap *self);
+[[nodiscard]]
+static inline void *tda_hmap_key_ctx(const tda_HMap *self) {
+    assert(self);
+    assert(self->al_);
+
+    return self->ctx_;
+}
 
 /// @}
 
@@ -462,14 +503,14 @@ tda_Status tda_hmap_get_or_insert(
 TDA_API
 void tda_hmap_clear(tda_HMap *self);
 
-/// makes room for 'cap' entries without a growth in between
+/// makes room for 'new_cap' entries without a growth in between
 /// @param self the map
-/// @param cap a capacity at or below the one it has is a no-op
+/// @param new_cap a capacity at or below the one it has is a no-op
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the array cannot be allocated; the map is unchanged
 /// @bigo{n}; the nodes are relinked, not reallocated, so borrowed nodes survive
 [[nodiscard]] TDA_API
-tda_Status tda_hmap_reserve(tda_HMap *self, size_t cap);
+tda_Status tda_hmap_reserve(tda_HMap *self, size_t new_cap);
 
 /// gives back unneeded buckets, down to the smallest power of two that holds the
 /// entries, but never below the count a fresh map starts with
@@ -482,11 +523,9 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self);
 
 /// exchanges the contents of two maps, hashers, equalities and ctx included
 /// @param self one map
-/// @param other must have the same key and value layouts and allocator; may be 'self'. The
-///              nodes do not move, so borrowed nodes stay valid. Different hashers are
+/// @param other must have the same key and value layouts; may be 'self'. The nodes do not
+///              move, so borrowed nodes stay valid. Different hashers and allocators are
 ///              fine, as each travels with its entries
-/// @note a node belongs to the allocator that made it. Across allocators use
-///       tda_hmap_copy_with, then tda_hmap_move_assign
 /// @bigo{1}
 TDA_API
 void tda_hmap_swap(tda_HMap *self, tda_HMap *other);
@@ -520,43 +559,43 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 
 /// @cond
 // return 'self' after checking the key or the value layout against TDA_LAYOUT_OF of
-// the type, so a macro evaluates its handle once; _Generic keeps the handle's constness.
+// the type, so a macro evaluates its pointer once; _Generic keeps the pointer's constness.
 // A macro that knows both types checks one and then the other
 [[nodiscard]]
-static inline const tda_HMap *tda_hmap_key_typed_c_(const tda_HMap *self, [[maybe_unused]] tda_Layout key) {
+static inline const tda_HMap *tda_hmap_key_typed_(const tda_HMap *self, [[maybe_unused]] tda_Layout key) {
     TDA_EXPECT(tda_layout_eq(tda_hmap_key_layout(self), key));
     return self;
 }
 
 [[nodiscard]]
-static inline tda_HMap *tda_hmap_key_typed_(tda_HMap *self, [[maybe_unused]] tda_Layout key) {
+static inline tda_HMap *tda_hmap_key_typed_mut_(tda_HMap *self, [[maybe_unused]] tda_Layout key) {
     TDA_EXPECT(tda_layout_eq(tda_hmap_key_layout(self), key));
     return self;
 }
 
 [[nodiscard]]
-static inline const tda_HMap *tda_hmap_val_typed_c_(const tda_HMap *self, [[maybe_unused]] tda_Layout val) {
+static inline const tda_HMap *tda_hmap_val_typed_(const tda_HMap *self, [[maybe_unused]] tda_Layout val) {
     TDA_EXPECT(tda_layout_eq(tda_hmap_val_layout(self), val));
     return self;
 }
 
 [[nodiscard]]
-static inline tda_HMap *tda_hmap_val_typed_(tda_HMap *self, [[maybe_unused]] tda_Layout val) {
+static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]] tda_Layout val) {
     TDA_EXPECT(tda_layout_eq(tda_hmap_val_layout(self), val));
     return self;
 }
 
 #define TDA_HMAP_KEY_TYPED_(K, self) \
-    _Generic((self), const tda_HMap *: tda_hmap_key_typed_c_, tda_HMap *: tda_hmap_key_typed_)((self), TDA_LAYOUT_OF(K))
+    _Generic((self), const tda_HMap *: tda_hmap_key_typed_, tda_HMap *: tda_hmap_key_typed_mut_)((self), TDA_LAYOUT_OF(K))
 
 #define TDA_HMAP_VAL_TYPED_(V, self) \
-    _Generic((self), const tda_HMap *: tda_hmap_val_typed_c_, tda_HMap *: tda_hmap_val_typed_)((self), TDA_LAYOUT_OF(V))
+    _Generic((self), const tda_HMap *: tda_hmap_val_typed_, tda_HMap *: tda_hmap_val_typed_mut_)((self), TDA_LAYOUT_OF(V))
 
 #define TDA_HMAP_TYPED_(K, V, self) \
     TDA_HMAP_VAL_TYPED_(V, TDA_HMAP_KEY_TYPED_(K, self))
 /// @endcond
 
-/// tda_hmap_new with TDA_LAYOUT_OF(K) and TDA_LAYOUT_OF(V)
+/// tda_hmap_init with TDA_LAYOUT_OF(K) and TDA_LAYOUT_OF(V)
 /// @param K the key type
 /// @param V the value type
 /// @param hasher the hash the keys are placed by
@@ -565,10 +604,10 @@ static inline tda_HMap *tda_hmap_val_typed_(tda_HMap *self, [[maybe_unused]] tda
 /// @param al the allocator
 /// @param[out] out where the new map is written
 /// @bigo{1}
-#define TDA_HMAP_NEW(K, V, hasher, eq, ctx, al, out) \
-    tda_hmap_new(TDA_LAYOUT_OF(K), TDA_LAYOUT_OF(V), (hasher), (eq), (ctx), (al), (out))
+#define TDA_HMAP_INIT(K, V, hasher, eq, ctx, al, out) \
+    tda_hmap_init(TDA_LAYOUT_OF(K), TDA_LAYOUT_OF(V), (hasher), (eq), (ctx), (al), (out))
 
-/// tda_hmap_new_cap with TDA_LAYOUT_OF(K) and TDA_LAYOUT_OF(V)
+/// tda_hmap_init_cap with TDA_LAYOUT_OF(K) and TDA_LAYOUT_OF(V)
 /// @param K the key type
 /// @param V the value type
 /// @param cap how many entries to make room for
@@ -578,8 +617,8 @@ static inline tda_HMap *tda_hmap_val_typed_(tda_HMap *self, [[maybe_unused]] tda
 /// @param al the allocator
 /// @param[out] out where the new map is written
 /// @bigo{n}
-#define TDA_HMAP_NEW_CAP(K, V, cap, hasher, eq, ctx, al, out) \
-    tda_hmap_new_cap((cap), TDA_LAYOUT_OF(K), TDA_LAYOUT_OF(V), (hasher), (eq), (ctx), (al), (out))
+#define TDA_HMAP_INIT_CAP(K, V, cap, hasher, eq, ctx, al, out) \
+    tda_hmap_init_cap((cap), TDA_LAYOUT_OF(K), TDA_LAYOUT_OF(V), (hasher), (eq), (ctx), (al), (out))
 
 /// tda_hmap_get as a const V *, from a key value rather than an address
 /// @param K the key type; scalars only, as 'key' becomes a compound literal

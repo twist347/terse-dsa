@@ -1,6 +1,7 @@
 #include "tda/algo/merge.h"
 #include "tda/algo/sort.h"
 #include "tda/alloc/default.h"
+#include "tda/core/util.h"
 
 #include "support/probe.h"
 #include "support/tagged.h"
@@ -450,6 +451,26 @@ static void test_inplace_merge_at_the_edges_asks_for_nothing() {
     TEST_ASSERT_EQUAL_size_t(0, tda_test_probe_requests(&probe));
 }
 
+// a comparator carried over from a C++ less-than: it never answers "greater"
+static int cmp_less_only_i32(const void *lhs, const void *rhs, void *ctx) {
+    TDA_UNUSED(ctx);
+
+    return *(const int32_t *) lhs < *(const int32_t *) rhs ? -1 : 0;
+}
+
+// the path without a buffer bisects for its split points, and must ask only "less" too
+static void test_inplace_merge_takes_a_less_only_comparator_on_both_paths() {
+    int32_t a[6] = {5, 6, 9, 1, 2, 6};
+    int32_t b[6] = {5, 6, 9, 1, 2, 6};
+
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, a, 6), 3, cmp_less_only_i32, nullptr, nullptr);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, b, 6), 3, cmp_less_only_i32, nullptr, tda_al_default());
+
+    constexpr int32_t want[6] = {1, 2, 5, 6, 6, 9};
+    TEST_ASSERT_EQUAL_INT32_ARRAY(want, a, 6);
+    TEST_ASSERT_EQUAL_INT32_ARRAY(want, b, 6);
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -480,6 +501,8 @@ int main() {
     RUN_TEST(test_inplace_merge_gives_the_buffer_back);
     RUN_TEST(test_inplace_merge_falls_back_when_the_buffer_is_refused);
     RUN_TEST(test_inplace_merge_at_the_edges_asks_for_nothing);
+
+    RUN_TEST(test_inplace_merge_takes_a_less_only_comparator_on_both_paths);
 
     return UNITY_END();
 }

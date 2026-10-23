@@ -12,16 +12,16 @@
 
 /* ========== internals ========== */
 
-#define ASSERT_HMAP(m)                                              \
-    (assert(m),                                                     \
-     assert(tda_layout_is_type((m)->key)),                          \
-     assert((m)->hasher),                                           \
-     assert((m)->eq),                                               \
-     assert((m)->al),                                               \
-     assert(((m)->bucket_count == 0) == ((m)->buckets == nullptr)), \
-     assert((m)->bucket_count == 0                                  \
-            || ((m)->bucket_count & ((m)->bucket_count - 1)) == 0), \
-     assert((m)->len == 0 || (m)->bucket_count > 0))
+#define ASSERT_HMAP(m)                                                \
+    (assert(m),                                                       \
+     assert(tda_layout_is_type((m)->key_)),                           \
+     assert((m)->hasher_),                                            \
+     assert((m)->eq_),                                                \
+     assert((m)->al_),                                                \
+     assert(((m)->bucket_count_ == 0) == ((m)->buckets_ == nullptr)), \
+     assert((m)->bucket_count_ == 0                                   \
+            || ((m)->bucket_count_ & ((m)->bucket_count_ - 1)) == 0), \
+     assert((m)->len_ == 0 || (m)->bucket_count_ > 0))
 
 static constexpr size_t HMAP_BUCKETS_BASE = 8;
 static constexpr size_t HMAP_GROWTH_FACTOR = 2;
@@ -30,28 +30,13 @@ static constexpr size_t HMAP_GROWTH_FACTOR = 2;
 static_assert((HMAP_BUCKETS_BASE & (HMAP_BUCKETS_BASE - 1)) == 0);
 static_assert((HMAP_GROWTH_FACTOR & (HMAP_GROWTH_FACTOR - 1)) == 0);
 
-// An entry is one allocation: this header, then the key and the value, each at the first
+// An entry is one allocation: this struct, then the key and the value, each at the first
 // offset its alignment allows, as members of a struct would be. Only the map knows those
 // offsets. The hash is cached so growing relinks without rehashing, and a lookup rejects
 // most mismatches before calling 'eq'.
 struct tda_HMapNode {
     tda_HMapNode *next;
     tda_Hash hash;
-};
-
-struct tda_HMap {
-    tda_HMapNode **buckets;
-    size_t bucket_count;
-    size_t len;
-    tda_Layout key;
-    tda_Layout val; // size 0 for a set's map, which has no value
-    size_t key_offset;
-    size_t val_offset;
-    tda_Layout node; // checked against overflow once, at construction
-    tda_Hasher hasher;
-    tda_Eq eq;
-    void *ctx; // passed to both: they agree on what a key is
-    tda_Al *al;
 };
 
 [[nodiscard]]
@@ -67,9 +52,9 @@ static void *node_val_mut(const tda_HMap *self, tda_HMapNode *node);
 static const void *node_val(const tda_HMap *self, const tda_HMapNode *node);
 
 [[nodiscard]]
-static tda_Status node_new(const tda_HMap *self, const void *key, const void *val, tda_Hash hash, tda_HMapNode **out);
+static tda_Status alloc_node(const tda_HMap *self, const void *key, const void *val, tda_Hash hash, tda_HMapNode **out);
 
-static void node_drop(const tda_HMap *self, tda_HMapNode *node);
+static void dealloc_node(const tda_HMap *self, tda_HMapNode *node);
 
 /// which of 'count' buckets a hash belongs to. The count is a power of two, so this is a
 /// mask, which is safe only because the mixer in core/hash avalanches every bit
@@ -95,7 +80,7 @@ static tda_HMapNode *find_node(const tda_HMap *self, const void *key, tda_Hash h
 static void link_node(tda_HMapNode **buckets, size_t count, tda_HMapNode *node);
 
 /// takes the node at '*link' out of its chain and frees it
-static void unlink_at(tda_HMap *self, tda_HMapNode **link);
+static void remove_at(tda_HMap *self, tda_HMapNode **link);
 
 /// the node after 'node' in walk order: down its chain, then on to the next bucket
 [[nodiscard]]
@@ -106,10 +91,10 @@ static tda_HMapNode *next_node(const tda_HMap *self, const tda_HMapNode *node);
 [[nodiscard]]
 static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda_Hash hash, tda_HMapNode **out);
 
-/// the bucket count that holds 'n' entries at the load of one entry per bucket: the
-/// smallest power of two at least 'n' and the base, or 0 on overflow
+/// the bucket count that holds 'len' entries at the load of one entry per bucket: the
+/// smallest power of two at least 'len' and the base, or 0 on overflow
 [[nodiscard]]
-static size_t buckets_for(size_t n);
+static size_t buckets_for(size_t len);
 
 /// moves every node into a fresh bucket array of 'new_count'. Only the array is
 /// allocated; the nodes are relinked, so borrowed nodes stay valid
@@ -119,7 +104,7 @@ static tda_Status rehash(tda_HMap *self, size_t new_count);
 /// buckets for 'cap' entries at the load of one per bucket; the body of tda_hmap_reserve,
 /// kept static so the insert path calls it directly
 [[nodiscard]]
-static tda_Status reserve_for(tda_HMap *self, size_t cap);
+static tda_Status reserve_buckets(tda_HMap *self, size_t cap);
 
 /// room for one more entry
 [[nodiscard]]
@@ -129,7 +114,9 @@ static tda_Status reserve_one(tda_HMap *self);
 [[nodiscard]]
 static tda_HMapNode *first_from(const tda_HMap *self, size_t idx);
 
-static void clear_nodes(tda_HMap *self);
+/// frees every node; the bucket array still points at them and len_ still counts them,
+/// so the caller clears or frees the array next
+static void free_nodes(tda_HMap *self);
 
 /// frees the nodes and the bucket array, leaving a map that owns nothing, like any
 /// container after a move
@@ -141,26 +128,31 @@ static bool eq_impl(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq, void *c
 
 /* ========== lifetime ========== */
 
-tda_Status tda_hmap_new(
+void tda_hmap_init(
     tda_Layout key, tda_Layout val,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
     tda_Al *al,
-    tda_HMap **out
-) {
-    return tda_hmap_new_cap(0, key, val, hasher, eq, ctx, al, out);
-}
-
-tda_Status tda_hmap_new_cap(
-    size_t cap,
-    tda_Layout key, tda_Layout val,
-    tda_Hasher hasher, tda_Eq eq, void *ctx,
-    tda_Al *al,
-    tda_HMap **out
+    tda_HMap *out
 ) {
     // the zero belongs to internal/hmap_impl.h and to ds/hset alone
     assert(tda_layout_is_type(val));
 
-    return tda_hmap_new_raw_(cap, key, val, hasher, eq, ctx, al, out);
+    // with no room asked for nothing is allocated, so this cannot fail
+    [[maybe_unused]] const tda_Status st = tda_hmap_init_raw_(0, key, val, hasher, eq, ctx, al, out);
+    assert(TDA_STATUS_IS_OK(st));
+}
+
+tda_Status tda_hmap_init_cap(
+    size_t cap,
+    tda_Layout key, tda_Layout val,
+    tda_Hasher hasher, tda_Eq eq, void *ctx,
+    tda_Al *al,
+    tda_HMap *out
+) {
+    // the zero belongs to internal/hmap_impl.h and to ds/hset alone
+    assert(tda_layout_is_type(val));
+
+    return tda_hmap_init_raw_(cap, key, val, hasher, eq, ctx, al, out);
 }
 
 tda_Status tda_hmap_from_spans(
@@ -170,34 +162,35 @@ tda_Status tda_hmap_from_spans(
     tda_Eq eq,
     void *ctx,
     tda_Al *al,
-    tda_HMap **out
+    tda_HMap *out
 ) {
     TDA_SPAN_ASSERT(keys);
     TDA_SPAN_ASSERT(vals);
     TDA_EXPECT(keys.len == vals.len);
     assert(out);
 
-    tda_HMap *obj;
-    tda_Status st = tda_hmap_new_cap(keys.len, keys.elem, vals.elem, hasher, eq, ctx, al, &obj);
+    tda_HMap obj;
+    tda_Status st = tda_hmap_init_cap(keys.len, keys.elem, vals.elem, hasher, eq, ctx, al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    st = tda_hmap_extend(obj, keys, vals);
+    st = tda_hmap_extend(&obj, keys, vals);
     if (TDA_STATUS_IS_ERR(st)) {
-        tda_hmap_drop(obj);
+        tda_hmap_deinit(&obj);
         return st;
     }
 
     *out = obj;
+
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_hmap_new_raw_(
+tda_Status tda_hmap_init_raw_(
     size_t cap, tda_Layout key, tda_Layout val,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
     tda_Al *al,
-    tda_HMap **out
+    tda_HMap *out
 ) {
     assert(tda_layout_is_type(key));
     assert(tda_layout_is_type(val) || (val.size == 0 && tda_layout_is_align(val.align)));
@@ -206,88 +199,95 @@ tda_Status tda_hmap_new_raw_(
     assert(al);
     assert(out);
 
-    // the header, the key, the value, laid out as a struct's members; with no value there
-    // is nothing to place after the key, so a set's node is just the header and the key
+    // the node struct, the key, the value, laid out as a struct's members; with no value there
+    // is nothing to place after the key, so a set's node is just the struct and the key.
+    // No real type comes near overflowing it; a layout built by hand might, and its nodes
+    // would be too short for what is copied into them
     tda_Layout node = TDA_LAYOUT_OF(tda_HMapNode);
-    size_t key_offset;
-    size_t val_offset;
-    if (tda_layout_ckd_extend(&node, key, &key_offset)
+    size_t key_offset = 0;
+    size_t val_offset = 0;
+    [[maybe_unused]] const bool overflow = tda_layout_ckd_extend(&node, key, &key_offset)
         || (val.size > 0 && tda_layout_ckd_extend(&node, val, &val_offset))
-        || tda_layout_ckd_pad(&node)) {
-        return TDA_STATUS_ERR_NO_MEM;
-    }
+        || tda_layout_ckd_pad(&node);
+    TDA_EXPECT(!overflow);
     if (val.size == 0) {
-        val_offset = key_offset + key.size; // an empty value right past the key, not the header
+        val_offset = key_offset + key.size; // an empty value right past the key, not the struct
     }
 
-    tda_HMap *obj = TDA_ALLOC(tda_HMap, al, 1);
-    if (!obj) {
-        return TDA_STATUS_ERR_NO_MEM;
-    }
-
-    obj->buckets = nullptr;
-    obj->bucket_count = 0;
-    obj->len = 0;
-    obj->key = key;
-    obj->val = val;
-    obj->key_offset = key_offset;
-    obj->val_offset = val_offset;
-    obj->node = node;
-    obj->hasher = hasher;
-    obj->eq = eq;
-    obj->ctx = ctx;
-    obj->al = al;
+    tda_HMap obj = {
+        .key_ = key,
+        .val_ = val,
+        .key_offset_ = key_offset,
+        .val_offset_ = val_offset,
+        .node_ = node,
+        .hasher_ = hasher,
+        .eq_ = eq,
+        .ctx_ = ctx,
+        .al_ = al,
+    };
 
     if (cap > 0) {
-        const tda_Status st = tda_hmap_reserve(obj, cap);
+        const tda_Status st = tda_hmap_reserve(&obj, cap);
         if (TDA_STATUS_IS_ERR(st)) {
-            TDA_DEALLOC(tda_HMap, al, obj, 1);
             return st;
         }
     }
 
-    ASSERT_HMAP(obj);
-
     *out = obj;
+
+    ASSERT_HMAP(out);
 
     return TDA_STATUS_OK;
 }
 
-void tda_hmap_drop(tda_HMap *self) {
-    if (!self) {
+void tda_hmap_deinit(tda_HMap *self) {
+    assert(self);
+
+    // the inert state, never initialized or already released
+    if (!self->al_) {
+        assert(!self->buckets_);
         return;
     }
 
     ASSERT_HMAP(self);
 
     release_buckets(self);
-    TDA_DEALLOC(tda_HMap, self->al, self, 1);
+    *self = (tda_HMap){};
 }
 
 /* ========== copy ========== */
 
-tda_Status tda_hmap_copy(const tda_HMap *self, tda_HMap **out) {
+tda_Status tda_hmap_copy(const tda_HMap *self, tda_HMap *out) {
     ASSERT_HMAP(self);
 
-    return tda_hmap_copy_with(self, self->al, out);
+    return tda_hmap_copy_with(self, self->al_, out);
 }
 
-tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap **out) {
+tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap *out) {
     ASSERT_HMAP(self);
     assert(al);
     assert(out);
 
-    tda_HMap *obj;
-    tda_Status st = tda_hmap_new_raw_(self->len, self->key, self->val, self->hasher, self->eq, self->ctx, al, &obj);
+    tda_HMap obj;
+    tda_Status st = tda_hmap_init_raw_(
+        self->len_,
+        self->key_,
+        self->val_,
+        self->hasher_,
+        self->eq_,
+        self->ctx_,
+        al,
+        &obj
+    );
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
     for (const tda_HMapNode *node = first_from(self, 0); node; node = tda_hmap_node_next(self, node)) {
-        const void *val = self->val.size > 0 ? node_val(self, node) : nullptr;
-        st = tda_hmap_insert(obj, node_key(self, node), val, nullptr);
+        const void *val = self->val_.size > 0 ? node_val(self, node) : nullptr;
+        st = tda_hmap_insert(&obj, node_key(self, node), val, nullptr);
         if (TDA_STATUS_IS_ERR(st)) {
-            tda_hmap_drop(obj);
+            tda_hmap_deinit(&obj);
             return st;
         }
     }
@@ -300,136 +300,48 @@ tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap **out) 
 tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    TDA_EXPECT(tda_layout_eq(self->key, other->key));
-    TDA_EXPECT(tda_layout_eq(self->val, other->val));
+    TDA_EXPECT(tda_layout_eq(self->key_, other->key_));
+    TDA_EXPECT(tda_layout_eq(self->val_, other->val_));
 
     if (self == other) {
         return TDA_STATUS_OK;
     }
 
     // build the clone first, so a refusal leaves 'self' unchanged
-    tda_HMap *clone;
-    const tda_Status st = tda_hmap_copy_with(other, self->al, &clone);
+    tda_HMap clone;
+    const tda_Status st = tda_hmap_copy_with(other, self->al_, &clone);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    TDA_SWAP(*self, *clone);
-    tda_hmap_drop(clone);
+    tda_hmap_deinit(self);
+    *self = clone;
 
     ASSERT_HMAP(self);
 
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
+void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    TDA_EXPECT(tda_layout_eq(self->key, other->key));
-    TDA_EXPECT(tda_layout_eq(self->val, other->val));
+    TDA_EXPECT(tda_layout_eq(self->key_, other->key_));
+    TDA_EXPECT(tda_layout_eq(self->val_, other->val_));
 
     if (self == other) {
-        return TDA_STATUS_OK;
+        return;
     }
 
-    // one allocator: swap the buckets, then release what 'self' held from 'other'. The
-    // swap also gives 'other' the hasher, equality and ctx of 'self', so restore its own,
-    // as the two-allocator path leaves them
-    if (self->al == other->al) {
-        const tda_Hasher other_hasher = other->hasher;
-        const tda_Eq other_eq = other->eq;
-        void *other_ctx = other->ctx;
-
-        TDA_SWAP(*self, *other);
-        release_buckets(other);
-
-        other->hasher = other_hasher;
-        other->eq = other_eq;
-        other->ctx = other_ctx;
-
-        ASSERT_HMAP(self);
-        ASSERT_HMAP(other);
-
-        return TDA_STATUS_OK;
-    }
-
-    // two allocators: build the copy first, so a refusal changes nothing
-    tda_HMap *obj;
-    const tda_Status st = tda_hmap_copy_with(other, self->al, &obj);
-    if (TDA_STATUS_IS_ERR(st)) {
-        return st;
-    }
-
-    TDA_SWAP(*self, *obj);
-    tda_hmap_drop(obj);
-    release_buckets(other);
+    // the allocator, the hasher, the equality and the ctx go along with the entries;
+    // 'other' keeps all of them and is left with no buckets
+    tda_hmap_deinit(self);
+    *self = *other;
+    other->buckets_ = nullptr;
+    other->bucket_count_ = 0;
+    other->len_ = 0;
 
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-
-    return TDA_STATUS_OK;
-}
-
-/* ========== info ========== */
-
-size_t tda_hmap_len(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->len;
-}
-
-size_t tda_hmap_bucket_count(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->bucket_count;
-}
-
-size_t tda_hmap_key_size(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->key.size;
-}
-
-tda_Layout tda_hmap_key_layout(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->key;
-}
-
-tda_Layout tda_hmap_val_layout(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->val;
-}
-
-size_t tda_hmap_val_size(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->val.size;
-}
-
-tda_Al *tda_hmap_al(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->al;
-}
-
-tda_Hasher tda_hmap_hasher(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->hasher;
-}
-
-tda_Eq tda_hmap_key_eq(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->eq;
-}
-
-void *tda_hmap_key_ctx(const tda_HMap *self) {
-    ASSERT_HMAP(self);
-
-    return self->ctx;
 }
 
 /* ========== compare ========== */
@@ -437,9 +349,9 @@ void *tda_hmap_key_ctx(const tda_HMap *self) {
 bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b) {
     ASSERT_HMAP(a);
     ASSERT_HMAP(b);
-    TDA_EXPECT(tda_layout_eq(a->key, b->key));
-    TDA_EXPECT(tda_layout_eq(a->val, b->val));
-    TDA_EXPECT(a->eq == b->eq);
+    TDA_EXPECT(tda_layout_eq(a->key_, b->key_));
+    TDA_EXPECT(tda_layout_eq(a->val_, b->val_));
+    TDA_EXPECT(a->eq_ == b->eq_);
 
     return eq_impl(a, b, nullptr, nullptr);
 }
@@ -447,9 +359,9 @@ bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b) {
 bool tda_hmap_eq_by(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq, void *ctx) {
     ASSERT_HMAP(a);
     ASSERT_HMAP(b);
-    TDA_EXPECT(tda_layout_eq(a->key, b->key));
-    TDA_EXPECT(tda_layout_eq(a->val, b->val));
-    TDA_EXPECT(a->eq == b->eq);
+    TDA_EXPECT(tda_layout_eq(a->key_, b->key_));
+    TDA_EXPECT(tda_layout_eq(a->val_, b->val_));
+    TDA_EXPECT(a->eq_ == b->eq_);
     assert(val_eq);
 
     return eq_impl(a, b, val_eq, ctx);
@@ -461,7 +373,7 @@ const void *tda_hmap_get(const tda_HMap *self, const void *key) {
     ASSERT_HMAP(self);
     assert(key);
 
-    const tda_HMapNode *node = find_node(self, key, self->hasher(key, self->ctx));
+    const tda_HMapNode *node = find_node(self, key, self->hasher_(key, self->ctx_));
 
     return node ? node_val(self, node) : nullptr;
 }
@@ -470,7 +382,7 @@ void *tda_hmap_get_mut(tda_HMap *self, const void *key) {
     ASSERT_HMAP(self);
     assert(key);
 
-    tda_HMapNode *node = find_node(self, key, self->hasher(key, self->ctx));
+    tda_HMapNode *node = find_node(self, key, self->hasher_(key, self->ctx_));
 
     return node ? node_val_mut(self, node) : nullptr;
 }
@@ -479,21 +391,21 @@ bool tda_hmap_contains(const tda_HMap *self, const void *key) {
     ASSERT_HMAP(self);
     assert(key);
 
-    return find_node(self, key, self->hasher(key, self->ctx)) != nullptr;
+    return find_node(self, key, self->hasher_(key, self->ctx_)) != nullptr;
 }
 
 const tda_HMapNode *tda_hmap_find(const tda_HMap *self, const void *key) {
     ASSERT_HMAP(self);
     assert(key);
 
-    return find_node(self, key, self->hasher(key, self->ctx));
+    return find_node(self, key, self->hasher_(key, self->ctx_));
 }
 
 tda_HMapNode *tda_hmap_find_mut(tda_HMap *self, const void *key) {
     ASSERT_HMAP(self);
     assert(key);
 
-    return find_node(self, key, self->hasher(key, self->ctx));
+    return find_node(self, key, self->hasher_(key, self->ctx_));
 }
 
 /* ========== nodes ========== */
@@ -550,15 +462,15 @@ void *tda_hmap_node_val_mut(tda_HMap *self, tda_HMapNode *node) {
 tda_Status tda_hmap_insert(tda_HMap *self, const void *key, const void *val, bool *out_is_new) {
     ASSERT_HMAP(self);
     assert(key);
-    assert(val || self->val.size == 0); // a value pointer is needed only when there is a value
+    assert(val || self->val_.size == 0); // a value pointer is needed only when there is a value
 
-    const tda_Hash hash = self->hasher(key, self->ctx);
+    const tda_Hash hash = self->hasher_(key, self->ctx_);
 
     tda_HMapNode *found = find_node(self, key, hash);
     if (found) {
-        if (self->val.size > 0) {
+        if (self->val_.size > 0) {
             // memmove: 'val' may alias the value being overwritten
-            memmove(node_val_mut(self, found), val, self->val.size);
+            memmove(node_val_mut(self, found), val, self->val_.size);
         }
 
         if (out_is_new) {
@@ -585,8 +497,8 @@ tda_Status tda_hmap_extend(tda_HMap *self, tda_Span keys, tda_Span vals) {
     ASSERT_HMAP(self);
     TDA_SPAN_ASSERT(keys);
     TDA_SPAN_ASSERT(vals);
-    TDA_EXPECT(tda_layout_eq(keys.elem, self->key));
-    TDA_EXPECT(tda_layout_eq(vals.elem, self->val));
+    TDA_EXPECT(tda_layout_eq(keys.elem, self->key_));
+    TDA_EXPECT(tda_layout_eq(vals.elem, self->val_));
     TDA_EXPECT(keys.len == vals.len);
 
     for (size_t i = 0; i < keys.len; ++i) {
@@ -607,11 +519,11 @@ tda_Status tda_hmap_get_or_insert(
 ) {
     ASSERT_HMAP(self);
     assert(key);
-    assert(val_if_absent || self->val.size == 0);
+    assert(val_if_absent || self->val_.size == 0);
     assert(out_node);
 
     // one hash and one bucket walk serve both the lookup and the insert
-    const tda_Hash hash = self->hasher(key, self->ctx);
+    const tda_Hash hash = self->hasher_(key, self->ctx_);
 
     tda_HMapNode *found = find_node(self, key, hash);
     if (found) {
@@ -633,23 +545,23 @@ bool tda_hmap_take(tda_HMap *self, const void *key, void *out_key, void *out_val
     ASSERT_HMAP(self);
     assert(key);
 
-    if (self->bucket_count == 0) {
+    if (self->bucket_count_ == 0) {
         return false;
     }
 
-    tda_HMapNode **link = find_link(self, key, self->hasher(key, self->ctx));
+    tda_HMapNode **link = find_link(self, key, self->hasher_(key, self->ctx_));
     if (!*link) {
         return false;
     }
 
     // memmove: 'out_key' may alias 'key'
     if (out_key) {
-        memmove(out_key, node_key(self, *link), self->key.size);
+        memmove(out_key, node_key(self, *link), self->key_.size);
     }
     if (out_val) {
-        memcpy(out_val, node_val(self, *link), self->val.size);
+        memcpy(out_val, node_val(self, *link), self->val_.size);
     }
-    unlink_at(self, link);
+    remove_at(self, link);
 
     ASSERT_HMAP(self);
 
@@ -659,9 +571,9 @@ bool tda_hmap_take(tda_HMap *self, const void *key, void *out_key, void *out_val
 void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node) {
     ASSERT_HMAP(self);
     assert(node);
-    TDA_EXPECT(self->len > 0);
+    TDA_EXPECT(self->len_ > 0);
 
-    tda_HMapNode **link = &self->buckets[bucket_of(self, node->hash)];
+    tda_HMapNode **link = &self->buckets_[bucket_of(self, node->hash)];
     while (*link && *link != node) {
         link = &(*link)->next;
     }
@@ -670,7 +582,7 @@ void tda_hmap_remove_node(tda_HMap *self, tda_HMapNode *node) {
     // done, so the check is free
     TDA_EXPECT(*link == node);
 
-    unlink_at(self, link);
+    remove_at(self, link);
 
     ASSERT_HMAP(self);
 }
@@ -679,15 +591,15 @@ void tda_hmap_retain(tda_HMap *self, tda_EntryPred pred, void *ctx) {
     ASSERT_HMAP(self);
     assert(pred);
 
-    for (size_t b = 0; b < self->bucket_count; ++b) {
-        tda_HMapNode **link = &self->buckets[b];
+    for (size_t i = 0; i < self->bucket_count_; ++i) {
+        tda_HMapNode **link = &self->buckets_[i];
         while (*link) {
             tda_HMapNode *node = *link;
             if (pred(node_key(self, node), node_val(self, node), ctx)) {
                 link = &node->next;
                 continue;
             }
-            unlink_at(self, link);
+            remove_at(self, link);
         }
     }
 }
@@ -695,27 +607,27 @@ void tda_hmap_retain(tda_HMap *self, tda_EntryPred pred, void *ctx) {
 void tda_hmap_clear(tda_HMap *self) {
     ASSERT_HMAP(self);
 
-    clear_nodes(self);
+    free_nodes(self);
 
-    for (size_t i = 0; i < self->bucket_count; ++i) {
-        self->buckets[i] = nullptr;
+    for (size_t i = 0; i < self->bucket_count_; ++i) {
+        self->buckets_[i] = nullptr;
     }
 
-    self->len = 0;
+    self->len_ = 0;
 
     ASSERT_HMAP(self);
 }
 
-tda_Status tda_hmap_reserve(tda_HMap *self, size_t cap) {
+tda_Status tda_hmap_reserve(tda_HMap *self, size_t new_cap) {
     ASSERT_HMAP(self);
 
-    return reserve_for(self, cap);
+    return reserve_buckets(self, new_cap);
 }
 
 tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
     ASSERT_HMAP(self);
 
-    if (self->len == 0) {
+    if (self->len_ == 0) {
         // empty: the map goes back to owning no buckets
         release_buckets(self);
 
@@ -724,8 +636,8 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
         return TDA_STATUS_OK;
     }
 
-    const size_t want = buckets_for(self->len);
-    if (want == 0 || want >= self->bucket_count) {
+    const size_t want = buckets_for(self->len_);
+    if (want == 0 || want >= self->bucket_count_) {
         return TDA_STATUS_OK;
     }
 
@@ -735,9 +647,8 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
 void tda_hmap_swap(tda_HMap *self, tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    TDA_EXPECT(tda_layout_eq(self->key, other->key));
-    TDA_EXPECT(tda_layout_eq(self->val, other->val));
-    TDA_EXPECT(self->al == other->al);
+    TDA_EXPECT(tda_layout_eq(self->key_, other->key_));
+    TDA_EXPECT(tda_layout_eq(self->val_, other->val_));
 
     if (self == other) {
         return;
@@ -778,32 +689,32 @@ void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_
 /* ========== internals ========== */
 
 static tda_Layout node_layout(const tda_HMap *self) {
-    return self->node;
+    return self->node_;
 }
 
 static const void *node_key(const tda_HMap *self, const tda_HMapNode *node) {
-    return tda_byte_offset(node, 1, self->key_offset);
+    return tda_byte_offset(node, 1, self->key_offset_);
 }
 
 static void *node_val_mut(const tda_HMap *self, tda_HMapNode *node) {
-    return tda_byte_offset_mut(node, 1, self->val_offset);
+    return tda_byte_offset_mut(node, 1, self->val_offset_);
 }
 
 static const void *node_val(const tda_HMap *self, const tda_HMapNode *node) {
-    return tda_byte_offset(node, 1, self->val_offset);
+    return tda_byte_offset(node, 1, self->val_offset_);
 }
 
-static tda_Status node_new(const tda_HMap *self, const void *key, const void *val, tda_Hash hash, tda_HMapNode **out) {
-    tda_HMapNode *node = tda_alloc(self->al, node_layout(self));
+static tda_Status alloc_node(const tda_HMap *self, const void *key, const void *val, tda_Hash hash, tda_HMapNode **out) {
+    tda_HMapNode *node = tda_alloc(self->al_, node_layout(self));
     if (!node) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
     node->next = nullptr;
     node->hash = hash;
-    memcpy(tda_byte_offset_mut(node, 1, self->key_offset), key, self->key.size);
-    if (self->val.size > 0) {
-        memcpy(node_val_mut(self, node), val, self->val.size);
+    memcpy(tda_byte_offset_mut(node, 1, self->key_offset_), key, self->key_.size);
+    if (self->val_.size > 0) {
+        memcpy(node_val_mut(self, node), val, self->val_.size);
     }
 
     *out = node;
@@ -811,8 +722,8 @@ static tda_Status node_new(const tda_HMap *self, const void *key, const void *va
     return TDA_STATUS_OK;
 }
 
-static void node_drop(const tda_HMap *self, tda_HMapNode *node) {
-    tda_dealloc(self->al, node, node_layout(self));
+static void dealloc_node(const tda_HMap *self, tda_HMapNode *node) {
+    tda_dealloc(self->al_, node, node_layout(self));
 }
 
 static size_t bucket_in(tda_Hash hash, size_t count) {
@@ -822,20 +733,20 @@ static size_t bucket_in(tda_Hash hash, size_t count) {
 }
 
 static size_t bucket_of(const tda_HMap *self, tda_Hash hash) {
-    assert(self->bucket_count > 0);
+    assert(self->bucket_count_ > 0);
 
-    return bucket_in(hash, self->bucket_count);
+    return bucket_in(hash, self->bucket_count_);
 }
 
 static bool holds_key(const tda_HMap *self, const tda_HMapNode *node, const void *key, tda_Hash hash) {
     // the cheap hash first, so 'eq' runs only on keys whose hashes match
-    return node->hash == hash && self->eq(node_key(self, node), key, self->ctx);
+    return node->hash == hash && self->eq_(node_key(self, node), key, self->ctx_);
 }
 
 static tda_HMapNode **find_link(const tda_HMap *self, const void *key, tda_Hash hash) {
     // walk the links, not the nodes: the chain is singly linked, so the link stands in
     // for the previous node when the entry is taken out
-    tda_HMapNode **link = &self->buckets[bucket_of(self, hash)];
+    tda_HMapNode **link = &self->buckets_[bucket_of(self, hash)];
     while (*link && !holds_key(self, *link, key, hash)) {
         link = &(*link)->next;
     }
@@ -844,13 +755,13 @@ static tda_HMapNode **find_link(const tda_HMap *self, const void *key, tda_Hash 
 }
 
 static tda_HMapNode *find_node(const tda_HMap *self, const void *key, tda_Hash hash) {
-    if (self->bucket_count == 0) {
+    if (self->bucket_count_ == 0) {
         return nullptr;
     }
 
     // its own walk over nodes rather than *find_link: a lookup is the hot path, and the
     // walk over links measured slower here
-    for (tda_HMapNode *node = self->buckets[bucket_of(self, hash)]; node; node = node->next) {
+    for (tda_HMapNode *node = self->buckets_[bucket_of(self, hash)]; node; node = node->next) {
         if (holds_key(self, node, key, hash)) {
             return node;
         }
@@ -865,13 +776,13 @@ static void link_node(tda_HMapNode **buckets, size_t count, tda_HMapNode *node) 
     buckets[bucket] = node;
 }
 
-static void unlink_at(tda_HMap *self, tda_HMapNode **link) {
+static void remove_at(tda_HMap *self, tda_HMapNode **link) {
     tda_HMapNode *node = *link;
     assert(node);
 
     *link = node->next;
-    node_drop(self, node);
-    --self->len;
+    dealloc_node(self, node);
+    --self->len_;
 }
 
 static tda_HMapNode *next_node(const tda_HMap *self, const tda_HMapNode *node) {
@@ -890,13 +801,13 @@ static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda
     }
 
     tda_HMapNode *node;
-    st = node_new(self, key, val, hash, &node);
+    st = alloc_node(self, key, val, hash, &node);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    link_node(self->buckets, self->bucket_count, node);
-    ++self->len;
+    link_node(self->buckets_, self->bucket_count_, node);
+    ++self->len_;
 
     ASSERT_HMAP(self);
 
@@ -905,30 +816,30 @@ static tda_Status add_node(tda_HMap *self, const void *key, const void *val, tda
     return TDA_STATUS_OK;
 }
 
-static size_t buckets_for(size_t want) {
-    size_t n = HMAP_BUCKETS_BASE;
-    while (n < want) {
+static size_t buckets_for(size_t len) {
+    size_t count = HMAP_BUCKETS_BASE;
+    while (count < len) {
         size_t grown;
-        if (ckd_mul(&grown, n, HMAP_GROWTH_FACTOR)) {
+        if (ckd_mul(&grown, count, HMAP_GROWTH_FACTOR)) {
             return 0;
         }
-        n = grown;
+        count = grown;
     }
 
-    return n;
+    return count;
 }
 
 static tda_Status rehash(tda_HMap *self, size_t new_count) {
     assert(new_count > 0);
     assert((new_count & (new_count - 1)) == 0);
 
-    tda_HMapNode **buckets = TDA_ALLOC_ZEROED(tda_HMapNode *, self->al, new_count);
+    tda_HMapNode **buckets = TDA_ALLOC_ZEROED(tda_HMapNode *, self->al_, new_count);
     if (!buckets) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
-    for (size_t i = 0; i < self->bucket_count; ++i) {
-        tda_HMapNode *node = self->buckets[i];
+    for (size_t i = 0; i < self->bucket_count_; ++i) {
+        tda_HMapNode *node = self->buckets_[i];
         while (node) {
             tda_HMapNode *next = node->next;
             link_node(buckets, new_count, node);
@@ -936,17 +847,17 @@ static tda_Status rehash(tda_HMap *self, size_t new_count) {
         }
     }
 
-    TDA_DEALLOC(tda_HMapNode *, self->al, self->buckets, self->bucket_count);
-    self->buckets = buckets;
-    self->bucket_count = new_count;
+    TDA_DEALLOC(tda_HMapNode *, self->al_, self->buckets_, self->bucket_count_);
+    self->buckets_ = buckets;
+    self->bucket_count_ = new_count;
 
     ASSERT_HMAP(self);
 
     return TDA_STATUS_OK;
 }
 
-static tda_Status reserve_for(tda_HMap *self, size_t cap) {
-    if (cap <= self->bucket_count) {
+static tda_Status reserve_buckets(tda_HMap *self, size_t cap) {
+    if (cap <= self->bucket_count_) {
         return TDA_STATUS_OK;
     }
 
@@ -960,36 +871,36 @@ static tda_Status reserve_for(tda_HMap *self, size_t cap) {
 
 static tda_Status reserve_one(tda_HMap *self) {
     // len is at most the bucket count, which is far below SIZE_MAX, so len + 1 fits
-    return reserve_for(self, self->len + 1);
+    return reserve_buckets(self, self->len_ + 1);
 }
 
 static tda_HMapNode *first_from(const tda_HMap *self, size_t idx) {
-    for (size_t i = idx; i < self->bucket_count; ++i) {
-        if (self->buckets[i]) {
-            return self->buckets[i];
+    for (size_t i = idx; i < self->bucket_count_; ++i) {
+        if (self->buckets_[i]) {
+            return self->buckets_[i];
         }
     }
 
     return nullptr;
 }
 
-static void clear_nodes(tda_HMap *self) {
-    for (size_t i = 0; i < self->bucket_count; ++i) {
-        tda_HMapNode *node = self->buckets[i];
+static void free_nodes(tda_HMap *self) {
+    for (size_t i = 0; i < self->bucket_count_; ++i) {
+        tda_HMapNode *node = self->buckets_[i];
         while (node) {
             tda_HMapNode *next = node->next;
-            node_drop(self, node);
+            dealloc_node(self, node);
             node = next;
         }
     }
 }
 
 static void release_buckets(tda_HMap *self) {
-    clear_nodes(self);
-    TDA_DEALLOC(tda_HMapNode *, self->al, self->buckets, self->bucket_count);
-    self->buckets = nullptr;
-    self->bucket_count = 0;
-    self->len = 0;
+    free_nodes(self);
+    TDA_DEALLOC(tda_HMapNode *, self->al_, self->buckets_, self->bucket_count_);
+    self->buckets_ = nullptr;
+    self->bucket_count_ = 0;
+    self->len_ = 0;
 }
 
 static bool eq_impl(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq, void *ctx) {
@@ -997,23 +908,23 @@ static bool eq_impl(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq, void *c
         return true;
     }
 
-    if (a->len != b->len) {
+    if (a->len_ != b->len_) {
         return false;
     }
 
     // equal lengths plus every key of 'a' in 'b' means containment both ways, since
     // the two share one equality, so one pass is enough. 'b' uses its own hasher
-    for (size_t i = 0; i < a->bucket_count; ++i) {
-        for (const tda_HMapNode *node = a->buckets[i]; node; node = node->next) {
+    for (size_t i = 0; i < a->bucket_count_; ++i) {
+        for (const tda_HMapNode *node = a->buckets_[i]; node; node = node->next) {
             const void *key = node_key(a, node);
-            const tda_HMapNode *found = find_node(b, key, b->hasher(key, b->ctx));
+            const tda_HMapNode *found = find_node(b, key, b->hasher_(key, b->ctx_));
             if (!found) {
                 return false;
             }
 
             const void *lhs = node_val(a, node);
             const void *rhs = node_val(b, found);
-            const bool same = val_eq ? val_eq(lhs, rhs, ctx) : memcmp(lhs, rhs, a->val.size) == 0;
+            const bool same = val_eq ? val_eq(lhs, rhs, ctx) : memcmp(lhs, rhs, a->val_.size) == 0;
             if (!same) {
                 return false;
             }

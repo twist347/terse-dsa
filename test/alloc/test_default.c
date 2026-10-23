@@ -1,5 +1,7 @@
 #include "tda/alloc/default.h"
 
+#include "support/layout.h"
+
 #include <unity.h>
 
 #include <stddef.h>
@@ -14,10 +16,6 @@ void tearDown() {
 
 static tda_Layout bytes(size_t size) {
     return (tda_Layout){.size = size, .align = alignof(max_align_t)};
-}
-
-static tda_Layout aligned(size_t size, size_t align) {
-    return (tda_Layout){.size = size, .align = align};
 }
 
 static void fill_ramp(unsigned char *p, size_t n) {
@@ -80,11 +78,11 @@ static void test_alloc_gives_the_alignment_asked_for() {
 
     for (size_t align = 1; align <= 4096; align *= 2) {
         for (size_t size = 1; size <= 2 * align; size *= 2) {
-            void *p = tda_alloc(al, aligned(size, align));
+            void *p = tda_alloc(al, tda_test_layout(size, align));
             TEST_ASSERT_NOT_NULL(p);
             TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % align);
             memset(p, 0xEE, size);
-            tda_dealloc(al, p, aligned(size, align));
+            tda_dealloc(al, p, tda_test_layout(size, align));
         }
     }
 }
@@ -127,7 +125,7 @@ static void test_alloc_zeroed_zeroes_the_block() {
 static void test_alloc_zeroed_zeroes_an_over_aligned_block() {
     tda_Al *al = tda_al_default();
 
-    const unsigned char *p = tda_alloc_zeroed(al, aligned(300, 256));
+    const unsigned char *p = tda_alloc_zeroed(al, tda_test_layout(300, 256));
     TEST_ASSERT_NOT_NULL(p);
     TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % 256);
 
@@ -135,7 +133,7 @@ static void test_alloc_zeroed_zeroes_an_over_aligned_block() {
         TEST_ASSERT_EQUAL_UINT8(0, p[i]);
     }
 
-    tda_dealloc(al, (void *) p, aligned(300, 256));
+    tda_dealloc(al, (void *) p, tda_test_layout(300, 256));
 }
 
 static void test_alloc_zeroed_zero_is_null() {
@@ -177,17 +175,17 @@ static void test_realloc_shrinks_and_keeps_the_prefix() {
 static void test_realloc_keeps_an_over_aligned_block_aligned() {
     tda_Al *al = tda_al_default();
 
-    unsigned char *p = tda_alloc(al, aligned(256, 256));
+    unsigned char *p = tda_alloc(al, tda_test_layout(256, 256));
     TEST_ASSERT_NOT_NULL(p);
     fill_ramp(p, 256);
-    TEST_ASSERT_NULL(tda_remap(al, p, aligned(256, 256), 4096));
+    TEST_ASSERT_NULL(tda_remap(al, p, tda_test_layout(256, 256), 4096));
 
-    unsigned char *q = tda_realloc(al, p, aligned(256, 256), 4096);
+    unsigned char *q = tda_realloc(al, p, tda_test_layout(256, 256), 4096);
     TEST_ASSERT_NOT_NULL(q);
     TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) q % 256);
     assert_ramp(q, 256);
 
-    tda_dealloc(al, q, aligned(4096, 256));
+    tda_dealloc(al, q, tda_test_layout(4096, 256));
 }
 
 // C23 owes malloc(n) the alignment of types of size n or less, so a block shorter than
@@ -198,27 +196,27 @@ static void test_a_block_shorter_than_its_alignment_is_aligned_anyway() {
 
     // the small ones too: some aligned_alloc refuse an alignment under a pointer's
     for (size_t align = 1; align <= max; align *= 2) {
-        unsigned char *p = tda_alloc(al, aligned(1, align));
+        unsigned char *p = tda_alloc(al, tda_test_layout(1, align));
         TEST_ASSERT_NOT_NULL(p);
         TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % align);
         p[0] = 7;
 
-        unsigned char *q = tda_realloc(al, p, aligned(1, align), 3 * max);
+        unsigned char *q = tda_realloc(al, p, tda_test_layout(1, align), 3 * max);
         TEST_ASSERT_NOT_NULL(q);
         TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) q % align);
         TEST_ASSERT_EQUAL_UINT8(7, q[0]);
 
-        unsigned char *r = tda_realloc(al, q, aligned(3 * max, align), 1);
+        unsigned char *r = tda_realloc(al, q, tda_test_layout(3 * max, align), 1);
         TEST_ASSERT_NOT_NULL(r);
         TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) r % align);
         TEST_ASSERT_EQUAL_UINT8(7, r[0]);
-        tda_dealloc(al, r, aligned(1, align));
+        tda_dealloc(al, r, tda_test_layout(1, align));
 
-        unsigned char *z = tda_alloc_zeroed(al, aligned(1, align));
+        unsigned char *z = tda_alloc_zeroed(al, tda_test_layout(1, align));
         TEST_ASSERT_NOT_NULL(z);
         TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) z % align);
         TEST_ASSERT_EQUAL_UINT8(0, z[0]);
-        tda_dealloc(al, z, aligned(1, align));
+        tda_dealloc(al, z, tda_test_layout(1, align));
     }
 }
 
@@ -234,11 +232,11 @@ static void test_realloc_to_zero_releases() {
 static void test_realloc_from_null_is_an_alloc() {
     tda_Al *al = tda_al_default();
 
-    void *p = tda_realloc(al, nullptr, aligned(0, 128), 16);
+    void *p = tda_realloc(al, nullptr, tda_test_layout(0, 128), 16);
     TEST_ASSERT_NOT_NULL(p);
     TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % 128);
 
-    tda_dealloc(al, p, aligned(16, 128));
+    tda_dealloc(al, p, tda_test_layout(16, 128));
 }
 
 /* ========== dealloc ========== */

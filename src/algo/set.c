@@ -21,32 +21,32 @@ size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, 
     TDA_EXPECT(dst.len >= a.len + b.len);
 
     size_t i = 0, j = 0;
-    size_t out = 0;
+    size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *l = tda_span_get(a, i);
-        const void *r = tda_span_get(b, j);
-        const int c = cmp(l, r, ctx);
+        const void *lhs = tda_span_get(a, i);
+        const void *rhs = tda_span_get(b, j);
+        const int order = cmp(lhs, rhs, ctx);
 
-        if (c < 0) {
-            out = tda_emit(dst, out, l);
+        if (order < 0) {
+            write = tda_emit(dst, write, lhs);
             ++i;
-        } else if (c > 0) {
-            out = tda_emit(dst, out, r);
+        } else if (order > 0) {
+            write = tda_emit(dst, write, rhs);
             ++j;
         } else {
             // one copy of the pair, taken from 'a'; any leftover run on either side is
             // emitted on later turns, which makes the count max(m, n)
-            out = tda_emit(dst, out, l);
+            write = tda_emit(dst, write, lhs);
             ++i;
             ++j;
         }
     }
 
-    out = tda_emit_rest(dst, out, a, i);
-    out = tda_emit_rest(dst, out, b, j);
+    write = tda_emit_rest(dst, write, a, i);
+    write = tda_emit_rest(dst, write, b, j);
 
-    return out;
+    return write;
 }
 
 size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx) {
@@ -61,27 +61,27 @@ size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cm
     TDA_EXPECT(dst.len >= (a.len < b.len ? a.len : b.len));
 
     size_t i = 0, j = 0;
-    size_t out = 0;
+    size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *l = tda_span_get(a, i);
-        const void *r = tda_span_get(b, j);
-        const int c = cmp(l, r, ctx);
+        const void *lhs = tda_span_get(a, i);
+        const void *rhs = tda_span_get(b, j);
+        const int order = cmp(lhs, rhs, ctx);
 
-        if (c < 0) {
+        if (order < 0) {
             ++i;
-        } else if (c > 0) {
+        } else if (order > 0) {
             ++j;
         } else {
             // the copy comes from 'a': equal by 'cmp' does not mean identical, so the
             // side an elem comes from is observable and must be fixed
-            out = tda_emit(dst, out, l);
+            write = tda_emit(dst, write, lhs);
             ++i;
             ++j;
         }
     }
 
-    return out;
+    return write;
 }
 
 size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx) {
@@ -96,17 +96,17 @@ size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp 
     TDA_EXPECT(dst.len >= a.len);
 
     size_t i = 0, j = 0;
-    size_t out = 0;
+    size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *l = tda_span_get(a, i);
-        const void *r = tda_span_get(b, j);
-        const int c = cmp(l, r, ctx);
+        const void *lhs = tda_span_get(a, i);
+        const void *rhs = tda_span_get(b, j);
+        const int order = cmp(lhs, rhs, ctx);
 
-        if (c < 0) {
-            out = tda_emit(dst, out, l);
+        if (order < 0) {
+            write = tda_emit(dst, write, lhs);
             ++i;
-        } else if (c > 0) {
+        } else if (order > 0) {
             ++j;
         } else {
             // one copy in 'a' cancels one copy in 'b'
@@ -116,7 +116,7 @@ size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp 
     }
 
     // what is left in 'b' has nothing in 'a' to cancel
-    return tda_emit_rest(dst, out, a, i);
+    return tda_emit_rest(dst, write, a, i);
 }
 
 size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx) {
@@ -131,18 +131,18 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
     TDA_EXPECT(dst.len >= a.len + b.len);
 
     size_t i = 0, j = 0;
-    size_t out = 0;
+    size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *l = tda_span_get(a, i);
-        const void *r = tda_span_get(b, j);
-        const int c = cmp(l, r, ctx);
+        const void *lhs = tda_span_get(a, i);
+        const void *rhs = tda_span_get(b, j);
+        const int order = cmp(lhs, rhs, ctx);
 
-        if (c < 0) {
-            out = tda_emit(dst, out, l);
+        if (order < 0) {
+            write = tda_emit(dst, write, lhs);
             ++i;
-        } else if (c > 0) {
-            out = tda_emit(dst, out, r);
+        } else if (order > 0) {
+            write = tda_emit(dst, write, rhs);
             ++j;
         } else {
             // the pair cancels; the excess of a longer run is emitted on later turns,
@@ -152,10 +152,10 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
         }
     }
 
-    out = tda_emit_rest(dst, out, a, i);
-    out = tda_emit_rest(dst, out, b, j);
+    write = tda_emit_rest(dst, write, a, i);
+    write = tda_emit_rest(dst, write, b, j);
 
-    return out;
+    return write;
 }
 
 /* ========== predicates ========== */

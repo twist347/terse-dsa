@@ -16,23 +16,21 @@ typedef struct {
 
 int main() {
     /// [type]
-    const tda_Layout l = TDA_LAYOUT_OF(Vec8);
-    printf("%zu bytes at %zu\n", l.size, l.align); // 32 bytes at 32
+    const tda_Layout layout = TDA_LAYOUT_OF(Vec8);
+    printf("%zu bytes at %zu\n", layout.size, layout.align); // 32 bytes at 32
 
     // the typed macros pass that layout, so every elem lands on its boundary, through
     // every growth, on any allocator
-    tda_Vec *v = nullptr;
-    if (TDA_STATUS_IS_ERR(TDA_VEC_NEW(Vec8, tda_al_default(), &v))) {
-        return 1;
-    }
+    tda_Vec v = {};
+    TDA_VEC_INIT(Vec8, tda_al_default(), &v);
     for (int i = 0; i < 100; ++i) {
-        if (TDA_STATUS_IS_ERR(tda_vec_push(v, &(Vec8){{(float) i}}))) {
-            tda_vec_drop(v);
+        if (TDA_STATUS_IS_ERR(tda_vec_push(&v, &(Vec8){{(float) i}}))) {
+            tda_vec_deinit(&v);
             return 1;
         }
     }
-    printf("%s\n", (uintptr_t) tda_vec_data(v) % 32 == 0 ? "aligned" : "not aligned"); // aligned
-    tda_vec_drop(v);
+    printf("%s\n", (uintptr_t) tda_vec_data(&v) % 32 == 0 ? "aligned" : "not aligned"); // aligned
+    tda_vec_deinit(&v);
     /// [type]
 
     /// [build]

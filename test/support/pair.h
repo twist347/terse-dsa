@@ -7,7 +7,7 @@
 
 /* ========== type ========== */
 
-/// an elem wider than a word, to keep elem_size honest. It has no tda_test_ prefix
+/// an elem wider than a word, to keep the elem layout honest. It has no tda_test_ prefix
 /// because tests write it as a type argument (TDA_SPAN_FROM_DATA_MUT(Pair, buf, 2)),
 /// where a prefix is noise.
 typedef struct {

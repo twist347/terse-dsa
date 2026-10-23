@@ -15,6 +15,10 @@
 
 /* ========== internals ========== */
 
+/// malloc's own alignment, alignof(max_align_t): what the plain libc calls are owed for a
+/// block at least that long
+static constexpr size_t PLAIN_ALIGN = alignof(max_align_t);
+
 // libc came before alignment did: malloc, calloc and realloc know only their own, and
 // C11 added aligned_alloc alone. So each hook takes the plain call up to that alignment
 // and aligned_alloc past it, which also keeps clear of the small alignments some
@@ -60,7 +64,7 @@ tda_Al *tda_al_default() {
 /* ========== internals ========== */
 
 static bool is_plain(size_t align) {
-    return align <= TDA_DEFAULT_ALIGNMENT;
+    return align <= PLAIN_ALIGN;
 }
 
 static size_t plain_size(size_t size, size_t align) {

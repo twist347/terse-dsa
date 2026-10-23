@@ -53,9 +53,9 @@ typedef struct {
 
 /// A writable view over contiguous elems: tda_Span with a 'data' to write through.
 typedef struct {
-    void *data;       ///< the first elem; null only while 'len' is 0
-    size_t len;       ///< how many elems the view spans
-    tda_Layout elem;  ///< the layout of one elem, a type's: TDA_LAYOUT_OF gives it
+    void *data;      ///< the first elem; null only while 'len' is 0
+    size_t len;      ///< how many elems the view spans
+    tda_Layout elem; ///< the layout of one elem, a type's: TDA_LAYOUT_OF gives it
 } tda_SpanMut;
 
 /// @name invariant
@@ -64,9 +64,9 @@ typedef struct {
 /// asserts what every view holds: 'data' set unless empty and on the elem's alignment,
 /// 'elem' a type's layout
 /// @param s the view, of either type
-#define TDA_SPAN_ASSERT(s)                                                  \
-    (assert((s).data || (s).len == 0),                                      \
-     assert(tda_layout_is_type((s).elem)),                                  \
+#define TDA_SPAN_ASSERT(s)                 \
+    (assert((s).data || (s).len == 0),     \
+     assert(tda_layout_is_type((s).elem)), \
      assert(((uintptr_t) (s).data & ((s).elem.align - 1)) == 0))
 
 /// @}
@@ -175,6 +175,38 @@ static inline tda_SpanMut tda_span_sub_mut(tda_SpanMut self, size_t idx, size_t 
     };
 }
 
+/// cuts 'self' in two at 'idx': the elems before it and the elems from it on
+/// @param self the view to cut
+/// @param idx where; asserts idx <= self.len, and 0 or len leaves one side empty
+/// @param[out] out_head the first idx elems
+/// @param[out] out_tail the other self.len - idx
+/// @bigo{1}; nothing is copied
+static inline void tda_span_split_at(tda_Span self, size_t idx, tda_Span *out_head, tda_Span *out_tail) {
+    TDA_SPAN_ASSERT(self);
+    TDA_EXPECT(idx <= self.len);
+    assert(out_head);
+    assert(out_tail);
+
+    *out_head = tda_span_sub(self, 0, idx);
+    *out_tail = tda_span_sub(self, idx, self.len - idx);
+}
+
+/// tda_span_split_at, writable; the two halves never overlap
+/// @param self the view to cut
+/// @param idx where; asserts idx <= self.len, and 0 or len leaves one side empty
+/// @param[out] out_head the first idx elems
+/// @param[out] out_tail the other self.len - idx
+/// @bigo{1}; nothing is copied
+static inline void tda_span_split_at_mut(tda_SpanMut self, size_t idx, tda_SpanMut *out_head, tda_SpanMut *out_tail) {
+    TDA_SPAN_ASSERT(self);
+    TDA_EXPECT(idx <= self.len);
+    assert(out_head);
+    assert(out_tail);
+
+    *out_head = tda_span_sub_mut(self, 0, idx);
+    *out_tail = tda_span_sub_mut(self, idx, self.len - idx);
+}
+
 /// @}
 
 /// @name info
@@ -230,7 +262,8 @@ static inline void *tda_span_get_mut(tda_SpanMut self, size_t idx) {
 static inline void tda_span_set(tda_SpanMut self, size_t idx, const void *val) {
     assert(val);
 
-    memcpy(tda_span_get_mut(self, idx), val, self.elem.size);
+    // memmove: 'val' may be the very elem being set
+    memmove(tda_span_get_mut(self, idx), val, self.elem.size);
 }
 
 /// @}
@@ -384,19 +417,19 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 
 /// tda_span_get as a const T *
 /// @param T the elem type
-/// @param s the view
+/// @param self the view
 /// @param idx the index
 /// @bigo{1}
-#define TDA_SPAN_GET_AS(T, s, idx) \
-    ((const T *) tda_span_get(tda_span_typed_((s), TDA_LAYOUT_OF(T)), (idx)))
+#define TDA_SPAN_GET_AS(T, self, idx) \
+    ((const T *) tda_span_get(tda_span_typed_((self), TDA_LAYOUT_OF(T)), (idx)))
 
 /// tda_span_get_mut as a T *
 /// @param T the elem type
-/// @param s the view
+/// @param self the view
 /// @param idx the index
 /// @bigo{1}
-#define TDA_SPAN_GET_MUT_AS(T, s, idx) \
-    ((T *) tda_span_get_mut(tda_span_mut_typed_((s), TDA_LAYOUT_OF(T)), (idx)))
+#define TDA_SPAN_GET_MUT_AS(T, self, idx) \
+    ((T *) tda_span_get_mut(tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)), (idx)))
 
 /// @cond
 // the body of both span walks; the hidden names come in already unique. An empty view
@@ -412,40 +445,40 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 /// walks the span front to back, binding 'elem' to each elem in turn
 /// @param T the elem type; a span carries layouts, not types
 /// @param elem the name of the loop variable, a const T *
-/// @param s the view, evaluated once, so tda_vec_to_span(v) and the like are fine here
+/// @param self the view, evaluated once, so tda_vec_to_span(v) and the like are fine here
 /// @bigo{n} for the whole walk
-#define TDA_SPAN_FOR_EACH_AS(T, elem, s)        \
-    TDA_SPAN_WALK_(                             \
-        tda_Span,                               \
-        const T,                                \
-        elem,                                   \
-        tda_span_typed_((s), TDA_LAYOUT_OF(T)), \
-        TDA_LINE_NAME_(span_),                  \
-        TDA_LINE_NAME_(once_),                  \
-        TDA_LINE_NAME_(end_)                    \
+#define TDA_SPAN_FOR_EACH_AS(T, elem, self)        \
+    TDA_SPAN_WALK_(                                \
+        tda_Span,                                  \
+        const T,                                   \
+        elem,                                      \
+        tda_span_typed_((self), TDA_LAYOUT_OF(T)), \
+        TDA_LINE_NAME_(span_),                     \
+        TDA_LINE_NAME_(once_),                     \
+        TDA_LINE_NAME_(end_)                       \
     )
 
 /// the same walk over elems that may be written through
 /// @copydetails TDA_SPAN_FOR_EACH_AS
-#define TDA_SPAN_FOR_EACH_MUT_AS(T, elem, s)        \
-    TDA_SPAN_WALK_(                                 \
-        tda_SpanMut,                                \
-        T,                                          \
-        elem,                                       \
-        tda_span_mut_typed_((s), TDA_LAYOUT_OF(T)), \
-        TDA_LINE_NAME_(span_),                      \
-        TDA_LINE_NAME_(once_),                      \
-        TDA_LINE_NAME_(end_)                        \
+#define TDA_SPAN_FOR_EACH_MUT_AS(T, elem, self)        \
+    TDA_SPAN_WALK_(                                    \
+        tda_SpanMut,                                   \
+        T,                                             \
+        elem,                                          \
+        tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)), \
+        TDA_LINE_NAME_(span_),                         \
+        TDA_LINE_NAME_(once_),                         \
+        TDA_LINE_NAME_(end_)                           \
     )
 
 /// tda_span_set from a value rather than its address
 /// @param T the elem type; scalars only, since (T){ val } takes nothing else
-/// @param s the view
+/// @param self the view
 /// @param idx the index
 /// @param val the value to copy in
 /// @bigo{1}
-#define TDA_SPAN_SET(T, s, idx, val) \
-    tda_span_set(tda_span_mut_typed_((s), TDA_LAYOUT_OF(T)), (idx), &(T){ (val) })
+#define TDA_SPAN_SET(T, self, idx, val) \
+    tda_span_set(tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)), (idx), &(T){ (val) })
 
 /// @}
 
