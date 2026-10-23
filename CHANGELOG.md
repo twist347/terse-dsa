@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 — unreleased
+## 2.0.0 — 2026-10-23
 
 Four changes break the API, each for a fault that 1.x could not fix without breaking
 it: every container and allocator was a handle the library allocated, so even an empty

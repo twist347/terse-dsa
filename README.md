@@ -179,7 +179,7 @@ With `FetchContent`:
 include(FetchContent)
 FetchContent_Declare(terse-dsa
     GIT_REPOSITORY https://github.com/twist347/terse-dsa.git
-    GIT_TAG v1.6.0
+    GIT_TAG v2.0.0
 )
 FetchContent_MakeAvailable(terse-dsa)
 
@@ -191,7 +191,7 @@ As a submodule:
 ```sh
 git submodule add https://github.com/twist347/terse-dsa.git \
     thirdparty/terse-dsa
-git -C thirdparty/terse-dsa checkout v1.6.0
+git -C thirdparty/terse-dsa checkout v2.0.0
 ```
 
 ```cmake
