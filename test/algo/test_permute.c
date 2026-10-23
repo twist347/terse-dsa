@@ -247,7 +247,7 @@ static void test_next_permutation_walks_the_whole_order() {
     for (size_t i = 0; i < 6; ++i) {
         TEST_ASSERT_EQUAL_INT32_ARRAY(ALL_3[i], buf, 3);
 
-        const bool more = tda_span_next_permutation(s, tda_cmp_i32);
+        const bool more = tda_span_next_permutation(s, tda_cmp_i32, nullptr);
         if (i < 5) {
             TEST_ASSERT_TRUE(more);
         } else {
@@ -265,7 +265,7 @@ static void test_next_permutation_skips_duplicate_arrangements() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
 
     size_t seen = 1;
-    while (tda_span_next_permutation(s, tda_cmp_i32)) {
+    while (tda_span_next_permutation(s, tda_cmp_i32, nullptr)) {
         ++seen;
     }
 
@@ -275,8 +275,8 @@ static void test_next_permutation_skips_duplicate_arrangements() {
 static void test_next_permutation_empty_and_single_report_false() {
     int32_t buf[1] = {42};
 
-    TEST_ASSERT_FALSE(tda_span_next_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32));
-    TEST_ASSERT_FALSE(tda_span_next_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32));
+    TEST_ASSERT_FALSE(tda_span_next_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_span_next_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, nullptr));
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
 }
 
@@ -285,7 +285,7 @@ static void test_next_permutation_follows_the_comparator() {
     int32_t buf[3] = {3, 2, 1};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
 
-    TEST_ASSERT_TRUE(tda_span_next_permutation(s, tda_cmp_desc_i32));
+    TEST_ASSERT_TRUE(tda_span_next_permutation(s, tda_cmp_desc_i32, nullptr));
 
     constexpr int32_t want[3] = {3, 1, 2};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 3);
@@ -295,7 +295,7 @@ static void test_next_permutation_stays_within_the_subspan() {
     int32_t buf[5] = {9, 1, 2, 3, 9};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
-    TEST_ASSERT_TRUE(tda_span_next_permutation(tda_span_sub_mut(s, 1, 3), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_next_permutation(tda_span_sub_mut(s, 1, 3), tda_cmp_i32, nullptr));
 
     constexpr int32_t want[5] = {9, 1, 3, 2, 9};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);
@@ -304,7 +304,7 @@ static void test_next_permutation_stays_within_the_subspan() {
 /* ========== prev_permutation ========== */
 
 // what a comparator carried over from a C++ less-than gives: never positive
-static int cmp_less_only(const void *lhs, const void *rhs) {
+static int cmp_less_only(const void *lhs, const void *rhs, void *) {
     return *(const int32_t *) lhs < *(const int32_t *) rhs ? -1 : 0;
 }
 
@@ -313,12 +313,12 @@ static void test_permutations_count_right_with_a_less_only_comparator() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
 
     for (size_t i = 0; i < 5; ++i) {
-        TEST_ASSERT_TRUE(tda_span_next_permutation(s, cmp_less_only));
+        TEST_ASSERT_TRUE(tda_span_next_permutation(s, cmp_less_only, nullptr));
         TEST_ASSERT_EQUAL_INT32_ARRAY(ALL_3[i + 1], buf, 3);
     }
 
     for (size_t i = 5; i > 0; --i) {
-        TEST_ASSERT_TRUE(tda_span_prev_permutation(s, cmp_less_only));
+        TEST_ASSERT_TRUE(tda_span_prev_permutation(s, cmp_less_only, nullptr));
         TEST_ASSERT_EQUAL_INT32_ARRAY(ALL_3[i - 1], buf, 3);
     }
 }
@@ -330,7 +330,7 @@ static void test_prev_permutation_walks_the_order_backwards() {
     for (size_t i = 6; i > 0; --i) {
         TEST_ASSERT_EQUAL_INT32_ARRAY(ALL_3[i - 1], buf, 3);
 
-        const bool more = tda_span_prev_permutation(s, tda_cmp_i32);
+        const bool more = tda_span_prev_permutation(s, tda_cmp_i32, nullptr);
         if (i > 1) {
             TEST_ASSERT_TRUE(more);
         } else {
@@ -349,8 +349,8 @@ static void test_prev_permutation_undoes_next_permutation() {
         memcpy(buf, ALL_3[i], sizeof(buf));
         const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
 
-        TEST_ASSERT_TRUE(tda_span_next_permutation(s, tda_cmp_i32));
-        TEST_ASSERT_TRUE(tda_span_prev_permutation(s, tda_cmp_i32));
+        TEST_ASSERT_TRUE(tda_span_next_permutation(s, tda_cmp_i32, nullptr));
+        TEST_ASSERT_TRUE(tda_span_prev_permutation(s, tda_cmp_i32, nullptr));
 
         TEST_ASSERT_EQUAL_INT32_ARRAY(ALL_3[i], buf, 3);
     }
@@ -359,15 +359,15 @@ static void test_prev_permutation_undoes_next_permutation() {
 static void test_prev_permutation_empty_and_single_report_false() {
     int32_t buf[1] = {42};
 
-    TEST_ASSERT_FALSE(tda_span_prev_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32));
-    TEST_ASSERT_FALSE(tda_span_prev_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32));
+    TEST_ASSERT_FALSE(tda_span_prev_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_span_prev_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, nullptr));
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
 }
 
 static void test_prev_permutation_moves_whole_elems() {
     Pair buf[2] = {{3, 30}, {1, 10}};
 
-    TEST_ASSERT_TRUE(tda_span_prev_permutation(TDA_SPAN_FROM_DATA_MUT(Pair, buf, 2), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_prev_permutation(TDA_SPAN_FROM_DATA_MUT(Pair, buf, 2), tda_cmp_i32, nullptr));
 
     // tda_cmp_i32 reads the first int32 of each Pair, but the whole elem must travel
     TEST_ASSERT_EQUAL_INT64(1, buf[0].a);
@@ -668,8 +668,8 @@ static void test_partition_stable_releases_its_scratch() {
     TEST_ASSERT_EQUAL_size_t(1, probe.alloc_calls);
     TEST_ASSERT_EQUAL_size_t(1, probe.dealloc_calls);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
-    TEST_ASSERT_EQUAL_size_t(4 * sizeof(int32_t), probe.last_alloc_size);
-    TEST_ASSERT_EQUAL_size_t(probe.last_alloc_size, probe.last_dealloc_size);
+    TEST_ASSERT_EQUAL_size_t(4 * sizeof(int32_t), probe.last_alloc.size);
+    TEST_ASSERT_EQUAL_size_t(probe.last_alloc.size, probe.last_dealloc.size);
 }
 
 // no scratch, no split: the span keeps the order it had and the boundary is not written
@@ -753,7 +753,7 @@ static void test_shuffle_keeps_every_elem() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, data, 10);
 
     tda_span_shuffle(s, &rng);
-    tda_span_sort(s, tda_cmp_i32);
+    tda_span_sort(s, tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32_ARRAY(sorted, data, 10);
 }
@@ -833,7 +833,7 @@ static void test_shuffle_prefix_keeps_every_elem() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, data, 8);
 
     tda_span_shuffle_prefix(s, 3, &rng);
-    tda_span_sort(s, tda_cmp_i32);
+    tda_span_sort(s, tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32_ARRAY(sorted, data, 8);
 }

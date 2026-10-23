@@ -29,6 +29,7 @@ static tda_Status two_arrs(tda_Al *al, tda_Arr **out) {
 
 drop_a:
     tda_arr_drop(a);
+
     return st;
 }
 

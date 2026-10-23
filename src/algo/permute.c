@@ -14,10 +14,10 @@
 /// asked, with the operands swapped for a descending walk, so a comparator that never
 /// answers "greater" (a < b ? -1 : 0) still works
 [[nodiscard]]
-static bool goes_before(tda_Span v, tda_Cmp cmp, bool asc, size_t i, size_t j);
+static bool goes_before(tda_Span v, tda_Cmp cmp, void *ctx, bool asc, size_t i, size_t j);
 
 [[nodiscard]]
-static bool permute_step(tda_SpanMut s, tda_Cmp cmp, bool asc);
+static bool permute_step(tda_SpanMut s, tda_Cmp cmp, void *ctx, bool asc);
 
 /* ========== permute ========== */
 
@@ -57,7 +57,7 @@ void tda_span_rotate(tda_SpanMut s, size_t mid) {
 void tda_span_swap_ranges(tda_SpanMut a, tda_SpanMut b) {
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
-    TDA_EXPECT(a.elem_size == b.elem_size);
+    TDA_EXPECT(tda_layout_eq(a.elem, b.elem));
     TDA_EXPECT(a.len == b.len);
     assert(tda_span_apart_or_same(tda_span_mut_to_span(a), tda_span_mut_to_span(b)));
 
@@ -66,22 +66,22 @@ void tda_span_swap_ranges(tda_SpanMut a, tda_SpanMut b) {
     }
 
     for (size_t i = 0; i < a.len; ++i) {
-        tda_bytes_swap(tda_span_get_mut(a, i), tda_span_get_mut(b, i), a.elem_size);
+        tda_bytes_swap(tda_span_get_mut(a, i), tda_span_get_mut(b, i), a.elem.size);
     }
 }
 
-bool tda_span_next_permutation(tda_SpanMut s, tda_Cmp cmp) {
+bool tda_span_next_permutation(tda_SpanMut s, tda_Cmp cmp, void *ctx) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
 
-    return permute_step(s, cmp, true);
+    return permute_step(s, cmp, ctx, true);
 }
 
-bool tda_span_prev_permutation(tda_SpanMut s, tda_Cmp cmp) {
+bool tda_span_prev_permutation(tda_SpanMut s, tda_Cmp cmp, void *ctx) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
 
-    return permute_step(s, cmp, false);
+    return permute_step(s, cmp, ctx, false);
 }
 
 size_t tda_span_partition(tda_SpanMut s, tda_Pred pred, void *ctx) {
@@ -99,6 +99,7 @@ size_t tda_span_partition(tda_SpanMut s, tda_Pred pred, void *ctx) {
             ++boundary;
         }
     }
+
     return boundary;
 }
 
@@ -121,18 +122,18 @@ tda_Status tda_span_partition_stable(
         return TDA_STATUS_OK;
     }
 
-    const size_t bytes = s.len * s.elem_size;
+    const tda_Layout buf_layout = tda_elems_layout(s.elem, s.len);
 
     // room for the whole span, though only rejected elems go there: their count is
     // unknown until pred has seen every elem, and calling pred twice to count could
     // give different answers
-    void *buf = tda_alloc(al, bytes);
+    void *buf = tda_alloc(al, buf_layout);
     if (!buf) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
     const tda_Span view = tda_span_mut_to_span(s);
-    const tda_SpanMut rejected = tda_span_from_data_mut(buf, s.len, s.elem_size);
+    const tda_SpanMut rejected = tda_span_from_data_mut(buf, s.len, s.elem);
 
     size_t kept = 0, dropped = 0;
 
@@ -158,7 +159,7 @@ tda_Status tda_span_partition_stable(
         tda_span_sub(tda_span_mut_to_span(rejected), 0, dropped)
     );
 
-    tda_dealloc(al, buf, bytes);
+    tda_dealloc(al, buf, buf_layout);
 
     *out_boundary = kept;
     return TDA_STATUS_OK;
@@ -205,14 +206,14 @@ void tda_span_shuffle_prefix(tda_SpanMut s, size_t count, tda_Rng *rng) {
 
 /* ========== internals ========== */
 
-static bool goes_before(tda_Span v, tda_Cmp cmp, bool asc, size_t i, size_t j) {
+static bool goes_before(tda_Span v, tda_Cmp cmp, void *ctx, bool asc, size_t i, size_t j) {
     const void *lhs = tda_span_get(v, i);
     const void *rhs = tda_span_get(v, j);
 
-    return asc ? cmp(lhs, rhs) < 0 : cmp(rhs, lhs) < 0;
+    return asc ? cmp(lhs, rhs, ctx) < 0 : cmp(rhs, lhs, ctx) < 0;
 }
 
-static bool permute_step(tda_SpanMut s, tda_Cmp cmp, bool asc) {
+static bool permute_step(tda_SpanMut s, tda_Cmp cmp, void *ctx, bool asc) {
     if (s.len < 2) {
         return false;
     }
@@ -220,7 +221,7 @@ static bool permute_step(tda_SpanMut s, tda_Cmp cmp, bool asc) {
     const tda_Span v = tda_span_mut_to_span(s);
 
     size_t pivot = s.len - 1;
-    while (pivot > 0 && !goes_before(v, cmp, asc, pivot - 1, pivot)) {
+    while (pivot > 0 && !goes_before(v, cmp, ctx, asc, pivot - 1, pivot)) {
         --pivot;
     }
 
@@ -233,12 +234,13 @@ static bool permute_step(tda_SpanMut s, tda_Cmp cmp, bool asc) {
     // this asks the question that stopped the loop above, so pivot + 1 answers it at the
     // latest; the bound guards against a comparator that answers differently twice
     size_t mate = s.len - 1;
-    while (mate > pivot + 1 && !goes_before(v, cmp, asc, pivot, mate)) {
+    while (mate > pivot + 1 && !goes_before(v, cmp, ctx, asc, pivot, mate)) {
         --mate;
     }
 
     tda_span_swap_elems(s, pivot, mate);
 
     tda_span_reverse(tda_span_sub_mut(s, pivot + 1, s.len - pivot - 1));
+
     return true;
 }

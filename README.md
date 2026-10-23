@@ -29,10 +29,11 @@ int main() {
         goto out; // the arena is held by now, so no bare return
     }
 
-    tda_span_sort(tda_vec_to_span_mut(vec), tda_cmp_i32);
+    // every comparator takes a ctx beside it; the ready-made ones need none
+    tda_span_sort(tda_vec_to_span_mut(vec), tda_cmp_i32, nullptr);
 
     size_t idx;
-    if (tda_span_binary_search(tda_vec_to_span(vec), &(int32_t){4}, tda_cmp_i32, &idx)) {
+    if (tda_span_binary_search(tda_vec_to_span(vec), &(int32_t){4}, tda_cmp_i32, nullptr, &idx)) {
         printf("4 is at %zu\n", idx); // 4 is at 3
     }
     rc = 0;
@@ -51,8 +52,10 @@ Two rules shape the whole API:
 - **Memory is explicit and swappable.** Nothing allocates on its own — every container is
   handed a `tda_Al *` and uses only that. Swapping in an arena, a slab or a logging
   allocator is a one-line change at the call site. A pool hands out blocks of one size,
-  so of the containers only a list runs on it; a slab keeps a pool per size class, and
-  any container runs on it.
+  so of the containers only a list runs on it, with blocks of `tda_list_block_layout`; a
+  slab keeps a pool per size class, and any container runs on it. Every request carries
+  a size and an alignment, so an elem aligned past malloc's own lands aligned in any
+  container, on any allocator.
 - **Errors cannot be dropped.** A fallible operation returns `tda_Status` and writes its
   result through a trailing `out`; `[[nodiscard]]` makes ignoring it a warning every
   compiler raises unasked, and a compile error under `-Werror`. Broken preconditions are
@@ -77,6 +80,7 @@ uses stays the better habit.
 |---|---|
 | `status.h` | `tda_Status`, what every fallible operation returns |
 | `span.h` | `tda_Span` / `tda_SpanMut`, a non-owning view over contiguous elems |
+| `layout.h` | `tda_Layout` — a block's size and alignment as one value, and `TDA_LAYOUT_OF(T)` |
 | `cmp.h` | `tda_Cmp` and `tda_Eq`, plus ready-made ones for the built-in types |
 | `hash.h` | `tda_Hasher`, `tda_Hash`, hashers for the built-in types and `tda_hash_combine` |
 | `rng.h` | `tda_Rng` — a seeded generator, and uniform ints, floats and bools drawn from one |
@@ -90,14 +94,13 @@ uses stays the better habit.
 
 | | |
 |---|---|
-| `alloc.h` | the `tda_Al` interface and the `tda_alloc` / `tda_calloc` / `tda_realloc` / `tda_dealloc` wrappers |
-| `default.h` | malloc and friends |
+| `alloc.h` | the `tda_Al` interface, Zig's four hooks and Rust's `alloc_zeroed`, and the `tda_alloc` / `tda_alloc_zeroed` / `tda_resize` / `tda_realloc` / `tda_dealloc` wrappers |
+| `default.h` | malloc and friends, and `aligned_alloc` past malloc's own alignment |
 | `arena.h` | bump allocation, freed all at once or back to a mark; over a parent or a buffer of your own |
-| `pool.h` | fixed-size blocks off a free list; over a parent or a buffer of your own |
+| `pool.h` | blocks of one layout off a free list; over a parent or a buffer of your own |
 | `slab.h` | small blocks from pools by size class, large ones from the parent; the one to put under a container |
-| `aligned.h` | wraps another allocator and over-aligns every block it hands out |
 | `log.h` | wraps another allocator and writes down what it is asked |
-| `debug.h` | wraps another allocator and stops on misuse: wrong sizes, double frees, writes past the end or after a free; reports leaks and fails on demand |
+| `debug.h` | wraps another allocator and stops on misuse: wrong sizes or alignments, double frees, writes past the end or after a free; reports leaks and fails on demand |
 
 **`algo`** — operations over spans, customized only through function pointers.
 

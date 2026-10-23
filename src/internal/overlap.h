@@ -21,10 +21,10 @@ static inline bool tda_span_overlap(tda_Span a, tda_Span b) {
     const uintptr_t pa = (uintptr_t) a.data;
     const uintptr_t pb = (uintptr_t) b.data;
 
-    return pa < pb + b.len * b.elem_size && pb < pa + a.len * a.elem_size;
+    return pa < pb + b.len * b.elem.size && pb < pa + a.len * a.elem.size;
 }
 
-/// whether two views of one len and elem_size are either apart or the very same elems,
+/// whether two views of one len and elem layout are either apart or the very same elems,
 /// the two cases an elementwise op can take
 [[nodiscard]]
 static inline bool tda_span_apart_or_same(tda_Span a, tda_Span b) {

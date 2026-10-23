@@ -18,8 +18,8 @@
 /// a status out-param is easy to ignore. The alloc wrappers are the exception: they
 /// report failure with a null pointer.
 ///
-/// A broken precondition asserts instead: a null self, an index past the end, an
-/// elem_size of 0. A tda_Status is for what valid code can still hit at runtime, which
+/// A broken precondition asserts instead: a null self, an index past the end, an elem
+/// layout that is no type's. A tda_Status is for what valid code can still hit at runtime, which
 /// is running out of memory; there is no enumerator for a bad argument.
 ///
 /// @par Example

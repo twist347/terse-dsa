@@ -7,6 +7,7 @@
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
 #include "tda/core/hash.h"
+#include "tda/core/layout.h"
 #include "tda/core/print.h"
 #include "tda/core/rng.h"
 #include "tda/core/span.h"
@@ -14,7 +15,6 @@
 #include "tda/core/util.h"
 #include "tda/core/version.h"
 
-#include "tda/alloc/aligned.h"
 #include "tda/alloc/alloc.h"
 #include "tda/alloc/arena.h"
 #include "tda/alloc/debug.h"

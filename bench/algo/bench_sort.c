@@ -11,6 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+// qsort's comparator takes two arguments, the library's three
+static int qsort_cmp_i32(const void *lhs, const void *rhs) {
+    return tda_cmp_i32(lhs, rhs, nullptr);
+}
+
 static constexpr size_t LEN = 100'000;
 static constexpr size_t BYTES = LEN * sizeof(int32_t);
 
@@ -44,22 +49,22 @@ static void fill_reversed(int32_t *a) {
 }
 
 static void sort_tda(int32_t *a) {
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, a, LEN), tda_cmp_i32);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, a, LEN), tda_cmp_i32, nullptr);
 }
 
 static void sort_tda_stable(int32_t *a) {
-    (void) tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, a, LEN), tda_cmp_i32, tda_al_default());
+    (void) tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, a, LEN), tda_cmp_i32, nullptr, tda_al_default());
 }
 
 // guaranteed n log n whatever the shape, the floor quicksort has to beat
 static void sort_heap(int32_t *a) {
     tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, a, LEN);
-    tda_span_make_heap(s, tda_cmp_i32);
-    tda_span_sort_heap(s, tda_cmp_i32);
+    tda_span_make_heap(s, tda_cmp_i32, nullptr);
+    tda_span_sort_heap(s, tda_cmp_i32, nullptr);
 }
 
 static void sort_libc(int32_t *a) {
-    qsort(a, LEN, sizeof(*a), tda_cmp_i32);
+    qsort(a, LEN, sizeof(*a), qsort_cmp_i32);
 }
 
 // only the copy and the sort are timed, and both sorters pay for the copy

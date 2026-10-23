@@ -16,47 +16,69 @@ static void on_abort(int sig) {
     _Exit(0);
 }
 
+static tda_Layout bytes(size_t size) {
+    return (tda_Layout){.size = size, .align = 8};
+}
+
 static void wrong_size(tda_Al *al) {
-    void *p = tda_alloc(al, 32);
-    tda_dealloc(al, p, 24);
+    void *p = tda_alloc(al, bytes(32));
+    tda_dealloc(al, p, bytes(24));
+}
+
+static void wrong_align(tda_Al *al) {
+    void *p = tda_alloc(al, (tda_Layout){.size = 32, .align = 64});
+    tda_dealloc(al, p, bytes(32));
+}
+
+// the old size is what the copy reads, so it is checked before the copy
+static void realloc_wrong_size(tda_Al *al) {
+    void *p = tda_alloc(al, bytes(8));
+    void *q = tda_realloc(al, p, bytes(64), 128);
+    (void) q;
+}
+
+static void realloc_wrong_align(tda_Al *al) {
+    void *p = tda_alloc(al, (tda_Layout){.size = 64, .align = 64});
+    void *q = tda_realloc(al, p, bytes(64), 128);
+    (void) q;
 }
 
 static void double_free(tda_Al *al) {
-    void *p = tda_alloc(al, 32);
-    tda_dealloc(al, p, 32);
-    tda_dealloc(al, p, 32);
+    void *p = tda_alloc(al, bytes(32));
+    tda_dealloc(al, p, bytes(32));
+    tda_dealloc(al, p, bytes(32));
 }
 
 static void foreign_pointer(tda_Al *al) {
     static unsigned char not_ours[32];
-    tda_dealloc(al, not_ours, sizeof(not_ours));
+    tda_dealloc(al, not_ours, bytes(sizeof(not_ours)));
 }
 
 static void write_past_end(tda_Al *al) {
-    unsigned char *p = tda_alloc(al, 32);
+    unsigned char *p = tda_alloc(al, bytes(32));
     p[32] = 0; // the first guard byte, still the parent's memory
-    tda_dealloc(al, p, 32);
+    tda_dealloc(al, p, bytes(32));
 }
 
 static void write_after_free(tda_Al *al) {
-    unsigned char *p = tda_alloc(al, 32);
-    tda_dealloc(al, p, 32);
+    unsigned char *p = tda_alloc(al, bytes(32));
+    tda_dealloc(al, p, bytes(32));
     p[5] = 0; // quarantined, so the parent has not got it back yet
     tda_al_debug_drop(al);
 }
 
 static void stale_realloc(tda_Al *al) {
-    unsigned char *p = tda_alloc(al, 8);
-    unsigned char *q = tda_realloc(al, p, 8, 16);
+    unsigned char *p = tda_alloc(al, bytes(8));
+    unsigned char *q = tda_realloc(al, p, bytes(8), 16);
     p[0] = 1; // the old block, kept across a growth
-    tda_dealloc(al, q, 16);
+    tda_dealloc(al, q, bytes(16));
     tda_al_debug_drop(al);
 }
 
 static void break_at(tda_Al *al) {
     tda_al_debug_break_at(al, 2);
-    void *p = tda_alloc(al, 8);
-    void *q = tda_alloc(al, 8);
+    void *p = tda_alloc(al, bytes(8));
+    void *q = tda_alloc(al, bytes(8));
     (void) p;
     (void) q;
 }
@@ -71,6 +93,9 @@ int main(int argc, char **argv) {
         void (*run)(tda_Al *);
     } cases[] = {
         {"wrong_size", wrong_size},
+        {"wrong_align", wrong_align},
+        {"realloc_wrong_size", realloc_wrong_size},
+        {"realloc_wrong_align", realloc_wrong_align},
         {"double_free", double_free},
         {"foreign_pointer", foreign_pointer},
         {"write_past_end", write_past_end},

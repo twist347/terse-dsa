@@ -26,8 +26,18 @@
  * the small blocks, the large blocks as they are.
  */
 
-static constexpr size_t CHUNK = 4096;    // mirrors CHUNK_BYTES in slab.c
-static constexpr size_t SMALL_MAX = 512; // mirrors SMALL_MAX
+static constexpr size_t CHUNK = 4096;       // mirrors CHUNK_BYTES in slab.c
+static constexpr size_t CHUNK_ALIGN = 512;  // mirrors CHUNK_ALIGN
+static constexpr size_t SMALL_MAX = 512;    // the largest class
+
+// what most tests ask for: malloc's alignment, which every class gives
+static tda_Layout bytes(size_t size) {
+    return (tda_Layout){.size = size, .align = alignof(max_align_t)};
+}
+
+static tda_Layout at(size_t size, size_t align) {
+    return (tda_Layout){.size = size, .align = align};
+}
 
 static tda_TestProbe probe;
 static tda_Al parent;
@@ -71,7 +81,7 @@ static void test_drop_gives_back_every_chunk() {
     tda_Al *al = tda_al_slab_new(&parent);
 
     for (size_t i = 0; i < 500; ++i) {
-        TEST_ASSERT_NOT_NULL(tda_alloc(al, 1 + i % SMALL_MAX));
+        TEST_ASSERT_NOT_NULL(tda_alloc(al, bytes(1 + i % SMALL_MAX)));
     }
     TEST_ASSERT_TRUE(tda_al_slab_stats(al).chunks > 1);
 
@@ -84,46 +94,47 @@ static void test_drop_gives_back_every_chunk() {
 static void test_a_small_block_takes_a_chunk_once() {
     tda_Al *al = tda_al_slab_new(&parent);
 
-    void *a = tda_alloc(al, 20);
+    void *a = tda_alloc(al, bytes(20));
     TEST_ASSERT_NOT_NULL(a);
-    TEST_ASSERT_EQUAL_size_t(CHUNK, probe.last_alloc_size);
+    TEST_ASSERT_EQUAL_size_t(CHUNK, probe.last_alloc.size);
+    TEST_ASSERT_EQUAL_size_t(CHUNK_ALIGN, probe.last_alloc.align);
 
     const size_t calls = probe.alloc_calls;
-    void *b = tda_alloc(al, 20);
+    void *b = tda_alloc(al, bytes(20));
     TEST_ASSERT_EQUAL_size_t(calls, probe.alloc_calls);
 
     // 20 bytes round up to the 32-byte class, carved one after another
     TEST_ASSERT_EQUAL_size_t(32, (size_t) ((unsigned char *) b - (unsigned char *) a));
 
-    tda_dealloc(al, a, 20);
-    tda_dealloc(al, b, 20);
+    tda_dealloc(al, a, bytes(20));
+    tda_dealloc(al, b, bytes(20));
     tda_al_slab_drop(al);
 }
 
 static void test_a_freed_block_is_handed_out_again() {
     tda_Al *al = tda_al_slab_new(&parent);
 
-    void *a = tda_alloc(al, 40);
-    tda_dealloc(al, a, 40);
-    void *b = tda_alloc(al, 48); // the same class
+    void *a = tda_alloc(al, bytes(40));
+    tda_dealloc(al, a, bytes(40));
+    void *b = tda_alloc(al, bytes(48)); // the same class
 
     TEST_ASSERT_EQUAL_PTR(a, b);
     TEST_ASSERT_EQUAL_size_t(0, probe.dealloc_calls);
 
-    tda_dealloc(al, b, 48);
+    tda_dealloc(al, b, bytes(48));
     tda_al_slab_drop(al);
 }
 
 static void test_classes_do_not_share_blocks() {
     tda_Al *al = tda_al_slab_new(&parent);
 
-    void *small = tda_alloc(al, 16);
-    tda_dealloc(al, small, 16);
-    void *other = tda_alloc(al, 100);
+    void *small = tda_alloc(al, bytes(16));
+    tda_dealloc(al, small, bytes(16));
+    void *other = tda_alloc(al, bytes(100));
 
     TEST_ASSERT_NOT_EQUAL(small, other);
 
-    tda_dealloc(al, other, 100);
+    tda_dealloc(al, other, bytes(100));
     tda_al_slab_drop(al);
 }
 
@@ -131,7 +142,7 @@ static void test_every_block_is_aligned() {
     tda_Al *al = tda_al_slab_new(&parent);
 
     for (size_t size = 1; size <= SMALL_MAX; size += 7) {
-        void *p = tda_alloc(al, size);
+        void *p = tda_alloc(al, bytes(size));
         TEST_ASSERT_NOT_NULL(p);
         TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) p % alignof(max_align_t));
         memset(p, 0xAB, size);
@@ -144,11 +155,41 @@ static void test_a_refused_chunk_gives_null_and_keeps_the_count() {
     tda_Al *al = tda_al_slab_new(&parent);
     tda_test_probe_fail_after_next(&probe, 0);
 
-    TEST_ASSERT_NULL(tda_alloc(al, 16));
+    TEST_ASSERT_NULL(tda_alloc(al, bytes(16)));
     TEST_ASSERT_EQUAL_size_t(0, tda_al_slab_stats(al).small_blocks);
     TEST_ASSERT_EQUAL_size_t(0, tda_al_slab_stats(al).chunks);
 
     tda_test_probe_reset(&probe);
+    tda_al_slab_drop(al);
+}
+
+// a class serves the alignments that divide its size: 20 bytes at 64 take the 64-byte
+// class, at 32 the 32-byte one, and every block of either lands on its boundary
+static void test_an_over_aligned_small_block_takes_a_class_it_divides() {
+    tda_Al *al = tda_al_slab_new(&parent);
+
+    for (size_t align = 32; align <= SMALL_MAX; align *= 2) {
+        unsigned char *a = tda_alloc(al, at(20, align));
+        unsigned char *b = tda_alloc(al, at(20, align));
+        TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) a % align);
+        TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) b % align);
+        TEST_ASSERT_EQUAL_size_t(align, (size_t) (b - a)); // the class is the alignment
+    }
+    TEST_ASSERT_EQUAL_size_t(0, tda_al_slab_stats(al).large_blocks);
+
+    tda_al_slab_drop(al);
+}
+
+// a class of 48 is aligned to 16 only, so a request at 32 skips it for 64
+static void test_a_class_too_loosely_aligned_is_skipped() {
+    tda_Al *al = tda_al_slab_new(&parent);
+
+    unsigned char *a = tda_alloc(al, at(40, 32));
+    unsigned char *b = tda_alloc(al, at(40, 32));
+    TEST_ASSERT_EQUAL_size_t(64, (size_t) (b - a));
+
+    tda_dealloc(al, a, at(40, 32));
+    tda_dealloc(al, b, at(40, 32));
     tda_al_slab_drop(al);
 }
 
@@ -157,68 +198,97 @@ static void test_a_refused_chunk_gives_null_and_keeps_the_count() {
 static void test_a_large_block_goes_to_the_parent_as_it_is() {
     tda_Al *al = tda_al_slab_new(&parent);
 
-    void *p = tda_alloc(al, SMALL_MAX + 1);
+    void *p = tda_alloc(al, bytes(SMALL_MAX + 1));
     TEST_ASSERT_NOT_NULL(p);
-    TEST_ASSERT_EQUAL_size_t(SMALL_MAX + 1, probe.last_alloc_size);
+    TEST_ASSERT_EQUAL_size_t(SMALL_MAX + 1, probe.last_alloc.size);
     TEST_ASSERT_EQUAL_size_t(1, tda_al_slab_stats(al).large_blocks);
 
-    tda_dealloc(al, p, SMALL_MAX + 1);
-    TEST_ASSERT_EQUAL_size_t(SMALL_MAX + 1, probe.last_dealloc_size);
+    tda_dealloc(al, p, bytes(SMALL_MAX + 1));
+    TEST_ASSERT_EQUAL_size_t(SMALL_MAX + 1, probe.last_dealloc.size);
     TEST_ASSERT_EQUAL_size_t(0, tda_al_slab_stats(al).large_blocks);
+
+    tda_al_slab_drop(al);
+}
+
+// an alignment past every class goes to the parent with the block, small or not
+static void test_an_alignment_past_every_class_goes_to_the_parent() {
+    tda_Al *al = tda_al_slab_new(&parent);
+
+    void *p = tda_alloc(al, at(16, 1024));
+    TEST_ASSERT_NOT_NULL(p);
+    TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % 1024);
+    TEST_ASSERT_EQUAL_size_t(1024, probe.last_alloc.align);
+    TEST_ASSERT_EQUAL_size_t(1, tda_al_slab_stats(al).large_blocks);
+
+    tda_dealloc(al, p, at(16, 1024));
+    TEST_ASSERT_EQUAL_size_t(1024, probe.last_dealloc.align);
 
     tda_al_slab_drop(al);
 }
 
 /* ========== realloc ========== */
 
+static void test_resize_answers_by_the_class() {
+    tda_Al *al = tda_al_slab_new(&parent);
+
+    void *p = tda_alloc(al, bytes(33)); // the 48-byte class
+    TEST_ASSERT_TRUE(tda_resize(al, p, bytes(33), 48));
+    TEST_ASSERT_TRUE(tda_resize(al, p, bytes(48), 40));
+    TEST_ASSERT_FALSE(tda_resize(al, p, bytes(40), 49));
+    TEST_ASSERT_FALSE(tda_resize(al, p, bytes(40), 32));
+
+    tda_dealloc(al, p, bytes(40));
+    tda_al_slab_drop(al);
+}
+
 static void test_realloc_within_a_class_stays_in_place() {
     tda_Al *al = tda_al_slab_new(&parent);
 
-    void *p = tda_alloc(al, 33); // the 48-byte class
-    void *q = tda_realloc(al, p, 33, 48);
+    void *p = tda_alloc(al, bytes(33)); // the 48-byte class
+    void *q = tda_realloc(al, p, bytes(33), 48);
 
     TEST_ASSERT_EQUAL_PTR(p, q);
 
-    tda_dealloc(al, q, 48);
+    tda_dealloc(al, q, bytes(48));
     tda_al_slab_drop(al);
 }
 
 static void test_realloc_across_classes_moves_and_keeps_the_bytes() {
     tda_Al *al = tda_al_slab_new(&parent);
 
-    unsigned char *p = tda_alloc(al, 8);
+    unsigned char *p = tda_alloc(al, bytes(8));
     memcpy(p, "abcdefgh", 8);
 
-    unsigned char *q = tda_realloc(al, p, 8, 100);
+    unsigned char *q = tda_realloc(al, p, bytes(8), 100);
     TEST_ASSERT_NOT_EQUAL(p, q);
     TEST_ASSERT_EQUAL_MEMORY("abcdefgh", q, 8);
 
-    unsigned char *r = tda_realloc(al, q, 100, 1000); // small to large
+    unsigned char *r = tda_realloc(al, q, bytes(100), 1000); // small to large
     TEST_ASSERT_EQUAL_MEMORY("abcdefgh", r, 8);
     TEST_ASSERT_EQUAL_size_t(0, tda_al_slab_stats(al).small_blocks);
     TEST_ASSERT_EQUAL_size_t(1, tda_al_slab_stats(al).large_blocks);
 
-    unsigned char *s = tda_realloc(al, r, 1000, 24); // and back
+    unsigned char *s = tda_realloc(al, r, bytes(1000), 24); // and back
     TEST_ASSERT_EQUAL_MEMORY("abcdefgh", s, 8);
     TEST_ASSERT_EQUAL_size_t(1, tda_al_slab_stats(al).small_blocks);
     TEST_ASSERT_EQUAL_size_t(0, tda_al_slab_stats(al).large_blocks);
 
-    tda_dealloc(al, s, 24);
+    tda_dealloc(al, s, bytes(24));
     tda_al_slab_drop(al);
 }
 
 static void test_realloc_between_large_blocks_uses_the_parents() {
     tda_Al *al = tda_al_slab_new(&parent);
 
-    void *p = tda_alloc(al, 1000);
-    const size_t before = probe.realloc_calls;
-    void *q = tda_realloc(al, p, 1000, 5000);
+    void *p = tda_alloc(al, bytes(1000));
+    const size_t before = probe.remap_calls;
+    void *q = tda_realloc(al, p, bytes(1000), 5000);
 
     TEST_ASSERT_NOT_NULL(q);
-    TEST_ASSERT_EQUAL_size_t(before + 1, probe.realloc_calls);
+    TEST_ASSERT_EQUAL_size_t(before + 1, probe.remap_calls);
     TEST_ASSERT_EQUAL_size_t(1, tda_al_slab_stats(al).large_blocks);
 
-    tda_dealloc(al, q, 5000);
+    tda_dealloc(al, q, bytes(5000));
     tda_al_slab_drop(al);
 }
 
@@ -238,15 +308,15 @@ static void test_every_container_runs_on_it() {
     tda_HSet *set;
     tda_PQueue *pq;
     tda_BitSet *bits;
-    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_vec_new(sizeof(int32_t), al, &vec));
-    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_deque_new(sizeof(int32_t), al, &deque));
-    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_list_new(sizeof(int32_t), al, &list));
+    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_vec_new(TDA_LAYOUT_OF(int32_t), al, &vec));
+    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_deque_new(TDA_LAYOUT_OF(int32_t), al, &deque));
+    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_list_new(TDA_LAYOUT_OF(int32_t), al, &list));
     TEST_ASSERT_EQUAL(
         TDA_STATUS_OK,
-        tda_hmap_new(sizeof(int32_t), sizeof(int64_t), tda_hash_i32, tda_eq_i32, al, &map)
+        tda_hmap_new(TDA_LAYOUT_OF(int32_t), TDA_LAYOUT_OF(int64_t), tda_hash_i32, tda_eq_i32, nullptr, al, &map)
     );
-    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_hset_new(sizeof(int32_t), tda_hash_i32, tda_eq_i32, al, &set));
-    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_pqueue_new(sizeof(int32_t), tda_cmp_i32, al, &pq));
+    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_hset_new(TDA_LAYOUT_OF(int32_t), tda_hash_i32, tda_eq_i32, nullptr, al, &set));
+    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_pqueue_new(TDA_LAYOUT_OF(int32_t), tda_cmp_i32, nullptr, al, &pq));
     TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_bitset_new(5000, al, &bits));
 
     for (int32_t i = 0; i < 3000; ++i) {
@@ -288,7 +358,8 @@ static void test_every_container_runs_on_it() {
     tda_al_debug_drop(dbg);
 }
 
-// random sizes on both sides of the small limit, each block filled with its own byte
+// random sizes on both sides of the small limit and random alignments, each block filled
+// with its own byte
 // and checked when given back, so two live blocks that overlap cannot go unseen
 static void test_random_blocks_never_overlap() {
     tda_Al *dbg = tda_al_debug_new(tda_al_default());
@@ -296,27 +367,29 @@ static void test_random_blocks_never_overlap() {
 
     enum { N = 400 };
     static unsigned char *ptrs[N];
-    static size_t sizes[N];
+    static tda_Layout layouts[N];
     tda_Rng rng = tda_rng_from_seed(9);
 
     for (size_t step = 0; step < 20000; ++step) {
         const size_t k = tda_rng_idx(&rng, N);
         if (ptrs[k]) {
-            for (size_t i = 0; i < sizes[k]; ++i) {
+            for (size_t i = 0; i < layouts[k].size; ++i) {
                 TEST_ASSERT_EQUAL_UINT8((unsigned char) k, ptrs[k][i]);
             }
-            tda_dealloc(al, ptrs[k], sizes[k]);
+            tda_dealloc(al, ptrs[k], layouts[k]);
             ptrs[k] = nullptr;
         } else {
-            sizes[k] = 1 + tda_rng_idx(&rng, 2 * SMALL_MAX);
-            ptrs[k] = tda_alloc(al, sizes[k]);
+            // alignments from 1 to 1024, past every class
+            layouts[k] = at(1 + tda_rng_idx(&rng, 2 * SMALL_MAX), (size_t) 1 << tda_rng_idx(&rng, 11));
+            ptrs[k] = tda_alloc(al, layouts[k]);
             TEST_ASSERT_NOT_NULL(ptrs[k]);
-            memset(ptrs[k], (int) (unsigned char) k, sizes[k]);
+            TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) ptrs[k] % layouts[k].align);
+            memset(ptrs[k], (int) (unsigned char) k, layouts[k].size);
         }
     }
 
     for (size_t k = 0; k < N; ++k) {
-        tda_dealloc(al, ptrs[k], sizes[k]);
+        tda_dealloc(al, ptrs[k], layouts[k]);
         ptrs[k] = nullptr;
     }
 
@@ -338,8 +411,13 @@ int main() {
     RUN_TEST(test_classes_do_not_share_blocks);
     RUN_TEST(test_every_block_is_aligned);
     RUN_TEST(test_a_refused_chunk_gives_null_and_keeps_the_count);
+    RUN_TEST(test_an_over_aligned_small_block_takes_a_class_it_divides);
+    RUN_TEST(test_a_class_too_loosely_aligned_is_skipped);
 
     RUN_TEST(test_a_large_block_goes_to_the_parent_as_it_is);
+    RUN_TEST(test_an_alignment_past_every_class_goes_to_the_parent);
+
+    RUN_TEST(test_resize_answers_by_the_class);
 
     RUN_TEST(test_realloc_within_a_class_stays_in_place);
     RUN_TEST(test_realloc_across_classes_moves_and_keeps_the_bytes);

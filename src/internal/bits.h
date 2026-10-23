@@ -19,6 +19,7 @@ static inline size_t tda_bit_count(uint64_t word) {
 #ifdef TDA_HAS_STDBIT
     return stdc_count_ones(word);
 #else
+
     return (size_t) __builtin_popcountg(word);
 #endif
 }
@@ -31,6 +32,7 @@ static inline size_t tda_bit_ctz(uint64_t word) {
 #ifdef TDA_HAS_STDBIT
     return stdc_trailing_zeros(word);
 #else
+
     return (size_t) __builtin_ctzg(word);
 #endif
 }
@@ -43,6 +45,7 @@ static inline size_t tda_bit_clz(uint64_t word) {
 #ifdef TDA_HAS_STDBIT
     return stdc_leading_zeros(word);
 #else
+
     return (size_t) __builtin_clzg(word);
 #endif
 }
@@ -54,6 +57,7 @@ static inline size_t tda_bit_log2_floor(size_t n) {
 #ifdef TDA_HAS_STDBIT
     return stdc_bit_width(n) - 1;
 #else
+
     return sizeof(size_t) * CHAR_BIT - 1 - (size_t) __builtin_clzg(n);
 #endif
 }

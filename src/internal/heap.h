@@ -32,8 +32,8 @@ static inline size_t tda_heap_left(size_t idx) {
 /// whether s[upper] may sit above s[lower]: the one order rule of the heap, which keeps
 /// the greatest elem at the root
 [[nodiscard]]
-static inline bool tda_heap_above(tda_Span s, size_t upper, size_t lower, tda_Cmp cmp) {
-    return cmp(tda_span_get(s, upper), tda_span_get(s, lower)) >= 0;
+static inline bool tda_heap_above(tda_Span s, size_t upper, size_t lower, tda_Cmp cmp, void *ctx) {
+    return cmp(tda_span_get(s, upper), tda_span_get(s, lower), ctx) >= 0;
 }
 
 /* ========== sifts ========== */
@@ -41,7 +41,7 @@ static inline bool tda_heap_above(tda_Span s, size_t upper, size_t lower, tda_Cm
 /// walks 'idx' towards the leaves of the heap held in the first 'len' elems.
 /// 'len' is a parameter rather than s.len because pop_heap and sort_heap shrink
 /// the heap while leaving the popped elems in the span behind it
-static inline void tda_heap_sift_down(tda_SpanMut s, size_t idx, size_t len, tda_Cmp cmp) {
+static inline void tda_heap_sift_down(tda_SpanMut s, size_t idx, size_t len, tda_Cmp cmp, void *ctx) {
     assert(len <= s.len);
 
     const tda_Span cs = tda_span_mut_to_span(s);
@@ -55,9 +55,9 @@ static inline void tda_heap_sift_down(tda_SpanMut s, size_t idx, size_t len, tda
         // on a tie the left child wins, so pop_heap does not reshuffle equal elems
         // for no reason
         const size_t right = left + 1;
-        const size_t best = right < len && !tda_heap_above(cs, left, right, cmp) ? right : left;
+        const size_t best = right < len && !tda_heap_above(cs, left, right, cmp, ctx) ? right : left;
 
-        if (tda_heap_above(cs, idx, best, cmp)) {
+        if (tda_heap_above(cs, idx, best, cmp, ctx)) {
             break;
         }
 
@@ -67,12 +67,12 @@ static inline void tda_heap_sift_down(tda_SpanMut s, size_t idx, size_t len, tda
 }
 
 /// walks 'idx' towards the root while it may not sit below its parent
-static inline void tda_heap_sift_up(tda_SpanMut s, size_t idx, tda_Cmp cmp) {
+static inline void tda_heap_sift_up(tda_SpanMut s, size_t idx, tda_Cmp cmp, void *ctx) {
     const tda_Span cs = tda_span_mut_to_span(s);
 
     while (idx > 0) {
         const size_t parent = tda_heap_parent(idx);
-        if (tda_heap_above(cs, parent, idx, cmp)) {
+        if (tda_heap_above(cs, parent, idx, cmp, ctx)) {
             break;
         }
 

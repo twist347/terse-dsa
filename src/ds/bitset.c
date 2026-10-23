@@ -91,7 +91,7 @@ tda_Status tda_bitset_new(size_t nbits, tda_Al *al, tda_BitSet **out) {
     assert(al);
     assert(out);
 
-    tda_BitSet *obj = tda_alloc(al, sizeof(tda_BitSet));
+    tda_BitSet *obj = TDA_ALLOC(tda_BitSet, al, 1);
     if (!obj) {
         return TDA_STATUS_ERR_NO_MEM;
     }
@@ -100,9 +100,9 @@ tda_Status tda_bitset_new(size_t nbits, tda_Al *al, tda_BitSet **out) {
     uint64_t *words = nullptr;
 
     if (nwords > 0) {
-        words = tda_calloc(al, nwords, sizeof(uint64_t));
+        words = TDA_ALLOC_ZEROED(uint64_t, al, nwords);
         if (!words) {
-            tda_dealloc(al, obj, sizeof(tda_BitSet));
+            TDA_DEALLOC(tda_BitSet, al, obj, 1);
             return TDA_STATUS_ERR_NO_MEM;
         }
     }
@@ -127,8 +127,8 @@ void tda_bitset_drop(tda_BitSet *self) {
     ASSERT_BITSET(self);
 
     tda_Al *al_copy = self->al;
-    tda_dealloc(al_copy, self->words, words_bytes(self));
-    tda_dealloc(al_copy, self, sizeof(tda_BitSet));
+    TDA_DEALLOC(uint64_t, al_copy, self->words, self->nwords);
+    TDA_DEALLOC(tda_BitSet, al_copy, self, 1);
 }
 
 /* ========== copy ========== */
@@ -168,12 +168,7 @@ tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other) {
     }
 
     if (self->nwords != other->nwords) {
-        uint64_t *new_words = tda_realloc(
-            self->al,
-            self->words,
-            words_bytes(self),
-            words_bytes(other)
-        );
+        uint64_t *new_words = TDA_REALLOC(uint64_t, self->al, self->words, self->nwords, other->nwords);
         // a new_size of 0 hands the block back and answers null, which is not a failure
         if (other->nwords > 0 && !new_words) {
             return TDA_STATUS_ERR_NO_MEM;
@@ -261,7 +256,7 @@ void tda_bitset_set(tda_BitSet *self, size_t idx) {
     self->words[word_of(idx)] |= bit_of(idx);
 }
 
-void tda_bitset_clear(tda_BitSet *self, size_t idx) {
+void tda_bitset_reset(tda_BitSet *self, size_t idx) {
     ASSERT_BITSET(self);
     TDA_EXPECT(idx < self->nbits);
 
@@ -279,7 +274,7 @@ void tda_bitset_set_to(tda_BitSet *self, size_t idx, bool val) {
     if (val) {
         tda_bitset_set(self, idx);
     } else {
-        tda_bitset_clear(self, idx);
+        tda_bitset_reset(self, idx);
     }
 }
 
@@ -296,7 +291,7 @@ void tda_bitset_set_all(tda_BitSet *self) {
     clear_tail(self);
 }
 
-void tda_bitset_clear_all(tda_BitSet *self) {
+void tda_bitset_reset_all(tda_BitSet *self) {
     ASSERT_BITSET(self);
 
     if (self->nwords > 0) {
@@ -518,7 +513,7 @@ static size_t words_for(size_t nbits) {
 }
 
 static void release_words(tda_BitSet *self) {
-    tda_dealloc(self->al, self->words, words_bytes(self));
+    TDA_DEALLOC(uint64_t, self->al, self->words, self->nwords);
     self->words = nullptr;
     self->nbits = 0;
     self->nwords = 0;

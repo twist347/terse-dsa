@@ -15,7 +15,7 @@ int main() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, nums, 5);
 
     // the fields are public: a view owns nothing, so it has no invariant to protect
-    printf("%zu elems of %zu bytes, %zu in all\n", s.len, s.elem_size,
+    printf("%zu elems of %zu bytes, %zu in all\n", s.len, s.elem.size,
            tda_span_bytes(tda_span_mut_to_span(s))); // 5 elems of 4 bytes, 20 in all
     /// [build]
 
@@ -43,7 +43,7 @@ int main() {
 
     /// [bridge]
     // ds hands out a view and algo works in place through it
-    tda_span_sort(s, tda_cmp_i32);
+    tda_span_sort(s, tda_cmp_i32, nullptr);
     tda_span_print(tda_span_mut_to_span(s), tda_fprint_i32); // [1, 2, 3, 4, 9]
     /// [bridge]
 

@@ -34,27 +34,34 @@ static void push_int(tda_PQueue *q, int32_t val) {
 // max-queue over the default allocator, filled one push at a time
 static tda_PQueue *make_queue(const int32_t *src, size_t n) {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, nullptr, tda_al_default(), &q));
 
     for (size_t i = 0; i < n; ++i) {
         push_int(q, src[i]);
     }
+
     return q;
 }
 
 // the same elems, heapified at once
 static tda_PQueue *make_queue_from(const int32_t *src, size_t n) {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(int32_t, src, n, tda_cmp_i32, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(int32_t, src, n, tda_cmp_i32, nullptr, tda_al_default(), &q));
 
     return q;
 }
 
-// the expected output: a copy sorted greatest first by libc qsort, an oracle sharing no
-// code with what is tested. tda_Cmp is qsort compatible by design
-static void expected_order(int32_t *dst, const int32_t *src, size_t n, tda_Cmp cmp) {
+// the expected output: a copy sorted greatest first by an insertion sort written out
+// here, an oracle sharing no code with what is tested
+static void expected_order(int32_t *dst, const int32_t *src, size_t n, tda_Cmp cmp, void *ctx) {
     memcpy(dst, src, n * sizeof(int32_t));
-    qsort(dst, n, sizeof(int32_t), cmp);
+    for (size_t i = 1; i < n; ++i) {
+        for (size_t j = i; j > 0 && cmp(&dst[j - 1], &dst[j], ctx) > 0; --j) {
+            const int32_t tmp = dst[j - 1];
+            dst[j - 1] = dst[j];
+            dst[j] = tmp;
+        }
+    }
 }
 
 // empties the queue through top + pop, checking after every step that the rest is still
@@ -68,15 +75,15 @@ static void assert_drains(tda_PQueue *q, const int32_t *want, size_t n) {
         tda_pqueue_pop(q);
 
         TEST_ASSERT_EQUAL_size_t(n - i - 1, tda_pqueue_len(q));
-        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_pqueue_cmp(q)));
+        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_pqueue_cmp(q), nullptr));
     }
 }
 
-static void assert_drains_sorted(tda_PQueue *q, const int32_t *src, size_t n, tda_Cmp cmp) {
+static void assert_drains_sorted(tda_PQueue *q, const int32_t *src, size_t n, tda_Cmp cmp, void *ctx) {
     int32_t want[64];
     TEST_ASSERT_TRUE(n <= 64);
 
-    expected_order(want, src, n, cmp);
+    expected_order(want, src, n, cmp, ctx);
     assert_drains(q, want, n);
 }
 
@@ -94,7 +101,7 @@ static void for_every_permutation(size_t n, void (*check)(const int32_t *, size_
     do {
         check(buf, n);
         ++seen;
-    } while (tda_span_next_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, n), tda_cmp_i32));
+    } while (tda_span_next_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, n), tda_cmp_i32, nullptr));
 
     size_t want = 1;
     for (size_t i = 2; i <= n; ++i) {
@@ -111,7 +118,7 @@ static constexpr size_t SPREAD_LEN = sizeof(SPREAD) / sizeof(SPREAD[0]);
 
 static void test_new_starts_empty_and_keeps_the_comparator() {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, nullptr, tda_al_default(), &q));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_pqueue_len(q));
     TEST_ASSERT_EQUAL_size_t(0, tda_pqueue_cap(q));
@@ -125,7 +132,7 @@ static void test_new_starts_empty_and_keeps_the_comparator() {
 // cap is room, not content
 static void test_new_cap_reserves_without_length() {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW_CAP(int32_t, 8, tda_cmp_i32, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_NEW_CAP(int32_t, 8, tda_cmp_i32, nullptr, tda_al_default(), &q));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_pqueue_len(q));
     TEST_ASSERT_EQUAL_size_t(8, tda_pqueue_cap(q));
@@ -137,7 +144,7 @@ static void test_from_data_heapifies_what_it_is_given() {
     tda_PQueue *q = make_queue_from(SPREAD, SPREAD_LEN);
 
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_pqueue_len(q));
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_cmp_i32, nullptr));
 
     tda_pqueue_drop(q);
 }
@@ -155,7 +162,15 @@ static void test_from_data_empty_stays_empty() {
 static void test_from_span_copies_the_view() {
     int32_t src[] = {3, 1, 2};
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(tda_pqueue_from_span(TDA_SPAN_FROM_DATA(int32_t, src, 3), tda_cmp_i32, tda_al_default(), &q));
+    TDA_TEST_OK(
+        tda_pqueue_from_span(
+            TDA_SPAN_FROM_DATA(int32_t, src, 3),
+            tda_cmp_i32,
+            nullptr,
+            tda_al_default(),
+            &q
+        )
+    );
 
     src[0] = 100;
     src[1] = 200;
@@ -171,7 +186,7 @@ static void test_from_span_copies_the_view() {
 static void test_from_data_copies_whole_elems() {
     constexpr Pair src[] = {{.a = 1, .b = 10}, {.a = 3, .b = 30}, {.a = 2, .b = 20}};
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(Pair, src, 3, tda_test_pair_cmp_a, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(Pair, src, 3, tda_test_pair_cmp_a, nullptr, tda_al_default(), &q));
 
     TEST_ASSERT_EQUAL_size_t(sizeof(Pair), tda_pqueue_elem_size(q));
 
@@ -191,7 +206,7 @@ static void test_drop_null_is_noop() {
 static void test_pushes_drain_greatest_first() {
     tda_PQueue *q = make_queue(SPREAD, SPREAD_LEN);
 
-    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_drop(q);
 }
@@ -200,19 +215,19 @@ static void test_pushes_drain_greatest_first() {
 static void test_pushes_drain_greatest_first_at_every_length() {
     for (size_t n = 0; n <= SPREAD_LEN; ++n) {
         tda_PQueue *q = make_queue(SPREAD, n);
-        assert_drains_sorted(q, SPREAD, n, tda_cmp_desc_i32);
+        assert_drains_sorted(q, SPREAD, n, tda_cmp_desc_i32, nullptr);
         tda_pqueue_drop(q);
     }
 }
 
 static void check_drains_in_order(const int32_t *src, size_t n) {
     tda_PQueue *pushed = make_queue(src, n);
-    assert_drains_sorted(pushed, src, n, tda_cmp_desc_i32);
+    assert_drains_sorted(pushed, src, n, tda_cmp_desc_i32, nullptr);
     tda_pqueue_drop(pushed);
 
     // both paths must agree: heapifying is an optimisation, not another order
     tda_PQueue *heapified = make_queue_from(src, n);
-    assert_drains_sorted(heapified, src, n, tda_cmp_desc_i32);
+    assert_drains_sorted(heapified, src, n, tda_cmp_desc_i32, nullptr);
     tda_pqueue_drop(heapified);
 }
 
@@ -224,16 +239,16 @@ static void test_every_permutation_drains_in_order() {
 // there is no min-queue type: a descending comparator is enough
 static void test_a_descending_comparator_gives_a_min_queue() {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, tda_al_default(), &q, 5, 3, 9, 1, 7));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, tda_al_default(), &q, 5, 3, 9, 1, 7));
 
-    assert_drains_sorted(q, (const int32_t[]){5, 3, 9, 1, 7}, 5, tda_cmp_i32);
+    assert_drains_sorted(q, (const int32_t[]){5, 3, 9, 1, 7}, 5, tda_cmp_i32, nullptr);
 
     tda_pqueue_drop(q);
 }
 
 static void test_top_is_the_greatest_after_every_push() {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, nullptr, tda_al_default(), &q));
 
     int32_t high = SPREAD[0];
     for (size_t i = 0; i < SPREAD_LEN; ++i) {
@@ -242,7 +257,7 @@ static void test_top_is_the_greatest_after_every_push() {
             high = SPREAD[i];
         }
         TEST_ASSERT_EQUAL_INT32(high, *TDA_PQUEUE_TOP_AS(int32_t, q));
-        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_cmp_i32));
+        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_cmp_i32, nullptr));
     }
 
     tda_pqueue_drop(q);
@@ -261,7 +276,7 @@ static void test_pushes_after_a_full_drain_are_ordered_again() {
     for (size_t i = 0; i < 3; ++i) {
         push_int(q, again[i]);
     }
-    assert_drains_sorted(q, again, 3, tda_cmp_desc_i32);
+    assert_drains_sorted(q, again, 3, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_drop(q);
 }
@@ -290,7 +305,7 @@ static void test_equal_keys_keep_every_payload() {
         {.a = 7, .b = 4}, {.a = 7, .b = 5}, {.a = 7, .b = 6},
     };
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(Pair, src, 6, tda_test_pair_cmp_a, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(Pair, src, 6, tda_test_pair_cmp_a, nullptr, tda_al_default(), &q));
 
     bool seen[7] = {};
     for (size_t i = 0; i < 6; ++i) {
@@ -310,7 +325,7 @@ static void test_pop_to_drains_greatest_first() {
     tda_PQueue *q = make_queue(SPREAD, SPREAD_LEN);
 
     int32_t want[SPREAD_LEN];
-    expected_order(want, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    expected_order(want, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     for (size_t i = 0; i < SPREAD_LEN; ++i) {
         int32_t out = -1;
@@ -318,7 +333,7 @@ static void test_pop_to_drains_greatest_first() {
 
         TEST_ASSERT_EQUAL_INT32(want[i], out);
         TEST_ASSERT_EQUAL_size_t(SPREAD_LEN - i - 1, tda_pqueue_len(q));
-        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_pqueue_cmp(q)));
+        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_pqueue_cmp(q), nullptr));
     }
 
     tda_pqueue_drop(q);
@@ -326,7 +341,7 @@ static void test_pop_to_drains_greatest_first() {
 
 static void test_pop_to_macro_moves_whole_elems() {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(Pair, tda_test_pair_cmp_a, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_NEW(Pair, tda_test_pair_cmp_a, nullptr, tda_al_default(), &q));
     TDA_TEST_OK(tda_pqueue_push(q, &(Pair){1, 10}));
     TDA_TEST_OK(tda_pqueue_push(q, &(Pair){3, 30}));
     TDA_TEST_OK(tda_pqueue_push(q, &(Pair){2, 20}));
@@ -348,7 +363,7 @@ static void check_replace_top(const int32_t *src, size_t n) {
         tda_PQueue *q = make_queue_from(src, n);
 
         tda_pqueue_replace_top(q, &val);
-        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_pqueue_cmp(q)));
+        TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_pqueue_cmp(q), nullptr));
 
         // src is a permutation of 1..n, so the dropped top is n
         int32_t after[8];
@@ -360,7 +375,7 @@ static void check_replace_top(const int32_t *src, size_t n) {
         }
         after[m++] = val;
 
-        assert_drains_sorted(q, after, m, tda_cmp_desc_i32);
+        assert_drains_sorted(q, after, m, tda_cmp_desc_i32, nullptr);
         tda_pqueue_drop(q);
     }
 }
@@ -378,7 +393,7 @@ static void test_replace_top_allocates_nothing() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, tda_cmp_i32, &al, &q));
+    TDA_TEST_OK(TDA_PQUEUE_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, tda_cmp_i32, nullptr, &al, &q));
     const size_t before = tda_test_probe_requests(&probe);
 
     for (int32_t i = 0; i < 32; ++i) {
@@ -398,7 +413,7 @@ static void test_replace_top_with_the_top_itself_changes_nothing() {
 
     tda_pqueue_replace_top(q, tda_pqueue_top(q));
 
-    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_drop(q);
 }
@@ -408,7 +423,7 @@ static void test_replace_top_keeps_the_k_greatest() {
     constexpr size_t k = 4;
 
     tda_PQueue *least_first = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_desc_i32, tda_al_default(), &least_first));
+    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_desc_i32, nullptr, tda_al_default(), &least_first));
 
     for (size_t i = 0; i < SPREAD_LEN; ++i) {
         if (tda_pqueue_len(least_first) < k) {
@@ -439,7 +454,7 @@ static void test_top_reads_without_removing() {
 
 static void test_len_follows_push_and_pop() {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, nullptr, tda_al_default(), &q));
 
     for (size_t i = 0; i < 5; ++i) {
         push_int(q, (int32_t) i);
@@ -490,7 +505,7 @@ static void test_reserve_grows_the_room_only() {
 
     TEST_ASSERT_TRUE(tda_pqueue_cap(q) >= 100);
     TEST_ASSERT_EQUAL_size_t(3, tda_pqueue_len(q));
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_cmp_i32, nullptr));
 
     tda_pqueue_drop(q);
 }
@@ -498,7 +513,7 @@ static void test_reserve_grows_the_room_only() {
 // the buffer moves, and the heap must survive the move
 static void test_shrink_to_fit_keeps_the_order() {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW_CAP(int32_t, 64, tda_cmp_i32, tda_al_default(), &q));
+    TDA_TEST_OK(TDA_PQUEUE_NEW_CAP(int32_t, 64, tda_cmp_i32, nullptr, tda_al_default(), &q));
     for (size_t i = 0; i < SPREAD_LEN; ++i) {
         push_int(q, SPREAD[i]);
     }
@@ -506,7 +521,7 @@ static void test_shrink_to_fit_keeps_the_order() {
     TDA_TEST_OK(tda_pqueue_shrink_to_fit(q));
 
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_pqueue_cap(q));
-    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_drop(q);
 }
@@ -535,7 +550,7 @@ static void test_copy_inherits_the_allocator_and_the_comparator() {
     TEST_ASSERT_NOT_NULL(arena);
 
     tda_PQueue *src = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, arena, &src, 5, 1, 3));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, arena, &src, 5, 1, 3));
 
     tda_PQueue *dst = nullptr;
     TDA_TEST_OK(tda_pqueue_copy(src, &dst));
@@ -565,7 +580,7 @@ static void test_copy_with_builds_on_the_given_allocator() {
 
     // the source is gone and the copy still drains in order: the buffer is its own
     tda_pqueue_drop(src);
-    assert_drains_sorted(dst, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    assert_drains_sorted(dst, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_drop(dst);
     tda_al_arena_drop(arena);
@@ -594,10 +609,10 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_PQueue *src = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, &al, &src, 1, 5, 3));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, &al, &src, 1, 5, 3));
 
     tda_PQueue *dst = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, &al, &dst, 9));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, &al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
     TDA_TEST_OK(tda_pqueue_move_assign(dst, src));
@@ -625,14 +640,14 @@ static void test_move_assign_across_allocators_empties_the_source() {
     tda_PQueue *src = make_queue_from(SPREAD, SPREAD_LEN);
 
     tda_PQueue *dst = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, arena, &dst, 9));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, arena, &dst, 9));
 
     TDA_TEST_OK(tda_pqueue_move_assign(dst, src));
 
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_pqueue_len(dst));
     TEST_ASSERT_EQUAL_PTR(tda_cmp_i32, tda_pqueue_cmp(dst));
     TEST_ASSERT_EQUAL_PTR(arena, tda_pqueue_al(dst));
-    assert_drains_sorted(dst, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    assert_drains_sorted(dst, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     TEST_ASSERT_EQUAL_size_t(0, tda_pqueue_len(src));
     TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_pqueue_al(src));
@@ -647,7 +662,7 @@ static void test_move_assign_across_allocators_reports_an_exhausted_arena() {
     TEST_ASSERT_NOT_NULL(arena);
 
     tda_PQueue *dst = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, arena, &dst, 9));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, arena, &dst, 9));
     tda_test_arena_leave(arena, 0);
 
     tda_PQueue *src = make_queue_from(SPREAD, SPREAD_LEN);
@@ -669,7 +684,7 @@ static void test_move_assign_of_itself_changes_nothing() {
     TDA_TEST_OK(tda_pqueue_move_assign(q, q));
 
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_pqueue_len(q));
-    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_drop(q);
 }
@@ -679,7 +694,7 @@ static void test_copy_drains_the_same_as_its_source() {
     tda_PQueue *dst = nullptr;
     TDA_TEST_OK(tda_pqueue_copy(src, &dst));
 
-    assert_drains_sorted(dst, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    assert_drains_sorted(dst, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_drop(src);
     tda_pqueue_drop(dst);
@@ -700,16 +715,16 @@ static void test_copy_of_empty_stays_empty() {
 // target's own comparator is replaced
 static void test_copy_assign_hands_over_the_comparator_too() {
     tda_PQueue *src = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, tda_al_default(), &src, 5, 1, 3));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, tda_al_default(), &src, 5, 1, 3));
 
     tda_PQueue *dst = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, tda_al_default(), &dst, 100, 200, 300));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, tda_al_default(), &dst, 100, 200, 300));
 
     TDA_TEST_OK(tda_pqueue_copy_assign(dst, src));
 
     TEST_ASSERT_EQUAL_PTR(tda_cmp_desc_i32, tda_pqueue_cmp(dst));
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(dst), tda_pqueue_cmp(dst)));
-    assert_drains_sorted(dst, (const int32_t[]){5, 1, 3}, 3, tda_cmp_i32);
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(dst), tda_pqueue_cmp(dst), nullptr));
+    assert_drains_sorted(dst, (const int32_t[]){5, 1, 3}, 3, tda_cmp_i32, nullptr);
 
     tda_pqueue_drop(src);
     tda_pqueue_drop(dst);
@@ -720,7 +735,7 @@ static void test_copy_assign_self_is_noop() {
 
     TDA_TEST_OK(tda_pqueue_copy_assign(q, q));
 
-    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_drop(q);
 }
@@ -730,8 +745,8 @@ static void test_copy_assign_self_is_noop() {
 static void test_swap_exchanges_the_elems_and_the_comparators() {
     tda_PQueue *a = nullptr;
     tda_PQueue *b = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, tda_al_default(), &a, 1, 2, 3));
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, tda_al_default(), &b, 10, 20, 30));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, tda_al_default(), &a, 1, 2, 3));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, tda_al_default(), &b, 10, 20, 30));
 
     tda_pqueue_swap(a, b);
 
@@ -741,8 +756,8 @@ static void test_swap_exchanges_the_elems_and_the_comparators() {
     TEST_ASSERT_EQUAL_INT32(3, *TDA_PQUEUE_TOP_AS(int32_t, b));
 
     // each side is still a heap under the order that came with its elems
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(a), tda_pqueue_cmp(a)));
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(b), tda_pqueue_cmp(b)));
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(a), tda_pqueue_cmp(a), nullptr));
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(b), tda_pqueue_cmp(b), nullptr));
 
     tda_pqueue_drop(a);
     tda_pqueue_drop(b);
@@ -753,7 +768,7 @@ static void test_swap_self_is_noop() {
 
     tda_pqueue_swap(q, q);
 
-    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32);
+    assert_drains_sorted(q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_drop(q);
 }
@@ -767,10 +782,10 @@ static void test_to_span_shows_the_heap_not_a_sorted_run() {
     const tda_Span s = tda_pqueue_to_span(q);
 
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem.size);
     TEST_ASSERT_EQUAL_PTR(tda_pqueue_top(q), s.data);
-    TEST_ASSERT_TRUE(tda_span_is_heap(s, tda_cmp_i32));
-    TEST_ASSERT_FALSE(tda_span_is_sorted(s, tda_cmp_desc_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(s, tda_cmp_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_span_is_sorted(s, tda_cmp_desc_i32, nullptr));
 
     tda_pqueue_drop(q);
 }
@@ -791,7 +806,7 @@ static void test_new_reports_an_exhausted_arena() {
     tda_test_arena_leave(arena, 0);
 
     tda_PQueue *q = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, arena, &q));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, nullptr, arena, &q));
     TEST_ASSERT_NULL(q);
 
     tda_al_arena_drop(arena);
@@ -802,7 +817,10 @@ static void test_from_data_reports_an_exhausted_arena() {
     TEST_ASSERT_NOT_NULL(arena);
 
     tda_PQueue *q = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_PQUEUE_FROM_DATA(int32_t, SPREAD, 1000, tda_cmp_i32, arena, &q));
+    TDA_TEST_STATUS(
+        TDA_STATUS_ERR_NO_MEM,
+        TDA_PQUEUE_FROM_DATA(int32_t, SPREAD, 1000, tda_cmp_i32, nullptr, arena, &q)
+    );
     TEST_ASSERT_NULL(q);
 
     tda_al_arena_drop(arena);
@@ -814,7 +832,7 @@ static void test_push_reports_an_exhausted_arena_and_changes_nothing() {
     TEST_ASSERT_NOT_NULL(arena);
 
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, arena, &q, 5, 1, 3));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, arena, &q, 5, 1, 3));
     tda_test_arena_leave(arena, 0);
 
     constexpr int32_t val = 100;
@@ -822,7 +840,7 @@ static void test_push_reports_an_exhausted_arena_and_changes_nothing() {
 
     TEST_ASSERT_EQUAL_size_t(3, tda_pqueue_len(q));
     TEST_ASSERT_EQUAL_INT32(5, *TDA_PQUEUE_TOP_AS(int32_t, q));
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_pqueue_to_span(q), tda_cmp_i32, nullptr));
 
     tda_pqueue_drop(q);
     tda_al_arena_drop(arena);
@@ -833,7 +851,7 @@ static void test_copy_reports_an_exhausted_arena() {
     TEST_ASSERT_NOT_NULL(arena);
 
     tda_PQueue *src = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, arena, &src, 5, 1, 3));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, arena, &src, 5, 1, 3));
     tda_test_arena_leave(arena, 0);
 
     tda_PQueue *dst = nullptr;
@@ -849,7 +867,7 @@ static void test_reserve_reports_an_exhausted_arena() {
     TEST_ASSERT_NOT_NULL(arena);
 
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, arena, &q, 5, 1, 3));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, arena, &q, 5, 1, 3));
     tda_test_arena_leave(arena, 0);
 
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_pqueue_reserve(q, 1000));
@@ -870,7 +888,7 @@ static void test_a_refused_header_frees_the_buffer() {
     tda_test_probe_fail_after_next(&probe, 1);
 
     tda_PQueue *q = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, &al, &q));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, nullptr, &al, &q));
 
     TEST_ASSERT_NULL(q);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
@@ -885,7 +903,10 @@ static void test_a_refused_header_frees_a_filled_buffer() {
     tda_test_probe_fail_after_next(&probe, 2);
 
     tda_PQueue *q = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_PQUEUE_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, tda_cmp_i32, &al, &q));
+    TDA_TEST_STATUS(
+        TDA_STATUS_ERR_NO_MEM,
+        TDA_PQUEUE_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, tda_cmp_i32, nullptr, &al, &q)
+    );
 
     TEST_ASSERT_NULL(q);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
@@ -910,7 +931,7 @@ static void test_into_vec_hands_the_elems_over() {
     TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_vec_al(v));
 
     // still a heap, so the greatest is at the front and the rest are not sorted yet
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_vec_to_span(v), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_vec_to_span(v), tda_cmp_i32, nullptr));
     TEST_ASSERT_EQUAL_INT32(9, *TDA_VEC_GET_AS(int32_t, v, 0));
 
     tda_vec_drop(v);
@@ -923,7 +944,7 @@ static void test_into_vec_then_sort_heap() {
 
     tda_Vec *v = tda_pqueue_into_vec(make_queue_from(src, 6));
 
-    tda_span_sort_heap(tda_vec_to_span_mut(v), tda_cmp_i32);
+    tda_span_sort_heap(tda_vec_to_span_mut(v), tda_cmp_i32, nullptr);
 
     for (size_t i = 0; i < 6; ++i) {
         TEST_ASSERT_EQUAL_INT32(want[i], *TDA_VEC_GET_AS(int32_t, v, i));
@@ -948,11 +969,11 @@ static void test_into_vec_releases_the_header_alone() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, &al, &q));
+    TDA_TEST_OK(TDA_PQUEUE_NEW(int32_t, tda_cmp_i32, nullptr, &al, &q));
 
     // the constructor's last block is the adapter's header, so into must free that, with
     // the size it was taken with
-    const size_t header = probe.last_alloc_size;
+    const size_t header = probe.last_alloc.size;
 
     TDA_TEST_OK(TDA_PQUEUE_PUSH(int32_t, q, 1));
     const size_t live = probe.live;
@@ -960,7 +981,7 @@ static void test_into_vec_releases_the_header_alone() {
     tda_Vec *v = tda_pqueue_into_vec(q);
 
     TEST_ASSERT_EQUAL_size_t(live - 1, probe.live);
-    TEST_ASSERT_EQUAL_size_t(header, probe.last_dealloc_size);
+    TEST_ASSERT_EQUAL_size_t(header, probe.last_dealloc.size);
 
     tda_vec_drop(v);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
@@ -986,7 +1007,7 @@ static void assert_prints(const char *expected, const tda_PQueue *q) {
 
 static void test_fprint_writes_the_elem() {
     tda_PQueue *q = nullptr;
-    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, tda_al_default(), &q, 7));
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, tda_al_default(), &q, 7));
 
     assert_prints("[7]\n", q);
 

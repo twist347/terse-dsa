@@ -65,8 +65,11 @@ drop:
     }
 
     int32_t *c = TDA_ALLOC(int32_t, local, 8);
-    printf("%s, %zu left\n", c ? "taken from the array" : "no room",
-           tda_al_arena_stats(local).available); // taken from the array, 144 left — the header took the front
+    printf(
+        "%s, %zu left\n",
+        c ? "taken from the array" : "no room",
+        tda_al_arena_stats(local).available
+    ); // taken from the array, 128 left — the header took the front
 
     tda_al_arena_drop(local); // returns nothing: the array was not borrowed
     /// [buf]

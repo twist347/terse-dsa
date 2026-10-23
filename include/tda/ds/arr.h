@@ -30,6 +30,9 @@
 /// Elems are copied in as bytes and freed with the block. Whatever an elem points to is
 /// the caller's to release.
 ///
+/// An arr knows the layout of its elem, size and alignment, and asks the allocator for a
+/// block aligned to it. The typed macros pass TDA_LAYOUT_OF(T).
+///
 /// The typed macros write 'const T', so an elem type already declared const needs its
 /// own typedef.
 ///
@@ -50,31 +53,31 @@ typedef struct tda_Arr tda_Arr;
 
 /// a new arr of 'len' zeroed elems
 /// @param len how many elems; 0 gives an arr with no block
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
 /// @param[out] out the new arr, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated, or
-///         len * elem_size overflows
+///         len * elem.size overflows
 /// @bigo{n}, for zeroing the block
 [[nodiscard]] TDA_API
-tda_Status tda_arr_new_len(size_t len, size_t elem_size, tda_Al *al, tda_Arr **out);
+tda_Status tda_arr_new_len(size_t len, tda_Layout elem, tda_Al *al, tda_Arr **out);
 
 /// a new arr holding a copy of 'len' elems read from 'data'
 /// @param data the elems to copy in; may be null only when len is 0
 /// @param len how many elems to read
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's
 /// @param al the allocator
 /// @param[out] out the new arr, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated, or
-///         len * elem_size overflows
+///         len * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_arr_from_data(const void *data, size_t len, size_t elem_size, tda_Al *al, tda_Arr **out);
+tda_Status tda_arr_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Arr **out);
 
 /// a new arr holding a copy of the elems 's' views
-/// @param s the view to copy
+/// @param s the view to copy; the elem layout is the span's
 /// @param al the allocator; need not be the one 's' points into
 /// @param[out] out the new arr, written only on success
 /// @retval TDA_STATUS_OK on success
@@ -115,7 +118,7 @@ tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr **out);
 
 /// overwrites the elems of 'self' with those of 'other', resizing the block if the
 /// lengths differ
-/// @param[in,out] self must have the same elem_size; keeps its allocator
+/// @param[in,out] self must have the same elem layout; keeps its allocator
 /// @param other the arr to copy from; may be 'self'
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be resized; 'self' is unchanged
@@ -124,7 +127,7 @@ tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr **out);
 tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other);
 
 /// moves the elems of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same elem_size; its old elems are released, its
+/// @param[in,out] self must have the same elem layout; its old elems are released, its
 ///                     allocator kept
 /// @param[in,out] other emptied on success and still usable; may be 'self'
 /// @retval TDA_STATUS_OK on success
@@ -141,7 +144,7 @@ tda_Status tda_arr_move_assign(tda_Arr *self, tda_Arr *other);
 
 /// whether the two hold the same elems, byte for byte
 /// @param a one arr
-/// @param b must have the same elem_size (asserted); a different length gives false
+/// @param b must have the same elem layout (asserted); a different length gives false
 /// @return whether the lengths match and the bytes do; as memcmp, it tells -0.0 from
 ///         +0.0 and compares struct padding
 /// @bigo{n}
@@ -150,12 +153,13 @@ bool tda_arr_eq(const tda_Arr *a, const tda_Arr *b);
 
 /// whether the two hold equal elems under 'eq'
 /// @param a one arr
-/// @param b must have the same elem_size
+/// @param b must have the same elem layout
 /// @param eq asked of each pair until one fails
+/// @param ctx passed to every call of 'eq'; may be null
 /// @return whether the lengths match and every pair does
 /// @bigo{n}
 [[nodiscard]] TDA_API
-bool tda_arr_eq_by(const tda_Arr *a, const tda_Arr *b, tda_Eq eq);
+bool tda_arr_eq_by(const tda_Arr *a, const tda_Arr *b, tda_Eq eq, void *ctx);
 
 /// @}
 
@@ -171,14 +175,21 @@ size_t tda_arr_len(const tda_Arr *self);
 
 /// the size of one elem
 /// @param self the arr
-/// @return elem_size
+/// @return elem.size, the size of the elem layout
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_arr_elem_size(const tda_Arr *self);
 
+/// the layout of one elem, as the arr was built with
+/// @param self the arr
+/// @return the size and the alignment; the block is aligned to it
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Layout tda_arr_elem_layout(const tda_Arr *self);
+
 /// the size of the block the arr owns
 /// @param self the arr
-/// @return len * elem_size
+/// @return len * elem.size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_arr_bytes(const tda_Arr *self);
@@ -258,7 +269,7 @@ void *tda_arr_data_mut(tda_Arr *self);
 
 /// exchanges the contents of two arrs
 /// @param[in,out] self one arr
-/// @param[in,out] other must have the same elem_size and allocator; may be 'self'
+/// @param[in,out] other must have the same elem layout and allocator; may be 'self'
 /// @note a block belongs to the allocator that made it. Across allocators use
 ///       tda_arr_copy_with, then tda_arr_move_assign
 /// @bigo{1}
@@ -316,34 +327,34 @@ void tda_arr_print(const tda_Arr *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// returns 'self' after checking sizeof(T), so a macro evaluates its handle once;
-// _Generic keeps the handle's constness
+// returns 'self' after checking TDA_LAYOUT_OF(T), so a macro evaluates its handle
+// once; _Generic keeps the handle's constness
 [[nodiscard]]
-static inline const tda_Arr *tda_arr_typed_c_(const tda_Arr *self, [[maybe_unused]] size_t size) {
-    TDA_EXPECT(tda_arr_elem_size(self) == size);
+static inline const tda_Arr *tda_arr_typed_c_(const tda_Arr *self, [[maybe_unused]] tda_Layout elem) {
+    TDA_EXPECT(tda_layout_eq(tda_arr_elem_layout(self), elem));
     return self;
 }
 
 [[nodiscard]]
-static inline tda_Arr *tda_arr_typed_(tda_Arr *self, [[maybe_unused]] size_t size) {
-    TDA_EXPECT(tda_arr_elem_size(self) == size);
+static inline tda_Arr *tda_arr_typed_(tda_Arr *self, [[maybe_unused]] tda_Layout elem) {
+    TDA_EXPECT(tda_layout_eq(tda_arr_elem_layout(self), elem));
     return self;
 }
 
 #define TDA_ARR_TYPED_(T, self) \
-    _Generic((self), const tda_Arr *: tda_arr_typed_c_, tda_Arr *: tda_arr_typed_)((self), sizeof(T))
+    _Generic((self), const tda_Arr *: tda_arr_typed_c_, tda_Arr *: tda_arr_typed_)((self), TDA_LAYOUT_OF(T))
 /// @endcond
 
-/// tda_arr_new_len with sizeof(T) for the elem size
+/// tda_arr_new_len with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param len how many elems
 /// @param al the allocator
 /// @param[out] out where the new arr is written
 /// @bigo{n}
 #define TDA_ARR_NEW_LEN(T, len, al, out) \
-    tda_arr_new_len((len), sizeof(T), (al), (out))
+    tda_arr_new_len((len), TDA_LAYOUT_OF(T), (al), (out))
 
-/// tda_arr_from_data with sizeof(T)
+/// tda_arr_from_data with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param data the elems, typechecked as const T *
 /// @param len how many to read
@@ -351,7 +362,7 @@ static inline tda_Arr *tda_arr_typed_(tda_Arr *self, [[maybe_unused]] size_t siz
 /// @param[out] out where the new arr is written
 /// @bigo{n}
 #define TDA_ARR_FROM_DATA(T, data, len, al, out) \
-    tda_arr_from_data((const T *){ (data) }, (len), sizeof(T), (al), (out))
+    tda_arr_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new arr from the elems written out: TDA_ARR_OF(int32_t, al, &a, 5, 3, 1)
 /// @param T the elem type
@@ -363,7 +374,7 @@ static inline tda_Arr *tda_arr_typed_(tda_Arr *self, [[maybe_unused]] size_t siz
     tda_arr_from_data(                                  \
         (const T[]){ __VA_ARGS__ },                     \
         sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
-        sizeof(T), (al), (out))
+        TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_arr_front as a const T *
 /// @param T the elem type

@@ -8,30 +8,30 @@
 #include <stdio.h>
 
 /// [custom]
-// a table must fill in alloc and dealloc; calloc and realloc may be null, and the
-// wrappers then build them from the other two. ctx is the implementation's state,
-// passed to every callback
+// a table must fill in alloc and dealloc; alloc_zeroed, resize and remap may be null, and
+// the wrappers then make do with the other two. ctx is the implementation's state,
+// passed to every callback, and every callback gets the layout the block was made with
 typedef struct {
     tda_Al *parent;
     size_t live;
 } CountingCtx;
 
-static void *counting_alloc(void *ctx, size_t size) {
+static void *counting_alloc(void *ctx, tda_Layout layout) {
     CountingCtx *c = ctx;
 
-    void *ptr = tda_alloc(c->parent, size);
+    void *ptr = tda_alloc(c->parent, layout);
     if (ptr) {
-        c->live += size;
+        c->live += layout.size;
     }
 
     return ptr;
 }
 
-static void counting_dealloc(void *ctx, void *ptr, size_t size) {
+static void counting_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     CountingCtx *c = ctx;
 
-    tda_dealloc(c->parent, ptr, size);
-    c->live -= size;
+    tda_dealloc(c->parent, ptr, layout);
+    c->live -= layout.size;
 }
 
 /// [custom]
@@ -40,8 +40,8 @@ int main() {
     /// [use]
     tda_Al *al = tda_al_default();
 
-    // the macros apply sizeof(T) and check the multiplication, so a count that would
-    // overflow gives null instead of a wrapped size
+    // the macros take the layout from T, sizeof and alignof, and check the multiplication,
+    // so a count that would overflow gives null instead of a wrapped size
     int32_t *xs = TDA_ALLOC(int32_t, al, 4);
     if (!xs) {
         return 1;
@@ -63,8 +63,8 @@ int main() {
         .dealloc = counting_dealloc,
     };
 
-    // calloc is null in that table, so the wrapper does alloc plus memset
-    int32_t *zeros = TDA_CALLOC(int32_t, &counting, 4);
+    // alloc_zeroed is null in that table, so the wrapper does alloc plus memset
+    int32_t *zeros = TDA_ALLOC_ZEROED(int32_t, &counting, 4);
     if (!zeros) {
         return 1;
     }

@@ -40,6 +40,7 @@ static tda_Queue *make_queue(const int32_t *src, size_t n) {
     for (size_t i = 0; i < n; ++i) {
         push_int(q, src[i]);
     }
+
     return q;
 }
 
@@ -743,10 +744,10 @@ static void test_the_copy_reaches_algo_and_the_queue_is_untouched() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, got, SPREAD_LEN);
     tda_queue_copy_to_span(q, s);
 
-    TEST_ASSERT_EQUAL_size_t(2, tda_span_max_elem(tda_span_mut_to_span(s), tda_cmp_i32));
+    TEST_ASSERT_EQUAL_size_t(2, tda_span_max_elem(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
 
-    tda_span_sort(s, tda_cmp_i32);
-    TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32));
+    tda_span_sort(s, tda_cmp_i32, nullptr);
+    TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
 
     assert_elems(q, SPREAD, SPREAD_LEN);
 
@@ -902,7 +903,7 @@ static void test_eq_matches_the_same_elems() {
     TEST_ASSERT_TRUE(tda_queue_eq(a, a));
     TEST_ASSERT_TRUE(tda_queue_eq(a, b));
     TEST_ASSERT_TRUE(tda_queue_eq(b, a));
-    TEST_ASSERT_TRUE(tda_queue_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_queue_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_queue_drop(a);
     tda_queue_drop(b);
@@ -916,7 +917,7 @@ static void test_eq_parts_one_differing_elem() {
     tda_Queue *b = make_queue(rhs, 3);
 
     TEST_ASSERT_FALSE(tda_queue_eq(a, b));
-    TEST_ASSERT_FALSE(tda_queue_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_queue_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_queue_drop(a);
     tda_queue_drop(b);
@@ -943,7 +944,7 @@ static void test_eq_of_two_empties() {
     tda_Queue *one = make_queue(src, 1);
 
     TEST_ASSERT_TRUE(tda_queue_eq(a, b));
-    TEST_ASSERT_TRUE(tda_queue_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_queue_eq_by(a, b, tda_eq_i32, nullptr));
     TEST_ASSERT_FALSE(tda_queue_eq(a, one));
 
     tda_queue_drop(a);
@@ -960,7 +961,7 @@ static void test_eq_ignores_where_the_ring_starts() {
 
     TEST_ASSERT_TRUE(tda_queue_eq(straight, wrapped));
     TEST_ASSERT_TRUE(tda_queue_eq(wrapped, straight));
-    TEST_ASSERT_TRUE(tda_queue_eq_by(wrapped, straight, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_queue_eq_by(wrapped, straight, tda_eq_i32, nullptr));
 
     tda_queue_drop(straight);
     tda_queue_drop(wrapped);
@@ -994,7 +995,7 @@ static void test_eq_by_asks_the_equality() {
     TDA_TEST_OK(TDA_QUEUE_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
     TEST_ASSERT_FALSE(tda_queue_eq(a, b));
-    TEST_ASSERT_TRUE(tda_queue_eq_by(a, b, tda_test_pair_eq_a));
+    TEST_ASSERT_TRUE(tda_queue_eq_by(a, b, tda_test_pair_eq_a, nullptr));
 
     tda_queue_drop(a);
     tda_queue_drop(b);
@@ -1043,7 +1044,7 @@ static void test_into_deque_releases_the_header_alone() {
 
     // the constructor's last block is the adapter's header, so into must free that, with
     // the size it was taken with
-    const size_t header = probe.last_alloc_size;
+    const size_t header = probe.last_alloc.size;
 
     TDA_TEST_OK(TDA_QUEUE_PUSH(int32_t, q, 1));
     const size_t live = probe.live;
@@ -1051,7 +1052,7 @@ static void test_into_deque_releases_the_header_alone() {
     tda_Deque *d = tda_queue_into_deque(q);
 
     TEST_ASSERT_EQUAL_size_t(live - 1, probe.live);
-    TEST_ASSERT_EQUAL_size_t(header, probe.last_dealloc_size);
+    TEST_ASSERT_EQUAL_size_t(header, probe.last_dealloc.size);
 
     tda_deque_drop(d);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);

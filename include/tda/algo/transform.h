@@ -10,7 +10,7 @@
 /// @ingroup algo
 /// @brief mapping a span elemwise into another
 ///
-/// Only the lengths must match. Unlike the rest of algo, the elem sizes may differ: the
+/// Only the lengths must match. Unlike the rest of algo, the elem layouts may differ: the
 /// op knows both types and each span is walked with its own stride, so a span of Pair can
 /// map into a span of int64_t. To copy bytes unchanged, use algo/copy.
 ///

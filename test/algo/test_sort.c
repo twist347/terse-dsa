@@ -1,6 +1,7 @@
 #include "tda/algo/sort.h"
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
+#include "tda/core/rng.h"
 
 #include "support/tagged.h"
 
@@ -16,10 +17,15 @@ void setUp() {
 void tearDown() {
 }
 
+// qsort's comparator takes two arguments, the library's three
+static int qsort_cmp_i32(const void *lhs, const void *rhs) {
+    return tda_cmp_i32(lhs, rhs, nullptr);
+}
+
 // sorts a copy with libc qsort, an oracle that shares no code with what is tested
 static void sorted_copy(int32_t *dst, const int32_t *src, size_t n) {
     memcpy(dst, src, n * sizeof(int32_t));
-    qsort(dst, n, sizeof(int32_t), tda_cmp_i32);
+    qsort(dst, n, sizeof(int32_t), qsort_cmp_i32);
 }
 
 // true when both hold the same elems in any order; a reordering algorithm must never
@@ -41,7 +47,7 @@ static void test_insertion_sort_orders_a_shuffled_span() {
     int32_t buf[6] = {5, 3, 1, 4, 2, 6};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6);
 
-    tda_span_insertion_sort(s, tda_cmp_i32);
+    tda_span_insertion_sort(s, tda_cmp_i32, nullptr);
 
     constexpr int32_t expected[6] = {1, 2, 3, 4, 5, 6};
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 6);
@@ -51,7 +57,7 @@ static void test_insertion_sort_already_sorted_is_unchanged() {
     int32_t buf[4] = {1, 2, 3, 4};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4);
 
-    tda_span_insertion_sort(s, tda_cmp_i32);
+    tda_span_insertion_sort(s, tda_cmp_i32, nullptr);
 
     constexpr int32_t expected[4] = {1, 2, 3, 4};
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 4);
@@ -62,7 +68,7 @@ static void test_insertion_sort_reversed_span() {
     int32_t buf[5] = {5, 4, 3, 2, 1};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
-    tda_span_insertion_sort(s, tda_cmp_i32);
+    tda_span_insertion_sort(s, tda_cmp_i32, nullptr);
 
     constexpr int32_t expected[5] = {1, 2, 3, 4, 5};
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 5);
@@ -72,7 +78,7 @@ static void test_insertion_sort_keeps_duplicates() {
     int32_t buf[6] = {3, 1, 3, 2, 1, 3};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6);
 
-    tda_span_insertion_sort(s, tda_cmp_i32);
+    tda_span_insertion_sort(s, tda_cmp_i32, nullptr);
 
     constexpr int32_t expected[6] = {1, 1, 2, 3, 3, 3};
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 6);
@@ -81,10 +87,10 @@ static void test_insertion_sort_keeps_duplicates() {
 static void test_insertion_sort_empty_and_single_are_noop() {
     int32_t buf[1] = {42};
 
-    tda_span_insertion_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32);
+    tda_span_insertion_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, nullptr);
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
 
-    tda_span_insertion_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32);
+    tda_span_insertion_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, nullptr);
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
 }
 
@@ -93,7 +99,7 @@ static void test_insertion_sort_follows_the_comparator() {
     int32_t buf[5] = {2, 5, 1, 4, 3};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
-    tda_span_insertion_sort(s, tda_cmp_desc_i32);
+    tda_span_insertion_sort(s, tda_cmp_desc_i32, nullptr);
 
     constexpr int32_t expected[5] = {5, 4, 3, 2, 1};
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 5);
@@ -106,7 +112,7 @@ static void test_insertion_sort_is_stable() {
     };
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 5);
 
-    tda_span_insertion_sort(s, tda_test_tagged_cmp_key);
+    tda_span_insertion_sort(s, tda_test_tagged_cmp_key, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(1, buf[0].key);
     TEST_ASSERT_EQUAL_INT32(0, buf[0].tag);
@@ -124,7 +130,7 @@ static void test_insertion_sort_stays_within_the_subspan() {
     int32_t buf[5] = {9, 3, 1, 2, 9};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
-    tda_span_insertion_sort(tda_span_sub_mut(s, 1, 3), tda_cmp_i32);
+    tda_span_insertion_sort(tda_span_sub_mut(s, 1, 3), tda_cmp_i32, nullptr);
 
     constexpr int32_t expected[5] = {9, 1, 2, 3, 9};
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 5);
@@ -140,12 +146,13 @@ static uintptr_t wide_first = 0;
 static uintptr_t wide_end = 0;
 static size_t wide_strays = 0;
 
-static int cmp_wide_in_place(const void *lhs, const void *rhs) {
+static int cmp_wide_in_place(const void *lhs, const void *rhs, void *) {
     wide_strays += (uintptr_t) lhs < wide_first || (uintptr_t) lhs >= wide_end;
     wide_strays += (uintptr_t) rhs < wide_first || (uintptr_t) rhs >= wide_end;
 
     const Wide *a = lhs;
     const Wide *b = rhs;
+
     return (a->key > b->key) - (a->key < b->key);
 }
 
@@ -161,7 +168,7 @@ static void test_insertion_sort_compares_elems_where_they_lie() {
     wide_first = (uintptr_t) buf;
     wide_end = (uintptr_t) (buf + 12);
     wide_strays = 0;
-    tda_span_insertion_sort(TDA_SPAN_FROM_DATA_MUT(Wide, buf, 12), cmp_wide_in_place);
+    tda_span_insertion_sort(TDA_SPAN_FROM_DATA_MUT(Wide, buf, 12), cmp_wide_in_place, nullptr);
 
     TEST_ASSERT_EQUAL_size_t(0, wide_strays);
     for (size_t i = 0; i < 12; ++i) {
@@ -174,8 +181,8 @@ typedef struct {
     unsigned char payload[300];
 } Bulky;
 
-static int cmp_bulky(const void *lhs, const void *rhs) {
-    return tda_cmp_i32(&((const Bulky *) lhs)->key, &((const Bulky *) rhs)->key);
+static int cmp_bulky(const void *lhs, const void *rhs, void *) {
+    return tda_cmp_i32(&((const Bulky *) lhs)->key, &((const Bulky *) rhs)->key, nullptr);
 }
 
 // too big to be set aside, so it takes the path that swaps instead of sliding
@@ -186,7 +193,7 @@ static void test_insertion_sort_moves_elems_too_big_to_set_aside() {
         memset(buf[i].payload, (int) (8 - i), sizeof(buf[i].payload));
     }
 
-    tda_span_insertion_sort(TDA_SPAN_FROM_DATA_MUT(Bulky, buf, 8), cmp_bulky);
+    tda_span_insertion_sort(TDA_SPAN_FROM_DATA_MUT(Bulky, buf, 8), cmp_bulky, nullptr);
 
     for (size_t i = 0; i < 8; ++i) {
         TEST_ASSERT_EQUAL_INT32((int32_t) (i + 1), buf[i].key);
@@ -200,7 +207,7 @@ static void test_insertion_sort_moves_elems_too_big_to_set_aside() {
 static void test_sort_orders_a_shuffled_span() {
     int32_t buf[6] = {5, 3, 1, 4, 2, 6};
 
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32, nullptr);
 
     constexpr int32_t want[6] = {1, 2, 3, 4, 5, 6};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 6);
@@ -209,7 +216,7 @@ static void test_sort_orders_a_shuffled_span() {
 static void test_sort_keeps_duplicates() {
     int32_t buf[6] = {3, 1, 3, 2, 1, 3};
 
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32, nullptr);
 
     constexpr int32_t want[6] = {1, 1, 2, 3, 3, 3};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 6);
@@ -218,17 +225,17 @@ static void test_sort_keeps_duplicates() {
 static void test_sort_empty_and_single_are_noop() {
     int32_t buf[1] = {42};
 
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, nullptr);
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
 
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, nullptr);
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
 }
 
 static void test_sort_follows_the_comparator() {
     int32_t buf[5] = {2, 5, 1, 4, 3};
 
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_desc_i32);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_desc_i32, nullptr);
 
     constexpr int32_t want[5] = {5, 4, 3, 2, 1};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);
@@ -238,7 +245,7 @@ static void test_sort_stays_within_the_subspan() {
     int32_t buf[5] = {9, 3, 1, 2, 9};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
-    tda_span_sort(tda_span_sub_mut(s, 1, 3), tda_cmp_i32);
+    tda_span_sort(tda_span_sub_mut(s, 1, 3), tda_cmp_i32, nullptr);
 
     constexpr int32_t want[5] = {9, 1, 2, 3, 9};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);
@@ -253,11 +260,11 @@ static void test_sort_orders_a_long_span() {
     }
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 64);
-    TEST_ASSERT_FALSE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32));
+    TEST_ASSERT_FALSE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
 
-    tda_span_sort(s, tda_cmp_i32);
+    tda_span_sort(s, tda_cmp_i32, nullptr);
 
-    TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
     for (size_t i = 0; i < 64; ++i) {
         TEST_ASSERT_EQUAL_INT32((int32_t) i, buf[i]);
     }
@@ -267,7 +274,7 @@ static void test_sort_orders_a_long_span() {
 static void test_sort_moves_whole_elems() {
     Tagged buf[3] = {{3, 30}, {1, 10}, {2, 20}};
 
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 3), tda_test_tagged_cmp_key);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 3), tda_test_tagged_cmp_key, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(1, buf[0].key);
     TEST_ASSERT_EQUAL_INT32(10, buf[0].tag);
@@ -284,7 +291,7 @@ static void test_sort_stable_orders_a_shuffled_span() {
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32, tda_al_default())
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32, nullptr, tda_al_default())
     );
 
     constexpr int32_t want[6] = {1, 2, 3, 4, 5, 6};
@@ -299,7 +306,7 @@ static void test_sort_stable_keeps_equal_elems_in_order() {
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 6), tda_test_tagged_cmp_key, tda_al_default())
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 6), tda_test_tagged_cmp_key, nullptr, tda_al_default())
     );
 
     for (size_t i = 0; i < 3; ++i) {
@@ -326,7 +333,7 @@ static void test_sort_stable_handles_lengths_that_are_not_powers_of_two() {
 
         TEST_ASSERT_EQUAL_INT(
             TDA_STATUS_OK,
-            tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, len), tda_cmp_i32, tda_al_default())
+            tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, len), tda_cmp_i32, nullptr, tda_al_default())
         );
 
         TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, len);
@@ -339,7 +346,7 @@ static void test_sort_stable_stays_within_the_subspan() {
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(tda_span_sub_mut(s, 1, 3), tda_cmp_i32, tda_al_default())
+        tda_span_sort_stable(tda_span_sub_mut(s, 1, 3), tda_cmp_i32, nullptr, tda_al_default())
     );
 
     constexpr int32_t want[5] = {9, 1, 2, 3, 9};
@@ -354,7 +361,7 @@ static void test_sort_stable_works_through_an_arena() {
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32, arena)
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32, nullptr, arena)
     );
 
     constexpr int32_t want[5] = {1, 2, 3, 4, 5};
@@ -372,7 +379,7 @@ static void test_sort_stable_reports_an_exhausted_arena() {
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_ERR_NO_MEM,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), tda_cmp_i32, arena)
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), tda_cmp_i32, nullptr, arena)
     );
 
     constexpr int32_t want[8] = {8, 7, 6, 5, 4, 3, 2, 1};
@@ -390,11 +397,11 @@ static void test_sort_stable_of_empty_and_single_needs_no_scratch() {
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, arena)
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, nullptr, arena)
     );
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, arena)
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, nullptr, arena)
     );
 
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
@@ -409,7 +416,7 @@ static void test_partial_sort_puts_the_n_smallest_in_order_at_the_front() {
     int32_t buf[8] = {7, 2, 8, 1, 5, 3, 6, 4};
     constexpr int32_t src[8] = {7, 2, 8, 1, 5, 3, 6, 4};
 
-    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), 3, tda_cmp_i32);
+    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), 3, tda_cmp_i32, nullptr);
 
     constexpr int32_t want_head[3] = {1, 2, 3};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want_head, buf, 3);
@@ -426,7 +433,7 @@ static void test_partial_sort_puts_the_n_smallest_in_order_at_the_front() {
 static void test_partial_sort_with_n_zero_is_a_noop() {
     int32_t buf[4] = {4, 3, 2, 1};
 
-    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 0, tda_cmp_i32);
+    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 0, tda_cmp_i32, nullptr);
 
     constexpr int32_t want[4] = {4, 3, 2, 1};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 4);
@@ -435,7 +442,7 @@ static void test_partial_sort_with_n_zero_is_a_noop() {
 static void test_partial_sort_with_n_equal_to_len_sorts_everything() {
     int32_t buf[5] = {3, 5, 1, 4, 2};
 
-    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), 5, tda_cmp_i32);
+    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), 5, tda_cmp_i32, nullptr);
 
     constexpr int32_t want[5] = {1, 2, 3, 4, 5};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);
@@ -444,7 +451,7 @@ static void test_partial_sort_with_n_equal_to_len_sorts_everything() {
 static void test_partial_sort_follows_the_comparator() {
     int32_t buf[6] = {3, 6, 1, 5, 2, 4};
 
-    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 2, tda_cmp_desc_i32);
+    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 2, tda_cmp_desc_i32, nullptr);
 
     constexpr int32_t want_head[2] = {6, 5};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want_head, buf, 2);
@@ -454,7 +461,7 @@ static void test_partial_sort_handles_duplicates() {
     int32_t buf[7] = {3, 1, 3, 1, 2, 3, 2};
     constexpr int32_t src[7] = {3, 1, 3, 1, 2, 3, 2};
 
-    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), 4, tda_cmp_i32);
+    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), 4, tda_cmp_i32, nullptr);
 
     constexpr int32_t want_head[4] = {1, 1, 2, 2};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want_head, buf, 4);
@@ -475,7 +482,7 @@ static void test_nth_elem_places_every_position() {
         int32_t buf[7];
         memcpy(buf, src, sizeof(buf));
 
-        tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), nth, tda_cmp_i32);
+        tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), nth, tda_cmp_i32, nullptr);
 
         TEST_ASSERT_EQUAL_INT32(want[nth], buf[nth]);
         TEST_ASSERT_TRUE(same_elems(src, buf, 7));
@@ -487,7 +494,7 @@ static void test_nth_elem_partitions_around_the_nth() {
     int32_t buf[9] = {9, 1, 8, 2, 7, 3, 6, 4, 5};
     constexpr size_t nth = 4;
 
-    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 9), nth, tda_cmp_i32);
+    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 9), nth, tda_cmp_i32, nullptr);
 
     for (size_t i = 0; i < nth; ++i) {
         TEST_ASSERT_TRUE(buf[i] <= buf[nth]);
@@ -500,7 +507,7 @@ static void test_nth_elem_partitions_around_the_nth() {
 static void test_nth_elem_of_a_single_is_a_noop() {
     int32_t buf[1] = {42};
 
-    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), 0, tda_cmp_i32);
+    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), 0, tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);
 }
@@ -516,7 +523,7 @@ static void test_nth_elem_handles_duplicates() {
         int32_t buf[8];
         memcpy(buf, src, sizeof(buf));
 
-        tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), nth, tda_cmp_i32);
+        tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), nth, tda_cmp_i32, nullptr);
 
         TEST_ASSERT_EQUAL_INT32(want[nth], buf[nth]);
     }
@@ -526,7 +533,7 @@ static void test_nth_elem_stays_within_the_subspan() {
     int32_t buf[6] = {9, 4, 1, 3, 2, 9};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6);
 
-    tda_span_nth_elem(tda_span_sub_mut(s, 1, 4), 0, tda_cmp_i32);
+    tda_span_nth_elem(tda_span_sub_mut(s, 1, 4), 0, tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(9, buf[0]);
     TEST_ASSERT_EQUAL_INT32(1, buf[1]); // the smallest of the four
@@ -551,9 +558,10 @@ static constexpr size_t SCALE_LIMIT = 3 * SCALE_N_LOG_N;
 
 static size_t cmp_calls = 0;
 
-static int cmp_i32_counting(const void *a, const void *b) {
+static int cmp_i32_counting(const void *a, const void *b, void *) {
     ++cmp_calls;
-    return tda_cmp_i32(a, b);
+
+    return tda_cmp_i32(a, b, nullptr);
 }
 
 static void test_sort_stays_n_log_n_on_ordered_input() {
@@ -563,14 +571,14 @@ static void test_sort_stays_n_log_n_on_ordered_input() {
         buf[i] = (int32_t) i;
     }
     cmp_calls = 0;
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting, nullptr);
     TEST_ASSERT_LESS_THAN_size_t(SCALE_LIMIT, cmp_calls);
 
     for (size_t i = 0; i < SCALE_N; ++i) {
         buf[i] = (int32_t) (SCALE_N - i);
     }
     cmp_calls = 0;
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting, nullptr);
     TEST_ASSERT_LESS_THAN_size_t(SCALE_LIMIT, cmp_calls);
 }
 
@@ -582,7 +590,7 @@ static void test_sort_stays_linear_on_equal_keys() {
     }
 
     cmp_calls = 0;
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting, nullptr);
 
     TEST_ASSERT_LESS_THAN_size_t(8 * SCALE_N, cmp_calls);
 }
@@ -595,14 +603,14 @@ static void test_nth_elem_stays_linear() {
         buf[i] = (int32_t) i;
     }
     cmp_calls = 0;
-    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), SCALE_N / 2, cmp_i32_counting);
+    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), SCALE_N / 2, cmp_i32_counting, nullptr);
     TEST_ASSERT_LESS_THAN_size_t(8 * SCALE_N, cmp_calls);
 
     for (size_t i = 0; i < SCALE_N; ++i) {
         buf[i] = 7;
     }
     cmp_calls = 0;
-    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), SCALE_N / 2, cmp_i32_counting);
+    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), SCALE_N / 2, cmp_i32_counting, nullptr);
     TEST_ASSERT_LESS_THAN_size_t(8 * SCALE_N, cmp_calls);
 }
 
@@ -615,7 +623,11 @@ static int32_t adversary_gas = 0;
 static int32_t adversary_solid = 0;
 static int32_t adversary_candidate = 0;
 
-static int cmp_adversary(const void *lhs, const void *rhs) {
+// the ctx the adversary is handed; the fallback paths only it reaches must pass it on
+static int adversary_ctx;
+
+static int cmp_adversary(const void *lhs, const void *rhs, void *ctx) {
+    TEST_ASSERT_EQUAL_PTR(&adversary_ctx, ctx);
     ++cmp_calls;
     const int32_t a = *(const int32_t *) lhs;
     const int32_t b = *(const int32_t *) rhs;
@@ -628,6 +640,7 @@ static int cmp_adversary(const void *lhs, const void *rhs) {
     } else if (adversary_val[b] == adversary_gas) {
         adversary_candidate = b;
     }
+
     return (adversary_val[a] > adversary_val[b]) - (adversary_val[a] < adversary_val[b]);
 }
 
@@ -651,7 +664,7 @@ static void test_sort_stays_n_log_n_against_an_adversary() {
     adversary_arm(buf, val);
 
     cmp_calls = 0;
-    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_adversary);
+    tda_span_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_adversary, &adversary_ctx);
 
     TEST_ASSERT_LESS_THAN_size_t(2 * SCALE_LIMIT, cmp_calls);
     for (size_t i = 1; i < SCALE_N; ++i) {
@@ -668,7 +681,7 @@ static void test_nth_elem_stays_n_log_n_against_an_adversary() {
 
     constexpr size_t nth = SCALE_N / 2;
     cmp_calls = 0;
-    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), nth, cmp_adversary);
+    tda_span_nth_elem(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), nth, cmp_adversary, &adversary_ctx);
 
     TEST_ASSERT_LESS_THAN_size_t(8 * SCALE_N_LOG_N, cmp_calls);
     for (size_t i = 0; i < nth; ++i) {
@@ -687,7 +700,7 @@ static void test_partial_sort_stays_n_log_n_against_an_adversary() {
 
     constexpr size_t count = SCALE_N / 2;
     cmp_calls = 0;
-    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), count, cmp_adversary);
+    tda_span_partial_sort(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), count, cmp_adversary, &adversary_ctx);
 
     TEST_ASSERT_LESS_THAN_size_t(8 * SCALE_N_LOG_N, cmp_calls);
     for (size_t i = 1; i < count; ++i) {
@@ -698,41 +711,97 @@ static void test_partial_sort_stays_n_log_n_against_an_adversary() {
     }
 }
 
+/* ========== a comparator that is no order ========== */
+
+static uint32_t liar_state;
+
+// answers at random, so the same pair may get any answer and nothing is transitive
+static int cmp_liar(const void *, const void *, void *) {
+    liar_state = liar_state * 1103515245u + 12345u;
+
+    return (int) ((liar_state >> 16) % 3) - 1;
+}
+
+// sort.h promises that a broken comparator scrambles the order and nothing else: every
+// elem stays exactly once, and under ASan nothing past the span is read
+static void test_a_comparator_that_is_no_order_keeps_every_elem() {
+    tda_Rng rng = tda_rng_from_seed(7);
+
+    for (size_t round = 0; round < 500; ++round) {
+        // exactly n elems on the heap, so a read one past the span is past the block
+        const size_t n = tda_rng_idx(&rng, 65);
+        int32_t *buf = n ? malloc(n * sizeof(int32_t)) : nullptr;
+        int32_t orig[64];
+        TEST_ASSERT_TRUE(n == 0 || buf);
+        for (size_t i = 0; i < n; ++i) {
+            buf[i] = (int32_t) tda_rng_idx(&rng, 16);
+        }
+        if (n > 0) {
+            memcpy(orig, buf, n * sizeof(int32_t));
+        }
+        const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, n);
+        liar_state = (uint32_t) round;
+
+        switch (round % 5) {
+        case 0:
+            tda_span_sort(s, cmp_liar, nullptr);
+            break;
+        case 1:
+            TEST_ASSERT_EQUAL_INT(TDA_STATUS_OK, tda_span_sort_stable(s, cmp_liar, nullptr, tda_al_default()));
+            break;
+        case 2:
+            tda_span_partial_sort(s, tda_rng_idx(&rng, n + 1), cmp_liar, nullptr);
+            break;
+        case 3:
+            if (n > 0) {
+                tda_span_nth_elem(s, tda_rng_idx(&rng, n), cmp_liar, nullptr);
+            }
+            break;
+        default:
+            tda_span_insertion_sort(s, cmp_liar, nullptr);
+            break;
+        }
+
+        TEST_ASSERT_TRUE(n == 0 || same_elems(buf, orig, n));
+        free(buf);
+    }
+}
+
 /* ========== is_sorted ========== */
 
 static void test_is_sorted_accepts_ascending() {
     constexpr int32_t buf[4] = {1, 2, 3, 4};
 
-    TEST_ASSERT_TRUE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 4), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 4), tda_cmp_i32, nullptr));
 }
 
 static void test_is_sorted_allows_equal_neighbours() {
     constexpr int32_t buf[4] = {1, 2, 2, 3};
 
-    TEST_ASSERT_TRUE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 4), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 4), tda_cmp_i32, nullptr));
 }
 
 // the break in order is in the last pair; the walk must reach it
 static void test_is_sorted_rejects_a_late_inversion() {
     constexpr int32_t buf[4] = {1, 2, 3, 0};
 
-    TEST_ASSERT_FALSE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 4), tda_cmp_i32));
+    TEST_ASSERT_FALSE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 4), tda_cmp_i32, nullptr));
 }
 
 static void test_is_sorted_empty_and_single_are_sorted() {
     constexpr int32_t buf[1] = {42};
 
-    TEST_ASSERT_TRUE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 0), tda_cmp_i32));
-    TEST_ASSERT_TRUE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 1), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 0), tda_cmp_i32, nullptr));
+    TEST_ASSERT_TRUE(tda_span_is_sorted(TDA_SPAN_FROM_DATA(int32_t, buf, 1), tda_cmp_i32, nullptr));
 }
 
 static void test_is_sorted_agrees_with_sort() {
     int32_t buf[6] = {4, 1, 6, 2, 5, 3};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6);
 
-    TEST_ASSERT_FALSE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32));
-    tda_span_insertion_sort(s, tda_cmp_i32);
-    TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32));
+    TEST_ASSERT_FALSE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
+    tda_span_insertion_sort(s, tda_cmp_i32, nullptr);
+    TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
 }
 
 /* ========== is_sorted_until ========== */
@@ -740,7 +809,7 @@ static void test_is_sorted_agrees_with_sort() {
 static void test_is_sorted_until_points_at_the_first_break() {
     constexpr int32_t buf[6] = {1, 2, 3, 2, 5, 6};
 
-    TEST_ASSERT_EQUAL_size_t(3, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, buf, 6), tda_cmp_i32));
+    TEST_ASSERT_EQUAL_size_t(3, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, buf, 6), tda_cmp_i32, nullptr));
 }
 
 // a sorted span answers with its own length, which makes is_sorted
@@ -749,29 +818,35 @@ static void test_is_sorted_until_of_a_sorted_span_is_its_length() {
     constexpr int32_t buf[4] = {1, 2, 3, 4};
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 4);
 
-    TEST_ASSERT_EQUAL_size_t(4, tda_span_is_sorted_until(s, tda_cmp_i32));
-    TEST_ASSERT_TRUE(tda_span_is_sorted(s, tda_cmp_i32));
+    TEST_ASSERT_EQUAL_size_t(4, tda_span_is_sorted_until(s, tda_cmp_i32, nullptr));
+    TEST_ASSERT_TRUE(tda_span_is_sorted(s, tda_cmp_i32, nullptr));
 }
 
 static void test_is_sorted_until_on_short_and_flat_spans() {
     constexpr int32_t one[1] = {5};
     constexpr int32_t flat[3] = {7, 7, 7};
 
-    TEST_ASSERT_EQUAL_size_t(0, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), tda_cmp_i32));
-    TEST_ASSERT_EQUAL_size_t(1, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, one, 1), tda_cmp_i32));
-    TEST_ASSERT_EQUAL_size_t(3, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, flat, 3), tda_cmp_i32));
+    TEST_ASSERT_EQUAL_size_t(
+        0,
+        tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), tda_cmp_i32, nullptr)
+    );
+    TEST_ASSERT_EQUAL_size_t(1, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, one, 1), tda_cmp_i32, nullptr));
+    TEST_ASSERT_EQUAL_size_t(3, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, flat, 3), tda_cmp_i32, nullptr));
 }
 
 static void test_is_sorted_until_breaks_at_the_second_elem() {
     constexpr int32_t buf[3] = {9, 1, 2};
 
-    TEST_ASSERT_EQUAL_size_t(1, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, buf, 3), tda_cmp_i32));
+    TEST_ASSERT_EQUAL_size_t(1, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, buf, 3), tda_cmp_i32, nullptr));
 }
 
 static void test_is_sorted_until_follows_the_comparator() {
     constexpr int32_t buf[4] = {4, 3, 2, 9};
 
-    TEST_ASSERT_EQUAL_size_t(3, tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, buf, 4), tda_cmp_desc_i32));
+    TEST_ASSERT_EQUAL_size_t(
+        3,
+        tda_span_is_sorted_until(TDA_SPAN_FROM_DATA(int32_t, buf, 4), tda_cmp_desc_i32, nullptr)
+    );
 }
 
 int main() {
@@ -822,6 +897,7 @@ int main() {
     RUN_TEST(test_sort_stays_n_log_n_against_an_adversary);
     RUN_TEST(test_nth_elem_stays_n_log_n_against_an_adversary);
     RUN_TEST(test_partial_sort_stays_n_log_n_against_an_adversary);
+    RUN_TEST(test_a_comparator_that_is_no_order_keeps_every_elem);
 
     RUN_TEST(test_is_sorted_accepts_ascending);
     RUN_TEST(test_is_sorted_allows_equal_neighbours);

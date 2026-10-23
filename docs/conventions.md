@@ -24,7 +24,8 @@ function.
 the operation verb; the instance is just the first argument, like `FILE *` in `fprintf`
 and not `file_printf`.
 
-- `tda_Al` is an interface → `tda_alloc`, `tda_calloc`, `tda_realloc`, `tda_dealloc`.
+- `tda_Al` is an interface → `tda_alloc`, `tda_alloc_zeroed`, `tda_resize`, `tda_remap`,
+  `tda_realloc`, `tda_dealloc`.
 - Functions about the allocator *object* keep the full slug: `tda_al_default`.
 
 Rule of thumb: **owned object → `tda_<slug>_verb(self, ...)`; interface →
@@ -45,6 +46,14 @@ comparator with their addresses.
 
 Where the bare name is already a result type, the typedef is named for the agent rather
 than the operation — `tda_Hash` is the value, so `tda_Hasher` produces one.
+
+**Every callback takes a `void *ctx` last**, and every function that takes a callback takes
+the ctx right after it: `tda_span_sort(s, cmp, ctx)`, `tda_span_find_if(s, pred, ctx, …)`.
+So an order or a match can depend on more than its operands — keys to sort indices by, a
+modulus, a seed — with no global. A ready-made callback ignores it and is passed
+`nullptr`. A container that stores its callbacks stores the ctx with them, one for a
+hasher and an equality that must agree. `tda_FPrint` is the exception: it prints one
+value to one stream and has nothing to be told.
 
 A function pointer that only ever lives inside one interface aggregate stays an inline
 member with no typedef, as in `tda_Al`: a typedef would name a type never written twice.
@@ -79,7 +88,9 @@ suffix; differ only by argument → after the slug; one version → nothing.**
   hashes.
 - `idx` one index, `i`/`j` a pair of them, `at` a node position.
 - `len` how many elems there are, `cap` how many fit, `count` how many an argument asks
-  for, `nth` an ordinal. `num` only in `tda_calloc`, where `malloc`'s spelling wins.
+  for, `nth` an ordinal.
+- `layout` a block's size and alignment together, a `tda_Layout`; `old` the one a block
+  was made with, when a new size comes beside it.
 
 **Macros** are `TDA_UPPER`, but the prefix is for what leaves the translation unit. A
 `static` constant or a macro that lives and dies inside one `.c` shares no namespace with
@@ -108,10 +119,14 @@ an error cannot be silently dropped.
   ignorable, which is the "errors are optional" model this library rejects.
 - **Can't-fail ops return their value directly**, with no status: pure accessors such as
   `tda_arr_len` and `tda_arr_elem_size`. Uniform means uniform among *fallible* ops.
-- **Allocator wrappers are the value-return exception, and a principled one.** `tda_alloc`,
-  `tda_calloc` and `tda_realloc` return the pointer, `nullptr` meaning failure: the value
-  and the single error cause share one channel, so `[[nodiscard]]` already flags a dropped
-  check. `tda_Status f(…, void **out)` would buy nothing and fight the `malloc` idiom.
+- **Allocator wrappers are the value-return exception, and a principled one.**
+  `tda_alloc`, `tda_alloc_zeroed` and `tda_realloc` return the pointer, `nullptr` meaning
+  failure: the value and the single error cause share one channel, so `[[nodiscard]]`
+  already flags a dropped check. `tda_Status f(…, void **out)` would buy nothing and
+  fight the `malloc` idiom.
+- **A type known at compile time is allocated through `TDA_ALLOC(T, …)`**, inside the
+  library as outside it: handles, allocator contexts, a bitset's words. A layout known
+  only at run time — elem buffers, nodes — goes through `tda_alloc` with that layout.
 - **Everything else keeps the status**, though OOM is nearly its only cause, because the
   status is a type-level marker that an op *can* fail rather than a carrier of causes. The
   `malloc` idiom does not generalize: most fallible ops have nothing to hand back, and
@@ -119,24 +134,37 @@ an error cannot be silently dropped.
   `binary_search`, while `hmap` and `hset` `insert` need both meanings at once. A second
   cause is then one more enumerator, not a new signature everywhere.
 - **assert vs status.** `assert` is for programmer errors — broken preconditions like
-  `elem_size > 0`, `al != nullptr`, `self != nullptr`, `out != nullptr`. Those are bugs,
-  not runtime states. `tda_Status` is for data-dependent failures reachable from correct
-  code: OOM, and `len * elem_size` overflow folded into `tda_calloc`'s `ckd_mul` →
-  `nullptr` → `TDA_STATUS_ERR_NO_MEM`. Never turn one of those into UB or an assert.
+  an elem layout that is no type's, `al != nullptr`, `self != nullptr`,
+  `out != nullptr`. Those are bugs, not runtime states. `tda_Status` is for
+  data-dependent failures reachable from correct code: OOM, and `len * elem.size`
+  overflow folded into `tda_layout_ckd_array` → `nullptr` → `TDA_STATUS_ERR_NO_MEM`. Never turn one of those into UB or an assert.
 - **`TDA_EXPECT` vs `assert`.** A precondition of a public function whose breach would
-  touch memory out of bounds — an index, emptiness, a range, matching `elem_size` — is a
+  touch memory out of bounds — an index, emptiness, a range, a matching elem layout — is a
   `TDA_EXPECT`, which `TDA_HARDENED` keeps in release, and so is an allocator's block
   that misses the alignment the contract promises. Invariants, anything above O(1) and a
   breach that only gives a wrong answer, such as an output overlapping an input in algo,
   stay `assert`.
-- **Typed macros check their type's size.** A `*_AS`, `SET`, `PUSH` and kin passes its
-  handle through `tda_<slug>_typed_`, which `TDA_EXPECT`s `sizeof(T)` against the elem
-  size and hands the handle back — one evaluation, constness kept by a `_Generic` choice
-  between a const and a mutable helper, so no cast drops it. A container stores no type,
-  so this catches a wrong width only: `float` passes for `int32_t`. A walk macro reads its
-  handle once too, and names its hidden variables with `TDA_LINE_NAME_`, so walks nest
-  without `-Wshadow`. The node macros (`TDA_LIST_NODE_ELEM_AS`, `TDA_HMAP_NODE_KEY_AS`,
-  `TDA_HSET_NODE_KEY_AS`) are the exception: a node has no container to ask, so their
-  type is taken on trust.
+- **Typed macros check their type's layout.** A `*_AS`, `SET`, `PUSH` and kin passes its
+  handle through `tda_<slug>_typed_`, which `TDA_EXPECT`s `TDA_LAYOUT_OF(T)` against the
+  elem layout and hands the handle back — one evaluation, constness kept by a `_Generic`
+  choice between a const and a mutable helper, so no cast drops it. A container stores
+  no type, so this catches a wrong width or alignment only: `float` passes for
+  `int32_t`. The node macros (`TDA_LIST_NODE_ELEM_AS`, `TDA_HMAP_NODE_KEY_AS`,
+  `TDA_HSET_NODE_KEY_AS`) take the container a node is in and check through it, since
+  the container knows where in the node the elem lies. A walk macro reads its handle
+  once too, and names its hidden variables with `TDA_LINE_NAME_`, so walks nest without
+  `-Wshadow`.
+- **Layouts are passed, never guessed.** Whatever allocates for elems — a container, an
+  algo's scratch buffer — gets their whole layout from its caller: a constructor takes a
+  `tda_Layout`, a span carries one. Nothing infers an alignment from a size. Two spans,
+  or a span and a container, meet only on one layout, alignment included.
 - Public symbols carry `TDA_API` (see `core/export.h`); everything else stays hidden under
   the library's default-hidden visibility.
+
+## Code layout
+
+- **A function body is paragraphs**, a blank line between them: the precondition checks,
+  each step of the work, the result. The final `return` is a paragraph of its own, after
+  a loop's `}` and after the line that computed its value alike.
+- **A body of one check and a `return`** — the `_typed_` helpers — is one paragraph and
+  takes no blank line.

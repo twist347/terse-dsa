@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tda/core/layout.h"
 #include "tda/core/util.h"
 
 #include <assert.h>
@@ -48,9 +49,19 @@ static inline size_t tda_ptr_distance(const void *a, const void *b, size_t strid
 
 /* ========== alignment ========== */
 
-/// what every allocator here hands out when nothing wider is asked for: the alignment
-/// malloc itself promises, and the floor under alloc/aligned's parameter
+/// malloc's own alignment, alignof(max_align_t): what the plain libc calls are owed for a
+/// block at least that long, and what the header at the front of a caller's buffer is
+/// put on
 static constexpr size_t TDA_DEFAULT_ALIGNMENT = alignof(max_align_t);
+
+/// room for 'len' elems of 'elem' that already sit in memory somewhere, as a scratch copy
+/// of a span; the size cannot overflow, since the elems already fit
+[[nodiscard]]
+static inline tda_Layout tda_elems_layout(tda_Layout elem, size_t len) {
+    assert(tda_layout_is_type(elem));
+
+    return (tda_Layout){.size = elem.size * len, .align = elem.align};
+}
 
 [[nodiscard]]
 static inline size_t tda_align_up(size_t val, size_t alignment) {
@@ -73,6 +84,7 @@ static inline bool tda_ckd_align_up(size_t *out, size_t val, size_t alignment) {
         return true;
     }
     *out = tda_align_up(val, alignment);
+
     return false;
 }
 

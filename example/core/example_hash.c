@@ -17,13 +17,13 @@ typedef struct {
     int32_t y;
 } Point;
 
-static tda_Hash hash_point(const void *v) {
+static tda_Hash hash_point(const void *v, void *) {
     const Point *p = v;
 
-    return tda_hash_combine(tda_hash_i32(&p->x), tda_hash_i32(&p->y));
+    return tda_hash_combine(tda_hash_i32(&p->x, nullptr), tda_hash_i32(&p->y, nullptr));
 }
 
-static bool eq_point(const void *lhs, const void *rhs) {
+static bool eq_point(const void *lhs, const void *rhs, void *) {
     const Point *a = lhs;
     const Point *b = rhs;
 
@@ -34,7 +34,7 @@ static bool eq_point(const void *lhs, const void *rhs) {
 int main() {
     /// [use]
     tda_HSet *seen = nullptr;
-    if (TDA_STATUS_IS_ERR(TDA_HSET_NEW(Point, hash_point, eq_point, tda_al_default(), &seen))) {
+    if (TDA_STATUS_IS_ERR(TDA_HSET_NEW(Point, hash_point, eq_point, nullptr, tda_al_default(), &seen))) {
         return 1;
     }
 
@@ -54,6 +54,7 @@ int main() {
 
 out:
     tda_hset_drop(seen);
+
     return TDA_STATUS_IS_ERR(st) ? 1 : 0;
     /// [use]
 }

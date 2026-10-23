@@ -12,7 +12,7 @@
 
 #define ASSERT_DEQUE(d)                             \
     (assert(d),                                     \
-     assert((d)->elem_size > 0),                    \
+     assert(tda_layout_is_type((d)->elem)),         \
      assert((d)->len <= (d)->cap),                  \
      assert((d)->cap == 0 || (d)->data),            \
      assert(!(d)->data || (d)->cap > 0),            \
@@ -30,14 +30,14 @@ struct tda_Deque {
     // slot holding the front elem. Kept alongside 'len' rather than a tail index:
     // with two indices a full ring and an empty one look exactly alike
     size_t head;
-    size_t elem_size;
+    tda_Layout elem;
     tda_Al *al;
 };
 
 [[nodiscard]]
-static tda_Status new_impl(bool zeroed, size_t len, size_t cap, size_t elem_size, tda_Al *al, tda_Deque **out);
+static tda_Status new_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al *al, tda_Deque **out);
 
-static void set_fields(tda_Deque *obj, void *data, size_t len, size_t cap, size_t elem_size, tda_Al *al);
+static void set_fields(tda_Deque *obj, void *data, size_t len, size_t cap, tda_Layout elem, tda_Al *al);
 
 /// frees the block, leaving an empty deque on the same allocator
 static void release_data(tda_Deque *self);
@@ -57,8 +57,9 @@ static tda_Status reserve_for(tda_Deque *self, size_t new_len);
 [[nodiscard]]
 static size_t len_bytes(const tda_Deque *self);
 
+/// a block of 'cap' elems at the elem's alignment; the caller has checked that it fits
 [[nodiscard]]
-static size_t cap_bytes(const tda_Deque *self);
+static tda_Layout cap_layout(const tda_Deque *self, size_t cap);
 
 /// moves the contents into a new block of 'new_cap' elems, unwrapped from slot 0. The
 /// caller has checked that the byte count fits
@@ -67,7 +68,7 @@ static tda_Status relocate(tda_Deque *self, size_t new_cap);
 
 /// the walk behind eq and eq_by; a null 'eq' compares bytes
 [[nodiscard]]
-static bool eq_impl(const tda_Deque *a, const tda_Deque *b, tda_Eq eq);
+static bool eq_impl(const tda_Deque *a, const tda_Deque *b, tda_Eq eq, void *ctx);
 
 /// the slot 'count' places after 'slot', one lap on when that passes the end. One
 /// subtraction and no division: 'count' is at most cap, so it never laps twice
@@ -113,38 +114,38 @@ static void move_elem(tda_Deque *self, size_t to, size_t from);
 
 /* ========== lifetime ========== */
 
-tda_Status tda_deque_new(size_t elem_size, tda_Al *al, tda_Deque **out) {
-    assert(elem_size > 0);
+tda_Status tda_deque_new(tda_Layout elem, tda_Al *al, tda_Deque **out) {
+    assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
-    return new_impl(false, 0, 0, elem_size, al, out);
+    return new_impl(false, 0, 0, elem, al, out);
 }
 
-tda_Status tda_deque_new_len(size_t len, size_t elem_size, tda_Al *al, tda_Deque **out) {
-    assert(elem_size > 0);
+tda_Status tda_deque_new_len(size_t len, tda_Layout elem, tda_Al *al, tda_Deque **out) {
+    assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
-    return new_impl(true, len, len, elem_size, al, out);
+    return new_impl(true, len, len, elem, al, out);
 }
 
-tda_Status tda_deque_new_cap(size_t cap, size_t elem_size, tda_Al *al, tda_Deque **out) {
-    assert(elem_size > 0);
+tda_Status tda_deque_new_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Deque **out) {
+    assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
-    return new_impl(false, 0, cap, elem_size, al, out);
+    return new_impl(false, 0, cap, elem, al, out);
 }
 
-tda_Status tda_deque_from_data(const void *data, size_t len, size_t elem_size, tda_Al *al, tda_Deque **out) {
+tda_Status tda_deque_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Deque **out) {
     assert(data || len == 0);
-    assert(elem_size > 0);
+    assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
     tda_Deque *deque;
-    const tda_Status st = new_impl(false, len, len, elem_size, al, &deque);
+    const tda_Status st = new_impl(false, len, len, elem, al, &deque);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
@@ -164,7 +165,7 @@ tda_Status tda_deque_from_span(tda_Span s, tda_Al *al, tda_Deque **out) {
     assert(al);
     assert(out);
 
-    return tda_deque_from_data(s.data, s.len, s.elem_size, al, out);
+    return tda_deque_from_data(s.data, s.len, s.elem, al, out);
 }
 
 void tda_deque_drop(tda_Deque *self) {
@@ -175,8 +176,8 @@ void tda_deque_drop(tda_Deque *self) {
     ASSERT_DEQUE(self);
 
     tda_Al *al_copy = self->al;
-    tda_dealloc(al_copy, self->data, cap_bytes(self));
-    tda_dealloc(al_copy, self, sizeof(tda_Deque));
+    tda_dealloc(al_copy, self->data, cap_layout(self, self->cap));
+    TDA_DEALLOC(tda_Deque, al_copy, self, 1);
 }
 
 /* ========== copy ========== */
@@ -193,7 +194,7 @@ tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque **ou
     assert(out);
 
     tda_Deque *copy;
-    const tda_Status st = new_impl(false, self->len, self->len, self->elem_size, al, &copy);
+    const tda_Status st = new_impl(false, self->len, self->len, self->elem, al, &copy);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
@@ -210,7 +211,7 @@ tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque **ou
 tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
-    TDA_EXPECT(self->elem_size == other->elem_size);
+    TDA_EXPECT(tda_layout_eq(self->elem, other->elem));
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -220,12 +221,12 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
     // to be overwritten; the old one goes only once the new one is in hand, so a failure
     // leaves 'self' as it was. 'other' holds this many, so the product fits
     if (other->len > self->cap) {
-        void *data = tda_alloc(self->al, other->len * self->elem_size);
+        void *data = tda_alloc(self->al, cap_layout(self, other->len));
         if (!data) {
             return TDA_STATUS_ERR_NO_MEM;
         }
 
-        tda_dealloc(self->al, self->data, cap_bytes(self));
+        tda_dealloc(self->al, self->data, cap_layout(self, self->cap));
         self->data = data;
         self->cap = other->len;
     }
@@ -243,7 +244,7 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
 tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
-    TDA_EXPECT(self->elem_size == other->elem_size);
+    TDA_EXPECT(tda_layout_eq(self->elem, other->elem));
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -280,7 +281,7 @@ tda_Status tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
 void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(dst);
-    TDA_EXPECT(dst.elem_size == self->elem_size);
+    TDA_EXPECT(tda_layout_eq(dst.elem, self->elem));
     TDA_EXPECT(dst.len == self->len);
 
     copy_out(self, dst.data);
@@ -289,7 +290,7 @@ void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst) {
 void tda_deque_copy_from_span(tda_Deque *self, tda_Span src) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(src.elem_size == self->elem_size);
+    TDA_EXPECT(tda_layout_eq(src.elem, self->elem));
     TDA_EXPECT(src.len == self->len);
 
     copy_range_in(self, 0, src.data, self->len);
@@ -303,8 +304,8 @@ void tda_deque_to_spans(const tda_Deque *self, tda_Span *out_front, tda_Span *ou
     assert(out_back);
 
     const size_t front_len = first_run(self);
-    *out_front = tda_span_from_data(front_len ? elem_at(self, 0) : nullptr, front_len, self->elem_size);
-    *out_back = tda_span_from_data(self->data, self->len - front_len, self->elem_size);
+    *out_front = tda_span_from_data(front_len ? elem_at(self, 0) : nullptr, front_len, self->elem);
+    *out_back = tda_span_from_data(self->data, self->len - front_len, self->elem);
 }
 
 void tda_deque_to_spans_mut(tda_Deque *self, tda_SpanMut *out_front, tda_SpanMut *out_back) {
@@ -313,8 +314,8 @@ void tda_deque_to_spans_mut(tda_Deque *self, tda_SpanMut *out_front, tda_SpanMut
     assert(out_back);
 
     const size_t front_len = first_run(self);
-    *out_front = tda_span_from_data_mut(front_len ? elem_at_mut(self, 0) : nullptr, front_len, self->elem_size);
-    *out_back = tda_span_from_data_mut(self->data, self->len - front_len, self->elem_size);
+    *out_front = tda_span_from_data_mut(front_len ? elem_at_mut(self, 0) : nullptr, front_len, self->elem);
+    *out_back = tda_span_from_data_mut(self->data, self->len - front_len, self->elem);
 }
 
 /* ========== compare ========== */
@@ -322,18 +323,18 @@ void tda_deque_to_spans_mut(tda_Deque *self, tda_SpanMut *out_front, tda_SpanMut
 bool tda_deque_eq(const tda_Deque *a, const tda_Deque *b) {
     ASSERT_DEQUE(a);
     ASSERT_DEQUE(b);
-    TDA_EXPECT(a->elem_size == b->elem_size);
+    TDA_EXPECT(tda_layout_eq(a->elem, b->elem));
 
-    return eq_impl(a, b, nullptr);
+    return eq_impl(a, b, nullptr, nullptr);
 }
 
-bool tda_deque_eq_by(const tda_Deque *a, const tda_Deque *b, tda_Eq eq) {
+bool tda_deque_eq_by(const tda_Deque *a, const tda_Deque *b, tda_Eq eq, void *ctx) {
     ASSERT_DEQUE(a);
     ASSERT_DEQUE(b);
-    TDA_EXPECT(a->elem_size == b->elem_size);
+    TDA_EXPECT(tda_layout_eq(a->elem, b->elem));
     assert(eq);
 
-    return eq_impl(a, b, eq);
+    return eq_impl(a, b, eq, ctx);
 }
 
 /* ========== info ========== */
@@ -353,7 +354,13 @@ size_t tda_deque_cap(const tda_Deque *self) {
 size_t tda_deque_elem_size(const tda_Deque *self) {
     ASSERT_DEQUE(self);
 
-    return self->elem_size;
+    return self->elem.size;
+}
+
+tda_Layout tda_deque_elem_layout(const tda_Deque *self) {
+    ASSERT_DEQUE(self);
+
+    return self->elem;
 }
 
 size_t tda_deque_bytes(const tda_Deque *self) {
@@ -418,7 +425,7 @@ void tda_deque_set(tda_Deque *self, size_t idx, const void *val) {
     TDA_EXPECT(idx < self->len);
 
     // memmove: 'val' may alias the elem being set
-    memmove(elem_at_mut(self, idx), val, self->elem_size);
+    memmove(elem_at_mut(self, idx), val, self->elem.size);
 }
 
 /* ========== mods ========== */
@@ -433,7 +440,7 @@ tda_Status tda_deque_push_front(tda_Deque *self, const void *val) {
     }
 
     self->head = slot_back(self, self->head, 1);
-    memcpy(slot_at_mut(self, self->head), val, self->elem_size);
+    memcpy(slot_at_mut(self, self->head), val, self->elem.size);
     ++self->len;
 
     return TDA_STATUS_OK;
@@ -448,7 +455,7 @@ tda_Status tda_deque_push_back(tda_Deque *self, const void *val) {
         return st;
     }
 
-    memcpy(elem_at_mut(self, self->len), val, self->elem_size);
+    memcpy(elem_at_mut(self, self->len), val, self->elem.size);
     ++self->len;
 
     return TDA_STATUS_OK;
@@ -475,7 +482,7 @@ void tda_deque_pop_front_to(tda_Deque *self, void *out) {
     TDA_EXPECT(self->len > 0);
 
     // memmove: 'out' may alias the slot being dropped
-    memmove(out, elem_at(self, 0), self->elem_size);
+    memmove(out, elem_at(self, 0), self->elem.size);
     tda_deque_pop_front(self);
 }
 
@@ -485,7 +492,7 @@ void tda_deque_pop_back_to(tda_Deque *self, void *out) {
     TDA_EXPECT(self->len > 0);
 
     // memmove, as in tda_deque_pop_front_to
-    memmove(out, elem_at(self, self->len - 1), self->elem_size);
+    memmove(out, elem_at(self, self->len - 1), self->elem.size);
     tda_deque_pop_back(self);
 }
 
@@ -494,7 +501,7 @@ tda_Status tda_deque_insert(tda_Deque *self, size_t idx, const void *val) {
     assert(val);
     TDA_EXPECT(idx <= self->len);
 
-    return tda_deque_insert_span(self, idx, tda_span_from_data(val, 1, self->elem_size));
+    return tda_deque_insert_span(self, idx, tda_span_from_data(val, 1, self->elem));
 }
 
 void tda_deque_remove(tda_Deque *self, size_t idx) {
@@ -519,7 +526,7 @@ tda_Status tda_deque_reserve(tda_Deque *self, size_t new_cap) {
     }
 
     size_t new_bytes;
-    if (ckd_mul(&new_bytes, new_cap, self->elem_size)) {
+    if (ckd_mul(&new_bytes, new_cap, self->elem.size)) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
@@ -560,7 +567,7 @@ tda_Status tda_deque_resize(tda_Deque *self, size_t new_len) {
     // the new tail may straddle the seam, so it is zeroed a slot at a time rather
     // than with one memset over a range that need not be contiguous
     for (size_t i = self->len; i < new_len; ++i) {
-        memset(elem_at_mut(self, i), 0, self->elem_size);
+        memset(elem_at_mut(self, i), 0, self->elem.size);
     }
     self->len = new_len;
 
@@ -580,7 +587,7 @@ void tda_deque_truncate(tda_Deque *self, size_t len) {
 void tda_deque_swap(tda_Deque *self, tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
-    TDA_EXPECT(self->elem_size == other->elem_size);
+    TDA_EXPECT(tda_layout_eq(self->elem, other->elem));
     TDA_EXPECT(self->al == other->al);
 
     if (self == other) {
@@ -602,7 +609,7 @@ void tda_deque_swap_elems(tda_Deque *self, size_t i, size_t j) {
         return;
     }
 
-    tda_bytes_swap(elem_at_mut(self, i), elem_at_mut(self, j), self->elem_size);
+    tda_bytes_swap(elem_at_mut(self, i), elem_at_mut(self, j), self->elem.size);
 }
 
 /* ========== bulk mods ========== */
@@ -610,7 +617,7 @@ void tda_deque_swap_elems(tda_Deque *self, size_t i, size_t j) {
 tda_Status tda_deque_extend(tda_Deque *self, tda_Span src) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(src.elem_size == self->elem_size);
+    TDA_EXPECT(tda_layout_eq(src.elem, self->elem));
 
     return tda_deque_insert_span(self, self->len, src);
 }
@@ -618,7 +625,7 @@ tda_Status tda_deque_extend(tda_Deque *self, tda_Span src) {
 tda_Status tda_deque_insert_span(tda_Deque *self, size_t idx, tda_Span src) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(src.elem_size == self->elem_size);
+    TDA_EXPECT(tda_layout_eq(src.elem, self->elem));
     TDA_EXPECT(idx <= self->len);
 
     if (src.len == 0) {
@@ -736,13 +743,13 @@ void tda_deque_print(const tda_Deque *self, tda_FPrint fprint) {
 
 /* ========== internals ========== */
 
-static tda_Status new_impl(bool zeroed, size_t len, size_t cap, size_t elem_size, tda_Al *al, tda_Deque **out) {
+static tda_Status new_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al *al, tda_Deque **out) {
     assert(len <= cap);
-    assert(elem_size > 0);
+    assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
-    tda_Deque *obj = tda_alloc(al, sizeof(tda_Deque));
+    tda_Deque *obj = TDA_ALLOC(tda_Deque, al, 1);
     if (!obj) {
         return TDA_STATUS_ERR_NO_MEM;
     }
@@ -750,20 +757,20 @@ static tda_Status new_impl(bool zeroed, size_t len, size_t cap, size_t elem_size
     void *data = nullptr;
 
     if (cap > 0) {
-        size_t bytes;
-        if (ckd_mul(&bytes, cap, elem_size)) {
+        tda_Layout block;
+        if (tda_layout_ckd_array(&block, elem, cap)) {
             goto fail;
         }
-        data = tda_alloc(al, bytes);
+        data = tda_alloc(al, block);
         if (!data) {
             goto fail;
         }
         if (zeroed) {
-            memset(data, 0, len * elem_size);
+            memset(data, 0, len * elem.size);
         }
     }
 
-    set_fields(obj, data, len, cap, elem_size, al);
+    set_fields(obj, data, len, cap, elem, al);
 
     ASSERT_DEQUE(obj);
 
@@ -771,16 +778,17 @@ static tda_Status new_impl(bool zeroed, size_t len, size_t cap, size_t elem_size
     return TDA_STATUS_OK;
 
 fail:
-    tda_dealloc(al, obj, sizeof(tda_Deque));
+    TDA_DEALLOC(tda_Deque, al, obj, 1);
+
     return TDA_STATUS_ERR_NO_MEM;
 }
 
-static void set_fields(tda_Deque *obj, void *data, size_t len, size_t cap, size_t elem_size, tda_Al *al) {
+static void set_fields(tda_Deque *obj, void *data, size_t len, size_t cap, tda_Layout elem, tda_Al *al) {
     obj->data = data;
     obj->len = len;
     obj->cap = cap;
     obj->head = 0;
-    obj->elem_size = elem_size;
+    obj->elem = elem;
     obj->al = al;
 }
 
@@ -831,13 +839,13 @@ static tda_Status relocate(tda_Deque *self, size_t new_cap) {
     // sitting before the seam, where the new capacity does not reach it. The contents are
     // unrolled into the new block instead, which is the same two memcpy a realloc would
     // have needed anyway
-    void *data = tda_alloc(self->al, new_cap * self->elem_size);
+    void *data = tda_alloc(self->al, cap_layout(self, new_cap));
     if (!data) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
     copy_out(self, data);
-    tda_dealloc(self->al, self->data, cap_bytes(self));
+    tda_dealloc(self->al, self->data, cap_layout(self, self->cap));
 
     self->data = data;
     self->cap = new_cap;
@@ -848,7 +856,7 @@ static tda_Status relocate(tda_Deque *self, size_t new_cap) {
     return TDA_STATUS_OK;
 }
 
-static bool eq_impl(const tda_Deque *a, const tda_Deque *b, tda_Eq eq) {
+static bool eq_impl(const tda_Deque *a, const tda_Deque *b, tda_Eq eq, void *ctx) {
     if (a == b) {
         return true;
     }
@@ -862,7 +870,7 @@ static bool eq_impl(const tda_Deque *a, const tda_Deque *b, tda_Eq eq) {
     for (size_t i = 0; i < a->len; ++i) {
         const void *x = elem_at(a, i);
         const void *y = elem_at(b, i);
-        if (eq ? !eq(x, y) : memcmp(x, y, a->elem_size) != 0) {
+        if (eq ? !eq(x, y, ctx) : memcmp(x, y, a->elem.size) != 0) {
             return false;
         }
     }
@@ -871,7 +879,7 @@ static bool eq_impl(const tda_Deque *a, const tda_Deque *b, tda_Eq eq) {
 }
 
 static void release_data(tda_Deque *self) {
-    tda_dealloc(self->al, self->data, cap_bytes(self));
+    tda_dealloc(self->al, self->data, cap_layout(self, self->cap));
     self->data = nullptr;
     self->len = 0;
     self->cap = 0;
@@ -879,11 +887,11 @@ static void release_data(tda_Deque *self) {
 }
 
 static size_t len_bytes(const tda_Deque *self) {
-    return self->len * self->elem_size;
+    return self->len * self->elem.size;
 }
 
-static size_t cap_bytes(const tda_Deque *self) {
-    return self->cap * self->elem_size;
+static tda_Layout cap_layout(const tda_Deque *self, size_t cap) {
+    return (tda_Layout){.size = cap * self->elem.size, .align = self->elem.align};
 }
 
 static size_t slot_fwd(const tda_Deque *self, size_t slot, size_t count) {
@@ -908,11 +916,11 @@ static size_t slot_of(const tda_Deque *self, size_t idx) {
 }
 
 static const unsigned char *slot_at(const tda_Deque *self, size_t slot) {
-    return tda_byte_offset(self->data, self->elem_size, slot);
+    return tda_byte_offset(self->data, self->elem.size, slot);
 }
 
 static unsigned char *slot_at_mut(tda_Deque *self, size_t slot) {
-    return tda_byte_offset_mut(self->data, self->elem_size, slot);
+    return tda_byte_offset_mut(self->data, self->elem.size, slot);
 }
 
 static const unsigned char *elem_at(const tda_Deque *self, size_t idx) {
@@ -941,13 +949,13 @@ static void copy_out(const tda_Deque *self, void *dst) {
     }
 
     const size_t run = first_run(self);
-    memcpy(dst, slot_at(self, self->head), run * self->elem_size);
+    memcpy(dst, slot_at(self, self->head), run * self->elem.size);
 
     if (run < self->len) {
         memcpy(
-            tda_byte_offset_mut(dst, self->elem_size, run),
+            tda_byte_offset_mut(dst, self->elem.size, run),
             slot_at(self, 0),
-            (self->len - run) * self->elem_size
+            (self->len - run) * self->elem.size
         );
     }
 }
@@ -962,18 +970,18 @@ static void copy_range_in(tda_Deque *self, size_t idx, const void *src, size_t c
     const size_t slot = slot_of(self, idx);
     const size_t run = run_from(self, slot, count);
 
-    memcpy(slot_at_mut(self, slot), src, run * self->elem_size);
+    memcpy(slot_at_mut(self, slot), src, run * self->elem.size);
 
     if (run < count) {
         memcpy(
             slot_at_mut(self, 0),
-            tda_byte_offset(src, self->elem_size, run),
-            (count - run) * self->elem_size
+            tda_byte_offset(src, self->elem.size, run),
+            (count - run) * self->elem.size
         );
     }
 }
 
 static void move_elem(tda_Deque *self, size_t to, size_t from) {
     // two distinct slots of the same ring, so they never overlap
-    memcpy(elem_at_mut(self, to), elem_at_mut(self, from), self->elem_size);
+    memcpy(elem_at_mut(self, to), elem_at_mut(self, from), self->elem.size);
 }

@@ -112,6 +112,7 @@ static size_t arg_evals = 0;
 
 static tda_Status counted(tda_Status st) {
     ++arg_evals;
+
     return st;
 }
 

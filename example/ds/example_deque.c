@@ -83,7 +83,12 @@ int main() {
 
     const int32_t key = 9;
     printf(
-        "%d\n", tda_span_contains(front, &key, tda_eq_i32) || tda_span_contains(back, &key, tda_eq_i32)
+        "%d\n", tda_span_contains(
+            front,
+            &key,
+            tda_eq_i32,
+            nullptr
+        ) || tda_span_contains(back, &key, tda_eq_i32, nullptr)
     ); // 1
 
     // an algo that needs one run, like sort, goes through copies: out into a buffer of
@@ -92,7 +97,7 @@ int main() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, tda_deque_len(d));
 
     tda_deque_copy_to_span(d, s);
-    tda_span_sort(s, tda_cmp_i32);
+    tda_span_sort(s, tda_cmp_i32, nullptr);
     tda_deque_copy_from_span(d, tda_span_mut_to_span(s));
 
     tda_deque_print(d, tda_fprint_i32); // [3, 5, 9]
@@ -101,6 +106,7 @@ int main() {
 out:
     // a null handle is a no-op, so this exit is safe from anywhere above
     tda_deque_drop(d);
+
     return rc;
     /// [algo]
 }

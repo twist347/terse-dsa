@@ -1,5 +1,102 @@
 # Changelog
 
+## 2.0.0 — unreleased
+
+Three changes break the API, each for a fault that 1.x could not fix without breaking
+it: an allocator could not tell "not in place" from "out of memory", an elem aligned
+past `max_align_t` sat wherever malloc put it, and a comparator could depend on nothing
+but its operands. See "Migrating from 1.x" below.
+
+### Changed
+
+- **`tda_Al` takes Zig's hooks and a layout in every call.** The table is `alloc`,
+  `alloc_zeroed`, `resize`, `remap` and `dealloc`, each given a `tda_Layout`, the size and
+  the alignment the block was made with. `resize` grows or shrinks a block only in place
+  and answers `bool`; `remap` may move it and answers null when it has no way cheaper
+  than a copy. Before, one null from `realloc` meant both "not in place" and "out of
+  memory". Only `alloc` and `dealloc` are required: a missing hook means "never", and
+  the wrappers make do. Null from `alloc` now means out of memory and nothing else; an
+  alignment an allocator was not built to give asserts.
+- The wrappers follow: `tda_alloc(al, layout)`, `tda_alloc_zeroed`, `tda_resize`,
+  `tda_remap`, `tda_realloc(al, ptr, old, new_size)` and `tda_dealloc(al, ptr, layout)`.
+  `tda_realloc` tries `resize`, then `remap`, then alloc, copy and dealloc. The typed
+  macros take the layout from the type: `TDA_ALLOC`, `TDA_ALLOC_ZEROED`, `TDA_REALLOC`,
+  `TDA_DEALLOC`.
+- **Every container is built on the layout of its elem**, not its size:
+  `tda_vec_new(TDA_LAYOUT_OF(T), al, &v)`, and the typed macros pass it themselves.
+  Buffers and nodes are aligned to it, so an elem with `alignas(64)` lands on a multiple
+  of 64 in a vec, a deque, a list or an hmap, on any allocator. Each container has an
+  `elem_layout` accessor (`key_layout` and `val_layout` for hmap, `key_layout` for hset),
+  and the typed accessors check the alignment as well as the size.
+- **A span carries the layout of its elems**: `tda_Span` is `{data, len, elem}`, and
+  `tda_span_from_data(data, len, TDA_LAYOUT_OF(T))` builds one; the typed macros pass
+  it. So nothing guesses an alignment: `from_span` and `hmap_from_spans` take the layout
+  off the span, and an algo that copies elems aside, as `sort_stable` does, asks for
+  exactly theirs. Two spans or a span and a container meet only on the same layout, and
+  a span's data has to sit on its elem's alignment, which its constructors assert.
+- **A node lays its elem out as a struct would.** list and hmap put the elem, or the key
+  and the value, after the links at the first offset their alignment allows, instead of
+  always at 16. An hmap node of `int32_t` keys and values is 24 bytes, not 32. The
+  offset is the container's, so `tda_list_node_elem(self, node)`,
+  `tda_hmap_node_key(self, node)` and `tda_hset_node_key(self, node)` take it, and the
+  `NODE_ELEM_AS` and `NODE_KEY_AS` macros take it and check the type with it.
+- **Every comparator, equality and hasher takes a `void *ctx`**, and every function that
+  takes one takes the ctx right after it: `tda_span_sort(s, cmp, ctx)`. An order can
+  depend on more than its operands, as keys to sort indices by, with no global. The
+  ready-made `tda_cmp_*`, `tda_eq_*` and `tda_hash_*` ignore it and are passed `nullptr`;
+  they no longer fit `qsort`. pqueue stores its ctx with its comparator, hmap and hset
+  one ctx with their hasher and equality, and copies, moves and swaps carry it along.
+- `alloc/default` serves any alignment: up to malloc's own through the plain calls, a
+  block shorter than its alignment asking for a whole `max_align_t`, which C23 owes that
+  alignment; past it through `aligned_alloc`, or `_aligned_malloc` on Windows. Each
+  block goes back the way it was made.
+- `alloc/arena` aligns each block to what it asks for and rounds nothing up, so small
+  blocks sit back to back; the cap is taken as given, and the whole block asks its
+  parent for no alignment, so any parent serves it.
+- `alloc/pool` is built on a block layout, `tda_al_pool_new(parent, block, count)` and
+  `tda_al_pool_from_buf(buf, size, block)`, so it holds one type at that type's
+  alignment; `tda_AlPoolStats` reports `block_align`. A block given back with a layout
+  past the pool's blocks fails `TDA_EXPECT`.
+- `alloc/slab` serves an alignment from the classes it divides, and passes one past
+  512 to the parent.
+- `alloc/debug` records the alignment too and stops on a block given back with another,
+  and checks the old layout of a realloc before anything is copied.
+- `alloc/log` writes a line per hook: `alloc`, `alloc_zeroed`, `resize` (in place or
+  refused), `remap` and `dealloc`, each with its alignment. A log read by a script needs
+  the new spelling.
+- `tda_hmap_eq`, `tda_hset_eq` and the set ops take containers whose key ctx differ, a
+  seed each, as long as their equalities agree.
+- `tda_bitset_clear` and `tda_bitset_clear_all` are now `tda_bitset_reset` and
+  `tda_bitset_reset_all`. Everywhere else in the library clear empties a container;
+  a bit is reset, as in `std::bitset`.
+
+### Removed
+
+- `alloc/aligned`: every allocator takes the alignment per call now, so a wrapper that
+  forces one on every block has nothing left to do.
+- `tda_calloc` and `TDA_CALLOC`, replaced by `tda_alloc_zeroed` and `TDA_ALLOC_ZEROED`.
+- `tda_span_find_sub_last`, deprecated since 1.3.0; `tda_span_find_last_sub` replaces it.
+
+### Added
+
+- `core/layout`: `tda_Layout`, `TDA_LAYOUT_OF(T)`, the predicates `tda_layout_is_align`,
+  `tda_layout_is_type` and `tda_layout_eq`, and checked arithmetic for building one:
+  `tda_layout_ckd_array`, `tda_layout_ckd_extend` and `tda_layout_ckd_pad`, which lay
+  out an array or a struct's members as C does.
+- `tda_list_block_layout`, the block a list needs from an allocator whose blocks are all
+  one layout, such as `alloc/pool`: the larger size and alignment of the list struct and
+  one node. Before, the struct was opaque and the node size unwritten, so the block was
+  found by trial.
+- `tda_pqueue_cmp_ctx`, `tda_hmap_key_ctx` and `tda_hset_key_ctx`.
+
+### Documentation
+
+- `algo/sort` states what it needs from a comparator, a strict weak ordering, and what
+  happens under one that is not: the order is unspecified, but no elem is lost or
+  duplicated and nothing outside the span is read. A test holds it to that with a
+  comparator that answers at random. Its example sorts indices by keys in the ctx.
+- The allocator wrappers give their complexity.
+
 ## 1.6.0 — 2026-10-22
 
 ### Added

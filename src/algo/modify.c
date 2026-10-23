@@ -5,23 +5,24 @@
 
 /* ========== internals ========== */
 
-// lets the key forms reuse the predicate forms: the key and its equality are
-// passed as the predicate's ctx
+// lets the key forms reuse the predicate forms: the key, its equality and the
+// equality's own ctx are passed as the predicate's ctx
 typedef struct {
     const void *key;
     tda_Eq eq;
+    void *ctx;
 } KeyMatch;
 
 [[nodiscard]]
 static bool key_matches(const void *elem, void *ctx) {
     const KeyMatch *self = ctx;
 
-    return self->eq(elem, self->key);
+    return self->eq(elem, self->key, self->ctx);
 }
 
 /* ========== unique ========== */
 
-size_t tda_span_unique(tda_SpanMut s, tda_Eq eq) {
+size_t tda_span_unique(tda_SpanMut s, tda_Eq eq, void *ctx) {
     TDA_SPAN_ASSERT(s);
     assert(eq);
 
@@ -37,9 +38,9 @@ size_t tda_span_unique(tda_SpanMut s, tda_Eq eq) {
 
         // compare against the last elem KEPT, not the previous one read: its
         // slot may already hold a different value
-        if (!eq(tda_span_get(view, write - 1), cur)) {
+        if (!eq(tda_span_get(view, write - 1), cur, ctx)) {
             if (write != read) {
-                memcpy(tda_span_get_mut(s, write), cur, s.elem_size);
+                memcpy(tda_span_get_mut(s, write), cur, s.elem.size);
             }
             ++write;
         }
@@ -50,12 +51,12 @@ size_t tda_span_unique(tda_SpanMut s, tda_Eq eq) {
 
 /* ========== remove ========== */
 
-size_t tda_span_remove(tda_SpanMut s, const void *key, tda_Eq eq) {
+size_t tda_span_remove(tda_SpanMut s, const void *key, tda_Eq eq, void *ctx) {
     TDA_SPAN_ASSERT(s);
     assert(key);
     assert(eq);
 
-    KeyMatch match = {.key = key, .eq = eq};
+    KeyMatch match = {.key = key, .eq = eq, .ctx = ctx};
 
     return tda_span_remove_if(s, key_matches, &match);
 }
@@ -72,7 +73,7 @@ size_t tda_span_remove_if(tda_SpanMut s, tda_Pred pred, void *ctx) {
 
         if (!pred(cur, ctx)) {
             if (write != read) {
-                memcpy(tda_span_get_mut(s, write), cur, s.elem_size);
+                memcpy(tda_span_get_mut(s, write), cur, s.elem.size);
             }
             ++write;
         }
@@ -83,13 +84,13 @@ size_t tda_span_remove_if(tda_SpanMut s, tda_Pred pred, void *ctx) {
 
 /* ========== replace ========== */
 
-void tda_span_replace(tda_SpanMut s, const void *key, const void *val, tda_Eq eq) {
+void tda_span_replace(tda_SpanMut s, const void *key, const void *val, tda_Eq eq, void *ctx) {
     TDA_SPAN_ASSERT(s);
     assert(key);
     assert(val);
     assert(eq);
 
-    KeyMatch match = {.key = key, .eq = eq};
+    KeyMatch match = {.key = key, .eq = eq, .ctx = ctx};
 
     tda_span_replace_if(s, key_matches, &match, val);
 }
@@ -103,7 +104,7 @@ void tda_span_replace_if(tda_SpanMut s, tda_Pred pred, void *ctx, const void *va
 
     for (size_t i = 0; i < s.len; ++i) {
         if (pred(tda_span_get(view, i), ctx)) {
-            memcpy(tda_span_get_mut(s, i), val, s.elem_size);
+            memcpy(tda_span_get_mut(s, i), val, s.elem.size);
         }
     }
 }

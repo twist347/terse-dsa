@@ -9,21 +9,23 @@
 
 /// @defgroup alloc_pool alloc/pool
 /// @ingroup alloc
-/// @brief an allocator that hands out blocks of one fixed size
+/// @brief an allocator that hands out blocks of one fixed layout
 ///
 /// One block, cut into equal pieces on a free list, so alloc and dealloc are both a
 /// pointer move and nothing fragments. The price is that every request must fit one
-/// piece.
+/// piece: a larger size gets null, as when the pieces run out, and a larger alignment
+/// asserts, since that is how the pool was built and not how full it is.
 ///
-/// tda_realloc keeps a block where it is while the new size fits it, and fails once it
-/// does not. The parent is borrowed and has to outlive it; tda_al_pool_from_buf needs
-/// none, and runs on memory the caller already has.
+/// A block resizes in place while the new size fits it, and not past that. The parent
+/// is borrowed and has to outlive it; tda_al_pool_from_buf needs none, and runs on
+/// memory the caller already has.
 ///
-/// So a pool suits objects of one size, not most containers. A container asks for its
-/// own struct and then for nodes or a buffer. A list works when block_size covers both
-/// the struct and a node. vec, deque, the adapters and hmap grow a buffer (hmap its
-/// bucket array) and get TDA_STATUS_ERR_NO_MEM once it outgrows a block. Under a
-/// container, alloc/slab is the pool to use: one per size class.
+/// So a pool suits objects of one type, as TDA_LAYOUT_OF gives the block, not most
+/// containers. A container asks for its own struct and then for nodes or a buffer. A
+/// list works on blocks of tda_list_block_layout, which covers both. vec, deque, the
+/// adapters and hmap grow a buffer (hmap its bucket array) and get
+/// TDA_STATUS_ERR_NO_MEM once it outgrows a block. Under a container, alloc/slab is the
+/// pool to use: one per size class.
 ///
 /// A block freed twice goes onto the free list twice and is then handed out to two
 /// owners. The check for it is partial: it catches the second free when nothing was freed
@@ -38,29 +40,30 @@
 /// @name lifetime
 /// @{
 
-/// a pool of 'block_count' blocks of 'block_size' bytes, taken from 'parent'
+/// a pool of 'block_count' blocks of 'block', taken from 'parent'
 /// @param parent where the block comes from; borrowed
-/// @param block_size a floor, greater than 0: it is rounded up to the alignment and to
-///                   what the free list needs, and tda_al_pool_stats reports the result
+/// @param block a floor, its size greater than 0: raised to what the free list needs,
+///              its size then rounded up to its alignment; tda_al_pool_stats reports
+///              the result
 /// @param block_count how many blocks, greater than 0
 /// @return the allocator, or null if the product overflowed or 'parent' had no block
 /// @bigo{n} — the free list is threaded through every block
 [[nodiscard]] TDA_API
-tda_Al *tda_al_pool_new(tda_Al *parent, size_t block_size, size_t block_count);
+tda_Al *tda_al_pool_new(tda_Al *parent, tda_Layout block, size_t block_count);
 
 /// a pool inside 'buf', with no parent: its own header takes the front, aligned, and as
 /// many blocks as fit the rest
 /// @param buf the memory, borrowed: a static or stack array, or a block from anywhere;
 ///            any alignment
 /// @param size its bytes, greater than 0
-/// @param block_size a floor, greater than 0, rounded up as in tda_al_pool_new;
-///                   tda_al_pool_stats reports it and the block count
+/// @param block a floor, raised as in tda_al_pool_new; tda_al_pool_stats reports it and
+///              the block count
 /// @return the allocator, which points into 'buf', or null if 'buf' cannot hold the
 ///         header and one block
 /// @warning 'buf' has to outlive the pool and everything built on it
 /// @bigo{n} — the free list is threaded through every block
 [[nodiscard]] TDA_API
-tda_Al *tda_al_pool_from_buf(void *buf, size_t size, size_t block_size);
+tda_Al *tda_al_pool_from_buf(void *buf, size_t size, tda_Layout block);
 
 /// gives the block back to the parent; from tda_al_pool_from_buf there is nothing to give
 /// @param self the pool; null is a no-op
@@ -88,6 +91,7 @@ void tda_al_pool_reset(tda_Al *self);
 /// What a pool is holding.
 typedef struct {
     size_t block_size;  ///< the real size of one block, after the rounding up
+    size_t block_align; ///< its real alignment, the most a request may ask for
     size_t block_count; ///< how many there are in all
     size_t used;        ///< how many are handed out
     size_t free;        ///< how many are left
@@ -95,7 +99,7 @@ typedef struct {
 
 /// what the pool is holding
 /// @param self the pool
-/// @return the four numbers
+/// @return the five numbers
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_AlPoolStats tda_al_pool_stats(const tda_Al *self);

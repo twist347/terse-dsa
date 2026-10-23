@@ -21,11 +21,11 @@ int main() {
     const tda_Span nums = TDA_SPAN_OF(int32_t, 5, 3, 1, 4, 1, 2);
 
     size_t idx;
-    if (tda_span_find(nums, &(int32_t){1}, tda_eq_i32, &idx)) {
+    if (tda_span_find(nums, &(int32_t){1}, tda_eq_i32, nullptr, &idx)) {
         printf("first 1 at %zu\n", idx); // first 1 at 2
     }
 
-    if (tda_span_find_last(nums, &(int32_t){1}, tda_eq_i32, &idx)) {
+    if (tda_span_find_last(nums, &(int32_t){1}, tda_eq_i32, nullptr, &idx)) {
         printf("last 1 at %zu\n", idx); // last 1 at 4
     }
 
@@ -38,13 +38,13 @@ int main() {
            tda_span_count_if(nums, greater_than, &bound), bound); // 2 of them are over 3
 
     // a miss is not an error, and it leaves 'idx' unchanged
-    printf("%s\n", tda_span_contains(nums, &(int32_t){7}, tda_eq_i32) ? "7 is in" : "no 7");
+    printf("%s\n", tda_span_contains(nums, &(int32_t){7}, tda_eq_i32, nullptr) ? "7 is in" : "no 7");
 
     // starts_with and ends_with take the same equality as a find
     const tda_Span head = TDA_SPAN_OF(int32_t, 5, 3);
     printf(
-        "%d %d\n", tda_span_starts_with(nums, head, tda_eq_i32),
-        tda_span_ends_with(nums, head, tda_eq_i32)
+        "%d %d\n", tda_span_starts_with(nums, head, tda_eq_i32, nullptr),
+        tda_span_ends_with(nums, head, tda_eq_i32, nullptr)
     ); // 1 0
     /// [find]
 
@@ -52,15 +52,15 @@ int main() {
     // binary search needs the span sorted by the same cmp
     const tda_Span sorted = TDA_SPAN_OF(int32_t, 1, 2, 2, 2, 5, 9);
 
-    if (tda_span_binary_search(sorted, &(int32_t){5}, tda_cmp_i32, &idx)) {
+    if (tda_span_binary_search(sorted, &(int32_t){5}, tda_cmp_i32, nullptr, &idx)) {
         printf("5 at %zu\n", idx); // 5 at 4
     }
 
     // with duplicates the answer is a range, not one index
-    const tda_Range r = tda_span_equal_range(sorted, &(int32_t){2}, tda_cmp_i32);
+    const tda_Range r = tda_span_equal_range(sorted, &(int32_t){2}, tda_cmp_i32, nullptr);
     printf("the 2s are [%zu, %zu)\n", r.lo, r.hi); // the 2s are [1, 4)
 
-    const tda_MinMax mm = tda_span_minmax_elem(sorted, tda_cmp_i32);
+    const tda_MinMax mm = tda_span_minmax_elem(sorted, tda_cmp_i32, nullptr);
     printf("min at %zu, max at %zu\n", mm.min, mm.max); // min at 0, max at 5
     /// [sorted]
 

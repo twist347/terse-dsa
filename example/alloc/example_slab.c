@@ -23,7 +23,7 @@ int main() {
     tda_List *list = nullptr;
     tda_HMap *map = nullptr;
     if (TDA_STATUS_IS_ERR(TDA_LIST_NEW(int32_t, al, &list))
-        || TDA_STATUS_IS_ERR(TDA_HMAP_NEW(int32_t, int32_t, tda_hash_i32, tda_eq_i32, al, &map))) {
+        || TDA_STATUS_IS_ERR(TDA_HMAP_NEW(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &map))) {
         goto out;
     }
 

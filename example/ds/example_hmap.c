@@ -28,7 +28,7 @@ int main() {
     tda_Al *al = tda_al_default();
 
     tda_HMap *m = nullptr;
-    if (TDA_STATUS_IS_ERR(TDA_HMAP_NEW(int32_t, int32_t, tda_hash_i32, tda_eq_i32, al, &m))) {
+    if (TDA_STATUS_IS_ERR(TDA_HMAP_NEW(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &m))) {
         return 1;
     }
 
@@ -57,7 +57,7 @@ int main() {
     // a position reaches the key and value together, and removes without hashing again
     tda_HMapNode *node = tda_hmap_find_mut(m, &(int32_t){1});
     printf(
-        "%" PRId32 " -> %" PRId32 "\n", *TDA_HMAP_NODE_KEY_AS(int32_t, node),
+        "%" PRId32 " -> %" PRId32 "\n", *TDA_HMAP_NODE_KEY_AS(int32_t, m, node),
         *TDA_HMAP_NODE_VAL_AS(int32_t, m, node)
     ); // 1 -> 12
 
@@ -101,6 +101,7 @@ int main() {
 out:
     // a null handle is a no-op, so this exit is safe from anywhere above
     tda_hmap_drop(m);
+
     return rc;
     /// [walk]
 }

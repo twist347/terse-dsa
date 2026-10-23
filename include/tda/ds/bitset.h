@@ -131,7 +131,7 @@ void tda_bitset_set(tda_BitSet *self, size_t idx);
 /// takes 'idx' out of the set
 /// @copydetails tda_bitset_set
 TDA_API
-void tda_bitset_clear(tda_BitSet *self, size_t idx);
+void tda_bitset_reset(tda_BitSet *self, size_t idx);
 
 /// puts 'idx' in when it is out and out when it is in
 /// @copydetails tda_bitset_set
@@ -161,7 +161,7 @@ void tda_bitset_set_all(tda_BitSet *self);
 /// @param self the bitset
 /// @bigo{n/64}
 TDA_API
-void tda_bitset_clear_all(tda_BitSet *self);
+void tda_bitset_reset_all(tda_BitSet *self);
 
 /// replaces the set with its complement, taken over the universe and nothing above it
 /// @param self the bitset

@@ -126,7 +126,7 @@ static void test_new_keeps_fields() {
 
     TEST_ASSERT_EQUAL_PTR(buf, s.data);
     TEST_ASSERT_EQUAL_size_t(3, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem.size);
 }
 
 // a null view is legal only while empty, and elem_size is still set
@@ -135,7 +135,7 @@ static void test_new_empty_over_null() {
 
     TEST_ASSERT_NULL(s.data);
     TEST_ASSERT_EQUAL_size_t(0, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem.size);
 }
 
 static void test_mut_to_span_preserves_view() {
@@ -144,7 +144,7 @@ static void test_mut_to_span_preserves_view() {
 
     TEST_ASSERT_EQUAL_PTR(m.data, s.data);
     TEST_ASSERT_EQUAL_size_t(m.len, s.len);
-    TEST_ASSERT_EQUAL_size_t(m.elem_size, s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(m.elem.size, s.elem.size);
 }
 
 // mut_to_span must hand back a view of the same memory, not a copy
@@ -164,7 +164,7 @@ static void test_of_views_the_literal() {
     const tda_Span s = TDA_SPAN_OF(int32_t, 3, 1, 2);
 
     TEST_ASSERT_EQUAL_size_t(3, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem.size);
     TEST_ASSERT_EQUAL_INT32(3, *TDA_SPAN_GET_AS(int32_t, s, 0));
     TEST_ASSERT_EQUAL_INT32(1, *TDA_SPAN_GET_AS(int32_t, s, 1));
     TEST_ASSERT_EQUAL_INT32(2, *TDA_SPAN_GET_AS(int32_t, s, 2));
@@ -173,7 +173,7 @@ static void test_of_views_the_literal() {
 static void test_of_derives_len_from_the_list() {
     TEST_ASSERT_EQUAL_size_t(1, TDA_SPAN_OF(int32_t, 42).len);
     TEST_ASSERT_EQUAL_size_t(5, TDA_SPAN_OF(int32_t, 1, 2, 3, 4, 5).len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int64_t), TDA_SPAN_OF(int64_t, 1, 2).elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int64_t), TDA_SPAN_OF(int64_t, 1, 2).elem.size);
 }
 
 // a brace-enclosed elem survives the macro: the commas split the args,
@@ -182,7 +182,7 @@ static void test_of_carries_struct_elems() {
     const tda_Span s = TDA_SPAN_OF(Pair, {1, 2}, {3, 4});
 
     TEST_ASSERT_EQUAL_size_t(2, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(Pair), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(Pair), s.elem.size);
     TEST_ASSERT_EQUAL_INT64(1, TDA_SPAN_GET_AS(Pair, s, 0)->a);
     TEST_ASSERT_EQUAL_INT64(2, TDA_SPAN_GET_AS(Pair, s, 0)->b);
     TEST_ASSERT_EQUAL_INT64(3, TDA_SPAN_GET_AS(Pair, s, 1)->a);
@@ -262,7 +262,7 @@ static void test_sub_offsets_and_shortens() {
     const tda_Span mid = tda_span_sub(s, 1, 3);
     TEST_ASSERT_EQUAL_PTR(&buf[1], mid.data);
     TEST_ASSERT_EQUAL_size_t(3, mid.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), mid.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), mid.elem.size);
     TEST_ASSERT_EQUAL_INT32(1, *TDA_SPAN_GET_AS(int32_t, mid, 0));
     TEST_ASSERT_EQUAL_INT32(3, *TDA_SPAN_GET_AS(int32_t, mid, 2));
 
@@ -293,7 +293,7 @@ static void test_sub_at_end_is_empty() {
 
     const tda_Span tail = tda_span_sub(s, 3, 0);
     TEST_ASSERT_EQUAL_size_t(0, tail.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tail.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tail.elem.size);
 }
 
 // the offset is start * elem_size, so a wide elem must land on its boundary
@@ -324,7 +324,7 @@ static void test_sub_mut_of_null_view_stays_null() {
     const tda_SpanMut sub = tda_span_sub_mut(s, 0, 0);
     TEST_ASSERT_NULL(sub.data);
     TEST_ASSERT_EQUAL_size_t(0, sub.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), sub.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), sub.elem.size);
 }
 
 static void test_sub_mut_writes_reach_the_source() {

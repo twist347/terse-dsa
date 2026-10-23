@@ -36,6 +36,7 @@ static int32_t *shuffled_keys(int32_t first, uint64_t seed) {
 
     tda_Rng rng = tda_rng_from_seed(seed);
     tda_span_shuffle(TDA_SPAN_FROM_DATA_MUT(int32_t, keys, ENTRIES), &rng);
+
     return keys;
 }
 
@@ -48,6 +49,7 @@ static tda_HMap *build(tda_Al *al, size_t cap, const int32_t *keys) {
         cap,
         tda_hash_i32,
         tda_eq_i32,
+        nullptr,
         al,
         &m
     );

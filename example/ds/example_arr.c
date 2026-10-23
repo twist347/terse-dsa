@@ -12,7 +12,7 @@
 #include <stdio.h>
 
 // an equality looser than bytewise: elems equal under it may differ in their bytes
-static bool eq_abs_i32(const void *lhs, const void *rhs) {
+static bool eq_abs_i32(const void *lhs, const void *rhs, void *) {
     const int32_t a = *(const int32_t *) lhs;
     const int32_t b = *(const int32_t *) rhs;
 
@@ -41,17 +41,17 @@ int main() {
 
     // an elem whose equality is not bytewise needs eq_by, which takes a tda_Eq
     TDA_ARR_SET(int32_t, twin, 0, -5);
-    printf("%d %d\n", tda_arr_eq(a, twin), tda_arr_eq_by(a, twin, eq_abs_i32)); // 0 1
+    printf("%d %d\n", tda_arr_eq(a, twin), tda_arr_eq_by(a, twin, eq_abs_i32, nullptr)); // 0 1
 
     tda_arr_drop(twin);
     /// [compare]
 
     /// [algo]
     // an arr keeps no order of its own, so algo rearranges the elems in place
-    tda_span_sort(tda_arr_to_span_mut(a), tda_cmp_i32);
+    tda_span_sort(tda_arr_to_span_mut(a), tda_cmp_i32, nullptr);
 
     size_t idx;
-    if (tda_span_binary_search(tda_arr_to_span(a), &(int32_t){4}, tda_cmp_i32, &idx)) {
+    if (tda_span_binary_search(tda_arr_to_span(a), &(int32_t){4}, tda_cmp_i32, nullptr, &idx)) {
         printf("4 is at %zu\n", idx); // 4 is at 3
     }
     /// [algo]
@@ -123,6 +123,7 @@ out:
     tda_arr_drop(shorter);
     tda_arr_drop(copy);
     tda_arr_drop(a);
+
     return rc;
     /// [copy]
 }

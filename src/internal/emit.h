@@ -15,7 +15,7 @@
 /// appends one elem to 'dst' at 'out' and reports the next write position
 [[nodiscard]]
 static inline size_t tda_emit(tda_SpanMut dst, size_t out, const void *elem) {
-    memcpy(tda_span_get_mut(dst, out), elem, dst.elem_size);
+    memcpy(tda_span_get_mut(dst, out), elem, dst.elem.size);
 
     return out + 1;
 }
@@ -31,7 +31,7 @@ static inline size_t tda_emit_rest(tda_SpanMut dst, size_t out, tda_Span src, si
     const size_t n = src.len - from;
     void *to = tda_span_get_mut(dst, out);
     TDA_EXPECT(n <= dst.len - out);
-    memcpy(to, tda_span_get(src, from), n * src.elem_size);
+    memcpy(to, tda_span_get(src, from), n * src.elem.size);
 
     return out + n;
 }

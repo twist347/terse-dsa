@@ -1,5 +1,6 @@
 tda_add_example(example_core_cmp example_cmp.c)
 tda_add_example(example_core_hash example_hash.c)
+tda_add_example(example_core_layout example_layout.c)
 tda_add_example(example_core_print example_print.c)
 tda_add_example(example_core_rng example_rng.c)
 tda_add_example(example_core_span example_span.c)

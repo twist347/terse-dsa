@@ -9,5 +9,6 @@ const char *tda_status_to_str(tda_Status st) {
         case TDA_STATUS_ERR_NO_MEM:
             return TDA_STRINGIFY(TDA_STATUS_ERR_NO_MEM);
     }
+
     return "UNKNOWN_TDA_STATUS";
 }

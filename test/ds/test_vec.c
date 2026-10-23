@@ -20,13 +20,6 @@ void setUp() {
 void tearDown() {
 }
 
-// the arena's granularity: each request is charged rounded up to it
-static constexpr size_t ARENA_STEP = alignof(max_align_t);
-
-static size_t arena_charge(size_t bytes) {
-    return (bytes + ARENA_STEP - 1) / ARENA_STEP * ARENA_STEP;
-}
-
 // int32_t vec of len elems holding 0, 1, ... len-1; cap == len
 static tda_Vec *make_vec(size_t len) {
     tda_Vec *v = nullptr;
@@ -35,6 +28,7 @@ static tda_Vec *make_vec(size_t len) {
     for (size_t i = 0; i < len; ++i) {
         TDA_VEC_SET(int32_t, v, i, (int32_t) i);
     }
+
     return v;
 }
 
@@ -126,7 +120,7 @@ static void test_from_data_copies_and_detaches_the_source() {
 // a null source is legal while len == 0, as in tda_span_from_data
 static void test_from_data_empty_has_no_buffer() {
     tda_Vec *v = nullptr;
-    TDA_TEST_OK(tda_vec_from_data(nullptr, 0, sizeof(int32_t), tda_al_default(), &v));
+    TDA_TEST_OK(tda_vec_from_data(nullptr, 0, TDA_LAYOUT_OF(int32_t), tda_al_default(), &v));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(v));
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_cap(v));
@@ -967,14 +961,19 @@ static void test_growing_alone_on_an_arena_costs_only_the_capacity() {
 
     tda_Vec *v = nullptr;
     TDA_TEST_OK(TDA_VEC_NEW(int32_t, arena, &v));
+
+    // counted from the first buffer, so the struct and the padding before it stay out
+    const int32_t zero = 0;
+    TDA_TEST_OK(tda_vec_push(v, &zero));
+    const size_t first_cap = tda_vec_cap(v);
     const size_t before = tda_al_arena_stats(arena).used;
 
-    for (int32_t i = 0; i < 1000; ++i) {
+    for (int32_t i = 1; i < 1000; ++i) {
         TDA_TEST_OK(tda_vec_push(v, &i));
     }
 
     TEST_ASSERT_EQUAL_size_t(1024, tda_vec_cap(v));
-    TEST_ASSERT_EQUAL_size_t(1024 * sizeof(int32_t), tda_al_arena_stats(arena).used - before);
+    TEST_ASSERT_EQUAL_size_t((1024 - first_cap) * sizeof(int32_t), tda_al_arena_stats(arena).used - before);
 
     tda_vec_drop(v);
     tda_al_arena_drop(arena);
@@ -1152,6 +1151,7 @@ static void test_remove_range_moves_wide_elems_whole() {
 // pushes each elem it sees onto the vec at 'ctx' and keeps them all
 static bool record(const void *elem, void *ctx) {
     TDA_TEST_OK(tda_vec_push(ctx, elem));
+
     return true;
 }
 
@@ -1576,7 +1576,7 @@ static void test_to_span_follows_the_len_not_the_capacity() {
 
     TEST_ASSERT_EQUAL_PTR(tda_vec_data(v), s.data);
     TEST_ASSERT_EQUAL_size_t(3, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem.size);
     TEST_ASSERT_EQUAL_INT32(3, *TDA_SPAN_GET_AS(int32_t, s, 2));
 
     tda_vec_drop(v);
@@ -1601,18 +1601,21 @@ static void test_to_span_of_empty_keeps_elem_size() {
 
     TEST_ASSERT_NULL(s.data);
     TEST_ASSERT_EQUAL_size_t(0, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem.size);
 
     tda_vec_drop(v);
 }
 
 /* ========== allocation failure ========== */
 
-// len * elem_size overflows size_t: reported, never attempted
+// a 2-byte elem: SIZE_MAX of them is too many for any address space
+static constexpr tda_Layout TWO_BYTES = {.size = 2, .align = 2};
+
+// len * elem.size overflows size_t: reported, never attempted
 static void test_new_len_reports_size_overflow() {
     tda_Vec *v = nullptr;
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_new_len(SIZE_MAX, 2, tda_al_default(), &v));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_new_len(SIZE_MAX, TWO_BYTES, tda_al_default(), &v));
 
     TEST_ASSERT_NULL(v); // out is untouched on failure
 }
@@ -1620,7 +1623,7 @@ static void test_new_len_reports_size_overflow() {
 static void test_new_cap_reports_size_overflow() {
     tda_Vec *v = nullptr;
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_new_cap(SIZE_MAX, 2, tda_al_default(), &v));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_new_cap(SIZE_MAX, TWO_BYTES, tda_al_default(), &v));
 
     TEST_ASSERT_NULL(v);
 }
@@ -1629,7 +1632,7 @@ static void test_from_data_reports_size_overflow() {
     constexpr int32_t src[1] = {1};
     tda_Vec *v = nullptr;
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_from_data(src, SIZE_MAX, 2, tda_al_default(), &v));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_from_data(src, SIZE_MAX, TWO_BYTES, tda_al_default(), &v));
 
     TEST_ASSERT_NULL(v);
 }
@@ -1675,12 +1678,6 @@ static void test_push_reports_an_exhausted_arena() {
 
 // when doubling does not fit, growth falls back to a single extra slot
 static void test_push_falls_back_to_one_more_slot_when_doubling_fails() {
-    const size_t for_three = arena_charge(3 * sizeof(Pair));
-    const size_t for_four = arena_charge(4 * sizeof(Pair));
-    if (for_three == for_four) {
-        TEST_IGNORE_MESSAGE("the arena's alignment step cannot separate the two requests");
-    }
-
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
     TEST_ASSERT_NOT_NULL(arena);
 
@@ -1690,8 +1687,10 @@ static void test_push_falls_back_to_one_more_slot_when_doubling_fails() {
     TDA_TEST_OK(tda_vec_push(v, &(Pair){1, 2}));
     TDA_TEST_OK(tda_vec_push(v, &(Pair){3, 4}));
 
-    // room for three elems, not the four doubling would ask for
-    tda_test_arena_leave(arena, for_three);
+    // room for three elems and whatever padding puts them on their alignment, never the
+    // four doubling would ask for
+    static_assert(3 * sizeof(Pair) + alignof(Pair) - 1 < 4 * sizeof(Pair));
+    tda_test_arena_leave(arena, 3 * sizeof(Pair) + alignof(Pair) - 1);
 
     TDA_TEST_OK(tda_vec_push(v, &(Pair){5, 6}));
 
@@ -1888,7 +1887,7 @@ static void test_eq_matches_the_same_elems() {
     TEST_ASSERT_TRUE(tda_vec_eq(a, a));
     TEST_ASSERT_TRUE(tda_vec_eq(a, b));
     TEST_ASSERT_TRUE(tda_vec_eq(b, a));
-    TEST_ASSERT_TRUE(tda_vec_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_vec_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_vec_drop(a);
     tda_vec_drop(b);
@@ -1900,7 +1899,7 @@ static void test_eq_parts_one_differing_elem() {
     TDA_VEC_SET(int32_t, b, 3, 99);
 
     TEST_ASSERT_FALSE(tda_vec_eq(a, b));
-    TEST_ASSERT_FALSE(tda_vec_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_vec_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_vec_drop(a);
     tda_vec_drop(b);
@@ -1923,7 +1922,7 @@ static void test_eq_of_two_empties() {
     tda_Vec *one = make_vec(1);
 
     TEST_ASSERT_TRUE(tda_vec_eq(a, b));
-    TEST_ASSERT_TRUE(tda_vec_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_vec_eq_by(a, b, tda_eq_i32, nullptr));
     TEST_ASSERT_FALSE(tda_vec_eq(a, one));
 
     tda_vec_drop(a);
@@ -1941,7 +1940,7 @@ static void test_eq_ignores_capacity() {
 
     TEST_ASSERT_TRUE(tda_vec_cap(a) != tda_vec_cap(b));
     TEST_ASSERT_TRUE(tda_vec_eq(a, b));
-    TEST_ASSERT_TRUE(tda_vec_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_vec_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_vec_drop(a);
     tda_vec_drop(b);
@@ -1970,7 +1969,7 @@ static void test_eq_by_asks_the_equality() {
     TDA_TEST_OK(TDA_VEC_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
     TEST_ASSERT_FALSE(tda_vec_eq(a, b));
-    TEST_ASSERT_TRUE(tda_vec_eq_by(a, b, tda_test_pair_eq_a));
+    TEST_ASSERT_TRUE(tda_vec_eq_by(a, b, tda_test_pair_eq_a, nullptr));
 
     tda_vec_drop(a);
     tda_vec_drop(b);

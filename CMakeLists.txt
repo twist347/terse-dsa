@@ -54,7 +54,6 @@ set(TDA_ALGO_SOURCES
 )
 
 set(TDA_ALLOC_SOURCES
-        src/alloc/aligned.c
         src/alloc/alloc.c
         src/alloc/arena.c
         src/alloc/debug.c
@@ -129,12 +128,15 @@ set_target_properties(tda PROPERTIES
 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT TDA_IPO_SUPPORTED OUTPUT TDA_IPO_ERROR)
-if (TDA_IPO_SUPPORTED)
+# only on the shared library: a static archive of LTO objects links only with a linker that
+# can read them, which a consumer's clang without -flto is not; it takes the consumer's
+# CMAKE_INTERPROCEDURAL_OPTIMIZATION instead
+if (TDA_IPO_SUPPORTED AND TDA_BUILD_SHARED)
     set_target_properties(tda PROPERTIES
             INTERPROCEDURAL_OPTIMIZATION_RELEASE ON
             INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON
     )
-else ()
+elseif (NOT TDA_IPO_SUPPORTED)
     message(STATUS "  LTO unavailable : ${TDA_IPO_ERROR}")
 endif ()
 

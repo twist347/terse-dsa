@@ -144,16 +144,16 @@ static void test_swap_exchanges_through_dereferenced_pointers() {
 static void test_swap_exchanges_whole_spans() {
     int32_t buf[4] = {1, 2, 3, 4};
     tda_Span a = TDA_SPAN_FROM_DATA(int32_t, buf, 4);
-    tda_Span b = tda_span_from_data(nullptr, 0, sizeof(Pair));
+    tda_Span b = tda_span_from_data(nullptr, 0, TDA_LAYOUT_OF(Pair));
 
     TDA_SWAP(a, b);
 
     TEST_ASSERT_NULL(a.data);
     TEST_ASSERT_EQUAL_size_t(0, a.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(Pair), a.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(Pair), a.elem.size);
     TEST_ASSERT_EQUAL_PTR(buf, b.data);
     TEST_ASSERT_EQUAL_size_t(4, b.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), b.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), b.elem.size);
 }
 
 // The macro takes each side's address once and reaches the value only through that

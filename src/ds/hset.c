@@ -13,15 +13,16 @@
     (assert(s),        \
      assert((s)->map))
 
-// two sets an op can combine: the same key size and the same key equality
-#define EXPECT_SAME_KEYS(a, b)                                              \
-    (TDA_EXPECT(tda_hmap_key_size((a)->map) == tda_hmap_key_size((b)->map)), \
+// two sets an op can combine: the same key layout and the same key equality. Their ctx
+// may differ, as two seeds do: each set is searched with its own hasher and ctx
+#define EXPECT_SAME_KEYS(a, b)                                                                \
+    (TDA_EXPECT(tda_layout_eq(tda_hmap_key_layout((a)->map), tda_hmap_key_layout((b)->map))), \
      TDA_EXPECT(tda_hmap_key_eq((a)->map) == tda_hmap_key_eq((b)->map)))
 
 // A set wraps a map: chaining, growth and the allocator are the map's, and the set only
 // limits which operations are forwarded.
 //
-// The map is built through internal/hmap_impl.h with val_size 0, so nothing follows the
+// The map is built through internal/hmap_impl.h with a value of size 0, so nothing follows the
 // key in a node and nothing pads it.
 struct tda_HSet {
     tda_HMap *map;
@@ -51,19 +52,26 @@ static bool not_held_by(const void *key, const void *val, void *ctx);
 
 /* ========== lifetime ========== */
 
-tda_Status tda_hset_new(size_t key_size, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HSet **out) {
-    return tda_hset_new_cap(0, key_size, hasher, eq, al, out);
+tda_Status tda_hset_new(tda_Layout key, tda_Hasher hasher, tda_Eq eq, void *ctx, tda_Al *al, tda_HSet **out) {
+    return tda_hset_new_cap(0, key, hasher, eq, ctx, al, out);
 }
 
-tda_Status tda_hset_new_cap(size_t cap, size_t key_size, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HSet **out) {
-    assert(key_size > 0);
+tda_Status tda_hset_new_cap(
+    size_t cap,
+    tda_Layout key,
+    tda_Hasher hasher, tda_Eq eq, void *ctx,
+    tda_Al *al,
+    tda_HSet **out
+) {
+    assert(tda_layout_is_type(key));
     assert(hasher);
     assert(eq);
     assert(al);
     assert(out);
 
     tda_HMap *map;
-    const tda_Status st = tda_hmap_new_raw_(cap, key_size, 0, hasher, eq, al, &map);
+    // no value, so nothing to lay out after the key
+    const tda_Status st = tda_hmap_new_raw_(cap, key, (tda_Layout){.size = 0, .align = 1}, hasher, eq, ctx, al, &map);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
@@ -71,12 +79,17 @@ tda_Status tda_hset_new_cap(size_t cap, size_t key_size, tda_Hasher hasher, tda_
     return wrap(map, out);
 }
 
-tda_Status tda_hset_from_span(tda_Span s, tda_Hasher hasher, tda_Eq eq, tda_Al *al, tda_HSet **out) {
+tda_Status tda_hset_from_span(
+    tda_Span s,
+    tda_Hasher hasher, tda_Eq eq, void *ctx,
+    tda_Al *al,
+    tda_HSet **out
+) {
     TDA_SPAN_ASSERT(s);
     assert(out);
 
     tda_HSet *obj;
-    tda_Status st = tda_hset_new_cap(s.len, s.elem_size, hasher, eq, al, &obj);
+    tda_Status st = tda_hset_new_cap(s.len, s.elem, hasher, eq, ctx, al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
@@ -100,7 +113,7 @@ void tda_hset_drop(tda_HSet *self) {
 
     tda_Al *al_copy = tda_hmap_al(self->map);
     tda_hmap_drop(self->map);
-    tda_dealloc(al_copy, self, sizeof(tda_HSet));
+    TDA_DEALLOC(tda_HSet, al_copy, self, 1);
 }
 
 /* ========== copy ========== */
@@ -155,6 +168,12 @@ size_t tda_hset_bucket_count(const tda_HSet *self) {
     return tda_hmap_bucket_count(self->map);
 }
 
+tda_Layout tda_hset_key_layout(const tda_HSet *self) {
+    ASSERT_HSET(self);
+
+    return tda_hmap_key_layout(self->map);
+}
+
 size_t tda_hset_key_size(const tda_HSet *self) {
     ASSERT_HSET(self);
 
@@ -179,12 +198,18 @@ tda_Eq tda_hset_key_eq(const tda_HSet *self) {
     return tda_hmap_key_eq(self->map);
 }
 
+void *tda_hset_key_ctx(const tda_HSet *self) {
+    ASSERT_HSET(self);
+
+    return tda_hmap_key_ctx(self->map);
+}
+
 /* ========== compare ========== */
 
 bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b) {
     ASSERT_HSET(a);
     ASSERT_HSET(b);
-    TDA_EXPECT(tda_hmap_key_size(a->map) == tda_hmap_key_size(b->map));
+    TDA_EXPECT(tda_layout_eq(tda_hmap_key_layout(a->map), tda_hmap_key_layout(b->map)));
     TDA_EXPECT(tda_hmap_key_eq(a->map) == tda_hmap_key_eq(b->map));
 
     if (a == b) {
@@ -195,10 +220,9 @@ bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b) {
         return false;
     }
 
-    // not tda_hmap_eq: the map has val_size 0, so there are no values to compare and
-    // node_val would point one past the key
+    // not tda_hmap_eq: the map's value has size 0, so there are no values to compare
     TDA_HMAP_FOR_EACH(node, a->map) {
-        if (!tda_hmap_contains(b->map, tda_hmap_node_key(node))) {
+        if (!tda_hmap_contains(b->map, tda_hmap_node_key(a->map, node))) {
             return false;
         }
     }
@@ -257,10 +281,11 @@ tda_HSetNode *tda_hset_node_next_mut(tda_HSet *self, tda_HSetNode *node) {
     return tda_hmap_node_next_mut(self->map, node);
 }
 
-const void *tda_hset_node_key(const tda_HSetNode *node) {
+const void *tda_hset_node_key(const tda_HSet *self, const tda_HSetNode *node) {
+    ASSERT_HSET(self);
     assert(node);
 
-    return tda_hmap_node_key(node);
+    return tda_hmap_node_key(self->map, node);
 }
 
 /* ========== mods ========== */
@@ -269,14 +294,14 @@ tda_Status tda_hset_insert(tda_HSet *self, const void *key, bool *out_is_new) {
     ASSERT_HSET(self);
     assert(key);
 
-    // no value: the map's val_size is 0
+    // no value: the map's value has size 0
     return tda_hmap_insert(self->map, key, nullptr, out_is_new);
 }
 
 tda_Status tda_hset_extend(tda_HSet *self, tda_Span src) {
     ASSERT_HSET(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(src.elem_size == tda_hmap_key_size(self->map));
+    TDA_EXPECT(tda_layout_eq(src.elem, tda_hmap_key_layout(self->map)));
 
     for (size_t i = 0; i < src.len; ++i) {
         const tda_Status st = tda_hmap_insert(self->map, tda_span_get(src, i), nullptr, nullptr);
@@ -354,7 +379,7 @@ tda_Status tda_hset_union(tda_HSet *self, const tda_HSet *other) {
     }
 
     TDA_HMAP_FOR_EACH(node, other->map) {
-        const tda_Status st = tda_hmap_insert(self->map, tda_hmap_node_key(node), nullptr, nullptr);
+        const tda_Status st = tda_hmap_insert(self->map, tda_hmap_node_key(other->map, node), nullptr, nullptr);
         if (TDA_STATUS_IS_ERR(st)) {
             return st;
         }
@@ -389,7 +414,7 @@ void tda_hset_difference(tda_HSet *self, const tda_HSet *other) {
     // 'self' against 'other'. Both give the same set, so walk the shorter one
     if (tda_hmap_len(other->map) < tda_hmap_len(self->map)) {
         TDA_HMAP_FOR_EACH(node, other->map) {
-            tda_hmap_remove(self->map, tda_hmap_node_key(node));
+            tda_hmap_remove(self->map, tda_hmap_node_key(other->map, node));
         }
         return;
     }
@@ -410,7 +435,7 @@ tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other) 
     // each key of 'other' flips: removed from 'self' if there, inserted if not. The keys
     // of 'other' are distinct, so none flips twice
     TDA_HMAP_FOR_EACH(node, other->map) {
-        const void *key = tda_hmap_node_key(node);
+        const void *key = tda_hmap_node_key(other->map, node);
         if (tda_hmap_remove(self->map, key)) {
             continue;
         }
@@ -439,7 +464,7 @@ bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other) {
     }
 
     TDA_HMAP_FOR_EACH(node, self->map) {
-        if (!tda_hmap_contains(other->map, tda_hmap_node_key(node))) {
+        if (!tda_hmap_contains(other->map, tda_hmap_node_key(self->map, node))) {
             return false;
         }
     }
@@ -461,7 +486,7 @@ bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other) {
     }
 
     TDA_HMAP_FOR_EACH(node, walked->map) {
-        if (tda_hmap_contains(asked->map, tda_hmap_node_key(node))) {
+        if (tda_hmap_contains(asked->map, tda_hmap_node_key(walked->map, node))) {
             return true;
         }
     }
@@ -483,7 +508,7 @@ void tda_hset_fprint(const tda_HSet *self, FILE *stream, tda_FPrint fprint) {
             fputs(", ", stream);
         }
         first = false;
-        fprint(stream, tda_hset_node_key(node));
+        fprint(stream, tda_hset_node_key(self, node));
     }
     fputs("}\n", stream);
 }
@@ -498,7 +523,7 @@ static tda_Status wrap(tda_HMap *map, tda_HSet **out) {
     assert(map);
     assert(out);
 
-    tda_HSet *obj = tda_alloc(tda_hmap_al(map), sizeof(tda_HSet));
+    tda_HSet *obj = TDA_ALLOC(tda_HSet, tda_hmap_al(map), 1);
     if (!obj) {
         tda_hmap_drop(map);
         return TDA_STATUS_ERR_NO_MEM;

@@ -1,5 +1,6 @@
 tda_add_test(test_core_cmp test_cmp.c)
 tda_add_test(test_core_hash test_hash.c)
+tda_add_test(test_core_layout test_layout.c)
 tda_add_test(test_core_print test_print.c)
 tda_add_test(test_core_rng test_rng.c)
 tda_add_test(test_core_span test_span.c)

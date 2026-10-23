@@ -44,7 +44,7 @@ void tda_span_rotate(tda_SpanMut s, size_t mid);
 
 /// exchanges the elems of two spans, position by position
 /// @param a one span
-/// @param b the other; asserts the same len and elem_size
+/// @param b the other; asserts the same len and elem layout
 /// @bigo{n}
 TDA_API
 void tda_span_swap_ranges(tda_SpanMut a, tda_SpanMut b);
@@ -57,19 +57,21 @@ void tda_span_swap_ranges(tda_SpanMut a, tda_SpanMut b);
 /// rearranges into the next permutation in 'cmp' order
 /// @param s the span
 /// @param cmp the order permutations are counted in
+/// @param ctx passed to every call of 'cmp'; may be null
 /// @return whether there was one; the last wraps to the first and returns false, so a
 ///         do-while from a sorted span visits each permutation once
 /// @bigo{n}
 [[nodiscard]] TDA_API
-bool tda_span_next_permutation(tda_SpanMut s, tda_Cmp cmp);
+bool tda_span_next_permutation(tda_SpanMut s, tda_Cmp cmp, void *ctx);
 
 /// rearranges into the previous permutation in 'cmp' order
 /// @param s the span
 /// @param cmp the order permutations are counted in
+/// @param ctx passed to every call of 'cmp'; may be null
 /// @return whether there was a previous one; on the first it wraps to the last
 /// @bigo{n}
 [[nodiscard]] TDA_API
-bool tda_span_prev_permutation(tda_SpanMut s, tda_Cmp cmp);
+bool tda_span_prev_permutation(tda_SpanMut s, tda_Cmp cmp, void *ctx);
 
 /// @}
 

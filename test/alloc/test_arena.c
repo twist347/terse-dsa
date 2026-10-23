@@ -1,5 +1,6 @@
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
+#include "tda/alloc/pool.h"
 
 #include "support/probe.h"
 
@@ -9,11 +10,16 @@
 #include <stdint.h>
 #include <string.h>
 
-// the arena rounds every request up to this, so sizes and offsets are predictable
+// malloc's own alignment, the one most tests below ask for when they ask for one
 static constexpr size_t ALIGNMENT = alignof(max_align_t);
 
-static size_t aligned(size_t size) {
-    return (size + ALIGNMENT - 1) / ALIGNMENT * ALIGNMENT;
+static tda_Layout at(size_t size, size_t align) {
+    return (tda_Layout){.size = size, .align = align};
+}
+
+// at alignment 1 a block takes exactly its size, so offsets are plain sums
+static tda_Layout bytes(size_t size) {
+    return at(size, 1);
 }
 
 /* ========== probe allocator ==========
@@ -73,33 +79,67 @@ static void test_new_cleans_up_after_a_failing_parent() {
     }
 }
 
+// the arena aligns each block itself, so its whole block asks the parent for nothing:
+// a pool built for small alignments can be the parent
+static void test_new_runs_on_a_parent_with_small_blocks_alignment() {
+    tda_Al *pool = tda_al_pool_new(tda_al_default(), (tda_Layout){.size = 256, .align = 8}, 4);
+    TEST_ASSERT_NOT_NULL(pool);
+
+    tda_Al *arena = tda_al_arena_new(pool, 128);
+    TEST_ASSERT_NOT_NULL(arena);
+    void *p = tda_alloc(arena, at(8, 8));
+    TEST_ASSERT_NOT_NULL(p);
+    TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % 8);
+
+    tda_al_arena_drop(arena);
+    tda_al_pool_drop(pool);
+}
+
 static void test_drop_null_is_noop() {
     tda_al_arena_drop(nullptr);
 }
 
 /* ========== alloc ========== */
 
-static void test_alloc_advances_by_the_aligned_size() {
+// nothing is rounded up: a block takes its size and no more
+static void test_alloc_advances_by_the_size() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    void *p = tda_alloc(arena, 1);
+    void *p = tda_alloc(arena, bytes(1));
     TEST_ASSERT_NOT_NULL(p);
 
     const tda_AlArenaStats st = tda_al_arena_stats(arena);
-    TEST_ASSERT_EQUAL_size_t(aligned(1), st.used);
-    TEST_ASSERT_EQUAL_size_t(1024 - aligned(1), st.available);
+    TEST_ASSERT_EQUAL_size_t(1, st.used);
+    TEST_ASSERT_EQUAL_size_t(1024 - 1, st.available);
 
     tda_al_arena_drop(arena);
 }
 
-static void test_every_block_is_aligned() {
+// whatever came before, a block starts on the alignment asked for, up to a page
+static void test_every_block_has_the_alignment_asked_for() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 32 * 1024);
+
+    for (size_t align = 1; align <= 4096; align *= 2) {
+        TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(3))); // knocks the offset off any grid
+        void *p = tda_alloc(arena, at(5, align));
+        TEST_ASSERT_NOT_NULL(p);
+        TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t) p % align);
+    }
+
+    tda_al_arena_drop(arena);
+}
+
+// small blocks sit back to back; one with a larger alignment skips to its boundary, and
+// the padding is all it costs
+static void test_alloc_pads_to_the_alignment_and_no_further() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    for (size_t size = 1; size <= 40; size += 7) {
-        void *p = tda_alloc(arena, size);
-        TEST_ASSERT_NOT_NULL(p);
-        TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) p % ALIGNMENT);
-    }
+    unsigned char *c1 = tda_alloc(arena, bytes(1));
+    unsigned char *c2 = tda_alloc(arena, bytes(1));
+    int32_t *i = TDA_ALLOC(int32_t, arena, 1);
+    TEST_ASSERT_EQUAL_PTR(c1 + 1, c2);
+    TEST_ASSERT_EQUAL_PTR(c1 + 4, (unsigned char *) i); // from offset 2 to 4
+    TEST_ASSERT_EQUAL_size_t(8, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
 }
@@ -108,8 +148,8 @@ static void test_every_block_is_aligned() {
 static void test_blocks_do_not_overlap() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    unsigned char *a = tda_alloc(arena, 16);
-    unsigned char *b = tda_alloc(arena, 16);
+    unsigned char *a = tda_alloc(arena, bytes(16));
+    unsigned char *b = tda_alloc(arena, bytes(16));
     TEST_ASSERT_NOT_NULL(a);
     TEST_ASSERT_NOT_NULL(b);
     TEST_ASSERT_TRUE(a != b);
@@ -125,7 +165,7 @@ static void test_blocks_do_not_overlap() {
 static void test_alloc_zero_is_null_and_does_not_move_the_offset() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
 
-    TEST_ASSERT_NULL(tda_alloc(arena, 0));
+    TEST_ASSERT_NULL(tda_alloc(arena, bytes(0)));
     TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
@@ -135,11 +175,11 @@ static void test_alloc_zero_is_null_and_does_not_move_the_offset() {
 static void test_alloc_beyond_the_capacity_fails() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 64);
 
-    TEST_ASSERT_NULL(tda_alloc(arena, 65));
+    TEST_ASSERT_NULL(tda_alloc(arena, bytes(65)));
     TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).used);
 
     // a request that still fits is unaffected by the failed one
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(16)));
 
     tda_al_arena_drop(arena);
 }
@@ -148,7 +188,7 @@ static void test_arena_can_be_filled_exactly() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 4 * ALIGNMENT);
 
     for (size_t i = 0; i < 4; ++i) {
-        TEST_ASSERT_NOT_NULL(tda_alloc(arena, ALIGNMENT));
+        TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(ALIGNMENT)));
     }
 
     const tda_AlArenaStats st = tda_al_arena_stats(arena);
@@ -156,40 +196,41 @@ static void test_arena_can_be_filled_exactly() {
     TEST_ASSERT_EQUAL_size_t(0, st.available);
 
     // and the next one has nowhere to go
-    TEST_ASSERT_NULL(tda_alloc(arena, 1));
+    TEST_ASSERT_NULL(tda_alloc(arena, bytes(1)));
 
     tda_al_arena_drop(arena);
 }
 
-// a cap off the alignment is rounded up, so a request for all of it still fits
-static void test_cap_off_the_alignment_is_rounded_up() {
+// any cap is taken as it is, and all of it can be handed out
+static void test_cap_is_taken_as_given() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 100);
 
     const tda_AlArenaStats st = tda_al_arena_stats(arena);
-    TEST_ASSERT_EQUAL_size_t(aligned(100), st.cap);
-    TEST_ASSERT_EQUAL_size_t(aligned(100), st.available);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 100));
+    TEST_ASSERT_EQUAL_size_t(100, st.cap);
+    TEST_ASSERT_EQUAL_size_t(100, st.available);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(100)));
 
     tda_al_arena_drop(arena);
 }
 
-// rounding up must be accounted for: a small request still consumes a whole slot
-static void test_capacity_accounts_for_rounding() {
-    tda_Al *arena = tda_al_arena_new(tda_al_default(), ALIGNMENT);
+// the padding before an aligned block is charged to the capacity like the block
+static void test_capacity_accounts_for_padding() {
+    tda_Al *arena = tda_al_arena_new(tda_al_default(), 2 * ALIGNMENT);
 
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 1));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(1)));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, at(ALIGNMENT, ALIGNMENT)));
     TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).available);
-    TEST_ASSERT_NULL(tda_alloc(arena, 1));
+    TEST_ASSERT_NULL(tda_alloc(arena, bytes(1)));
 
     tda_al_arena_drop(arena);
 }
 
-/* ========== calloc ========== */
+/* ========== alloc_zeroed ========== */
 
-static void test_calloc_zeroes_the_block() {
+static void test_alloc_zeroed_zeroes_the_block() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    const unsigned char *p = tda_calloc(arena, 8, 4);
+    const unsigned char *p = tda_alloc_zeroed(arena, bytes(32));
     TEST_ASSERT_NOT_NULL(p);
     for (size_t i = 0; i < 32; ++i) {
         TEST_ASSERT_EQUAL_UINT8(0, p[i]);
@@ -198,17 +239,17 @@ static void test_calloc_zeroes_the_block() {
     tda_al_arena_drop(arena);
 }
 
-// a reused arena must not hand out the previous tenant's bytes through calloc
-static void test_calloc_zeroes_reused_memory() {
+// a reused arena must not hand out the previous tenant's bytes through alloc_zeroed
+static void test_alloc_zeroed_zeroes_reused_memory() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    unsigned char *first = tda_alloc(arena, 32);
+    unsigned char *first = tda_alloc(arena, bytes(32));
     TEST_ASSERT_NOT_NULL(first);
     memset(first, 0xFF, 32);
 
     tda_al_arena_reset(arena);
 
-    const unsigned char *second = tda_calloc(arena, 8, 4);
+    const unsigned char *second = tda_alloc_zeroed(arena, bytes(32));
     TEST_ASSERT_EQUAL_PTR(first, second);
     for (size_t i = 0; i < 32; ++i) {
         TEST_ASSERT_EQUAL_UINT8(0, second[i]);
@@ -217,10 +258,10 @@ static void test_calloc_zeroes_reused_memory() {
     tda_al_arena_drop(arena);
 }
 
-static void test_calloc_rejects_overflow() {
+static void test_alloc_zeroed_rejects_overflow() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
 
-    TEST_ASSERT_NULL(tda_calloc(arena, SIZE_MAX, 2));
+    TEST_ASSERT_NULL(TDA_ALLOC_ZEROED(int32_t, arena, SIZE_MAX));
     TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
@@ -232,13 +273,13 @@ static void test_calloc_rejects_overflow() {
 static void test_realloc_grows_the_last_block_in_place() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    unsigned char *p = tda_alloc(arena, 16);
+    unsigned char *p = tda_alloc(arena, bytes(16));
     TEST_ASSERT_NOT_NULL(p);
     for (size_t i = 0; i < 16; ++i) {
         p[i] = (unsigned char) (i + 1);
     }
 
-    unsigned char *q = tda_realloc(arena, p, 16, 64);
+    unsigned char *q = tda_realloc(arena, p, bytes(16), 64);
     TEST_ASSERT_EQUAL_PTR(p, q);
     for (size_t i = 0; i < 16; ++i) {
         TEST_ASSERT_EQUAL_UINT8((unsigned char) (i + 1), q[i]);
@@ -252,11 +293,11 @@ static void test_realloc_grows_the_last_block_in_place() {
 static void test_realloc_shrinks_the_last_block_in_place() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    void *p = tda_alloc(arena, 64);
+    void *p = tda_alloc(arena, bytes(64));
     TEST_ASSERT_NOT_NULL(p);
 
-    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, 64, 20));
-    TEST_ASSERT_EQUAL_size_t(aligned(20), tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, bytes(64), 20));
+    TEST_ASSERT_EQUAL_size_t(20, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
 }
@@ -266,14 +307,14 @@ static void test_realloc_shrinks_the_last_block_in_place() {
 static void test_realloc_moves_a_block_that_is_not_the_last() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    unsigned char *p = tda_alloc(arena, 16);
+    unsigned char *p = tda_alloc(arena, bytes(16));
     TEST_ASSERT_NOT_NULL(p);
     for (size_t i = 0; i < 16; ++i) {
         p[i] = (unsigned char) (i + 1);
     }
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(16)));
 
-    unsigned char *q = tda_realloc(arena, p, 16, 64);
+    unsigned char *q = tda_realloc(arena, p, bytes(16), 64);
     TEST_ASSERT_NOT_NULL(q);
     TEST_ASSERT_TRUE(p != q);
     for (size_t i = 0; i < 16; ++i) {
@@ -289,12 +330,12 @@ static void test_realloc_moves_a_block_that_is_not_the_last() {
 static void test_realloc_shrinks_a_block_that_is_not_the_last_in_place() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 4 * ALIGNMENT);
 
-    void *p = tda_alloc(arena, 2 * ALIGNMENT);
+    void *p = tda_alloc(arena, bytes(2 * ALIGNMENT));
     TEST_ASSERT_NOT_NULL(p);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 2 * ALIGNMENT));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(2 * ALIGNMENT)));
     TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).available);
 
-    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, 2 * ALIGNMENT, 1));
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, bytes(2 * ALIGNMENT), 1));
     TEST_ASSERT_EQUAL_size_t(4 * ALIGNMENT, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
@@ -305,11 +346,11 @@ static void test_realloc_shrinks_a_block_that_is_not_the_last_in_place() {
 static void test_realloc_of_the_last_block_beyond_the_capacity_fails() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 64);
 
-    unsigned char *p = tda_alloc(arena, 32);
+    unsigned char *p = tda_alloc(arena, bytes(32));
     TEST_ASSERT_NOT_NULL(p);
     memset(p, 0x5A, 32);
 
-    TEST_ASSERT_NULL(tda_realloc(arena, p, 32, 65));
+    TEST_ASSERT_NULL(tda_realloc(arena, p, bytes(32), 65));
     TEST_ASSERT_EQUAL_size_t(32, tda_al_arena_stats(arena).used);
     TEST_ASSERT_EQUAL_UINT8(0x5A, p[31]);
 
@@ -319,7 +360,7 @@ static void test_realloc_of_the_last_block_beyond_the_capacity_fails() {
 static void test_realloc_of_null_is_an_alloc() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
 
-    TEST_ASSERT_NOT_NULL(tda_realloc(arena, nullptr, 0, 32));
+    TEST_ASSERT_NOT_NULL(tda_realloc(arena, nullptr, bytes(0), 32));
     TEST_ASSERT_EQUAL_size_t(32, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
@@ -331,10 +372,10 @@ static void test_realloc_of_null_is_an_alloc() {
 static void test_dealloc_does_not_reclaim() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
 
-    void *p = tda_alloc(arena, 32);
+    void *p = tda_alloc(arena, bytes(32));
     const size_t used = tda_al_arena_stats(arena).used;
 
-    tda_dealloc(arena, p, 32);
+    tda_dealloc(arena, p, bytes(32));
     TEST_ASSERT_EQUAL_size_t(used, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
@@ -343,8 +384,8 @@ static void test_dealloc_does_not_reclaim() {
 static void test_reset_reclaims_everything() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 256);
 
-    void *first = tda_alloc(arena, 32);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 32));
+    void *first = tda_alloc(arena, bytes(32));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(32)));
 
     tda_al_arena_reset(arena);
 
@@ -353,7 +394,7 @@ static void test_reset_reclaims_everything() {
     TEST_ASSERT_EQUAL_size_t(256, st.available);
 
     // the arena hands out the same memory again
-    TEST_ASSERT_EQUAL_PTR(first, tda_alloc(arena, 32));
+    TEST_ASSERT_EQUAL_PTR(first, tda_alloc(arena, bytes(32)));
 
     tda_al_arena_drop(arena);
 }
@@ -372,31 +413,31 @@ static void test_reset_of_an_untouched_arena_is_harmless() {
 static void test_rewind_takes_back_what_came_after_the_mark() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    void *kept = tda_alloc(arena, 40);
+    void *kept = tda_alloc(arena, bytes(40));
     TEST_ASSERT_NOT_NULL(kept);
     const tda_AlArenaMark mark = tda_al_arena_mark(arena);
-    TEST_ASSERT_EQUAL_size_t(aligned(40), mark.offset);
+    TEST_ASSERT_EQUAL_size_t(40, mark.offset);
 
-    void *scratch = tda_alloc(arena, 100);
+    void *scratch = tda_alloc(arena, bytes(100));
     TEST_ASSERT_NOT_NULL(scratch);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 7));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(7)));
 
     tda_al_arena_rewind(arena, mark);
-    TEST_ASSERT_EQUAL_size_t(aligned(40), tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_size_t(40, tda_al_arena_stats(arena).used);
 
     // the room is handed out again from where the mark stood
-    TEST_ASSERT_EQUAL_PTR(scratch, tda_alloc(arena, 8));
+    TEST_ASSERT_EQUAL_PTR(scratch, tda_alloc(arena, bytes(8)));
 
     tda_al_arena_drop(arena);
 }
 
 static void test_a_rewind_with_nothing_since_changes_nothing() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(16)));
 
     tda_al_arena_rewind(arena, tda_al_arena_mark(arena));
 
-    TEST_ASSERT_EQUAL_size_t(aligned(16), tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_size_t(16, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
 }
@@ -406,12 +447,12 @@ static void test_marks_nest() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
     const tda_AlArenaMark outer = tda_al_arena_mark(arena);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(16)));
     const tda_AlArenaMark inner = tda_al_arena_mark(arena);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 32));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(32)));
 
     tda_al_arena_rewind(arena, inner);
-    TEST_ASSERT_EQUAL_size_t(aligned(16), tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_size_t(16, tda_al_arena_stats(arena).used);
 
     tda_al_arena_rewind(arena, outer);
     TEST_ASSERT_EQUAL_size_t(0, tda_al_arena_stats(arena).used);
@@ -423,19 +464,19 @@ static void test_marks_nest() {
 static void test_rewinding_an_outer_mark_skips_the_inner_ones() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    void *first = tda_alloc(arena, 16);
+    void *first = tda_alloc(arena, bytes(16));
     TEST_ASSERT_NOT_NULL(first);
     const tda_AlArenaMark outer = tda_al_arena_mark(arena);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(16)));
     (void) tda_al_arena_mark(arena);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(16)));
 
     tda_al_arena_rewind(arena, outer);
-    TEST_ASSERT_EQUAL_size_t(aligned(16), tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_size_t(16, tda_al_arena_stats(arena).used);
 
     // and the floor is the one from before the outer mark, not the inner one's: the first
     // block, last again, grows in place
-    TEST_ASSERT_EQUAL_PTR(first, tda_realloc(arena, first, 16, 64));
+    TEST_ASSERT_EQUAL_PTR(first, tda_realloc(arena, first, bytes(16), 64));
 
     tda_al_arena_drop(arena);
 }
@@ -445,13 +486,13 @@ static void test_rewinding_an_outer_mark_skips_the_inner_ones() {
 static void test_a_block_from_under_the_mark_moves_to_grow() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    unsigned char *old = tda_alloc(arena, 16);
+    unsigned char *old = tda_alloc(arena, bytes(16));
     TEST_ASSERT_NOT_NULL(old);
     memset(old, 0xab, 16);
 
     const tda_AlArenaMark mark = tda_al_arena_mark(arena);
 
-    unsigned char *grown = tda_realloc(arena, old, 16, 64);
+    unsigned char *grown = tda_realloc(arena, old, bytes(16), 64);
     TEST_ASSERT_NOT_NULL(grown);
     TEST_ASSERT_TRUE(grown != old);
     for (size_t i = 0; i < 16; ++i) {
@@ -461,7 +502,7 @@ static void test_a_block_from_under_the_mark_moves_to_grow() {
     tda_al_arena_rewind(arena, mark);
 
     // what the rewind frees is the moved copy's room, and 'old' is whole
-    unsigned char *next = tda_alloc(arena, 64);
+    unsigned char *next = tda_alloc(arena, bytes(64));
     TEST_ASSERT_NOT_NULL(next);
     memset(next, 0, 64);
     for (size_t i = 0; i < 16; ++i) {
@@ -475,15 +516,15 @@ static void test_a_block_from_under_the_mark_moves_to_grow() {
 static void test_a_block_from_under_the_mark_shrinks_where_it_stands() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    void *old = tda_alloc(arena, 64);
+    void *old = tda_alloc(arena, bytes(64));
     TEST_ASSERT_NOT_NULL(old);
     const tda_AlArenaMark mark = tda_al_arena_mark(arena);
 
-    TEST_ASSERT_EQUAL_PTR(old, tda_realloc(arena, old, 64, 16));
-    TEST_ASSERT_EQUAL_size_t(aligned(64), tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_PTR(old, tda_realloc(arena, old, bytes(64), 16));
+    TEST_ASSERT_EQUAL_size_t(64, tda_al_arena_stats(arena).used);
 
     tda_al_arena_rewind(arena, mark);
-    TEST_ASSERT_EQUAL_size_t(aligned(64), tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_size_t(64, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
 }
@@ -492,16 +533,16 @@ static void test_a_block_from_under_the_mark_shrinks_where_it_stands() {
 static void test_a_block_from_above_the_mark_grows_in_place() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(16)));
     const tda_AlArenaMark mark = tda_al_arena_mark(arena);
 
-    void *p = tda_alloc(arena, 16);
+    void *p = tda_alloc(arena, bytes(16));
     TEST_ASSERT_NOT_NULL(p);
-    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, 16, 64));
-    TEST_ASSERT_EQUAL_size_t(aligned(16) + 64, tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, bytes(16), 64));
+    TEST_ASSERT_EQUAL_size_t(16 + 64, tda_al_arena_stats(arena).used);
 
     tda_al_arena_rewind(arena, mark);
-    TEST_ASSERT_EQUAL_size_t(aligned(16), tda_al_arena_stats(arena).used);
+    TEST_ASSERT_EQUAL_size_t(16, tda_al_arena_stats(arena).used);
 
     tda_al_arena_drop(arena);
 }
@@ -511,12 +552,12 @@ static void test_a_block_from_above_the_mark_grows_in_place() {
 static void test_the_rewind_lowers_the_floor_again() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    void *p = tda_alloc(arena, 16);
+    void *p = tda_alloc(arena, bytes(16));
     TEST_ASSERT_NOT_NULL(p);
 
     tda_al_arena_rewind(arena, tda_al_arena_mark(arena));
 
-    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, 16, 64));
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, bytes(16), 64));
 
     tda_al_arena_drop(arena);
 }
@@ -525,13 +566,13 @@ static void test_the_rewind_lowers_the_floor_again() {
 static void test_reset_drops_the_floor() {
     tda_Al *arena = tda_al_arena_new(tda_al_default(), 1024);
 
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 16));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(16)));
     (void) tda_al_arena_mark(arena);
     tda_al_arena_reset(arena);
 
-    void *p = tda_alloc(arena, 16);
+    void *p = tda_alloc(arena, bytes(16));
     TEST_ASSERT_NOT_NULL(p);
-    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, 16, 64));
+    TEST_ASSERT_EQUAL_PTR(p, tda_realloc(arena, p, bytes(16), 64));
 
     tda_al_arena_drop(arena);
 }
@@ -544,7 +585,7 @@ static void test_mark_and_rewind_in_a_buffer() {
 
     const size_t before = tda_al_arena_stats(arena).used;
     const tda_AlArenaMark mark = tda_al_arena_mark(arena);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 100));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(100)));
 
     tda_al_arena_rewind(arena, mark);
     TEST_ASSERT_EQUAL_size_t(before, tda_al_arena_stats(arena).used);
@@ -560,6 +601,7 @@ static alignas(max_align_t) unsigned char mem[512];
 static bool inside(const void *ptr, size_t size, const void *buf, size_t buf_size) {
     const uintptr_t addr = (uintptr_t) ptr;
     const uintptr_t begin = (uintptr_t) buf;
+
     return addr >= begin && addr + size <= begin + buf_size;
 }
 
@@ -573,7 +615,7 @@ static void test_from_buf_hands_out_the_buffer_itself() {
     TEST_ASSERT_TRUE(st.cap > 0 && st.cap < sizeof(mem));
     TEST_ASSERT_EQUAL_size_t(0, st.used);
 
-    void *p = tda_alloc(arena, 16);
+    void *p = tda_alloc(arena, bytes(16));
     TEST_ASSERT_NOT_NULL(p);
     TEST_ASSERT_TRUE(inside(p, 16, mem, sizeof(mem)));
 
@@ -587,7 +629,7 @@ static void test_from_buf_aligns_whatever_the_buffer() {
         TEST_ASSERT_NOT_NULL(arena);
 
         for (size_t size = 1; size <= 40; size += 13) {
-            void *p = tda_alloc(arena, size);
+            void *p = tda_alloc(arena, at(size, ALIGNMENT));
             TEST_ASSERT_NOT_NULL(p);
             TEST_ASSERT_EQUAL_size_t(0, (uintptr_t) p % ALIGNMENT);
             TEST_ASSERT_TRUE(inside(p, size, mem + off, sizeof(mem) - off));
@@ -602,7 +644,7 @@ static void test_from_buf_rejects_a_buffer_too_small_for_the_header() {
 }
 
 // the smallest buffer it takes still hands out a byte, and the next size down is refused
-static void test_from_buf_on_the_smallest_buffer_hands_out_a_slot() {
+static void test_from_buf_on_the_smallest_buffer_hands_out_a_byte() {
     size_t size = 1;
     tda_Al *arena;
     while (!(arena = tda_al_arena_from_buf(mem, size))) {
@@ -610,8 +652,8 @@ static void test_from_buf_on_the_smallest_buffer_hands_out_a_slot() {
         ++size;
     }
 
-    TEST_ASSERT_EQUAL_size_t(ALIGNMENT, tda_al_arena_stats(arena).cap);
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 1));
+    TEST_ASSERT_EQUAL_size_t(1, tda_al_arena_stats(arena).cap);
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(1)));
 
     tda_al_arena_drop(arena);
 }
@@ -622,26 +664,25 @@ static void test_from_buf_runs_out_inside_the_buffer() {
     const size_t cap = tda_al_arena_stats(arena).cap;
 
     size_t taken = 0;
-    for (void *p; (p = tda_alloc(arena, ALIGNMENT)); taken += ALIGNMENT) {
-        TEST_ASSERT_TRUE(inside(p, ALIGNMENT, mem, sizeof(mem)));
+    for (void *p; (p = tda_alloc(arena, bytes(1))); ++taken) {
+        TEST_ASSERT_TRUE(inside(p, 1, mem, sizeof(mem)));
     }
     TEST_ASSERT_EQUAL_size_t(cap, taken);
 
     tda_al_arena_drop(arena);
 }
 
-// the block runs up to the end of the buffer: what is left past it is too short for a
-// slot. Every size over one slot's span puts the end exactly on a slot once
-static void test_from_buf_wastes_less_than_a_slot_at_the_end() {
+// the block runs up to the last byte of the buffer, whatever its size
+static void test_from_buf_hands_out_the_buffer_to_its_last_byte() {
     for (size_t size = sizeof(mem) - ALIGNMENT; size < sizeof(mem); ++size) {
         tda_Al *arena = tda_al_arena_from_buf(mem, size);
         TEST_ASSERT_NOT_NULL(arena);
 
         uintptr_t end = 0;
-        for (void *p; (p = tda_alloc(arena, ALIGNMENT));) {
-            end = (uintptr_t) p + ALIGNMENT;
+        for (void *p; (p = tda_alloc(arena, bytes(1)));) {
+            end = (uintptr_t) p + 1;
         }
-        TEST_ASSERT_TRUE((uintptr_t) mem + size - end < ALIGNMENT);
+        TEST_ASSERT_EQUAL_UINT64((uintptr_t) mem + size, end);
 
         tda_al_arena_drop(arena);
     }
@@ -650,7 +691,7 @@ static void test_from_buf_wastes_less_than_a_slot_at_the_end() {
 // drop gives nothing back to anyone, so the same buffer builds the next arena
 static void test_from_buf_can_be_built_again_after_drop() {
     tda_Al *arena = tda_al_arena_from_buf(mem, sizeof(mem));
-    TEST_ASSERT_NOT_NULL(tda_alloc(arena, 64));
+    TEST_ASSERT_NOT_NULL(tda_alloc(arena, bytes(64)));
     tda_al_arena_drop(arena);
 
     arena = tda_al_arena_from_buf(mem, sizeof(mem));
@@ -670,7 +711,7 @@ static void test_arena_can_feed_another_arena() {
     tda_Al *inner = tda_al_arena_new(outer, 256);
     TEST_ASSERT_NOT_NULL(inner);
 
-    unsigned char *p = tda_alloc(inner, 64);
+    unsigned char *p = tda_alloc(inner, bytes(64));
     TEST_ASSERT_NOT_NULL(p);
     memset(p, 0x7E, 64);
     TEST_ASSERT_EQUAL_UINT8(0x7E, p[63]);
@@ -687,20 +728,22 @@ int main() {
     RUN_TEST(test_new_starts_empty);
     RUN_TEST(test_drop_returns_everything_to_the_parent);
     RUN_TEST(test_new_cleans_up_after_a_failing_parent);
+    RUN_TEST(test_new_runs_on_a_parent_with_small_blocks_alignment);
     RUN_TEST(test_drop_null_is_noop);
 
-    RUN_TEST(test_alloc_advances_by_the_aligned_size);
-    RUN_TEST(test_every_block_is_aligned);
+    RUN_TEST(test_alloc_advances_by_the_size);
+    RUN_TEST(test_every_block_has_the_alignment_asked_for);
+    RUN_TEST(test_alloc_pads_to_the_alignment_and_no_further);
     RUN_TEST(test_blocks_do_not_overlap);
     RUN_TEST(test_alloc_zero_is_null_and_does_not_move_the_offset);
     RUN_TEST(test_alloc_beyond_the_capacity_fails);
     RUN_TEST(test_arena_can_be_filled_exactly);
-    RUN_TEST(test_capacity_accounts_for_rounding);
-    RUN_TEST(test_cap_off_the_alignment_is_rounded_up);
+    RUN_TEST(test_capacity_accounts_for_padding);
+    RUN_TEST(test_cap_is_taken_as_given);
 
-    RUN_TEST(test_calloc_zeroes_the_block);
-    RUN_TEST(test_calloc_zeroes_reused_memory);
-    RUN_TEST(test_calloc_rejects_overflow);
+    RUN_TEST(test_alloc_zeroed_zeroes_the_block);
+    RUN_TEST(test_alloc_zeroed_zeroes_reused_memory);
+    RUN_TEST(test_alloc_zeroed_rejects_overflow);
 
     RUN_TEST(test_realloc_grows_the_last_block_in_place);
     RUN_TEST(test_realloc_shrinks_the_last_block_in_place);
@@ -727,9 +770,9 @@ int main() {
     RUN_TEST(test_from_buf_hands_out_the_buffer_itself);
     RUN_TEST(test_from_buf_aligns_whatever_the_buffer);
     RUN_TEST(test_from_buf_rejects_a_buffer_too_small_for_the_header);
-    RUN_TEST(test_from_buf_on_the_smallest_buffer_hands_out_a_slot);
+    RUN_TEST(test_from_buf_on_the_smallest_buffer_hands_out_a_byte);
     RUN_TEST(test_from_buf_runs_out_inside_the_buffer);
-    RUN_TEST(test_from_buf_wastes_less_than_a_slot_at_the_end);
+    RUN_TEST(test_from_buf_hands_out_the_buffer_to_its_last_byte);
     RUN_TEST(test_from_buf_can_be_built_again_after_drop);
 
     RUN_TEST(test_arena_can_feed_another_arena);

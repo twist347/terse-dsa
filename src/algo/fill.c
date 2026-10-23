@@ -8,7 +8,7 @@ void tda_span_fill(tda_SpanMut s, const void *val) {
     assert(val);
 
     for (size_t i = 0; i < s.len; ++i) {
-        memcpy(tda_span_get_mut(s, i), val, s.elem_size);
+        memcpy(tda_span_get_mut(s, i), val, s.elem.size);
     }
 }
 
@@ -19,7 +19,7 @@ void tda_span_fill_zero(tda_SpanMut s) {
         return;
     }
 
-    memset(s.data, 0, s.len * s.elem_size);
+    memset(s.data, 0, s.len * s.elem.size);
 }
 
 void tda_span_generate(tda_SpanMut s, tda_Gen gen, void *ctx) {

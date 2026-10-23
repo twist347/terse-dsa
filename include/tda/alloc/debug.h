@@ -17,7 +17,7 @@
 /// the number of the request that made it, and every misuse stops the program with a
 /// line on stderr:
 ///
-/// - a dealloc or realloc with a size other than the one the block was made with;
+/// - a dealloc or realloc with a size or an alignment other than the block was made with;
 /// - a pointer it never handed out, or one already given back;
 /// - a write past the end of a block, seen when the block is given back;
 /// - a write into a block after it was given back.
@@ -34,8 +34,9 @@
 ///
 /// The record lives in a table taken from tda_al_default, not from the parent, so an
 /// arena or a pool underneath sees only the caller's blocks, each 16 bytes longer for the
-/// guard past its end. The allocator's own two blocks come from the parent, which must
-/// outlive it.
+/// guard past its end; a pool sized for exactly the caller's blocks therefore serves
+/// none of them. The allocator's own two blocks come from the parent, which must outlive
+/// it.
 ///
 /// @par Example
 /// @snippet alloc/example_debug.c leaks
@@ -97,7 +98,7 @@ size_t tda_al_debug_fprint_leaks(const tda_Al *self, FILE *stream);
 /// parent were out of memory
 /// @param self the allocator
 /// @param n how many to let through; SIZE_MAX turns refusing off
-/// @note a request is an alloc, a calloc or a realloc to a non-zero size; giving back
+/// @note a request is an alloc or an alloc_zeroed, a realloc's among them; giving back
 ///       is never refused
 /// @bigo{1}
 TDA_API

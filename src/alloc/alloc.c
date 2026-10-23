@@ -1,81 +1,103 @@
 #include "tda/alloc/alloc.h"
 
 #include <assert.h>
-#include <stdckdint.h>
 #include <string.h>
 
 /* ========== wrappers ========== */
 
-void *tda_alloc(tda_Al *al, size_t size) {
+void *tda_alloc(tda_Al *al, tda_Layout layout) {
     assert(al);
     assert(al->alloc);
+    assert(tda_layout_is_align(layout.align));
 
-    if (size == 0) {
+    if (layout.size == 0) {
         return nullptr;
     }
 
-    return al->alloc(al->ctx, size);
+    return al->alloc(al->ctx, layout);
 }
 
-void *tda_calloc(tda_Al *al, size_t num, size_t size) {
+void *tda_alloc_zeroed(tda_Al *al, tda_Layout layout) {
     assert(al);
+    assert(tda_layout_is_align(layout.align));
 
-    if (num == 0 || size == 0) {
+    if (layout.size == 0) {
         return nullptr;
     }
 
-    size_t total;
-    if (ckd_mul(&total, num, size)) {
+    if (al->alloc_zeroed) {
+        return al->alloc_zeroed(al->ctx, layout);
+    }
+
+    void *ptr = tda_alloc(al, layout);
+    if (ptr) {
+        memset(ptr, 0, layout.size);
+    }
+
+    return ptr;
+}
+
+bool tda_resize(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
+    assert(al);
+    assert(ptr);
+    assert(old.size > 0 && new_size > 0);
+    assert(tda_layout_is_align(old.align));
+
+    return al->resize && al->resize(al->ctx, ptr, old, new_size);
+}
+
+void *tda_remap(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
+    assert(al);
+    assert(ptr);
+    assert(old.size > 0 && new_size > 0);
+    assert(tda_layout_is_align(old.align));
+
+    return al->remap ? al->remap(al->ctx, ptr, old, new_size) : nullptr;
+}
+
+void *tda_realloc(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
+    assert(al);
+    assert(ptr || old.size == 0);
+    assert(tda_layout_is_align(old.align));
+
+    if (new_size == 0) {
+        tda_dealloc(al, ptr, old);
         return nullptr;
     }
 
-    // fallback
-    if (!al->calloc) {
-        void *ptr = tda_alloc(al, total);
-        if (!ptr) {
-            return nullptr;
-        }
-        memset(ptr, 0, total);
+    if (!ptr) {
+        return tda_alloc(al, (tda_Layout){.size = new_size, .align = old.align});
+    }
+
+    // cheapest first: no move, then the allocator's own move, then a copy
+    if (tda_resize(al, ptr, old, new_size)) {
         return ptr;
     }
 
-    return al->calloc(al->ctx, num, size);
-}
+    void *moved = tda_remap(al, ptr, old, new_size);
+    if (moved) {
+        return moved;
+    }
 
-void *tda_realloc(tda_Al *al, void *ptr, size_t old_size, size_t new_size) {
-    assert(al);
-    assert(ptr || old_size == 0);
-
-    if (new_size == 0) {
-        tda_dealloc(al, ptr, old_size);
+    void *new_ptr = tda_alloc(al, (tda_Layout){.size = new_size, .align = old.align});
+    if (!new_ptr) {
         return nullptr;
     }
 
-    // fallback
-    if (!al->realloc) {
-        void *new_ptr = tda_alloc(al, new_size);
-        if (!new_ptr) {
-            return nullptr;
-        }
+    memcpy(new_ptr, ptr, old.size < new_size ? old.size : new_size);
+    tda_dealloc(al, ptr, old);
 
-        if (ptr) {
-            const size_t copy_size = old_size < new_size ? old_size : new_size;
-            memcpy(new_ptr, ptr, copy_size);
-            tda_dealloc(al, ptr, old_size);
-        }
-        return new_ptr;
-    }
-
-    return al->realloc(al->ctx, ptr, old_size, new_size);
+    return new_ptr;
 }
 
-void tda_dealloc(tda_Al *al, void *ptr, size_t size) {
+void tda_dealloc(tda_Al *al, void *ptr, tda_Layout layout) {
     assert(al);
     assert(al->dealloc);
+    assert(tda_layout_is_align(layout.align));
 
     if (!ptr) {
         return;
     }
 
-    al->dealloc(al->ctx, ptr, size);
+    al->dealloc(al->ctx, ptr, layout);
 }

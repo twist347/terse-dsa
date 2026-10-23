@@ -15,10 +15,10 @@
 /// @{
 
 /// bumped by a breaking change
-#define TDA_VERSION_MAJOR 1
+#define TDA_VERSION_MAJOR 2
 
 /// bumped by an addition
-#define TDA_VERSION_MINOR 6
+#define TDA_VERSION_MINOR 0
 
 /// bumped by a fix
 #define TDA_VERSION_PATCH 0

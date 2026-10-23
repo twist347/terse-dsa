@@ -42,40 +42,44 @@
 /// @param a one sorted span
 /// @param b the other, sorted by the same 'cmp'
 /// @param cmp the order both are in
+/// @param ctx passed to every call of 'cmp'; may be null
 /// @return how many elems were written
 /// @bigo{n}
 [[nodiscard]] TDA_API
-size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp);
+size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx);
 
 /// the elems present in both
 /// @param dst must hold the shorter of the two
 /// @param a one sorted span
 /// @param b the other, sorted by the same 'cmp'
 /// @param cmp the order both are in
+/// @param ctx passed to every call of 'cmp'; may be null
 /// @return how many elems were written
 /// @bigo{n}
 [[nodiscard]] TDA_API
-size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp);
+size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx);
 
 /// the elems of 'a' not matched in 'b'
 /// @param dst must hold a.len
 /// @param a the span to take from
 /// @param b the span to subtract, sorted by the same 'cmp'
 /// @param cmp the order both are in
+/// @param ctx passed to every call of 'cmp'; may be null
 /// @return how many elems were written
 /// @bigo{n}
 [[nodiscard]] TDA_API
-size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp);
+size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx);
 
 /// the elems present in exactly one of the two
 /// @param dst must hold a.len + b.len
 /// @param a one sorted span
 /// @param b the other, sorted by the same 'cmp'
 /// @param cmp the order both are in
+/// @param ctx passed to every call of 'cmp'; may be null
 /// @return how many elems were written
 /// @bigo{n}
 [[nodiscard]] TDA_API
-size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp);
+size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx);
 
 /// @}
 
@@ -86,10 +90,11 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
 /// @param sup the span that may contain the other
 /// @param sub the span to look for; an empty one is included in anything
 /// @param cmp the order both are in
+/// @param ctx passed to every call of 'cmp'; may be null
 /// @return whether 'sup' contains every elem of 'sub', counting duplicates
 /// @bigo{n}
 [[nodiscard]] TDA_API
-bool tda_span_includes(tda_Span sup, tda_Span sub, tda_Cmp cmp);
+bool tda_span_includes(tda_Span sup, tda_Span sub, tda_Cmp cmp, void *ctx);
 
 /// @}
 

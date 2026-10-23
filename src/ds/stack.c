@@ -22,13 +22,13 @@ static tda_Status wrap(tda_Vec *vec, tda_Stack **out);
 
 /* ========== lifetime ========== */
 
-tda_Status tda_stack_new(size_t elem_size, tda_Al *al, tda_Stack **out) {
-    assert(elem_size > 0);
+tda_Status tda_stack_new(tda_Layout elem, tda_Al *al, tda_Stack **out) {
+    assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
     tda_Vec *vec;
-    const tda_Status st = tda_vec_new(elem_size, al, &vec);
+    const tda_Status st = tda_vec_new(elem, al, &vec);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
@@ -36,13 +36,13 @@ tda_Status tda_stack_new(size_t elem_size, tda_Al *al, tda_Stack **out) {
     return wrap(vec, out);
 }
 
-tda_Status tda_stack_new_cap(size_t cap, size_t elem_size, tda_Al *al, tda_Stack **out) {
-    assert(elem_size > 0);
+tda_Status tda_stack_new_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Stack **out) {
+    assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
     tda_Vec *vec;
-    const tda_Status st = tda_vec_new_cap(cap, elem_size, al, &vec);
+    const tda_Status st = tda_vec_new_cap(cap, elem, al, &vec);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
@@ -50,13 +50,13 @@ tda_Status tda_stack_new_cap(size_t cap, size_t elem_size, tda_Al *al, tda_Stack
     return wrap(vec, out);
 }
 
-tda_Status tda_stack_from_data(const void *data, size_t len, size_t elem_size, tda_Al *al, tda_Stack **out) {
-    assert(elem_size > 0);
+tda_Status tda_stack_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Stack **out) {
+    assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
 
     tda_Vec *vec;
-    const tda_Status st = tda_vec_from_data(data, len, elem_size, al, &vec);
+    const tda_Status st = tda_vec_from_data(data, len, elem, al, &vec);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
@@ -70,7 +70,7 @@ tda_Status tda_stack_from_span(tda_Span s, tda_Al *al, tda_Stack **out) {
     assert(al);
     assert(out);
 
-    return tda_stack_from_data(s.data, s.len, s.elem_size, al, out);
+    return tda_stack_from_data(s.data, s.len, s.elem, al, out);
 }
 
 void tda_stack_drop(tda_Stack *self) {
@@ -82,14 +82,14 @@ void tda_stack_drop(tda_Stack *self) {
 
     tda_Al *al_copy = tda_vec_al(self->vec);
     tda_vec_drop(self->vec);
-    tda_dealloc(al_copy, self, sizeof(tda_Stack));
+    TDA_DEALLOC(tda_Stack, al_copy, self, 1);
 }
 
 tda_Vec *tda_stack_into_vec(tda_Stack *self) {
     ASSERT_STACK(self);
 
     tda_Vec *vec = self->vec;
-    tda_dealloc(tda_vec_al(vec), self, sizeof(tda_Stack));
+    TDA_DEALLOC(tda_Stack, tda_vec_al(vec), self, 1);
 
     return vec;
 }
@@ -119,7 +119,7 @@ tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al *al, tda_Stack **ou
 tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
-    TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
+    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(self->vec), tda_vec_elem_layout(other->vec)));
 
     // no self-assignment guard: the vec already returns early on it
     return tda_vec_copy_assign(self->vec, other->vec);
@@ -128,7 +128,7 @@ tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
 tda_Status tda_stack_move_assign(tda_Stack *self, tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
-    TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
+    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(self->vec), tda_vec_elem_layout(other->vec)));
 
     // self-move is handled by the vec, as in copy_assign
     return tda_vec_move_assign(self->vec, other->vec);
@@ -143,11 +143,11 @@ bool tda_stack_eq(const tda_Stack *a, const tda_Stack *b) {
     return tda_vec_eq(a->vec, b->vec);
 }
 
-bool tda_stack_eq_by(const tda_Stack *a, const tda_Stack *b, tda_Eq eq) {
+bool tda_stack_eq_by(const tda_Stack *a, const tda_Stack *b, tda_Eq eq, void *ctx) {
     ASSERT_STACK(a);
     ASSERT_STACK(b);
 
-    return tda_vec_eq_by(a->vec, b->vec, eq);
+    return tda_vec_eq_by(a->vec, b->vec, eq, ctx);
 }
 
 /* ========== info ========== */
@@ -168,6 +168,12 @@ size_t tda_stack_elem_size(const tda_Stack *self) {
     ASSERT_STACK(self);
 
     return tda_vec_elem_size(self->vec);
+}
+
+tda_Layout tda_stack_elem_layout(const tda_Stack *self) {
+    ASSERT_STACK(self);
+
+    return tda_vec_elem_layout(self->vec);
 }
 
 tda_Al *tda_stack_al(const tda_Stack *self) {
@@ -237,7 +243,7 @@ tda_Status tda_stack_shrink_to_fit(tda_Stack *self) {
 void tda_stack_swap(tda_Stack *self, tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
-    TDA_EXPECT(tda_vec_elem_size(self->vec) == tda_vec_elem_size(other->vec));
+    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(self->vec), tda_vec_elem_layout(other->vec)));
 
     // self-swap is handled by the vec, as in copy_assign
     tda_vec_swap(self->vec, other->vec);
@@ -271,7 +277,7 @@ static tda_Status wrap(tda_Vec *vec, tda_Stack **out) {
     assert(vec);
     assert(out);
 
-    tda_Stack *obj = tda_alloc(tda_vec_al(vec), sizeof(tda_Stack));
+    tda_Stack *obj = TDA_ALLOC(tda_Stack, tda_vec_al(vec), 1);
     if (!obj) {
         tda_vec_drop(vec);
         return TDA_STATUS_ERR_NO_MEM;

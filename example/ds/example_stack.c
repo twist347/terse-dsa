@@ -62,7 +62,7 @@ int main() {
     const tda_Span view = tda_stack_to_span(s); // bottom to top, so the top is LAST
 
     size_t idx;
-    if (tda_span_find(view, &(int32_t){8}, tda_eq_i32, &idx)) {
+    if (tda_span_find(view, &(int32_t){8}, tda_eq_i32, nullptr, &idx)) {
         printf("8 sits %zu from the bottom of %zu\n", idx, view.len); // 8 sits 1 from the bottom of 2
     }
 
@@ -89,6 +89,7 @@ out:
     // a null handle is a no-op, so this drops whichever of the two is still alive
     tda_vec_drop(v);
     tda_stack_drop(s);
+
     return rc;
     /// [into]
 }

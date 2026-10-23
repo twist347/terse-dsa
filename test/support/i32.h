@@ -27,7 +27,7 @@ static inline bool tda_test_i32_in_mask(const void *elem, void *ctx) {
 /* ========== equalities ========== */
 
 /// tda_Eq over int32_t that ignores the sign, so equal elems can differ byte for byte
-static inline bool tda_test_i32_eq_abs(const void *lhs, const void *rhs) {
+static inline bool tda_test_i32_eq_abs(const void *lhs, const void *rhs, void *) {
     const int32_t a = *(const int32_t *) lhs;
     const int32_t b = *(const int32_t *) rhs;
 

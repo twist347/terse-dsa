@@ -2,31 +2,56 @@
 
 #include "tda/core/util.h"
 
+#include "internal/ptr.h"
+
+#include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
+
+#ifdef _WIN32
+#include <malloc.h>
+#endif
 
 /* ========== internals ========== */
 
+// libc came before alignment did: malloc, calloc and realloc know only their own, and
+// C11 added aligned_alloc alone. So each hook takes the plain call up to that alignment
+// and aligned_alloc past it, which also keeps clear of the small alignments some
+// aligned_alloc refuse: macOS takes nothing under the size of a pointer
+
+/// whether the plain calls serve 'align': it is within malloc's own
 [[nodiscard]]
-static void *malloc_wrapper(void *ctx, size_t size);
+static bool is_plain(size_t align);
+
+/// what to ask the plain calls for so the block is owed 'align'. C23 promises malloc(n)
+/// only the alignment of types of size n or less, so a block shorter than its alignment
+/// asks for a whole max_align_t, which is owed every plain alignment
+[[nodiscard]]
+static size_t plain_size(size_t size, size_t align);
 
 [[nodiscard]]
-static void *calloc_wrapper(void *ctx, size_t num, size_t size);
+static void *default_alloc(void *ctx, tda_Layout layout);
 
 [[nodiscard]]
-static void *realloc_wrapper(void *ctx, void *ptr, size_t old_size, size_t new_size);
+static void *default_alloc_zeroed(void *ctx, tda_Layout layout);
 
-static void free_wrapper(void *ctx, void *ptr, size_t size);
+[[nodiscard]]
+static void *default_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size);
+
+static void default_dealloc(void *ctx, void *ptr, tda_Layout layout);
 
 /* ========== lifetime ========== */
 
 tda_Al *tda_al_default() {
+    // no resize: libc has no call that grows a block only where it lies
     static tda_Al static_al = {
         .ctx = nullptr,
-        .alloc = malloc_wrapper,
-        .calloc = calloc_wrapper,
-        .realloc = realloc_wrapper,
-        .dealloc = free_wrapper,
+        .alloc = default_alloc,
+        .alloc_zeroed = default_alloc_zeroed,
+        .resize = nullptr,
+        .remap = default_remap,
+        .dealloc = default_dealloc,
     };
 
     return &static_al;
@@ -34,28 +59,75 @@ tda_Al *tda_al_default() {
 
 /* ========== internals ========== */
 
-static void *malloc_wrapper(void *ctx, size_t size) {
-    TDA_UNUSED(ctx);
-
-    return malloc(size);
+static bool is_plain(size_t align) {
+    return align <= TDA_DEFAULT_ALIGNMENT;
 }
 
-static void *calloc_wrapper(void *ctx, size_t num, size_t size) {
-    TDA_UNUSED(ctx);
+static size_t plain_size(size_t size, size_t align) {
+    assert(is_plain(align));
 
-    return calloc(num, size);
+    return size >= align ? size : sizeof(max_align_t);
 }
 
-static void *realloc_wrapper(void *ctx, void *ptr, size_t old_size, size_t new_size) {
+static void *default_alloc(void *ctx, tda_Layout layout) {
     TDA_UNUSED(ctx);
-    TDA_UNUSED(old_size);
 
-    return realloc(ptr, new_size);
+    if (is_plain(layout.align)) {
+        return malloc(plain_size(layout.size, layout.align));
+    }
+
+#ifdef _WIN32
+    // UCRT has no aligned_alloc, and its aligned blocks go back through _aligned_free
+    return _aligned_malloc(layout.size, layout.align);
+#else
+    // aligned_alloc takes a size that is a multiple of the alignment
+    size_t size;
+    if (tda_ckd_align_up(&size, layout.size, layout.align)) {
+        return nullptr;
+    }
+
+    return aligned_alloc(layout.align, size);
+#endif
 }
 
-static void free_wrapper(void *ctx, void *ptr, size_t size) {
+static void *default_alloc_zeroed(void *ctx, tda_Layout layout) {
+    // calloc's large blocks come from the system already zeroed, and it skips the memset
+    if (is_plain(layout.align)) {
+        TDA_UNUSED(ctx);
+        return calloc(1, plain_size(layout.size, layout.align));
+    }
+
+    void *ptr = default_alloc(ctx, layout);
+    if (ptr) {
+        memset(ptr, 0, layout.size);
+    }
+
+    return ptr;
+}
+
+static void *default_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     TDA_UNUSED(ctx);
-    TDA_UNUSED(size);
+
+    // realloc may move a large block by remapping its pages instead of copying them, but
+    // it keeps only malloc's own alignment, and only what the new size is owed
+    if (!is_plain(old.align)) {
+        return nullptr;
+    }
+
+    return realloc(ptr, plain_size(new_size, old.align));
+}
+
+static void default_dealloc(void *ctx, void *ptr, tda_Layout layout) {
+    TDA_UNUSED(ctx);
+
+#ifdef _WIN32
+    if (!is_plain(layout.align)) {
+        _aligned_free(ptr);
+        return;
+    }
+#else
+    TDA_UNUSED(layout);
+#endif
 
     free(ptr);
 }

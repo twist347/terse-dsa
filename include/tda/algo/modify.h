@@ -17,7 +17,7 @@
 /// kept elems are packed to the front and the rest, up to s.len, is left unspecified.
 /// The caller shortens its own container:
 ///
-///     const size_t kept = tda_span_unique(tda_vec_to_span_mut(v), tda_eq_i32);
+///     const size_t kept = tda_span_unique(tda_vec_to_span_mut(v), tda_eq_i32, nullptr);
 ///     tda_vec_truncate(v, kept);
 ///
 /// [[nodiscard]] makes ignoring that length a warning (an error under -Werror).
@@ -32,11 +32,12 @@
 /// drops every elem equal to the one before it, so each run keeps only its first
 /// @param s the span
 /// @param eq the equality
+/// @param ctx passed to every call of 'eq'; may be null
 /// @return the new length. Only neighbours are compared, so only a sorted span ends up
 ///         free of duplicates
 /// @bigo{n}
 [[nodiscard]] TDA_API
-size_t tda_span_unique(tda_SpanMut s, tda_Eq eq);
+size_t tda_span_unique(tda_SpanMut s, tda_Eq eq, void *ctx);
 
 /// @}
 
@@ -48,10 +49,11 @@ size_t tda_span_unique(tda_SpanMut s, tda_Eq eq);
 /// @param key must not point into 's': elems move during the pass, and 'key' would
 ///            then read whatever lands there
 /// @param eq the equality
+/// @param ctx passed to every call of 'eq'; may be null
 /// @return the new length
 /// @bigo{n}
 [[nodiscard]] TDA_API
-size_t tda_span_remove(tda_SpanMut s, const void *key, tda_Eq eq);
+size_t tda_span_remove(tda_SpanMut s, const void *key, tda_Eq eq, void *ctx);
 
 /// drops every elem satisfying 'pred'
 /// @param s the span
@@ -72,9 +74,10 @@ size_t tda_span_remove_if(tda_SpanMut s, tda_Pred pred, void *ctx);
 /// @param key must not point into 's': the first match would overwrite it
 /// @param val the value to write
 /// @param eq the equality
+/// @param ctx passed to every call of 'eq'; may be null
 /// @bigo{n}
 TDA_API
-void tda_span_replace(tda_SpanMut s, const void *key, const void *val, tda_Eq eq);
+void tda_span_replace(tda_SpanMut s, const void *key, const void *val, tda_Eq eq, void *ctx);
 
 /// overwrites every elem satisfying 'pred' with 'val'
 /// @param s the span

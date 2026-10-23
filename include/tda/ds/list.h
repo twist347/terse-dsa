@@ -55,7 +55,7 @@ typedef struct tda_ListNode tda_ListNode;
 /// @{
 
 /// an empty list
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
 /// @param[out] out the new list, written only on success
 /// @retval TDA_STATUS_OK on success
@@ -63,12 +63,12 @@ typedef struct tda_ListNode tda_ListNode;
 ///         elem size would not fit in size_t
 /// @bigo{1}
 [[nodiscard]] TDA_API
-tda_Status tda_list_new(size_t elem_size, tda_Al *al, tda_List **out);
+tda_Status tda_list_new(tda_Layout elem, tda_Al *al, tda_List **out);
 
 /// a list holding a copy of 'len' elems read from 'data', front to back
 /// @param data the elems to copy in; may be null only when len is 0
 /// @param len how many elems to read
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al the allocator
 /// @param[out] out the new list, written only on success
 /// @retval TDA_STATUS_OK on success
@@ -76,10 +76,10 @@ tda_Status tda_list_new(size_t elem_size, tda_Al *al, tda_List **out);
 ///         nothing is leaked
 /// @bigo{n}, one allocation per elem
 [[nodiscard]] TDA_API
-tda_Status tda_list_from_data(const void *data, size_t len, size_t elem_size, tda_Al *al, tda_List **out);
+tda_Status tda_list_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_List **out);
 
 /// a list holding a copy of the elems 's' views
-/// @param s the view to copy
+/// @param s the view to copy; the elem layout is the span's
 /// @param al the allocator
 /// @param[out] out the new list, written only on success
 /// @retval TDA_STATUS_OK on success
@@ -120,7 +120,7 @@ tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List **out);
 
 /// overwrites the elems of 'self' with those of 'other', reusing its nodes and allocating
 /// or releasing the difference
-/// @param[in,out] self must have the same elem_size; keeps its allocator
+/// @param[in,out] self must have the same elem layout; keeps its allocator
 /// @param other the list to copy from; may be 'self'
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated; 'self' is unchanged
@@ -129,7 +129,7 @@ tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List **out);
 tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other);
 
 /// moves the elems of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same elem_size; its old elems are released, its
+/// @param[in,out] self must have the same elem layout; its old elems are released, its
 ///                     allocator kept
 /// @param[in,out] other emptied on success and still usable; may be 'self'
 /// @retval TDA_STATUS_OK on success
@@ -147,7 +147,7 @@ tda_Status tda_list_move_assign(tda_List *self, tda_List *other);
 
 /// whether the two hold the same elems front to back, byte for byte
 /// @param a one list
-/// @param b must have the same elem_size (asserted); a different length gives false
+/// @param b must have the same elem layout (asserted); a different length gives false
 /// @return whether the lengths match and the bytes do
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -155,12 +155,13 @@ bool tda_list_eq(const tda_List *a, const tda_List *b);
 
 /// whether the two hold equal elems under 'eq'
 /// @param a one list
-/// @param b must have the same elem_size
+/// @param b must have the same elem layout
 /// @param eq asked of each pair until one fails
+/// @param ctx passed to every call of 'eq'; may be null
 /// @return whether the lengths match and every pair does
 /// @bigo{n}
 [[nodiscard]] TDA_API
-bool tda_list_eq_by(const tda_List *a, const tda_List *b, tda_Eq eq);
+bool tda_list_eq_by(const tda_List *a, const tda_List *b, tda_Eq eq, void *ctx);
 
 /// @}
 
@@ -176,10 +177,17 @@ size_t tda_list_len(const tda_List *self);
 
 /// the size of one elem
 /// @param self the list
-/// @return elem_size
+/// @return elem.size, the size of the elem layout
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_list_elem_size(const tda_List *self);
+
+/// the layout of one elem, as the list was built with
+/// @param self the list
+/// @return the size and the alignment; every elem is aligned to it
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Layout tda_list_elem_layout(const tda_List *self);
 
 /// the allocator the list was built with
 /// @param self the list
@@ -187,6 +195,19 @@ size_t tda_list_elem_size(const tda_List *self);
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Al *tda_list_al(const tda_List *self);
+
+/// the smallest block that holds both the list struct and one node, for an allocator
+/// whose blocks are all one layout, such as alloc/pool
+/// @param elem the layout of one elem, asserted to be a type's and one tda_list_new
+///             accepts
+/// @return the larger size and the larger alignment of the two; under it tda_list_new or
+///         the first push fails
+/// @note a node of an elem smaller than about four pointers is smaller than the struct,
+///       so every node of such a list leaves part of its block unused; alloc/slab sizes
+///       the two apart
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Layout tda_list_block_layout(tda_Layout elem);
 
 /// @}
 
@@ -247,15 +268,16 @@ tda_ListNode *tda_list_back_node_mut(tda_List *self);
 /// @param key the address of the value looked for
 /// @param eq the equality; passed per call, since a list is never told how its elems
 ///           compare
+/// @param ctx passed to every call of 'eq'; may be null
 /// @return the node, or null when no elem is equal
 /// @bigo{n}
 [[nodiscard]] TDA_API
-const tda_ListNode *tda_list_find(const tda_List *self, const void *key, tda_Eq eq);
+const tda_ListNode *tda_list_find(const tda_List *self, const void *key, tda_Eq eq, void *ctx);
 
 /// the same position, to write, insert or remove through
 /// @copydetails tda_list_find
 [[nodiscard]] TDA_API
-tda_ListNode *tda_list_find_mut(tda_List *self, const void *key, tda_Eq eq);
+tda_ListNode *tda_list_find_mut(tda_List *self, const void *key, tda_Eq eq, void *ctx);
 
 /// the position after 'node'
 /// @param node the position to step from
@@ -282,16 +304,17 @@ const tda_ListNode *tda_list_node_prev(const tda_ListNode *node);
 tda_ListNode *tda_list_node_prev_mut(tda_ListNode *node);
 
 /// the elem at 'node'
+/// @param self the list 'node' is in, which knows where in a node its elem lies
 /// @param node the position
 /// @return valid until that elem is removed
 /// @bigo{1}
 [[nodiscard]] TDA_API
-const void *tda_list_node_elem(const tda_ListNode *node);
+const void *tda_list_node_elem(const tda_List *self, const tda_ListNode *node);
 
 /// the elem at 'node', to write through
 /// @copydetails tda_list_node_elem
 [[nodiscard]] TDA_API
-void *tda_list_node_elem_mut(tda_ListNode *node);
+void *tda_list_node_elem_mut(tda_List *self, tda_ListNode *node);
 
 /// @}
 
@@ -362,7 +385,7 @@ void tda_list_retain(tda_List *self, tda_Pred pred, void *ctx);
 
 /// moves every node of 'src' to the front of 'self', leaving 'src' empty
 /// @param self the list written into
-/// @param[in,out] src must have the same elem_size and not be 'self' (asserted);
+/// @param[in,out] src must have the same elem layout and not be 'self' (asserted);
 ///                    emptied on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and a node cannot be
@@ -379,7 +402,7 @@ tda_Status tda_list_splice_back(tda_List *self, tda_List *src);
 
 /// exchanges the contents of two lists
 /// @param self one list
-/// @param other must have the same elem_size and allocator; the nodes do not move, so
+/// @param other must have the same elem layout and allocator; the nodes do not move, so
 ///              borrowed positions stay valid
 /// @note a node belongs to the allocator that made it. Across allocators use
 ///       tda_list_copy_with, then tda_list_move_assign
@@ -414,16 +437,18 @@ void tda_list_reverse(tda_List *self);
 /// sorts by relinking; stable, no allocation
 /// @param self the list
 /// @param cmp the order to sort under
+/// @param ctx passed to every call of 'cmp'; may be null
 /// @bigo{n log n}; elems stay in their nodes, so a borrowed position still names the
 ///         same elem, which sorting a copy could not give
 TDA_API
-void tda_list_sort(tda_List *self, tda_Cmp cmp);
+void tda_list_sort(tda_List *self, tda_Cmp cmp, void *ctx);
 
 /// merges the sorted 'src' into the sorted 'self', leaving 'src' empty
 /// @param self must already be sorted under 'cmp'
-/// @param[in,out] src must have the same elem_size, be sorted under 'cmp' and not be
+/// @param[in,out] src must have the same elem layout, be sorted under 'cmp' and not be
 ///                    'self' (asserted); on ties elems of 'self' come first
 /// @param cmp the order both are already in
+/// @param ctx passed to every call of 'cmp'; may be null
 /// @retval TDA_STATUS_OK on success; on one allocator the nodes of 'src' are relinked
 ///         and borrowed positions survive
 /// @retval TDA_STATUS_ERR_NO_MEM when the allocators differ and a node cannot be
@@ -431,7 +456,7 @@ void tda_list_sort(tda_List *self, tda_Cmp cmp);
 ///         and its borrowed positions do not survive
 /// @bigo{n + m}; splice_back then sort would cost O(n log n)
 [[nodiscard]] TDA_API
-tda_Status tda_list_merge(tda_List *self, tda_List *src, tda_Cmp cmp);
+tda_Status tda_list_merge(tda_List *self, tda_List *src, tda_Cmp cmp, void *ctx);
 
 /// @}
 
@@ -441,7 +466,7 @@ tda_Status tda_list_merge(tda_List *self, tda_List *src, tda_Cmp cmp);
 /// writes every elem into 'dst', front to back; the list's only way to algo, as there
 /// is no contiguous block to view
 /// @param self the list
-/// @param dst must have the same elem_size and be exactly as long as the list
+/// @param dst must have the same elem layout and be exactly as long as the list
 /// @bigo{n}
 TDA_API
 void tda_list_copy_to_span(const tda_List *self, tda_SpanMut dst);
@@ -449,7 +474,7 @@ void tda_list_copy_to_span(const tda_List *self, tda_SpanMut dst);
 /// overwrites every elem from 'src', front to back; pairs with tda_list_copy_to_span to
 /// put an algo result back
 /// @param self the list
-/// @param src must have the same elem_size and be exactly as long as the list; the nodes
+/// @param src must have the same elem layout and be exactly as long as the list; the nodes
 ///            stay in place, so this cannot fail
 /// @bigo{n}
 TDA_API
@@ -481,33 +506,33 @@ void tda_list_print(const tda_List *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// returns 'self' after checking sizeof(T), so a macro evaluates its handle once;
-// _Generic keeps the handle's constness
+// returns 'self' after checking TDA_LAYOUT_OF(T), so a macro evaluates its handle
+// once; _Generic keeps the handle's constness
 [[nodiscard]]
-static inline const tda_List *tda_list_typed_c_(const tda_List *self, [[maybe_unused]] size_t size) {
-    TDA_EXPECT(tda_list_elem_size(self) == size);
+static inline const tda_List *tda_list_typed_c_(const tda_List *self, [[maybe_unused]] tda_Layout elem) {
+    TDA_EXPECT(tda_layout_eq(tda_list_elem_layout(self), elem));
     return self;
 }
 
 [[nodiscard]]
-static inline tda_List *tda_list_typed_(tda_List *self, [[maybe_unused]] size_t size) {
-    TDA_EXPECT(tda_list_elem_size(self) == size);
+static inline tda_List *tda_list_typed_(tda_List *self, [[maybe_unused]] tda_Layout elem) {
+    TDA_EXPECT(tda_layout_eq(tda_list_elem_layout(self), elem));
     return self;
 }
 
 #define TDA_LIST_TYPED_(T, self) \
-    _Generic((self), const tda_List *: tda_list_typed_c_, tda_List *: tda_list_typed_)((self), sizeof(T))
+    _Generic((self), const tda_List *: tda_list_typed_c_, tda_List *: tda_list_typed_)((self), TDA_LAYOUT_OF(T))
 /// @endcond
 
-/// tda_list_new with sizeof(T) for the elem size
+/// tda_list_new with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new list is written
 /// @bigo{1}
 #define TDA_LIST_NEW(T, al, out) \
-    tda_list_new(sizeof(T), (al), (out))
+    tda_list_new(TDA_LAYOUT_OF(T), (al), (out))
 
-/// tda_list_from_data with sizeof(T)
+/// tda_list_from_data with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param data the elems, typechecked as const T *
 /// @param len how many to read
@@ -515,7 +540,7 @@ static inline tda_List *tda_list_typed_(tda_List *self, [[maybe_unused]] size_t 
 /// @param[out] out where the new list is written
 /// @bigo{n}
 #define TDA_LIST_FROM_DATA(T, data, len, al, out) \
-    tda_list_from_data((const T *){ (data) }, (len), sizeof(T), (al), (out))
+    tda_list_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new list from the elems written out: TDA_LIST_OF(int32_t, al, &l, 5, 3, 1)
 /// @param T the elem type
@@ -527,7 +552,7 @@ static inline tda_List *tda_list_typed_(tda_List *self, [[maybe_unused]] size_t 
     tda_list_from_data(                                 \
         (const T[]){ __VA_ARGS__ },                     \
         sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
-        sizeof(T), (al), (out))
+        TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_list_front as a const T *
 /// @param T the elem type
@@ -581,27 +606,28 @@ static inline tda_List *tda_list_typed_(tda_List *self, [[maybe_unused]] size_t 
 /// @param self the list
 /// @param val the value looked for
 /// @param eq the equality
+/// @param ctx passed to every call of 'eq'; may be null
 /// @bigo{n}
-#define TDA_LIST_FIND(T, self, val, eq) \
-    tda_list_find(TDA_LIST_TYPED_(T, self), &(T){ (val) }, (eq))
+#define TDA_LIST_FIND(T, self, val, eq, ctx) \
+    tda_list_find(TDA_LIST_TYPED_(T, self), &(T){ (val) }, (eq), (ctx))
 
 /// tda_list_find_mut from a value rather than an address
 /// @copydetails TDA_LIST_FIND
-#define TDA_LIST_FIND_MUT(T, self, val, eq) \
-    tda_list_find_mut(TDA_LIST_TYPED_(T, self), &(T){ (val) }, (eq))
+#define TDA_LIST_FIND_MUT(T, self, val, eq, ctx) \
+    tda_list_find_mut(TDA_LIST_TYPED_(T, self), &(T){ (val) }, (eq), (ctx))
 
 /// tda_list_node_elem as a const T *
 /// @param T the elem type
+/// @param self the list 'node' is in
 /// @param node the position
-/// @warning T is not checked: a node does not know its elem size
 /// @bigo{1}
-#define TDA_LIST_NODE_ELEM_AS(T, node) \
-    ((const T *) tda_list_node_elem((node)))
+#define TDA_LIST_NODE_ELEM_AS(T, self, node) \
+    ((const T *) tda_list_node_elem(TDA_LIST_TYPED_(T, self), (node)))
 
 /// tda_list_node_elem_mut as a T *
 /// @copydetails TDA_LIST_NODE_ELEM_AS
-#define TDA_LIST_NODE_ELEM_MUT_AS(T, node) \
-    ((T *) tda_list_node_elem_mut((node)))
+#define TDA_LIST_NODE_ELEM_MUT_AS(T, self, node) \
+    ((T *) tda_list_node_elem_mut(TDA_LIST_TYPED_(T, self), (node)))
 
 /// tda_list_push_front from a value rather than an address
 /// @param T the elem type; scalars only, as 'val' becomes a compound literal

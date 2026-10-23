@@ -15,9 +15,9 @@ int main() {
         return 1;
     }
 
-    int32_t *xs = TDA_CALLOC(int32_t, log, 4); // [TDA] calloc num = 4 size = 4 -> 0x...
+    int32_t *xs = TDA_ALLOC_ZEROED(int32_t, log, 4); // [TDA] alloc_zeroed size = 16 align = 4 -> 0x...
     if (xs) {
-        TDA_DEALLOC(int32_t, log, xs, 4);      // [TDA] dealloc 0x... size = 16
+        TDA_DEALLOC(int32_t, log, xs, 4);            // [TDA] dealloc 0x... size = 16 align = 4
     }
 
     // the wrapped allocator must outlive the log, since the drop gives the log's blocks

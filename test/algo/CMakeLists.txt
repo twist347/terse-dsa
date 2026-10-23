@@ -1,5 +1,6 @@
 tda_add_test(test_algo_compare test_compare.c)
 tda_add_test(test_algo_copy test_copy.c)
+tda_add_test(test_algo_ctx test_ctx.c)
 tda_add_test(test_algo_fill test_fill.c)
 tda_add_test(test_algo_fold test_fold.c)
 tda_add_test(test_algo_heap test_heap.c)

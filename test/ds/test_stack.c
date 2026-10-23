@@ -40,6 +40,7 @@ static tda_Stack *make_stack(const int32_t *src, size_t n) {
     for (size_t i = 0; i < n; ++i) {
         push_int(s, src[i]);
     }
+
     return s;
 }
 
@@ -58,7 +59,7 @@ static void assert_elems(const tda_Stack *s, const int32_t *want, size_t n) {
 
     const tda_Span sp = tda_stack_to_span(s);
     TEST_ASSERT_EQUAL_size_t(n, sp.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), sp.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), sp.elem.size);
 
     if (n > 0) {
         TEST_ASSERT_EQUAL_INT32_ARRAY(want, sp.data, n);
@@ -642,7 +643,7 @@ static void test_to_span_shows_bottom_to_top() {
     const tda_Span sp = tda_stack_to_span(s);
 
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, sp.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), sp.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), sp.elem.size);
     TEST_ASSERT_EQUAL_INT32_ARRAY(SPREAD, sp.data, SPREAD_LEN);
 
     tda_stack_drop(s);
@@ -676,7 +677,7 @@ static void test_to_span_of_empty_has_no_elems() {
     const tda_Span sp = tda_stack_to_span(s);
 
     TEST_ASSERT_EQUAL_size_t(0, sp.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), sp.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), sp.elem.size);
 
     tda_stack_drop(s);
 }
@@ -687,8 +688,8 @@ static void test_the_span_reaches_algo_and_the_stack_is_untouched() {
     tda_Stack *s = make_stack_from(SPREAD, SPREAD_LEN);
     const tda_Span sp = tda_stack_to_span(s);
 
-    TEST_ASSERT_EQUAL_size_t(2, tda_span_max_elem(sp, tda_cmp_i32));
-    TEST_ASSERT_FALSE(tda_span_is_sorted(sp, tda_cmp_i32));
+    TEST_ASSERT_EQUAL_size_t(2, tda_span_max_elem(sp, tda_cmp_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_span_is_sorted(sp, tda_cmp_i32, nullptr));
 
     assert_elems(s, SPREAD, SPREAD_LEN);
 
@@ -847,7 +848,7 @@ static void test_eq_matches_the_same_elems() {
     TEST_ASSERT_TRUE(tda_stack_eq(a, a));
     TEST_ASSERT_TRUE(tda_stack_eq(a, b));
     TEST_ASSERT_TRUE(tda_stack_eq(b, a));
-    TEST_ASSERT_TRUE(tda_stack_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_stack_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_stack_drop(a);
     tda_stack_drop(b);
@@ -861,7 +862,7 @@ static void test_eq_parts_one_differing_elem() {
     tda_Stack *b = make_stack(rhs, 3);
 
     TEST_ASSERT_FALSE(tda_stack_eq(a, b));
-    TEST_ASSERT_FALSE(tda_stack_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_stack_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_stack_drop(a);
     tda_stack_drop(b);
@@ -888,7 +889,7 @@ static void test_eq_of_two_empties() {
     tda_Stack *one = make_stack(src, 1);
 
     TEST_ASSERT_TRUE(tda_stack_eq(a, b));
-    TEST_ASSERT_TRUE(tda_stack_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_stack_eq_by(a, b, tda_eq_i32, nullptr));
     TEST_ASSERT_FALSE(tda_stack_eq(a, one));
 
     tda_stack_drop(a);
@@ -922,7 +923,7 @@ static void test_eq_by_asks_the_equality() {
     TDA_TEST_OK(TDA_STACK_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
     TEST_ASSERT_FALSE(tda_stack_eq(a, b));
-    TEST_ASSERT_TRUE(tda_stack_eq_by(a, b, tda_test_pair_eq_a));
+    TEST_ASSERT_TRUE(tda_stack_eq_by(a, b, tda_test_pair_eq_a, nullptr));
 
     tda_stack_drop(a);
     tda_stack_drop(b);
@@ -975,7 +976,7 @@ static void test_into_vec_releases_the_header_alone() {
 
     // the constructor's last block is the adapter's header, so into must free that, with
     // the size it was taken with
-    const size_t header = probe.last_alloc_size;
+    const size_t header = probe.last_alloc.size;
 
     TDA_TEST_OK(TDA_STACK_PUSH(int32_t, s, 1));
     const size_t live = probe.live;
@@ -983,7 +984,7 @@ static void test_into_vec_releases_the_header_alone() {
     tda_Vec *v = tda_stack_into_vec(s);
 
     TEST_ASSERT_EQUAL_size_t(live - 1, probe.live);
-    TEST_ASSERT_EQUAL_size_t(header, probe.last_dealloc_size);
+    TEST_ASSERT_EQUAL_size_t(header, probe.last_dealloc.size);
 
     tda_vec_drop(v);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);

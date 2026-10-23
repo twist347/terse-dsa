@@ -13,14 +13,14 @@
 /* ========== internals ========== */
 
 [[nodiscard]]
-static void *arena_alloc(void *ctx, size_t size);
+static void *arena_alloc(void *ctx, tda_Layout layout);
 
-/// resizes the last block in place, since nothing lies past it; any other block moves,
-/// and its old slot stays used like every block the arena has lent
+/// resizes the last block in place, since nothing lies past it, and shrinks any other;
+/// there is no remap, since a block that has to move costs what the wrapper's copy costs
 [[nodiscard]]
-static void *arena_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size);
+static bool arena_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size);
 
-static void arena_dealloc(void *ctx, void *ptr, size_t size);
+static void arena_dealloc(void *ctx, void *ptr, tda_Layout layout);
 
 typedef struct {
     tda_Al *parent_al; // null when the arena lives in a caller's buffer
@@ -49,10 +49,14 @@ static bool is_last_block(const ArenaCtx *arena_ctx, const void *ptr, size_t siz
 [[nodiscard]]
 static size_t block_start(const ArenaCtx *arena_ctx, const void *ptr);
 
-/// where a block of 'size' starting at 'start' would end, rounded up to the alignment;
-/// false when it would pass the capacity
+/// where a block of 'size' starting at 'start' would end; false when it would pass the
+/// capacity
 [[nodiscard]]
 static bool block_end(const ArenaCtx *arena_ctx, size_t start, size_t size, size_t *out_end);
+
+/// the arena's whole block, as asked of the parent
+[[nodiscard]]
+static tda_Layout data_layout(size_t cap);
 
 #define ASSERT_ARENA(al)                 \
     (assert(al),                         \
@@ -65,35 +69,27 @@ tda_Al *tda_al_arena_new(tda_Al *parent, size_t cap) {
     assert(parent);
     assert(cap > 0);
 
-    // every request is rounded up to the alignment, so a tail past the last multiple of
-    // it could never be handed out
-    size_t block_size;
-    if (tda_ckd_align_up(&block_size, cap, TDA_DEFAULT_ALIGNMENT)) {
-        return nullptr;
-    }
-
-    void *data = tda_alloc(parent, block_size);
+    // each block is aligned by its own address, so the whole asks for none: any parent
+    // serves it, a pool built for small alignments too
+    void *data = tda_alloc(parent, data_layout(cap));
     if (!data) {
         return nullptr;
     }
 
-    ArenaCtx *arena_ctx = tda_alloc(parent, sizeof(ArenaCtx));
+    ArenaCtx *arena_ctx = TDA_ALLOC(ArenaCtx, parent, 1);
     if (!arena_ctx) {
-        tda_dealloc(parent, data, block_size);
+        tda_dealloc(parent, data, data_layout(cap));
         return nullptr;
     }
 
-    tda_Al *obj = tda_alloc(parent, sizeof(tda_Al));
+    tda_Al *obj = TDA_ALLOC(tda_Al, parent, 1);
     if (!obj) {
-        tda_dealloc(parent, arena_ctx, sizeof(ArenaCtx));
-        tda_dealloc(parent, data, block_size);
+        TDA_DEALLOC(ArenaCtx, parent, arena_ctx, 1);
+        tda_dealloc(parent, data, data_layout(cap));
         return nullptr;
     }
 
-    // blocks are carved on this grid from the start of data; see the tda_Al contract
-    TDA_EXPECT(tda_ptr_is_aligned(data, TDA_DEFAULT_ALIGNMENT));
-
-    arena_init(obj, arena_ctx, parent, data, block_size);
+    arena_init(obj, arena_ctx, parent, data, cap);
 
     return obj;
 }
@@ -104,13 +100,12 @@ tda_Al *tda_al_arena_from_buf(void *buf, size_t size) {
 
     void *head_ptr, *data;
     size_t rest;
-    if (!tda_buf_split_head(buf, size, sizeof(ArenaHead), &head_ptr, &data, &rest) || rest < TDA_DEFAULT_ALIGNMENT) {
+    if (!tda_buf_split_head(buf, size, sizeof(ArenaHead), &head_ptr, &data, &rest) || rest == 0) {
         return nullptr;
     }
 
-    // cut down to whole slots, as tda_al_arena_new rounds up; a partial tail is unusable
     ArenaHead *head = head_ptr;
-    arena_init(&head->al, &head->ctx, nullptr, data, tda_align_down(rest, TDA_DEFAULT_ALIGNMENT));
+    arena_init(&head->al, &head->ctx, nullptr, data, rest);
 
     return &head->al;
 }
@@ -129,9 +124,9 @@ void tda_al_arena_drop(tda_Al *self) {
         return;
     }
 
-    tda_dealloc(parent_al, arena_ctx->data, arena_ctx->cap);
-    tda_dealloc(parent_al, arena_ctx, sizeof(ArenaCtx));
-    tda_dealloc(parent_al, self, sizeof(tda_Al));
+    tda_dealloc(parent_al, arena_ctx->data, data_layout(arena_ctx->cap));
+    TDA_DEALLOC(ArenaCtx, parent_al, arena_ctx, 1);
+    TDA_DEALLOC(tda_Al, parent_al, self, 1);
 }
 
 /* ========== mods ========== */
@@ -191,60 +186,46 @@ tda_AlArenaStats tda_al_arena_stats(const tda_Al *self) {
 
 /* ========== internals ========== */
 
-static void *arena_alloc(void *ctx, size_t size) {
+static void *arena_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
     ArenaCtx *arena_ctx = ctx;
 
-    if (size == 0) {
-        return nullptr;
-    }
-
+    // the padding is a count, checked against the capacity before an address is formed
+    const void *cursor = tda_byte_offset(arena_ctx->data, 1, arena_ctx->offset);
+    size_t start;
     size_t end;
-    if (!block_end(arena_ctx, arena_ctx->offset, size, &end)) {
+    if (ckd_add(&start, arena_ctx->offset, tda_ptr_align_pad(cursor, layout.align))
+        || !block_end(arena_ctx, start, layout.size, &end)) {
         return nullptr;
     }
 
-    void *ptr = tda_byte_offset_mut(arena_ctx->data, 1, arena_ctx->offset);
     arena_ctx->offset = end;
 
-    return ptr;
+    return tda_byte_offset_mut(arena_ctx->data, 1, start);
 }
 
-static void *arena_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size) {
+static bool arena_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
-    assert(new_size > 0); // tda_realloc answers a request for nothing itself
 
     ArenaCtx *arena_ctx = ctx;
-
-    if (!ptr) {
-        return arena_alloc(ctx, new_size);
-    }
 
     // the last block resizes in place unless it starts under the floor: grown in place
     // it would reach past a mark, and the rewind would hand its tail out again
     const size_t start = block_start(arena_ctx, ptr);
-    if (is_last_block(arena_ctx, ptr, old_size) && start >= arena_ctx->floor) {
+    if (is_last_block(arena_ctx, ptr, old.size) && start >= arena_ctx->floor) {
         size_t end;
         if (!block_end(arena_ctx, start, new_size, &end)) {
-            return nullptr;
+            return false;
         }
         arena_ctx->offset = end;
-        return ptr;
+        return true;
     }
 
     // any other block shrinks in place: the arena frees nothing per block, so the tail
     // is lost either way, and a move would cost more and could fail
-    if (new_size <= old_size) {
-        return ptr;
-    }
-
-    // only a growth gets here, so all of the old block is copied
-    void *new_ptr = arena_alloc(ctx, new_size);
-    if (new_ptr) {
-        memcpy(new_ptr, ptr, old_size);
-    }
-    return new_ptr;
+    return new_size <= old.size;
 }
 
 static void arena_init(tda_Al *obj, ArenaCtx *arena_ctx, tda_Al *parent, void *data, size_t cap) {
@@ -256,13 +237,14 @@ static void arena_init(tda_Al *obj, ArenaCtx *arena_ctx, tda_Al *parent, void *d
 
     obj->ctx = arena_ctx;
     obj->alloc = arena_alloc;
-    obj->calloc = nullptr;
-    obj->realloc = arena_realloc;
+    obj->alloc_zeroed = nullptr;
+    obj->resize = arena_resize;
+    obj->remap = nullptr;
     obj->dealloc = arena_dealloc;
 }
 
 static bool is_last_block(const ArenaCtx *arena_ctx, const void *ptr, size_t size) {
-    return block_start(arena_ctx, ptr) + tda_align_up(size, TDA_DEFAULT_ALIGNMENT) == arena_ctx->offset;
+    return block_start(arena_ctx, ptr) + size == arena_ctx->offset;
 }
 
 static size_t block_start(const ArenaCtx *arena_ctx, const void *ptr) {
@@ -270,16 +252,17 @@ static size_t block_start(const ArenaCtx *arena_ctx, const void *ptr) {
 }
 
 static bool block_end(const ArenaCtx *arena_ctx, size_t start, size_t size, size_t *out_end) {
-    size_t aligned_size;
-    return !tda_ckd_align_up(&aligned_size, size, TDA_DEFAULT_ALIGNMENT)
-        && !ckd_add(out_end, start, aligned_size)
-        && *out_end <= arena_ctx->cap;
+    return !ckd_add(out_end, start, size) && *out_end <= arena_ctx->cap;
 }
 
-static void arena_dealloc(void *ctx, void *ptr, size_t size) {
+static void arena_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     // the arena frees nothing per block
 
     TDA_UNUSED(ctx);
     TDA_UNUSED(ptr);
-    TDA_UNUSED(size);
+    TDA_UNUSED(layout);
+}
+
+static tda_Layout data_layout(size_t cap) {
+    return (tda_Layout){.size = cap, .align = 1};
 }

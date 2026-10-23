@@ -20,7 +20,7 @@
 
 /// writes one value over every elem
 /// @param s the span
-/// @param val points to elem_size bytes, read once per elem
+/// @param val points to elem.size bytes, read once per elem
 /// @bigo{n}
 TDA_API
 void tda_span_fill(tda_SpanMut s, const void *val);

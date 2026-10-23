@@ -34,7 +34,7 @@ void tda_span_fold_back(tda_Span s, void *acc, tda_Fold fold, void *ctx) {
 void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(dst.elem_size == src.elem_size);
+    TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
     TDA_EXPECT(dst.len == src.len);
     assert(op);
     assert(tda_span_apart_or_same(tda_span_mut_to_span(dst), src));
@@ -45,7 +45,7 @@ void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx
 
     // in place, the first elem is already there, and memcpy onto itself is UB
     if (dst.data != src.data) {
-        memcpy(tda_span_get_mut(dst, 0), tda_span_get(src, 0), dst.elem_size);
+        memcpy(tda_span_get_mut(dst, 0), tda_span_get(src, 0), dst.elem.size);
     }
 
     const tda_Span prev = tda_span_mut_to_span(dst);
@@ -58,7 +58,7 @@ void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx
 void tda_span_adjacent_difference(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(dst.elem_size == src.elem_size);
+    TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
     TDA_EXPECT(dst.len == src.len);
     assert(op);
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), src));
@@ -67,7 +67,7 @@ void tda_span_adjacent_difference(tda_SpanMut dst, tda_Span src, tda_BinOp op, v
         return;
     }
 
-    memcpy(tda_span_get_mut(dst, 0), tda_span_get(src, 0), dst.elem_size);
+    memcpy(tda_span_get_mut(dst, 0), tda_span_get(src, 0), dst.elem.size);
 
     for (size_t i = 1; i < src.len; ++i) {
         op(tda_span_get_mut(dst, i), tda_span_get(src, i), tda_span_get(src, i - 1), ctx);

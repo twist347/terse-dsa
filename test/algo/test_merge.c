@@ -19,6 +19,11 @@ void tearDown() {
 
 /* ========== merge ========== */
 
+// qsort's comparator takes two arguments, the library's three
+static int qsort_cmp_i32(const void *lhs, const void *rhs) {
+    return tda_cmp_i32(lhs, rhs, nullptr);
+}
+
 static void test_merge_interleaves_both_sides() {
     constexpr int32_t a[3] = {1, 3, 5};
     constexpr int32_t b[3] = {2, 4, 6};
@@ -28,7 +33,8 @@ static void test_merge_interleaves_both_sides() {
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 6),
         TDA_SPAN_FROM_DATA(int32_t, a, 3),
         TDA_SPAN_FROM_DATA(int32_t, b, 3),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
 
     constexpr int32_t expected[6] = {1, 2, 3, 4, 5, 6};
@@ -45,7 +51,8 @@ static void test_merge_disjoint_ranges() {
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 6),
         TDA_SPAN_FROM_DATA(int32_t, a, 3),
         TDA_SPAN_FROM_DATA(int32_t, b, 3),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
 
     constexpr int32_t expected[6] = {1, 2, 3, 7, 8, 9};
@@ -61,7 +68,8 @@ static void test_merge_second_side_comes_first() {
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 4),
         TDA_SPAN_FROM_DATA(int32_t, a, 2),
         TDA_SPAN_FROM_DATA(int32_t, b, 2),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
 
     constexpr int32_t expected[4] = {1, 2, 7, 8};
@@ -77,7 +85,8 @@ static void test_merge_uneven_lengths() {
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 6),
         TDA_SPAN_FROM_DATA(int32_t, a, 1),
         TDA_SPAN_FROM_DATA(int32_t, b, 5),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
 
     constexpr int32_t expected[6] = {1, 2, 3, 4, 5, 6};
@@ -92,7 +101,8 @@ static void test_merge_with_an_empty_side() {
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 3),
         TDA_SPAN_FROM_DATA(int32_t, a, 3),
         TDA_SPAN_FROM_DATA(int32_t, a, 0),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
     TEST_ASSERT_EQUAL_INT32_ARRAY(a, dst, 3);
 
@@ -102,7 +112,8 @@ static void test_merge_with_an_empty_side() {
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst2, 3),
         TDA_SPAN_FROM_DATA(int32_t, a, 0),
         TDA_SPAN_FROM_DATA(int32_t, a, 3),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
     TEST_ASSERT_EQUAL_INT32_ARRAY(a, dst2, 3);
 }
@@ -115,7 +126,8 @@ static void test_merge_both_sides_empty() {
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 0),
         TDA_SPAN_FROM_DATA(int32_t, a, 0),
         TDA_SPAN_FROM_DATA(int32_t, a, 0),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
 
     TEST_ASSERT_EQUAL_INT32(42, dst[0]);
@@ -130,7 +142,8 @@ static void test_merge_keeps_duplicates() {
         TDA_SPAN_FROM_DATA_MUT(int32_t, dst, 5),
         TDA_SPAN_FROM_DATA(int32_t, a, 3),
         TDA_SPAN_FROM_DATA(int32_t, b, 2),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
 
     constexpr int32_t expected[5] = {1, 2, 2, 2, 3};
@@ -147,7 +160,8 @@ static void test_merge_is_stable_on_ties() {
         TDA_SPAN_FROM_DATA_MUT(Tagged, dst, 4),
         TDA_SPAN_FROM_DATA(Tagged, a, 2),
         TDA_SPAN_FROM_DATA(Tagged, b, 2),
-        tda_test_tagged_cmp_key
+        tda_test_tagged_cmp_key,
+        nullptr
     );
 
     TEST_ASSERT_EQUAL_INT32(1, dst[0].key);
@@ -170,7 +184,8 @@ static void test_merge_writes_only_into_the_destination_view() {
         tda_span_sub_mut(s, 1, 2),
         TDA_SPAN_FROM_DATA(int32_t, a, 1),
         TDA_SPAN_FROM_DATA(int32_t, b, 1),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
 
     constexpr int32_t expected[4] = {9, 1, 2, 9};
@@ -188,9 +203,9 @@ static void assert_merges_in_place(const int32_t *src, size_t len, size_t mid, t
 
     memcpy(buf, src, len * sizeof(int32_t));
     memcpy(want, src, len * sizeof(int32_t));
-    qsort(want, len, sizeof(int32_t), tda_cmp_i32);
+    qsort(want, len, sizeof(int32_t), qsort_cmp_i32);
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, len), mid, tda_cmp_i32, al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, len), mid, tda_cmp_i32, nullptr, al);
 
     if (len > 0) {
         TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, len);
@@ -241,17 +256,17 @@ static void test_inplace_merge_at_the_edges_changes_nothing() {
     int32_t buf[4];
 
     memcpy(buf, src, sizeof(buf));
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 0, tda_cmp_i32, tda_al_default());
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 0, tda_cmp_i32, nullptr, tda_al_default());
     TEST_ASSERT_EQUAL_INT32_ARRAY(src, buf, 4);
 
     memcpy(buf, src, sizeof(buf));
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 4, tda_cmp_i32, tda_al_default());
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 4, tda_cmp_i32, nullptr, tda_al_default());
     TEST_ASSERT_EQUAL_INT32_ARRAY(src, buf, 4);
 }
 
 static void test_inplace_merge_of_short_spans() {
     int32_t one[1] = {7};
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, one, 1), 0, tda_cmp_i32, tda_al_default());
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, one, 1), 0, tda_cmp_i32, nullptr, tda_al_default());
     TEST_ASSERT_EQUAL_INT32(7, one[0]);
 
     assert_merges_both_ways((const int32_t[]){2, 1}, 2, 1);
@@ -267,7 +282,13 @@ static void test_inplace_merge_is_stable_on_ties() {
         {1, 200}, {2, 201}, {3, 202},
     };
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 6), 3, tda_test_tagged_cmp_key, tda_al_default());
+    tda_span_inplace_merge(
+        TDA_SPAN_FROM_DATA_MUT(Tagged, buf, 6),
+        3,
+        tda_test_tagged_cmp_key,
+        nullptr,
+        tda_al_default()
+    );
 
     constexpr int32_t want_keys[6] = {1, 1, 2, 2, 2, 3};
     constexpr int32_t want_tags[6] = {100, 200, 101, 102, 201, 202};
@@ -305,9 +326,9 @@ static void check_sweep(size_t left_len, size_t right_len, tda_Al *al) {
         buf[i] = (Tagged){.key = sweep_keys[i], .tag = (int32_t) i};
         want_keys[i] = sweep_keys[i];
     }
-    qsort(want_keys, len, sizeof(int32_t), tda_cmp_i32);
+    qsort(want_keys, len, sizeof(int32_t), qsort_cmp_i32);
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, len), left_len, tda_test_tagged_cmp_key, al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(Tagged, buf, len), left_len, tda_test_tagged_cmp_key, nullptr, al);
 
     for (size_t i = 0; i < len; ++i) {
         TEST_ASSERT_EQUAL_INT32_MESSAGE(want_keys[i], buf[i].key, "not the sorted order");
@@ -374,17 +395,17 @@ static void test_inplace_merge_asks_only_for_the_shorter_run() {
 
     int32_t buf[8] = {5, 1, 2, 3, 4, 6, 7, 8};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), 1, tda_cmp_i32, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), 1, tda_cmp_i32, nullptr, &al);
 
     TEST_ASSERT_EQUAL_size_t(1, tda_test_probe_requests(&probe));
-    TEST_ASSERT_EQUAL_size_t(1 * sizeof(int32_t), probe.last_alloc_size);
+    TEST_ASSERT_EQUAL_size_t(1 * sizeof(int32_t), probe.last_alloc.size);
 
     tda_test_probe_reset(&probe);
     int32_t other[8] = {1, 2, 3, 4, 5, 6, 7, 0};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, other, 8), 7, tda_cmp_i32, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, other, 8), 7, tda_cmp_i32, nullptr, &al);
 
-    TEST_ASSERT_EQUAL_size_t(1 * sizeof(int32_t), probe.last_alloc_size);
+    TEST_ASSERT_EQUAL_size_t(1 * sizeof(int32_t), probe.last_alloc.size);
 }
 
 static void test_inplace_merge_gives_the_buffer_back() {
@@ -394,7 +415,7 @@ static void test_inplace_merge_gives_the_buffer_back() {
 
     int32_t buf[6] = {1, 3, 5, 2, 4, 6};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 3, tda_cmp_i32, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 3, tda_cmp_i32, nullptr, &al);
 
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
@@ -408,7 +429,7 @@ static void test_inplace_merge_falls_back_when_the_buffer_is_refused() {
 
     int32_t buf[6] = {1, 3, 5, 2, 4, 6};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 3, tda_cmp_i32, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 3, tda_cmp_i32, nullptr, &al);
 
     constexpr int32_t want[6] = {1, 2, 3, 4, 5, 6};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 6);
@@ -423,8 +444,8 @@ static void test_inplace_merge_at_the_edges_asks_for_nothing() {
 
     int32_t buf[4] = {2, 4, 1, 3};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 0, tda_cmp_i32, &al);
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 4, tda_cmp_i32, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 0, tda_cmp_i32, nullptr, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 4, tda_cmp_i32, nullptr, &al);
 
     TEST_ASSERT_EQUAL_size_t(0, tda_test_probe_requests(&probe));
 }

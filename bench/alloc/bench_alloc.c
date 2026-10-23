@@ -31,21 +31,12 @@ static void fill_order() {
     tda_span_shuffle(TDA_SPAN_FROM_DATA_MUT(size_t, order, BLOCKS), &rng);
 }
 
-static void *libc_alloc(void *ctx, size_t size) {
-    (void) ctx;
-    return malloc(size);
-}
-
-static void libc_dealloc(void *ctx, void *ptr, size_t size) {
-    (void) ctx;
-    (void) size;
-    free(ptr);
-}
+// at malloc's own alignment, so every allocator is asked what libc gives
+static constexpr tda_Layout BLOCK = {.size = BLOCK_SIZE, .align = alignof(max_align_t)};
 
 // every pattern is written once against these, so libc and tda_Al run the same loop
-#define ALLOC(al) ((al) ? tda_alloc((al), BLOCK_SIZE) : libc_alloc(nullptr, BLOCK_SIZE))
-#define DEALLOC(al, p) \
-    ((al) ? tda_dealloc((al), (p), BLOCK_SIZE) : libc_dealloc(nullptr, (p), BLOCK_SIZE))
+#define ALLOC(al) ((al) ? tda_alloc((al), BLOCK) : malloc(BLOCK_SIZE))
+#define DEALLOC(al, p) ((al) ? tda_dealloc((al), (p), BLOCK) : free(p))
 
 /// one block taken and given back, BLOCKS times: the free list never grows past one
 static void churn(tda_Al *al) {
@@ -96,17 +87,17 @@ static void shuffled(tda_Al *al) {
     }
 
 // built once outside the timed loop: tda_al_pool_new threads every block, @bigo{n}
-#define BENCH_POOL(PATTERN)                                                   \
-    UBENCH_EX(PATTERN, pool) {                                                \
-        fill_order();                                                         \
-        tda_Al *pool = tda_al_pool_new(tda_al_default(), BLOCK_SIZE, BLOCKS); \
-        if (!pool) {                                                          \
-            return;                                                           \
-        }                                                                     \
-        UBENCH_DO_BENCHMARK() {                                               \
-            PATTERN(pool);                                                    \
-        }                                                                     \
-        tda_al_pool_drop(pool);                                               \
+#define BENCH_POOL(PATTERN)                                              \
+    UBENCH_EX(PATTERN, pool) {                                           \
+        fill_order();                                                    \
+        tda_Al *pool = tda_al_pool_new(tda_al_default(), BLOCK, BLOCKS); \
+        if (!pool) {                                                     \
+            return;                                                      \
+        }                                                                \
+        UBENCH_DO_BENCHMARK() {                                          \
+            PATTERN(pool);                                               \
+        }                                                                \
+        tda_al_pool_drop(pool);                                          \
     }
 
 // dealloc is a no-op, so the reset that takes everything back is timed with the pattern

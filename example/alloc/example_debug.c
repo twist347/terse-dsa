@@ -34,7 +34,7 @@ int main() {
     // run checks one refusal path of the push
     for (size_t n = 0;; ++n) {
         tda_Vec *v;
-        if (tda_vec_new(sizeof(int32_t), al, &v) != TDA_STATUS_OK) {
+        if (tda_vec_new(TDA_LAYOUT_OF(int32_t), al, &v) != TDA_STATUS_OK) {
             return 1;
         }
 

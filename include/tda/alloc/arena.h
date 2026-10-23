@@ -14,8 +14,10 @@
 /// One block, taken from the parent at construction and handed out in pieces. dealloc is
 /// a no-op; everything is freed at once by tda_al_arena_reset in O(1).
 ///
-/// tda_realloc resizes the last block in place, since nothing lies past it; any other
-/// block moves and its old slot stays used. A vec growing alone costs the arena its final
+/// Each block starts on the alignment it asks for and takes its size and no more, so the
+/// only waste is the padding before an over-aligned block. The last block resizes in
+/// place, since nothing lies past it; any other block shrinks in place and moves to grow,
+/// its old slot staying used. A vec growing alone costs the arena its final
 /// capacity; one growing beside others costs every capacity it passed through. A deque
 /// and an hmap always grow into a new buffer, so they cost every capacity even alone.
 /// The parent is borrowed and must outlive the arena; tda_al_arena_from_buf needs no
@@ -43,15 +45,14 @@
 
 /// an arena over 'cap' bytes taken from 'parent'
 /// @param parent where the block comes from; borrowed
-/// @param cap the most bytes it will hand out, greater than 0; rounded up to the
-///            alignment, as every request is
+/// @param cap the most bytes it will hand out, padding included, greater than 0
 /// @return the allocator, or null if 'parent' could not give the block
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_Al *tda_al_arena_new(tda_Al *parent, size_t cap);
 
-/// an arena inside 'buf', with no parent: its header takes the aligned front, and the
-/// rest, cut down to a multiple of the alignment, is the block
+/// an arena inside 'buf', with no parent: its header takes the aligned front, and all of
+/// the rest is the block
 /// @param buf the memory, borrowed: a static or stack array, or a block from anywhere;
 ///            any alignment
 /// @param size its bytes, greater than 0
@@ -114,7 +115,7 @@ void tda_al_arena_rewind(tda_Al *self, tda_AlArenaMark mark);
 
 /// What an arena is holding.
 typedef struct {
-    size_t cap;       ///< the block it was built with, a multiple of the alignment
+    size_t cap;       ///< the block it was built with, taken as given
     size_t used;      ///< how far the pointer is bumped, padding included
     size_t available; ///< cap - used, an upper bound on the next request
 } tda_AlArenaStats;

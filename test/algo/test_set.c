@@ -21,13 +21,13 @@ void tearDown() {
 static constexpr int32_t UNTOUCHED = 0x7f7f7f7f;
 
 static tda_Span span_of(const int32_t *v, size_t n) {
-    return tda_span_from_data(v, n, sizeof(int32_t));
+    return tda_span_from_data(v, n, TDA_LAYOUT_OF(int32_t));
 }
 
 // runs 'op' into a dst prefilled with UNTOUCHED and checks the elems, the returned
 // count, and that nothing was written past that count
 static void assert_writes(
-    size_t (*op)(tda_SpanMut, tda_Span, tda_Span, tda_Cmp),
+    size_t (*op)(tda_SpanMut, tda_Span, tda_Span, tda_Cmp, void *),
     const int32_t *a, size_t an,
     const int32_t *b, size_t bn,
     const int32_t *want, size_t wn,
@@ -41,10 +41,11 @@ static void assert_writes(
     }
 
     const size_t got = op(
-        tda_span_from_data_mut(dst, cap, sizeof(int32_t)),
+        tda_span_from_data_mut(dst, cap, TDA_LAYOUT_OF(int32_t)),
         span_of(a, an),
         span_of(b, bn),
-        tda_cmp_i32
+        tda_cmp_i32,
+        nullptr
     );
 
     TEST_ASSERT_EQUAL_size_t(wn, got);
@@ -60,7 +61,7 @@ static void assert_writes(
     }
 
     // the result is sorted, which lets these compose without a sort in between
-    TEST_ASSERT_TRUE(tda_span_is_sorted(span_of(dst, got), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_sorted(span_of(dst, got), tda_cmp_i32, nullptr));
 }
 
 /* ========== union ========== */
@@ -126,10 +127,11 @@ static void test_intersection_takes_its_elems_from_the_first_span() {
     Pair dst[2] = {};
 
     const size_t got = tda_span_set_intersection(
-        tda_span_from_data_mut(dst, 2, sizeof(Pair)),
-        tda_span_from_data(a, 2, sizeof(Pair)),
-        tda_span_from_data(b, 2, sizeof(Pair)),
-        tda_test_pair_cmp_a
+        tda_span_from_data_mut(dst, 2, TDA_LAYOUT_OF(Pair)),
+        tda_span_from_data(a, 2, TDA_LAYOUT_OF(Pair)),
+        tda_span_from_data(b, 2, TDA_LAYOUT_OF(Pair)),
+        tda_test_pair_cmp_a,
+        nullptr
     );
 
     TEST_ASSERT_EQUAL_size_t(2, got);
@@ -209,14 +211,14 @@ static void test_includes_accepts_a_subset() {
     constexpr int32_t sup[] = {1, 2, 3, 4, 5};
     constexpr int32_t sub[] = {2, 4};
 
-    TEST_ASSERT_TRUE(tda_span_includes(span_of(sup, 5), span_of(sub, 2), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_includes(span_of(sup, 5), span_of(sub, 2), tda_cmp_i32, nullptr));
 }
 
 static void test_includes_rejects_a_missing_elem() {
     constexpr int32_t sup[] = {1, 2, 3};
     constexpr int32_t sub[] = {2, 9};
 
-    TEST_ASSERT_FALSE(tda_span_includes(span_of(sup, 3), span_of(sub, 2), tda_cmp_i32));
+    TEST_ASSERT_FALSE(tda_span_includes(span_of(sup, 3), span_of(sub, 2), tda_cmp_i32, nullptr));
 }
 
 // a duplicate needs a duplicate: one copy cannot account for two
@@ -225,21 +227,21 @@ static void test_includes_counts_duplicates() {
     constexpr int32_t two[] = {2, 2};
     constexpr int32_t three[] = {2, 2, 2};
 
-    TEST_ASSERT_TRUE(tda_span_includes(span_of(sup, 4), span_of(two, 2), tda_cmp_i32));
-    TEST_ASSERT_FALSE(tda_span_includes(span_of(sup, 4), span_of(three, 3), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_includes(span_of(sup, 4), span_of(two, 2), tda_cmp_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_span_includes(span_of(sup, 4), span_of(three, 3), tda_cmp_i32, nullptr));
 }
 
 static void test_includes_of_an_empty_sub_is_true() {
     constexpr int32_t sup[] = {1, 2, 3};
 
-    TEST_ASSERT_TRUE(tda_span_includes(span_of(sup, 3), span_of(nullptr, 0), tda_cmp_i32));
-    TEST_ASSERT_TRUE(tda_span_includes(span_of(nullptr, 0), span_of(nullptr, 0), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_includes(span_of(sup, 3), span_of(nullptr, 0), tda_cmp_i32, nullptr));
+    TEST_ASSERT_TRUE(tda_span_includes(span_of(nullptr, 0), span_of(nullptr, 0), tda_cmp_i32, nullptr));
 }
 
 static void test_includes_rejects_anything_from_an_empty_sup() {
     constexpr int32_t sub[] = {1};
 
-    TEST_ASSERT_FALSE(tda_span_includes(span_of(nullptr, 0), span_of(sub, 1), tda_cmp_i32));
+    TEST_ASSERT_FALSE(tda_span_includes(span_of(nullptr, 0), span_of(sub, 1), tda_cmp_i32, nullptr));
 }
 
 // the last elem of 'sub' has to be reached without walking off 'sup'
@@ -247,7 +249,7 @@ static void test_includes_rejects_a_sub_that_runs_past_the_end() {
     constexpr int32_t sup[] = {1, 2};
     constexpr int32_t sub[] = {1, 2, 3};
 
-    TEST_ASSERT_FALSE(tda_span_includes(span_of(sup, 2), span_of(sub, 3), tda_cmp_i32));
+    TEST_ASSERT_FALSE(tda_span_includes(span_of(sup, 2), span_of(sub, 3), tda_cmp_i32, nullptr));
 }
 
 /* ========== exhaustive ========== */
@@ -279,6 +281,7 @@ static size_t expand_counts(const int *c, int32_t *out) {
             out[n++] = v;
         }
     }
+
     return n;
 }
 
@@ -291,7 +294,7 @@ static void check_pair(const int32_t *a, size_t an, const int32_t *b, size_t bn)
     count_values(a, an, ca);
     count_values(b, bn, cb);
 
-    static size_t (*const ops[4])(tda_SpanMut, tda_Span, tda_Span, tda_Cmp) = {
+    static size_t (*const ops[4])(tda_SpanMut, tda_Span, tda_Span, tda_Cmp, void *) = {
         tda_span_set_union,
         tda_span_set_intersection,
         tda_span_set_difference,
@@ -326,7 +329,7 @@ static void check_pair(const int32_t *a, size_t an, const int32_t *b, size_t bn)
             want_includes = false;
         }
     }
-    TEST_ASSERT_EQUAL_INT(want_includes, tda_span_includes(span_of(a, an), span_of(b, bn), tda_cmp_i32));
+    TEST_ASSERT_EQUAL_INT(want_includes, tda_span_includes(span_of(a, an), span_of(b, bn), tda_cmp_i32, nullptr));
 }
 
 static int32_t sweep_a[MAXLEN];

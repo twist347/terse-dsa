@@ -32,6 +32,7 @@ static tda_BitSet *make_bitset(size_t nbits, const size_t *members, size_t n) {
     for (size_t i = 0; i < n; ++i) {
         tda_bitset_set(b, members[i]);
     }
+
     return b;
 }
 
@@ -177,15 +178,15 @@ static void test_set_and_test_roundtrip() {
     tda_bitset_drop(b);
 }
 
-static void test_clear_takes_one_out() {
+static void test_reset_takes_one_out() {
     constexpr size_t start[] = {0, 5, 64, 128};
     constexpr size_t want[] = {0, 64, 128};
     tda_BitSet *b = make_bitset(200, start, 4);
 
-    tda_bitset_clear(b, 5);
+    tda_bitset_reset(b, 5);
     assert_members(b, 200, want, 3);
 
-    tda_bitset_clear(b, 5); // clearing what is already out changes nothing
+    tda_bitset_reset(b, 5); // resetting what is already out changes nothing
     assert_members(b, 200, want, 3);
 
     tda_bitset_drop(b);
@@ -275,11 +276,11 @@ static void test_set_all_fills_the_universe() {
     }
 }
 
-static void test_clear_all_empties_the_set() {
+static void test_reset_all_empties_the_set() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         tda_BitSet *b = make_full(SEAMS[s]);
 
-        tda_bitset_clear_all(b);
+        tda_bitset_reset_all(b);
         assert_members(b, SEAMS[s], nullptr, 0);
 
         tda_bitset_drop(b);
@@ -327,7 +328,7 @@ static void test_the_whole_set_ops_survive_an_empty_universe() {
     TEST_ASSERT_FALSE(tda_bitset_any(b));
 
     tda_bitset_flip_all(b);
-    tda_bitset_clear_all(b);
+    tda_bitset_reset_all(b);
     assert_members(b, 0, nullptr, 0);
 
     tda_bitset_drop(b);
@@ -516,7 +517,7 @@ static void test_copy_is_independent() {
     TEST_ASSERT_TRUE(tda_bitset_eq(b, copy));
     TEST_ASSERT_EQUAL_PTR(tda_bitset_al(b), tda_bitset_al(copy));
 
-    tda_bitset_clear(copy, 64);
+    tda_bitset_reset(copy, 64);
     TEST_ASSERT_FALSE(tda_bitset_eq(b, copy));
     assert_members(b, 129, want, 3);
 
@@ -683,6 +684,7 @@ static void test_for_each_over_an_empty_set_runs_no_body() {
 
 static const tda_BitSet *counted(const tda_BitSet *b, size_t *calls) {
     ++*calls;
+
     return b;
 }
 
@@ -1174,14 +1176,14 @@ int main() {
     RUN_TEST(test_an_empty_universe_owns_no_words);
 
     RUN_TEST(test_set_and_test_roundtrip);
-    RUN_TEST(test_clear_takes_one_out);
+    RUN_TEST(test_reset_takes_one_out);
     RUN_TEST(test_flip_toggles_one);
     RUN_TEST(test_set_to_writes_both_ways);
     RUN_TEST(test_one_bit_leaves_the_rest_of_its_word_alone);
     RUN_TEST(test_the_bits_at_the_word_seams);
 
     RUN_TEST(test_set_all_fills_the_universe);
-    RUN_TEST(test_clear_all_empties_the_set);
+    RUN_TEST(test_reset_all_empties_the_set);
     RUN_TEST(test_flip_all_is_the_complement);
     RUN_TEST(test_flip_all_twice_changes_nothing);
     RUN_TEST(test_the_whole_set_ops_survive_an_empty_universe);

@@ -16,6 +16,6 @@ typedef struct {
 /* ========== comparators ========== */
 
 /// tda_Cmp over Tagged, reading the key alone
-static inline int tda_test_tagged_cmp_key(const void *lhs, const void *rhs) {
-    return tda_cmp_i32(&((const Tagged *) lhs)->key, &((const Tagged *) rhs)->key);
+static inline int tda_test_tagged_cmp_key(const void *lhs, const void *rhs, void *) {
+    return tda_cmp_i32(&((const Tagged *) lhs)->key, &((const Tagged *) rhs)->key, nullptr);
 }

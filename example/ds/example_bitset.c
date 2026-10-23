@@ -33,7 +33,7 @@ int main() {
     tda_bitset_set_to(a, 4, true); // unlike flip, asking twice changes nothing
     tda_bitset_print(a); // {0, 4, 7}
 
-    tda_bitset_clear(a, 4);
+    tda_bitset_reset(a, 4);
     /// [bits]
 
     /// [scan]
@@ -87,6 +87,7 @@ out:
     tda_bitset_drop(both);
     tda_bitset_drop(b);
     tda_bitset_drop(a);
+
     return rc;
     /// [set ops]
 }

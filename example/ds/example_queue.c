@@ -61,7 +61,7 @@ int main() {
     const tda_Span view = tda_span_mut_to_span(out_span);
 
     printf("%zu waiting, %zu of them 3\n", view.len,
-           tda_span_count(view, &(int32_t){3}, tda_eq_i32)); // 3 waiting, 1 of them 3
+           tda_span_count(view, &(int32_t){3}, tda_eq_i32, nullptr)); // 3 waiting, 1 of them 3
 
     // and it is one way: sorting the copy says nothing about the queue, so there is no
     // copy_from_span to write it back
@@ -85,6 +85,7 @@ out:
     // a null handle is a no-op, so this drops whichever of the two is still alive
     tda_deque_drop(d);
     tda_queue_drop(q);
+
     return rc;
     /// [into]
 }

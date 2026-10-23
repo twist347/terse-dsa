@@ -14,10 +14,10 @@ int main() {
         goto out;
     }
 
-    tda_span_sort(tda_vec_to_span_mut(vec), tda_cmp_i32); // algo, core/cmp
+    tda_span_sort(tda_vec_to_span_mut(vec), tda_cmp_i32, nullptr); // algo, core/cmp
 
     size_t idx; // core/span
-    if (!tda_span_binary_search(tda_vec_to_span(vec), &(int32_t){4}, tda_cmp_i32, &idx)) {
+    if (!tda_span_binary_search(tda_vec_to_span(vec), &(int32_t){4}, tda_cmp_i32, nullptr, &idx)) {
         goto out;
     }
 
@@ -30,5 +30,6 @@ int main() {
 out:
     tda_vec_drop(vec);
     tda_al_arena_drop(arena);
+
     return rc;
 }

@@ -27,6 +27,7 @@ static tda_Arr *make_arr(size_t len) {
     for (size_t i = 0; i < len; ++i) {
         TDA_ARR_SET(int32_t, a, i, (int32_t) i);
     }
+
     return a;
 }
 
@@ -66,7 +67,7 @@ static void test_from_data_copies_the_source() {
     constexpr int32_t src[4] = {5, 6, 7, 8};
 
     tda_Arr *a = nullptr;
-    TDA_TEST_OK(tda_arr_from_data(src, 4, sizeof(int32_t), tda_al_default(), &a));
+    TDA_TEST_OK(tda_arr_from_data(src, 4, TDA_LAYOUT_OF(int32_t), tda_al_default(), &a));
 
     TEST_ASSERT_EQUAL_size_t(4, tda_arr_len(a));
     TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_arr_elem_size(a));
@@ -81,7 +82,7 @@ static void test_from_data_is_detached_from_the_source() {
     int32_t src[3] = {1, 2, 3};
 
     tda_Arr *a = nullptr;
-    TDA_TEST_OK(tda_arr_from_data(src, 3, sizeof(int32_t), tda_al_default(), &a));
+    TDA_TEST_OK(tda_arr_from_data(src, 3, TDA_LAYOUT_OF(int32_t), tda_al_default(), &a));
 
     src[0] = 999;
     TEST_ASSERT_EQUAL_INT32(1, *TDA_ARR_GET_AS(int32_t, a, 0));
@@ -92,7 +93,7 @@ static void test_from_data_is_detached_from_the_source() {
 // a null source is legal while len == 0, as in tda_span_from_data
 static void test_from_data_empty_has_no_buffer() {
     tda_Arr *a = nullptr;
-    TDA_TEST_OK(tda_arr_from_data(nullptr, 0, sizeof(int32_t), tda_al_default(), &a));
+    TDA_TEST_OK(tda_arr_from_data(nullptr, 0, TDA_LAYOUT_OF(int32_t), tda_al_default(), &a));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_arr_len(a));
     TEST_ASSERT_NULL(tda_arr_data(a));
@@ -105,7 +106,7 @@ static void test_from_data_copies_whole_elements() {
     constexpr Pair src[2] = {{1, 2}, {3, 4}};
 
     tda_Arr *arr = nullptr;
-    TDA_TEST_OK(tda_arr_from_data(src, 2, sizeof(Pair), tda_al_default(), &arr));
+    TDA_TEST_OK(tda_arr_from_data(src, 2, TDA_LAYOUT_OF(Pair), tda_al_default(), &arr));
 
     const Pair *got = tda_arr_data(arr);
     TEST_ASSERT_EQUAL_INT64(1, got[0].a);
@@ -229,7 +230,7 @@ static void test_span_views_the_same_memory() {
     const tda_SpanMut s = tda_arr_to_span_mut(a);
     TEST_ASSERT_EQUAL_PTR(tda_arr_data(a), s.data);
     TEST_ASSERT_EQUAL_size_t(4, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem.size);
 
     TDA_SPAN_SET(int32_t, s, 0, 77);
     TEST_ASSERT_EQUAL_INT32(77, *TDA_ARR_GET_AS(int32_t, a, 0));
@@ -412,7 +413,7 @@ static void test_to_span_matches_the_arr_shape() {
 
     TEST_ASSERT_EQUAL_PTR(tda_arr_data(a), s.data);
     TEST_ASSERT_EQUAL_size_t(4, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem.size);
     TEST_ASSERT_EQUAL_INT32(2, *TDA_SPAN_GET_AS(int32_t, s, 2));
 
     tda_arr_drop(a);
@@ -425,7 +426,7 @@ static void test_to_span_of_empty_keeps_elem_size() {
 
     TEST_ASSERT_NULL(s.data);
     TEST_ASSERT_EQUAL_size_t(0, s.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), s.elem.size);
 
     tda_arr_drop(a);
 }
@@ -595,11 +596,14 @@ static void test_copy_assign_keeps_the_target_allocator() {
 
 /* ========== allocation failure ========== */
 
-// len * elem_size overflows size_t: reported, never attempted
+// a 2-byte elem: SIZE_MAX of them is too many for any address space
+static constexpr tda_Layout TWO_BYTES = {.size = 2, .align = 2};
+
+// len * elem.size overflows size_t: reported, never attempted
 static void test_new_len_reports_size_overflow() {
     tda_Arr *a = nullptr;
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_new_len(SIZE_MAX, 2, tda_al_default(), &a));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_new_len(SIZE_MAX, TWO_BYTES, tda_al_default(), &a));
 
     TEST_ASSERT_NULL(a); // out is untouched on failure
 }
@@ -608,7 +612,7 @@ static void test_from_data_reports_size_overflow() {
     constexpr int32_t src[1] = {1};
     tda_Arr *a = nullptr;
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_from_data(src, SIZE_MAX, 2, tda_al_default(), &a));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_from_data(src, SIZE_MAX, TWO_BYTES, tda_al_default(), &a));
 
     TEST_ASSERT_NULL(a);
 }
@@ -633,7 +637,7 @@ static void test_from_data_reports_an_exhausted_arena() {
     constexpr int32_t src[4] = {1, 2, 3, 4};
     tda_Arr *a = nullptr;
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_from_data(src, 1000, sizeof(int32_t), arena, &a));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_from_data(src, 1000, TDA_LAYOUT_OF(int32_t), arena, &a));
 
     TEST_ASSERT_NULL(a);
 
@@ -878,7 +882,7 @@ static void test_eq_matches_the_same_elems() {
     TEST_ASSERT_TRUE(tda_arr_eq(a, a));
     TEST_ASSERT_TRUE(tda_arr_eq(a, b));
     TEST_ASSERT_TRUE(tda_arr_eq(b, a));
-    TEST_ASSERT_TRUE(tda_arr_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_arr_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_arr_drop(a);
     tda_arr_drop(b);
@@ -891,7 +895,7 @@ static void test_eq_parts_one_differing_elem() {
 
     TEST_ASSERT_FALSE(tda_arr_eq(a, b));
     TEST_ASSERT_FALSE(tda_arr_eq(b, a));
-    TEST_ASSERT_FALSE(tda_arr_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_arr_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_arr_drop(a);
     tda_arr_drop(b);
@@ -904,7 +908,7 @@ static void test_eq_parts_different_lengths() {
 
     TEST_ASSERT_FALSE(tda_arr_eq(a, shorter));
     TEST_ASSERT_FALSE(tda_arr_eq(shorter, a));
-    TEST_ASSERT_FALSE(tda_arr_eq_by(a, shorter, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_arr_eq_by(a, shorter, tda_eq_i32, nullptr));
 
     tda_arr_drop(a);
     tda_arr_drop(shorter);
@@ -916,7 +920,7 @@ static void test_eq_of_two_empties() {
     tda_Arr *one = make_arr(1);
 
     TEST_ASSERT_TRUE(tda_arr_eq(a, b));
-    TEST_ASSERT_TRUE(tda_arr_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_arr_eq_by(a, b, tda_eq_i32, nullptr));
     TEST_ASSERT_FALSE(tda_arr_eq(a, one));
     TEST_ASSERT_FALSE(tda_arr_eq(one, a));
 
@@ -937,7 +941,7 @@ static void test_eq_by_asks_the_equality() {
     TDA_TEST_OK(TDA_ARR_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
     TEST_ASSERT_FALSE(tda_arr_eq(a, b));
-    TEST_ASSERT_TRUE(tda_arr_eq_by(a, b, tda_test_pair_eq_a));
+    TEST_ASSERT_TRUE(tda_arr_eq_by(a, b, tda_test_pair_eq_a, nullptr));
 
     tda_arr_drop(a);
     tda_arr_drop(b);

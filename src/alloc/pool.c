@@ -22,6 +22,7 @@ typedef struct {
     unsigned char *data;
     PoolNode *free_head;
     size_t block_size;
+    size_t block_align;
     size_t block_count;
     size_t used;
 } PoolCtx;
@@ -33,34 +34,34 @@ typedef struct {
 } PoolHead;
 
 [[nodiscard]]
-static void *pool_alloc(void *ctx, size_t size);
+static void *pool_alloc(void *ctx, tda_Layout layout);
 
 /// a block already has the pool's one size, so a new size that fits stays where it is;
 /// one that does not cannot be had from this pool at all
 [[nodiscard]]
-static void *pool_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size);
+static bool pool_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size);
 
-static void pool_dealloc(void *ctx, void *ptr, size_t size);
+static void pool_dealloc(void *ctx, void *ptr, tda_Layout layout);
 
-/// 'block_size' raised to hold a free-list pointer and rounded up to the alignment; false
-/// when the rounding overflows
+/// 'block' raised to hold and align a free-list pointer, its size then rounded up to its
+/// alignment so the blocks tile; true when the rounding overflows
 [[nodiscard]]
-static bool pool_round_block_size(size_t *block_size);
+static bool pool_ckd_block(tda_Layout *out, tda_Layout block);
 
 static void pool_init(
     tda_Al *obj,
     PoolCtx *pool_ctx,
     tda_Al *parent,
     void *data,
-    size_t block_size,
+    tda_Layout block,
     size_t block_count
 );
 
 static void pool_build_free_list(PoolCtx *ctx);
 
-/// the bytes of the block array, which fit: the constructor checked the product
+/// the block array, whose size fits: the constructor checked the product
 [[nodiscard]]
-static size_t pool_data_bytes(const PoolCtx *ctx);
+static tda_Layout pool_data_layout(const PoolCtx *ctx);
 
 [[nodiscard]] [[maybe_unused]]
 static bool pool_owns(const PoolCtx *ctx, const void *ptr);
@@ -72,66 +73,65 @@ static bool pool_owns(const PoolCtx *ctx, const void *ptr);
 
 /* ========== lifetime ========== */
 
-tda_Al *tda_al_pool_new(tda_Al *parent, size_t block_size, size_t block_count) {
+tda_Al *tda_al_pool_new(tda_Al *parent, tda_Layout block, size_t block_count) {
     assert(parent);
-    assert(block_size > 0);
+    assert(block.size > 0);
+    assert(tda_layout_is_align(block.align));
     assert(block_count > 0);
 
-    if (!pool_round_block_size(&block_size)) {
+    tda_Layout data_layout;
+    if (pool_ckd_block(&block, block) || tda_layout_ckd_array(&data_layout, block, block_count)) {
         return nullptr;
     }
 
-    // allocate backing buffer
-    size_t total_bytes;
-    if (ckd_mul(&total_bytes, block_size, block_count)) {
-        return nullptr;
-    }
-
-    // allocate context
-    PoolCtx *pool_ctx = tda_alloc(parent, sizeof(PoolCtx));
+    PoolCtx *pool_ctx = TDA_ALLOC(PoolCtx, parent, 1);
     if (!pool_ctx) {
         return nullptr;
     }
 
-    unsigned char *data = tda_alloc(parent, total_bytes);
+    unsigned char *data = tda_alloc(parent, data_layout);
     if (!data) {
-        tda_dealloc(parent, pool_ctx, sizeof(PoolCtx));
+        TDA_DEALLOC(PoolCtx, parent, pool_ctx, 1);
         return nullptr;
     }
 
-    // blocks are carved on this grid from the start of data; see the tda_Al contract
-    TDA_EXPECT(tda_ptr_is_aligned(data, TDA_DEFAULT_ALIGNMENT));
-
-    // allocate the tda_Al itself
-    tda_Al *obj = tda_alloc(parent, sizeof(tda_Al));
+    tda_Al *obj = TDA_ALLOC(tda_Al, parent, 1);
     if (!obj) {
-        tda_dealloc(parent, data, total_bytes);
-        tda_dealloc(parent, pool_ctx, sizeof(PoolCtx));
+        tda_dealloc(parent, data, data_layout);
+        TDA_DEALLOC(PoolCtx, parent, pool_ctx, 1);
         return nullptr;
     }
 
-    pool_init(obj, pool_ctx, parent, data, block_size, block_count);
+    pool_init(obj, pool_ctx, parent, data, block, block_count);
 
     return obj;
 }
 
-tda_Al *tda_al_pool_from_buf(void *buf, size_t size, size_t block_size) {
+tda_Al *tda_al_pool_from_buf(void *buf, size_t size, tda_Layout block) {
     assert(buf);
     assert(size > 0);
-    assert(block_size > 0);
+    assert(block.size > 0);
+    assert(tda_layout_is_align(block.align));
 
-    if (!pool_round_block_size(&block_size)) {
+    if (pool_ckd_block(&block, block)) {
         return nullptr;
     }
 
-    void *head_ptr, *data;
+    void *head_ptr, *rest_ptr;
     size_t rest;
-    if (!tda_buf_split_head(buf, size, sizeof(PoolHead), &head_ptr, &data, &rest) || rest < block_size) {
+    if (!tda_buf_split_head(buf, size, sizeof(PoolHead), &head_ptr, &rest_ptr, &rest)) {
+        return nullptr;
+    }
+
+    // the blocks start on their own alignment, which may be past the header's
+    const size_t pad = tda_ptr_align_pad(rest_ptr, block.align);
+    if (pad > rest || rest - pad < block.size) {
         return nullptr;
     }
 
     PoolHead *head = head_ptr;
-    pool_init(&head->al, &head->ctx, nullptr, data, block_size, rest / block_size);
+    void *data = tda_byte_offset_mut(rest_ptr, 1, pad);
+    pool_init(&head->al, &head->ctx, nullptr, data, block, (rest - pad) / block.size);
 
     return &head->al;
 }
@@ -150,9 +150,9 @@ void tda_al_pool_drop(tda_Al *self) {
         return;
     }
 
-    tda_dealloc(parent_al, pool_ctx->data, pool_data_bytes(pool_ctx));
-    tda_dealloc(parent_al, pool_ctx, sizeof(PoolCtx));
-    tda_dealloc(parent_al, self, sizeof(tda_Al));
+    tda_dealloc(parent_al, pool_ctx->data, pool_data_layout(pool_ctx));
+    TDA_DEALLOC(PoolCtx, parent_al, pool_ctx, 1);
+    TDA_DEALLOC(tda_Al, parent_al, self, 1);
 }
 
 void tda_al_pool_reset(tda_Al *self) {
@@ -170,6 +170,7 @@ tda_AlPoolStats tda_al_pool_stats(const tda_Al *self) {
 
     return (tda_AlPoolStats){
         .block_size = pool_ctx->block_size,
+        .block_align = pool_ctx->block_align,
         .block_count = pool_ctx->block_count,
         .used = pool_ctx->used,
         .free = pool_ctx->block_count - pool_ctx->used,
@@ -178,15 +179,16 @@ tda_AlPoolStats tda_al_pool_stats(const tda_Al *self) {
 
 /* ========== internals ========== */
 
-static void *pool_alloc(void *ctx, size_t size) {
+static void *pool_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
-
-    if (size == 0) {
-        return nullptr;
-    }
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
     PoolCtx *pool_ctx = ctx;
-    if (size > pool_ctx->block_size) {
+
+    // an alignment past the blocks' is how the pool was built, not how full it is; a
+    // size past them is a request it cannot serve, as when it runs out
+    TDA_EXPECT(layout.align <= pool_ctx->block_align);
+    if (layout.size > pool_ctx->block_size) {
         return nullptr;
     }
 
@@ -201,15 +203,15 @@ static void *pool_alloc(void *ctx, size_t size) {
     return node;
 }
 
-static void pool_dealloc(void *ctx, void *ptr, size_t size) {
+static void pool_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     assert(ctx);
-    TDA_UNUSED(size);
-
-    if (!ptr) {
-        return;
-    }
+    assert(ptr); // tda_dealloc takes null itself
 
     PoolCtx *pool_ctx = ctx;
+    TDA_UNUSED(layout); // only the check reads it, and a release build drops that
+
+    // the layout is what alloc was asked: it fits one block, or the block is not ours
+    TDA_EXPECT(layout.size <= pool_ctx->block_size && layout.align <= pool_ctx->block_align);
 
     // a foreign block would be threaded into the free list and handed out as the pool's
     // own, so a hardened build keeps these. A block freed twice is caught only when it is
@@ -226,29 +228,26 @@ static void pool_dealloc(void *ctx, void *ptr, size_t size) {
     --pool_ctx->used;
 }
 
-static void *pool_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size) {
+static bool pool_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
-    assert(new_size > 0); // tda_realloc answers a request for nothing itself
-    TDA_UNUSED(old_size);
+    TDA_UNUSED(ptr); // only the ownership check reads it, and a release build drops that
+    TDA_UNUSED(old);
 
     PoolCtx *pool_ctx = ctx;
-
-    if (!ptr) {
-        return pool_alloc(ctx, new_size);
-    }
-
     TDA_EXPECT(pool_owns(pool_ctx, ptr));
 
-    return new_size <= pool_ctx->block_size ? ptr : nullptr;
+    return new_size <= pool_ctx->block_size;
 }
 
-static bool pool_round_block_size(size_t *block_size) {
-    // each block must hold at least a free-list pointer
-    if (*block_size < sizeof(PoolNode)) {
-        *block_size = sizeof(PoolNode);
-    }
+static bool pool_ckd_block(tda_Layout *out, tda_Layout block) {
+    // a free block holds the list's pointer, so it has that pointer's size and alignment
+    // at least
+    const size_t align = block.align > alignof(PoolNode) ? block.align : alignof(PoolNode);
+    const size_t size = block.size > sizeof(PoolNode) ? block.size : sizeof(PoolNode);
 
-    return !tda_ckd_align_up(block_size, *block_size, TDA_DEFAULT_ALIGNMENT);
+    out->align = align;
+
+    return tda_ckd_align_up(&out->size, size, align);
 }
 
 static void pool_init(
@@ -256,12 +255,16 @@ static void pool_init(
     PoolCtx *pool_ctx,
     tda_Al *parent,
     void *data,
-    size_t block_size,
+    tda_Layout block,
     size_t block_count
 ) {
+    assert(tda_layout_is_type(block));
+    assert(tda_ptr_is_aligned(data, block.align));
+
     pool_ctx->parent_al = parent;
     pool_ctx->data = data;
-    pool_ctx->block_size = block_size;
+    pool_ctx->block_size = block.size;
+    pool_ctx->block_align = block.align;
     pool_ctx->block_count = block_count;
     pool_ctx->used = 0;
 
@@ -269,8 +272,9 @@ static void pool_init(
 
     obj->ctx = pool_ctx;
     obj->alloc = pool_alloc;
-    obj->calloc = nullptr;
-    obj->realloc = pool_realloc;
+    obj->alloc_zeroed = nullptr;
+    obj->resize = pool_resize;
+    obj->remap = nullptr;
     obj->dealloc = pool_dealloc;
 }
 
@@ -286,8 +290,8 @@ static void pool_build_free_list(PoolCtx *ctx) {
     }
 }
 
-static size_t pool_data_bytes(const PoolCtx *ctx) {
-    return ctx->block_size * ctx->block_count;
+static tda_Layout pool_data_layout(const PoolCtx *ctx) {
+    return (tda_Layout){.size = ctx->block_size * ctx->block_count, .align = ctx->block_align};
 }
 
 static bool pool_owns(const PoolCtx *ctx, const void *ptr) {
@@ -295,7 +299,7 @@ static bool pool_owns(const PoolCtx *ctx, const void *ptr) {
     // pool's own is undefined, and one from outside is exactly what this is here to catch
     const uintptr_t addr = (uintptr_t) ptr;
     const uintptr_t begin = (uintptr_t) ctx->data;
-    const uintptr_t end = begin + pool_data_bytes(ctx);
+    const uintptr_t end = begin + pool_data_layout(ctx).size;
 
     return addr >= begin && addr < end && (addr - begin) % ctx->block_size == 0;
 }

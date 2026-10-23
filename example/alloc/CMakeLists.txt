@@ -1,4 +1,3 @@
-tda_add_example(example_alloc_aligned example_aligned.c)
 tda_add_example(example_alloc_alloc example_alloc.c)
 tda_add_example(example_alloc_arena example_arena.c)
 tda_add_example(example_alloc_debug example_debug.c)

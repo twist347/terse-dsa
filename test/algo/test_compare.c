@@ -16,15 +16,16 @@ void tearDown() {
 
 // a comparator returning the raw difference, not -1/0/+1: tda_span_cmp
 // must normalize it, and a test that only checks the sign would not notice
-static int cmp_diff_i32(const void *a, const void *b) {
+static int cmp_diff_i32(const void *a, const void *b, void *) {
     return *(const int32_t *) a - *(const int32_t *) b;
 }
 
 static size_t eq_calls = 0;
 
-static bool eq_counting_i32(const void *a, const void *b) {
+static bool eq_counting_i32(const void *a, const void *b, void *) {
     ++eq_calls;
-    return tda_eq_i32(a, b);
+
+    return tda_eq_i32(a, b, nullptr);
 }
 
 /* ========== eq ========== */
@@ -85,14 +86,24 @@ static void test_eq_by_uses_the_predicate() {
     // byte-wise these differ, by absolute value they match
     TEST_ASSERT_FALSE(tda_span_eq(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3)));
     TEST_ASSERT_TRUE(
-        tda_span_eq_by(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), tda_test_i32_eq_abs)
+        tda_span_eq_by(
+            TDA_SPAN_FROM_DATA(int32_t, a, 3),
+            TDA_SPAN_FROM_DATA(int32_t, b, 3),
+            tda_test_i32_eq_abs,
+            nullptr
+        )
     );
 }
 
 static void test_eq_by_different_lengths() {
     constexpr int32_t a[3] = {1, 2, 3};
 
-    TEST_ASSERT_FALSE(tda_span_eq_by(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, a, 2), tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_span_eq_by(
+        TDA_SPAN_FROM_DATA(int32_t, a, 3),
+        TDA_SPAN_FROM_DATA(int32_t, a, 2),
+        tda_eq_i32,
+        nullptr
+    ));
 }
 
 // the same buffer short-circuits: the predicate must not be called
@@ -101,7 +112,7 @@ static void test_eq_by_same_buffer_skips_the_predicate() {
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, a, 3);
 
     eq_calls = 0;
-    TEST_ASSERT_TRUE(tda_span_eq_by(s, s, eq_counting_i32));
+    TEST_ASSERT_TRUE(tda_span_eq_by(s, s, eq_counting_i32, nullptr));
     TEST_ASSERT_EQUAL_size_t(0, eq_calls);
 }
 
@@ -112,7 +123,7 @@ static void test_eq_by_stops_at_the_first_mismatch() {
 
     eq_calls = 0;
     TEST_ASSERT_FALSE(
-        tda_span_eq_by(TDA_SPAN_FROM_DATA(int32_t, a, 4), TDA_SPAN_FROM_DATA(int32_t, b, 4), eq_counting_i32)
+        tda_span_eq_by(TDA_SPAN_FROM_DATA(int32_t, a, 4), TDA_SPAN_FROM_DATA(int32_t, b, 4), eq_counting_i32, nullptr)
     );
     TEST_ASSERT_EQUAL_size_t(2, eq_calls);
 }
@@ -122,7 +133,7 @@ static void test_eq_by_empty_spans_are_equal() {
 
     eq_calls = 0;
     TEST_ASSERT_TRUE(
-        tda_span_eq_by(TDA_SPAN_FROM_DATA(int32_t, a, 0), TDA_SPAN_FROM_DATA(int32_t, a, 0), eq_counting_i32)
+        tda_span_eq_by(TDA_SPAN_FROM_DATA(int32_t, a, 0), TDA_SPAN_FROM_DATA(int32_t, a, 0), eq_counting_i32, nullptr)
     );
     TEST_ASSERT_EQUAL_size_t(0, eq_calls);
 }
@@ -135,7 +146,13 @@ static void test_mismatch_reports_the_first_disagreement() {
 
     size_t idx = 999;
     TEST_ASSERT_TRUE(
-        tda_span_mismatch(TDA_SPAN_FROM_DATA(int32_t, a, 4), TDA_SPAN_FROM_DATA(int32_t, b, 4), tda_eq_i32, &idx)
+        tda_span_mismatch(
+            TDA_SPAN_FROM_DATA(int32_t, a, 4),
+            TDA_SPAN_FROM_DATA(int32_t, b, 4),
+            tda_eq_i32,
+            nullptr,
+            &idx
+        )
     );
     TEST_ASSERT_EQUAL_size_t(2, idx);
 }
@@ -147,7 +164,13 @@ static void test_mismatch_at_the_very_first_elem() {
 
     size_t idx = 999;
     TEST_ASSERT_TRUE(
-        tda_span_mismatch(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), tda_eq_i32, &idx)
+        tda_span_mismatch(
+            TDA_SPAN_FROM_DATA(int32_t, a, 3),
+            TDA_SPAN_FROM_DATA(int32_t, b, 3),
+            tda_eq_i32,
+            nullptr,
+            &idx
+        )
     );
     TEST_ASSERT_EQUAL_size_t(0, idx);
 }
@@ -158,7 +181,13 @@ static void test_mismatch_of_equal_spans_leaves_the_out_param_alone() {
 
     size_t idx = 777;
     TEST_ASSERT_FALSE(
-        tda_span_mismatch(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), tda_eq_i32, &idx)
+        tda_span_mismatch(
+            TDA_SPAN_FROM_DATA(int32_t, a, 3),
+            TDA_SPAN_FROM_DATA(int32_t, b, 3),
+            tda_eq_i32,
+            nullptr,
+            &idx
+        )
     );
     TEST_ASSERT_EQUAL_size_t(777, idx);
 }
@@ -175,6 +204,7 @@ static void test_mismatch_looks_at_the_common_prefix_only() {
             TDA_SPAN_FROM_DATA(int32_t, shorter, 2),
             TDA_SPAN_FROM_DATA(int32_t, longer, 4),
             tda_eq_i32,
+            nullptr,
             &idx
         )
     );
@@ -191,6 +221,7 @@ static void test_mismatch_inside_the_prefix_of_unequal_lengths() {
             TDA_SPAN_FROM_DATA(int32_t, shorter, 2),
             TDA_SPAN_FROM_DATA(int32_t, longer, 4),
             tda_eq_i32,
+            nullptr,
             &idx
         )
     );
@@ -206,6 +237,7 @@ static void test_mismatch_of_empty_spans_finds_nothing() {
             TDA_SPAN_FROM_DATA(int32_t, nullptr, 0),
             TDA_SPAN_FROM_DATA(int32_t, buf, 2),
             tda_eq_i32,
+            nullptr,
             &idx
         )
     );
@@ -223,6 +255,7 @@ static void test_mismatch_honours_the_callback() {
             TDA_SPAN_FROM_DATA(int32_t, a, 3),
             TDA_SPAN_FROM_DATA(int32_t, b, 3),
             tda_test_i32_eq_abs,
+            nullptr,
             &idx
         )
     );
@@ -238,6 +271,7 @@ static size_t occurrences(const int32_t *arr, size_t n, int32_t key) {
     for (size_t i = 0; i < n; ++i) {
         c += arr[i] == key;
     }
+
     return c;
 }
 
@@ -273,7 +307,8 @@ static void test_is_permutation_matches_the_counts_everywhere() {
                 const bool got = tda_span_is_permutation(
                     TDA_SPAN_FROM_DATA(int32_t, a, n),
                     TDA_SPAN_FROM_DATA(int32_t, b, n),
-                    tda_eq_i32
+                    tda_eq_i32,
+                    nullptr
                 );
                 TEST_ASSERT_EQUAL(want, got);
             }
@@ -286,21 +321,21 @@ static void test_is_permutation_counts_the_repeats() {
     const tda_Span a = TDA_SPAN_OF(int32_t, 1, 1, 2);
     const tda_Span b = TDA_SPAN_OF(int32_t, 1, 2, 2);
 
-    TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32));
-    TEST_ASSERT_FALSE(tda_span_is_permutation(b, a, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_span_is_permutation(b, a, tda_eq_i32, nullptr));
 }
 
 static void test_is_permutation_of_different_lengths_is_false() {
     const tda_Span a = TDA_SPAN_OF(int32_t, 1, 2);
     const tda_Span b = TDA_SPAN_OF(int32_t, 2, 1, 1);
 
-    TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32, nullptr));
 }
 
 static void test_is_permutation_of_empty_spans() {
     const tda_Span empty = TDA_SPAN_FROM_DATA(int32_t, (const int32_t *) nullptr, 0);
 
-    TEST_ASSERT_TRUE(tda_span_is_permutation(empty, empty, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_span_is_permutation(empty, empty, tda_eq_i32, nullptr));
 }
 
 // equal under the predicate, not by the bytes: {1, -2} is {2, -1} by absolute value
@@ -308,8 +343,8 @@ static void test_is_permutation_honours_the_equality() {
     const tda_Span a = TDA_SPAN_OF(int32_t, 1, -2, 3);
     const tda_Span b = TDA_SPAN_OF(int32_t, -3, 2, -1);
 
-    TEST_ASSERT_TRUE(tda_span_is_permutation(a, b, tda_test_i32_eq_abs));
-    TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_span_is_permutation(a, b, tda_test_i32_eq_abs, nullptr));
+    TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32, nullptr));
 }
 
 static void test_is_permutation_compares_whole_elems() {
@@ -317,8 +352,8 @@ static void test_is_permutation_compares_whole_elems() {
     const tda_Span b = TDA_SPAN_OF(Pair, {2, 99}, {1, 98}, {1, 97});
     const tda_Span c = TDA_SPAN_OF(Pair, {2, 99}, {2, 98}, {1, 97});
 
-    TEST_ASSERT_TRUE(tda_span_is_permutation(a, b, tda_test_pair_eq_a));
-    TEST_ASSERT_FALSE(tda_span_is_permutation(a, c, tda_test_pair_eq_a));
+    TEST_ASSERT_TRUE(tda_span_is_permutation(a, b, tda_test_pair_eq_a, nullptr));
+    TEST_ASSERT_FALSE(tda_span_is_permutation(a, c, tda_test_pair_eq_a, nullptr));
 }
 
 // spans that agree elem by elem are settled by the prefix walk alone: one call per pair
@@ -334,7 +369,8 @@ static void test_is_permutation_of_equal_spans_is_linear() {
     TEST_ASSERT_TRUE(tda_span_is_permutation(
         TDA_SPAN_FROM_DATA(int32_t, buf, 100),
         TDA_SPAN_FROM_DATA(int32_t, copy, 100),
-        eq_counting_i32
+        eq_counting_i32,
+        nullptr
     ));
     TEST_ASSERT_EQUAL_size_t(100, eq_calls);
 }
@@ -347,7 +383,7 @@ static void test_cmp_of_equal_spans_is_zero() {
 
     TEST_ASSERT_EQUAL_INT(
         0,
-        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), tda_cmp_i32)
+        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), tda_cmp_i32, nullptr)
     );
 }
 
@@ -357,11 +393,11 @@ static void test_cmp_is_decided_by_the_first_difference() {
 
     TEST_ASSERT_EQUAL_INT(
         -1,
-        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), tda_cmp_i32)
+        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, a, 3), TDA_SPAN_FROM_DATA(int32_t, b, 3), tda_cmp_i32, nullptr)
     );
     TEST_ASSERT_EQUAL_INT(
         1,
-        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, b, 3), TDA_SPAN_FROM_DATA(int32_t, a, 3), tda_cmp_i32)
+        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, b, 3), TDA_SPAN_FROM_DATA(int32_t, a, 3), tda_cmp_i32, nullptr)
     );
 }
 
@@ -372,11 +408,21 @@ static void test_cmp_orders_a_prefix_before_the_longer_span() {
 
     TEST_ASSERT_EQUAL_INT(
         -1,
-        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, shorter, 2), TDA_SPAN_FROM_DATA(int32_t, longer, 3), tda_cmp_i32)
+        tda_span_cmp(
+            TDA_SPAN_FROM_DATA(int32_t, shorter, 2),
+            TDA_SPAN_FROM_DATA(int32_t, longer, 3),
+            tda_cmp_i32,
+            nullptr
+        )
     );
     TEST_ASSERT_EQUAL_INT(
         1,
-        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, longer, 3), TDA_SPAN_FROM_DATA(int32_t, shorter, 2), tda_cmp_i32)
+        tda_span_cmp(
+            TDA_SPAN_FROM_DATA(int32_t, longer, 3),
+            TDA_SPAN_FROM_DATA(int32_t, shorter, 2),
+            tda_cmp_i32,
+            nullptr
+        )
     );
 }
 
@@ -384,9 +430,9 @@ static void test_cmp_of_empty_spans() {
     const tda_Span empty = TDA_SPAN_FROM_DATA(int32_t, nullptr, 0);
     constexpr int32_t buf[1] = {1};
 
-    TEST_ASSERT_EQUAL_INT(0, tda_span_cmp(empty, empty, tda_cmp_i32));
-    TEST_ASSERT_EQUAL_INT(-1, tda_span_cmp(empty, TDA_SPAN_FROM_DATA(int32_t, buf, 1), tda_cmp_i32));
-    TEST_ASSERT_EQUAL_INT(1, tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, buf, 1), empty, tda_cmp_i32));
+    TEST_ASSERT_EQUAL_INT(0, tda_span_cmp(empty, empty, tda_cmp_i32, nullptr));
+    TEST_ASSERT_EQUAL_INT(-1, tda_span_cmp(empty, TDA_SPAN_FROM_DATA(int32_t, buf, 1), tda_cmp_i32, nullptr));
+    TEST_ASSERT_EQUAL_INT(1, tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, buf, 1), empty, tda_cmp_i32, nullptr));
 }
 
 // the callback may return any sign-carrying int; the span-level answer is -1/0/+1
@@ -396,11 +442,11 @@ static void test_cmp_normalizes_whatever_the_callback_returns() {
 
     TEST_ASSERT_EQUAL_INT(
         -1,
-        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, a, 2), TDA_SPAN_FROM_DATA(int32_t, b, 2), cmp_diff_i32)
+        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, a, 2), TDA_SPAN_FROM_DATA(int32_t, b, 2), cmp_diff_i32, nullptr)
     );
     TEST_ASSERT_EQUAL_INT(
         1,
-        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, b, 2), TDA_SPAN_FROM_DATA(int32_t, a, 2), cmp_diff_i32)
+        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, b, 2), TDA_SPAN_FROM_DATA(int32_t, a, 2), cmp_diff_i32, nullptr)
     );
 }
 
@@ -411,7 +457,7 @@ static void test_cmp_follows_the_comparator() {
 
     TEST_ASSERT_EQUAL_INT(
         1,
-        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, a, 2), TDA_SPAN_FROM_DATA(int32_t, b, 2), tda_cmp_desc_i32)
+        tda_span_cmp(TDA_SPAN_FROM_DATA(int32_t, a, 2), TDA_SPAN_FROM_DATA(int32_t, b, 2), tda_cmp_desc_i32, nullptr)
     );
 }
 
@@ -425,8 +471,8 @@ static void test_cmp_and_eq_agree() {
     const tda_Span sb = TDA_SPAN_FROM_DATA(int32_t, b, 3);
     const tda_Span sc = TDA_SPAN_FROM_DATA(int32_t, c, 3);
 
-    TEST_ASSERT_TRUE(tda_span_eq(sa, sb) == (tda_span_cmp(sa, sb, tda_cmp_i32) == 0));
-    TEST_ASSERT_TRUE(tda_span_eq(sa, sc) == (tda_span_cmp(sa, sc, tda_cmp_i32) == 0));
+    TEST_ASSERT_TRUE(tda_span_eq(sa, sb) == (tda_span_cmp(sa, sb, tda_cmp_i32, nullptr) == 0));
+    TEST_ASSERT_TRUE(tda_span_eq(sa, sc) == (tda_span_cmp(sa, sc, tda_cmp_i32, nullptr) == 0));
 }
 
 int main() {

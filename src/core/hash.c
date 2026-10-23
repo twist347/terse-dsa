@@ -31,7 +31,7 @@ static tda_Hash hash_mix_u64(uint64_t x);
 // type sign-extends, which is a bijection into uint64_t, so equal values stay equal and
 // different ones stay different, which is all the mixer needs.
 #define DEFINE_HASH_INT(name, T)                          \
-    tda_Hash tda_hash_##name(const void *val) {           \
+    tda_Hash tda_hash_##name(const void *val, void *) {   \
         assert(val);                                      \
         return hash_mix_u64((uint64_t) *(const T *) val); \
     }
@@ -60,7 +60,7 @@ DEFINE_HASH_INT(ptrdiff, ptrdiff_t)
 
 /* ========== floating point ========== */
 
-tda_Hash tda_hash_f32(const void *val) {
+tda_Hash tda_hash_f32(const void *val, void *) {
     assert(val);
 
     float f = *(const float *) val;
@@ -80,7 +80,7 @@ tda_Hash tda_hash_f32(const void *val) {
     return hash_mix_u64(bits);
 }
 
-tda_Hash tda_hash_f64(const void *val) {
+tda_Hash tda_hash_f64(const void *val, void *) {
     assert(val);
 
     double f = *(const double *) val;
@@ -127,7 +127,7 @@ tda_Hash tda_hash_bytes(const void *data, size_t len) {
 
 /* ========== str ========== */
 
-tda_Hash tda_hash_cstr(const void *val) {
+tda_Hash tda_hash_cstr(const void *val, void *) {
     assert(val);
 
     const char *str = *(const char *const *) val;
@@ -146,6 +146,7 @@ tda_Hash tda_hash_cstr(const void *val) {
 tda_Hash tda_hash_combine(tda_Hash a, tda_Hash b) {
     tda_Hash v = a;
     v ^= b + HASH_GOLDEN_64 + (v << 6) + (v >> 2);
+
     return hash_mix_u64(v);
 }
 
@@ -158,6 +159,7 @@ static tda_Hash hash_mix_u64(uint64_t x) {
     x ^= x >> 33;
     x *= FMIX64_C2;
     x ^= x >> 33;
+
     return x;
 }
 

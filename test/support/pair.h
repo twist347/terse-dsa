@@ -36,13 +36,13 @@ static inline bool tda_test_pair_a_is_negative(const void *elem, void *ctx) {
 
 /// tda_Eq over Pair, reading the first field alone. Pairs equal under it can still differ
 /// byte for byte, which tells an _eq_by from an _eq
-static inline bool tda_test_pair_eq_a(const void *lhs, const void *rhs) {
+static inline bool tda_test_pair_eq_a(const void *lhs, const void *rhs, void *) {
     return ((const Pair *) lhs)->a == ((const Pair *) rhs)->a;
 }
 
 /* ========== comparators ========== */
 
 /// tda_Cmp over Pair, ordering by the first field alone
-static inline int tda_test_pair_cmp_a(const void *lhs, const void *rhs) {
-    return tda_cmp_i64(&((const Pair *) lhs)->a, &((const Pair *) rhs)->a);
+static inline int tda_test_pair_cmp_a(const void *lhs, const void *rhs, void *) {
+    return tda_cmp_i64(&((const Pair *) lhs)->a, &((const Pair *) rhs)->a, nullptr);
 }

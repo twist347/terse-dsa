@@ -9,13 +9,13 @@
 
 /* ========== set ops ========== */
 
-size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
+size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    TDA_EXPECT(dst.elem_size == a.elem_size);
-    TDA_EXPECT(dst.elem_size == b.elem_size);
+    TDA_EXPECT(tda_layout_eq(dst.elem, a.elem));
+    TDA_EXPECT(tda_layout_eq(dst.elem, b.elem));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
     TDA_EXPECT(dst.len >= a.len + b.len);
@@ -26,7 +26,7 @@ size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) 
     while (i < a.len && j < b.len) {
         const void *l = tda_span_get(a, i);
         const void *r = tda_span_get(b, j);
-        const int c = cmp(l, r);
+        const int c = cmp(l, r, ctx);
 
         if (c < 0) {
             out = tda_emit(dst, out, l);
@@ -49,13 +49,13 @@ size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) 
     return out;
 }
 
-size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
+size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    TDA_EXPECT(dst.elem_size == a.elem_size);
-    TDA_EXPECT(dst.elem_size == b.elem_size);
+    TDA_EXPECT(tda_layout_eq(dst.elem, a.elem));
+    TDA_EXPECT(tda_layout_eq(dst.elem, b.elem));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
     TDA_EXPECT(dst.len >= (a.len < b.len ? a.len : b.len));
@@ -66,7 +66,7 @@ size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cm
     while (i < a.len && j < b.len) {
         const void *l = tda_span_get(a, i);
         const void *r = tda_span_get(b, j);
-        const int c = cmp(l, r);
+        const int c = cmp(l, r, ctx);
 
         if (c < 0) {
             ++i;
@@ -84,13 +84,13 @@ size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cm
     return out;
 }
 
-size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
+size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    TDA_EXPECT(dst.elem_size == a.elem_size);
-    TDA_EXPECT(dst.elem_size == b.elem_size);
+    TDA_EXPECT(tda_layout_eq(dst.elem, a.elem));
+    TDA_EXPECT(tda_layout_eq(dst.elem, b.elem));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
     TDA_EXPECT(dst.len >= a.len);
@@ -101,7 +101,7 @@ size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp 
     while (i < a.len && j < b.len) {
         const void *l = tda_span_get(a, i);
         const void *r = tda_span_get(b, j);
-        const int c = cmp(l, r);
+        const int c = cmp(l, r, ctx);
 
         if (c < 0) {
             out = tda_emit(dst, out, l);
@@ -119,13 +119,13 @@ size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp 
     return tda_emit_rest(dst, out, a, i);
 }
 
-size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp) {
+size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
     assert(cmp);
-    TDA_EXPECT(dst.elem_size == a.elem_size);
-    TDA_EXPECT(dst.elem_size == b.elem_size);
+    TDA_EXPECT(tda_layout_eq(dst.elem, a.elem));
+    TDA_EXPECT(tda_layout_eq(dst.elem, b.elem));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
     TDA_EXPECT(dst.len >= a.len + b.len);
@@ -136,7 +136,7 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
     while (i < a.len && j < b.len) {
         const void *l = tda_span_get(a, i);
         const void *r = tda_span_get(b, j);
-        const int c = cmp(l, r);
+        const int c = cmp(l, r, ctx);
 
         if (c < 0) {
             out = tda_emit(dst, out, l);
@@ -160,11 +160,11 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
 
 /* ========== predicates ========== */
 
-bool tda_span_includes(tda_Span sup, tda_Span sub, tda_Cmp cmp) {
+bool tda_span_includes(tda_Span sup, tda_Span sub, tda_Cmp cmp, void *ctx) {
     TDA_SPAN_ASSERT(sup);
     TDA_SPAN_ASSERT(sub);
     assert(cmp);
-    TDA_EXPECT(sup.elem_size == sub.elem_size);
+    TDA_EXPECT(tda_layout_eq(sup.elem, sub.elem));
 
     size_t i = 0;
 
@@ -173,11 +173,11 @@ bool tda_span_includes(tda_Span sup, tda_Span sub, tda_Cmp cmp) {
 
         // advance 'sup' to the elem being matched; running out or stepping past the
         // value means this copy has no match
-        while (i < sup.len && cmp(tda_span_get(sup, i), want) < 0) {
+        while (i < sup.len && cmp(tda_span_get(sup, i), want, ctx) < 0) {
             ++i;
         }
 
-        if (i == sup.len || cmp(tda_span_get(sup, i), want) > 0) {
+        if (i == sup.len || cmp(tda_span_get(sup, i), want, ctx) > 0) {
             return false;
         }
 

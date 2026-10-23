@@ -44,43 +44,43 @@ typedef struct tda_Stack tda_Stack;
 /// @{
 
 /// an empty stack that owns no block yet
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
 /// @param[out] out the new stack, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the vec cannot be allocated
 /// @bigo{1}
 [[nodiscard]] TDA_API
-tda_Status tda_stack_new(size_t elem_size, tda_Al *al, tda_Stack **out);
+tda_Status tda_stack_new(tda_Layout elem, tda_Al *al, tda_Stack **out);
 
 /// an empty stack with room for 'cap' elems before the first growth
 /// @param cap how many elems to make room for
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al the allocator
 /// @param[out] out the new stack, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated, or
-///         cap * elem_size overflows
+///         cap * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_stack_new_cap(size_t cap, size_t elem_size, tda_Al *al, tda_Stack **out);
+tda_Status tda_stack_new_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Stack **out);
 
 /// a stack holding a copy of 'len' elems read from 'data', pushed in order
 /// @param data the elems to copy in; 'data[0]' is the bottom and the last one the top.
 ///             May be null only when len is 0
 /// @param len how many elems to read
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al the allocator
 /// @param[out] out the new stack, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated, or
-///         len * elem_size overflows
+///         len * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_stack_from_data(const void *data, size_t len, size_t elem_size, tda_Al *al, tda_Stack **out);
+tda_Status tda_stack_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Stack **out);
 
 /// a stack holding a copy of the elems 's' views
-/// @param s the view to copy; its last elem is the top
+/// @param s the view to copy; its last elem is the top; the elem layout is the span's
 /// @param al the allocator
 /// @param[out] out the new stack, written only on success
 /// @retval TDA_STATUS_OK on success
@@ -128,7 +128,7 @@ tda_Status tda_stack_copy(const tda_Stack *self, tda_Stack **out);
 tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al *al, tda_Stack **out);
 
 /// overwrites the elems of 'self' with those of 'other', growing the block if needed
-/// @param[in,out] self must have the same elem_size; keeps its allocator
+/// @param[in,out] self must have the same elem layout; keeps its allocator
 /// @param other the stack to copy from; may be 'self'
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, leaving 'self' as it was
@@ -137,7 +137,7 @@ tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al *al, tda_Stack **ou
 tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other);
 
 /// moves the elems of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same elem_size; its old elems are released, its
+/// @param[in,out] self must have the same elem layout; its old elems are released, its
 ///                     allocator kept
 /// @param[in,out] other emptied on success and still usable; may be 'self'
 /// @retval TDA_STATUS_OK on success
@@ -154,7 +154,7 @@ tda_Status tda_stack_move_assign(tda_Stack *self, tda_Stack *other);
 
 /// whether the two hold the same elems bottom to top, byte for byte
 /// @param a one stack
-/// @param b must have the same elem_size (asserted); a different length gives false
+/// @param b must have the same elem layout (asserted); a different length gives false
 /// @return whether the lengths match and the bytes do
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -162,12 +162,13 @@ bool tda_stack_eq(const tda_Stack *a, const tda_Stack *b);
 
 /// whether the two hold equal elems under 'eq'
 /// @param a one stack
-/// @param b must have the same elem_size
+/// @param b must have the same elem layout
 /// @param eq asked of each pair until one fails
+/// @param ctx passed to every call of 'eq'; may be null
 /// @return whether the lengths match and every pair does
 /// @bigo{n}
 [[nodiscard]] TDA_API
-bool tda_stack_eq_by(const tda_Stack *a, const tda_Stack *b, tda_Eq eq);
+bool tda_stack_eq_by(const tda_Stack *a, const tda_Stack *b, tda_Eq eq, void *ctx);
 
 /// @}
 
@@ -190,10 +191,17 @@ size_t tda_stack_cap(const tda_Stack *self);
 
 /// the size of one elem
 /// @param self the stack
-/// @return elem_size
+/// @return elem.size, the size of the elem layout
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_stack_elem_size(const tda_Stack *self);
+
+/// the layout of one elem, as the stack was built with
+/// @param self the stack
+/// @return the size and the alignment; every elem is aligned to it
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Layout tda_stack_elem_layout(const tda_Stack *self);
 
 /// the allocator the stack was built with
 /// @param self the stack
@@ -256,7 +264,7 @@ void tda_stack_clear(tda_Stack *self);
 /// @param self the stack
 /// @param new_cap a capacity at or below the one it has is a no-op
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, or new_cap * elem_size
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, or new_cap * elem.size
 ///         overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -272,7 +280,7 @@ tda_Status tda_stack_shrink_to_fit(tda_Stack *self);
 
 /// exchanges the contents of two stacks
 /// @param[in,out] self one stack
-/// @param[in,out] other must have the same elem_size and allocator; may be 'self'
+/// @param[in,out] other must have the same elem layout and allocator; may be 'self'
 /// @note a block belongs to the allocator that made it. Across allocators use
 ///       tda_stack_copy_with, then tda_stack_move_assign
 /// @bigo{1}
@@ -317,42 +325,42 @@ void tda_stack_print(const tda_Stack *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// returns 'self' after checking sizeof(T), so a macro evaluates its handle once;
-// _Generic keeps the handle's constness
+// returns 'self' after checking TDA_LAYOUT_OF(T), so a macro evaluates its handle
+// once; _Generic keeps the handle's constness
 [[nodiscard]]
-static inline const tda_Stack *tda_stack_typed_c_(const tda_Stack *self, [[maybe_unused]] size_t size) {
-    TDA_EXPECT(tda_stack_elem_size(self) == size);
+static inline const tda_Stack *tda_stack_typed_c_(const tda_Stack *self, [[maybe_unused]] tda_Layout elem) {
+    TDA_EXPECT(tda_layout_eq(tda_stack_elem_layout(self), elem));
     return self;
 }
 
 [[nodiscard]]
-static inline tda_Stack *tda_stack_typed_(tda_Stack *self, [[maybe_unused]] size_t size) {
-    TDA_EXPECT(tda_stack_elem_size(self) == size);
+static inline tda_Stack *tda_stack_typed_(tda_Stack *self, [[maybe_unused]] tda_Layout elem) {
+    TDA_EXPECT(tda_layout_eq(tda_stack_elem_layout(self), elem));
     return self;
 }
 
 #define TDA_STACK_TYPED_(T, self) \
-    _Generic((self), const tda_Stack *: tda_stack_typed_c_, tda_Stack *: tda_stack_typed_)((self), sizeof(T))
+    _Generic((self), const tda_Stack *: tda_stack_typed_c_, tda_Stack *: tda_stack_typed_)((self), TDA_LAYOUT_OF(T))
 /// @endcond
 
-/// tda_stack_new with sizeof(T) for the elem size
+/// tda_stack_new with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new stack is written
 /// @bigo{1}
 #define TDA_STACK_NEW(T, al, out) \
-    tda_stack_new(sizeof(T), (al), (out))
+    tda_stack_new(TDA_LAYOUT_OF(T), (al), (out))
 
-/// tda_stack_new_cap with sizeof(T)
+/// tda_stack_new_cap with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param cap how many elems to make room for
 /// @param al the allocator
 /// @param[out] out where the new stack is written
 /// @bigo{n}
 #define TDA_STACK_NEW_CAP(T, cap, al, out) \
-    tda_stack_new_cap((cap), sizeof(T), (al), (out))
+    tda_stack_new_cap((cap), TDA_LAYOUT_OF(T), (al), (out))
 
-/// tda_stack_from_data with sizeof(T)
+/// tda_stack_from_data with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param data the elems, typechecked as const T *
 /// @param len how many to read
@@ -360,7 +368,7 @@ static inline tda_Stack *tda_stack_typed_(tda_Stack *self, [[maybe_unused]] size
 /// @param[out] out where the new stack is written
 /// @bigo{n}
 #define TDA_STACK_FROM_DATA(T, data, len, al, out) \
-    tda_stack_from_data((const T *){ (data) }, (len), sizeof(T), (al), (out))
+    tda_stack_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new stack from the elems written out: TDA_STACK_OF(int32_t, al, &s, 5, 3, 1)
 /// @param T the elem type
@@ -372,7 +380,7 @@ static inline tda_Stack *tda_stack_typed_(tda_Stack *self, [[maybe_unused]] size
     tda_stack_from_data(                                \
         (const T[]){ __VA_ARGS__ },                     \
         sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
-        sizeof(T), (al), (out))
+        TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_stack_top as a const T *
 /// @param T the elem type

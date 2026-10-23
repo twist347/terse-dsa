@@ -144,12 +144,12 @@ int main() {
     /// [algo]
     // the bridge to algo works both ways. Out: a writable view; algo rearranges the elems
     // in place, since a vec has no order to protect
-    tda_span_sort(tda_vec_to_span_mut(v), tda_cmp_i32);
+    tda_span_sort(tda_vec_to_span_mut(v), tda_cmp_i32, nullptr);
     tda_vec_print(v, tda_fprint_i32); // [1, 2, 3, 4, 5]
 
     // back: an algorithm that drops elems packs the kept ones to the front and returns
     // the count, and the vec adopts that length
-    const size_t kept = tda_span_remove(tda_vec_to_span_mut(v), &(int32_t){3}, tda_eq_i32);
+    const size_t kept = tda_span_remove(tda_vec_to_span_mut(v), &(int32_t){3}, tda_eq_i32, nullptr);
     tda_vec_truncate(v, kept);
     tda_vec_print(v, tda_fprint_i32); // [1, 2, 4, 5]
 
@@ -162,6 +162,7 @@ int main() {
 out:
     // a null handle is a no-op, so this exit is safe from anywhere above
     tda_vec_drop(v);
+
     return rc;
     /// [algo]
 }

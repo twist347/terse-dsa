@@ -18,10 +18,15 @@ void tearDown() {
 
 /* ========== helpers ========== */
 
+// qsort's comparator takes two arguments, the library's three
+static int qsort_cmp_i32(const void *lhs, const void *rhs) {
+    return tda_cmp_i32(lhs, rhs, nullptr);
+}
+
 // sorts a copy with libc qsort, an oracle that shares no code with what is tested
 static void sorted_copy(int32_t *dst, const int32_t *src, size_t n) {
     memcpy(dst, src, n * sizeof(int32_t));
-    qsort(dst, n, sizeof(int32_t), tda_cmp_i32);
+    qsort(dst, n, sizeof(int32_t), qsort_cmp_i32);
 }
 
 // a rearranging op must never invent, drop or duplicate an elem
@@ -51,7 +56,7 @@ static void for_every_permutation(size_t n, void (*check)(const int32_t *, size_
     do {
         check(buf, n);
         ++seen;
-    } while (tda_span_next_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, n), tda_cmp_i32));
+    } while (tda_span_next_permutation(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, n), tda_cmp_i32, nullptr));
 
     size_t want = 1;
     for (size_t i = 2; i <= n; ++i) {
@@ -67,9 +72,9 @@ static void check_make_heap(const int32_t *src, size_t n) {
     memcpy(buf, src, n * sizeof(int32_t));
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, n);
-    tda_span_make_heap(s, tda_cmp_i32);
+    tda_span_make_heap(s, tda_cmp_i32, nullptr);
 
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_span_mut_to_span(s), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
     TEST_ASSERT_TRUE(same_elems(src, buf, n));
 }
 
@@ -81,7 +86,7 @@ static void test_make_heap_builds_a_heap_from_any_permutation() {
 static void test_make_heap_puts_the_largest_at_the_root() {
     int32_t buf[7] = {3, 1, 4, 1, 5, 9, 2};
 
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), tda_cmp_i32);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(9, buf[0]);
 }
@@ -89,11 +94,11 @@ static void test_make_heap_puts_the_largest_at_the_root() {
 static void test_make_heap_of_empty_or_single_is_a_heap() {
     int32_t one = 7;
 
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0), tda_cmp_i32);
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, &one, 1), tda_cmp_i32);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0), tda_cmp_i32, nullptr);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, &one, 1), tda_cmp_i32, nullptr);
 
-    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), tda_cmp_i32));
-    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, &one, 1), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), tda_cmp_i32, nullptr));
+    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, &one, 1), tda_cmp_i32, nullptr));
     TEST_ASSERT_EQUAL_INT32(7, one);
 }
 
@@ -103,9 +108,9 @@ static void test_make_heap_keeps_duplicates() {
     int32_t buf[6];
     memcpy(buf, src, sizeof(buf));
 
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32, nullptr);
 
-    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, 6), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, 6), tda_cmp_i32, nullptr));
     TEST_ASSERT_TRUE(same_elems(src, buf, 6));
 }
 
@@ -113,7 +118,7 @@ static void test_make_heap_keeps_duplicates() {
 static void test_make_heap_leaves_a_descending_run_alone() {
     int32_t buf[5] = {5, 4, 3, 2, 1};
 
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32, nullptr);
 
     constexpr int32_t want[5] = {5, 4, 3, 2, 1};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);
@@ -124,17 +129,17 @@ static void test_make_heap_leaves_a_descending_run_alone() {
 static void test_push_heap_lifts_a_new_largest_to_the_root() {
     int32_t buf[5] = {8, 6, 7, 1, 99};
 
-    tda_span_push_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32);
+    tda_span_push_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(99, buf[0]);
-    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, 5), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, 5), tda_cmp_i32, nullptr));
 }
 
 // the newcomer stops where it belongs; a smaller one never moves at all
 static void test_push_heap_leaves_a_smaller_newcomer_in_place() {
     int32_t buf[5] = {8, 6, 7, 1, 2};
 
-    tda_span_push_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32);
+    tda_span_push_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32, nullptr);
 
     constexpr int32_t want[5] = {8, 6, 7, 1, 2};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);
@@ -148,9 +153,9 @@ static void test_push_heap_grows_a_heap_one_elem_at_a_time() {
     for (size_t len = 1; len <= 8; ++len) {
         buf[len - 1] = src[len - 1];
 
-        tda_span_push_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, len), tda_cmp_i32);
+        tda_span_push_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, len), tda_cmp_i32, nullptr);
 
-        TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, len), tda_cmp_i32));
+        TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, len), tda_cmp_i32, nullptr));
         TEST_ASSERT_TRUE(same_elems(src, buf, len));
     }
 }
@@ -158,7 +163,7 @@ static void test_push_heap_grows_a_heap_one_elem_at_a_time() {
 static void test_push_heap_on_a_single_elem_is_a_noop() {
     int32_t one = 7;
 
-    tda_span_push_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, &one, 1), tda_cmp_i32);
+    tda_span_push_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, &one, 1), tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(7, one);
 }
@@ -168,10 +173,10 @@ static void test_push_heap_on_a_single_elem_is_a_noop() {
 static void test_pop_heap_parks_the_largest_at_the_end() {
     int32_t buf[6] = {9, 8, 5, 7, 1, 2};
 
-    tda_span_pop_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32);
+    tda_span_pop_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(9, buf[5]);
-    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, 5), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, 5), tda_cmp_i32, nullptr));
 }
 
 // afterwards only the part before the parked elem is a heap, not the whole span
@@ -180,11 +185,11 @@ static void test_pop_heap_drains_in_descending_order() {
     int32_t buf[7];
     memcpy(buf, src, sizeof(buf));
 
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), tda_cmp_i32);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7), tda_cmp_i32, nullptr);
 
     int32_t drained[7];
     for (size_t len = 7; len > 0; --len) {
-        tda_span_pop_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, len), tda_cmp_i32);
+        tda_span_pop_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, len), tda_cmp_i32, nullptr);
         drained[7 - len] = buf[len - 1];
     }
 
@@ -196,7 +201,7 @@ static void test_pop_heap_drains_in_descending_order() {
 static void test_pop_heap_on_a_single_elem_is_a_noop() {
     int32_t one = 7;
 
-    tda_span_pop_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, &one, 1), tda_cmp_i32);
+    tda_span_pop_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, &one, 1), tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(7, one);
 }
@@ -208,8 +213,8 @@ static void check_sort_heap(const int32_t *src, size_t n) {
     memcpy(buf, src, n * sizeof(int32_t));
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, n);
-    tda_span_make_heap(s, tda_cmp_i32);
-    tda_span_sort_heap(s, tda_cmp_i32);
+    tda_span_make_heap(s, tda_cmp_i32, nullptr);
+    tda_span_sort_heap(s, tda_cmp_i32, nullptr);
 
     int32_t want[8];
     sorted_copy(want, src, n);
@@ -227,8 +232,8 @@ static void test_sort_heap_orders_duplicates() {
     memcpy(buf, src, sizeof(buf));
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8);
-    tda_span_make_heap(s, tda_cmp_i32);
-    tda_span_sort_heap(s, tda_cmp_i32);
+    tda_span_make_heap(s, tda_cmp_i32, nullptr);
+    tda_span_sort_heap(s, tda_cmp_i32, nullptr);
 
     int32_t want[8];
     sorted_copy(want, src, 8);
@@ -238,8 +243,8 @@ static void test_sort_heap_orders_duplicates() {
 static void test_sort_heap_of_empty_or_single_is_a_noop() {
     int32_t one = 7;
 
-    tda_span_sort_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0), tda_cmp_i32);
-    tda_span_sort_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, &one, 1), tda_cmp_i32);
+    tda_span_sort_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0), tda_cmp_i32, nullptr);
+    tda_span_sort_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, &one, 1), tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(7, one);
 }
@@ -250,15 +255,15 @@ static void test_is_heap_rejects_a_broken_edge() {
     constexpr int32_t good[5] = {9, 8, 5, 7, 1};
     constexpr int32_t bad[5] = {9, 8, 5, 7, 99};
 
-    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, good, 5), tda_cmp_i32));
-    TEST_ASSERT_FALSE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, bad, 5), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, good, 5), tda_cmp_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, bad, 5), tda_cmp_i32, nullptr));
 }
 
 static void test_is_heap_until_points_at_the_first_offender() {
     // index 3 is a child of index 1, and 9 > 8 breaks that edge
     constexpr int32_t buf[6] = {9, 8, 5, 9, 1, 2};
 
-    TEST_ASSERT_EQUAL_size_t(3, tda_span_is_heap_until(TDA_SPAN_FROM_DATA(int32_t, buf, 6), tda_cmp_i32));
+    TEST_ASSERT_EQUAL_size_t(3, tda_span_is_heap_until(TDA_SPAN_FROM_DATA(int32_t, buf, 6), tda_cmp_i32, nullptr));
 }
 
 // the documented property: whatever the answer, the prefix before it is a heap
@@ -266,21 +271,21 @@ static void test_is_heap_until_returns_a_heap_prefix() {
     constexpr int32_t buf[7] = {9, 8, 5, 7, 1, 99, 2};
 
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 7);
-    const size_t until = tda_span_is_heap_until(s, tda_cmp_i32);
+    const size_t until = tda_span_is_heap_until(s, tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_size_t(5, until);
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_span_sub(s, 0, until), tda_cmp_i32));
-    TEST_ASSERT_FALSE(tda_span_is_heap(tda_span_sub(s, 0, until + 1), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_span_sub(s, 0, until), tda_cmp_i32, nullptr));
+    TEST_ASSERT_FALSE(tda_span_is_heap(tda_span_sub(s, 0, until + 1), tda_cmp_i32, nullptr));
 }
 
 static void test_is_heap_accepts_empty_and_single() {
     constexpr int32_t one = 7;
 
-    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), tda_cmp_i32));
-    TEST_ASSERT_EQUAL_size_t(0, tda_span_is_heap_until(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), tda_cmp_i32, nullptr));
+    TEST_ASSERT_EQUAL_size_t(0, tda_span_is_heap_until(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), tda_cmp_i32, nullptr));
 
-    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, &one, 1), tda_cmp_i32));
-    TEST_ASSERT_EQUAL_size_t(1, tda_span_is_heap_until(TDA_SPAN_FROM_DATA(int32_t, &one, 1), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, &one, 1), tda_cmp_i32, nullptr));
+    TEST_ASSERT_EQUAL_size_t(1, tda_span_is_heap_until(TDA_SPAN_FROM_DATA(int32_t, &one, 1), tda_cmp_i32, nullptr));
 }
 
 /* ========== through the comparator ========== */
@@ -292,13 +297,13 @@ static void test_descending_comparator_gives_a_min_heap() {
     memcpy(buf, src, sizeof(buf));
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 7);
-    tda_span_make_heap(s, tda_cmp_desc_i32);
+    tda_span_make_heap(s, tda_cmp_desc_i32, nullptr);
 
     TEST_ASSERT_EQUAL_INT32(1, buf[0]);
-    TEST_ASSERT_TRUE(tda_span_is_heap(tda_span_mut_to_span(s), tda_cmp_desc_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(tda_span_mut_to_span(s), tda_cmp_desc_i32, nullptr));
     TEST_ASSERT_TRUE(same_elems(src, buf, 7));
 
-    tda_span_sort_heap(s, tda_cmp_desc_i32);
+    tda_span_sort_heap(s, tda_cmp_desc_i32, nullptr);
 
     constexpr int32_t want[7] = {9, 5, 4, 3, 2, 1, 1};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 7);
@@ -312,7 +317,7 @@ static void test_descending_comparator_gives_a_min_heap() {
 static void test_make_heap_leaves_equal_elems_where_they_are() {
     Pair buf[6] = {{7, 1}, {7, 2}, {7, 3}, {7, 4}, {7, 5}, {7, 6}};
 
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(Pair, buf, 6), tda_test_pair_cmp_a);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(Pair, buf, 6), tda_test_pair_cmp_a, nullptr);
 
     for (size_t i = 0; i < 6; ++i) {
         TEST_ASSERT_EQUAL_INT64(7, buf[i].a);
@@ -325,12 +330,12 @@ static void test_heap_moves_wide_elems_whole() {
     Pair buf[5] = {{1, 10}, {5, 50}, {3, 30}, {2, 20}, {4, 40}};
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(Pair, buf, 5);
-    tda_span_make_heap(s, tda_test_pair_cmp_a);
+    tda_span_make_heap(s, tda_test_pair_cmp_a, nullptr);
 
     TEST_ASSERT_EQUAL_INT64(5, buf[0].a);
     TEST_ASSERT_EQUAL_INT64(50, buf[0].b);
 
-    tda_span_sort_heap(s, tda_test_pair_cmp_a);
+    tda_span_sort_heap(s, tda_test_pair_cmp_a, nullptr);
 
     for (size_t i = 0; i < 5; ++i) {
         TEST_ASSERT_EQUAL_INT64((int64_t) i + 1, buf[i].a);
@@ -344,9 +349,10 @@ static constexpr size_t SCALE_N = 65536;
 
 static size_t cmp_calls = 0;
 
-static int cmp_i32_counting(const void *a, const void *b) {
+static int cmp_i32_counting(const void *a, const void *b, void *) {
     ++cmp_calls;
-    return tda_cmp_i32(a, b);
+
+    return tda_cmp_i32(a, b, nullptr);
 }
 
 // make_heap is the linear one, which is why it exists next to a loop of push_heap that
@@ -364,9 +370,9 @@ static void test_make_heap_stays_linear() {
     }
 
     cmp_calls = 0;
-    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting);
+    tda_span_make_heap(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N), cmp_i32_counting, nullptr);
 
-    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, SCALE_N), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_heap(TDA_SPAN_FROM_DATA(int32_t, buf, SCALE_N), tda_cmp_i32, nullptr));
     TEST_ASSERT_LESS_THAN_size_t(4 * SCALE_N, cmp_calls);
 }
 
@@ -377,12 +383,12 @@ static void test_sort_heap_stays_n_log_n() {
     }
 
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SCALE_N);
-    tda_span_make_heap(s, tda_cmp_i32);
+    tda_span_make_heap(s, tda_cmp_i32, nullptr);
 
     cmp_calls = 0;
-    tda_span_sort_heap(s, cmp_i32_counting);
+    tda_span_sort_heap(s, cmp_i32_counting, nullptr);
 
-    TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32));
+    TEST_ASSERT_TRUE(tda_span_is_sorted(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
     TEST_ASSERT_LESS_THAN_size_t(3 * SCALE_N * 16, cmp_calls);
 }
 

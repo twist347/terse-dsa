@@ -45,54 +45,54 @@ typedef struct tda_Vec tda_Vec;
 /// @{
 
 /// an empty vec that owns no block yet
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
 /// @param[out] out the new vec, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header cannot be allocated
 /// @bigo{1}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_new(size_t elem_size, tda_Al *al, tda_Vec **out);
+tda_Status tda_vec_new(tda_Layout elem, tda_Al *al, tda_Vec **out);
 
 /// a vec of 'len' zeroed elems, with the capacity to match
 /// @param len how many elems
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al the allocator
 /// @param[out] out the new vec, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated, or
-///         len * elem_size overflows
+///         len * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_new_len(size_t len, size_t elem_size, tda_Al *al, tda_Vec **out);
+tda_Status tda_vec_new_len(size_t len, tda_Layout elem, tda_Al *al, tda_Vec **out);
 
 /// an empty vec with room for 'cap' elems before the first growth
 /// @param cap how many elems to make room for
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al the allocator
 /// @param[out] out the new vec, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated, or
-///         cap * elem_size overflows
+///         cap * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_new_cap(size_t cap, size_t elem_size, tda_Al *al, tda_Vec **out);
+tda_Status tda_vec_new_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Vec **out);
 
 /// a vec holding a copy of 'len' elems read from 'data'
 /// @param data the elems to copy in; may be null only when len is 0
 /// @param len how many elems to read
-/// @param elem_size the size of one elem, asserted greater than 0
+/// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al the allocator
 /// @param[out] out the new vec, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the header or the block cannot be allocated, or
-///         len * elem_size overflows
+///         len * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_from_data(const void *data, size_t len, size_t elem_size, tda_Al *al, tda_Vec **out);
+tda_Status tda_vec_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Vec **out);
 
 /// a vec holding a copy of the elems 's' views
-/// @param s the view to copy
+/// @param s the view to copy; the elem layout is the span's
 /// @param al the allocator
 /// @param[out] out the new vec, written only on success
 /// @retval TDA_STATUS_OK on success
@@ -132,7 +132,7 @@ tda_Status tda_vec_copy(const tda_Vec *self, tda_Vec **out);
 tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al *al, tda_Vec **out);
 
 /// overwrites the elems of 'self' with those of 'other', growing the block if needed
-/// @param[in,out] self must have the same elem_size; keeps its allocator
+/// @param[in,out] self must have the same elem layout; keeps its allocator
 /// @param other the vec to copy from; may be 'self'
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, leaving 'self' as it was
@@ -141,7 +141,7 @@ tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al *al, tda_Vec **out);
 tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other);
 
 /// moves the elems of 'other' into 'self', leaving 'other' empty
-/// @param[in,out] self must have the same elem_size; its old elems are released, its
+/// @param[in,out] self must have the same elem layout; its old elems are released, its
 ///                     allocator kept
 /// @param[in,out] other emptied on success and still usable; may be 'self'
 /// @retval TDA_STATUS_OK on success
@@ -158,7 +158,7 @@ tda_Status tda_vec_move_assign(tda_Vec *self, tda_Vec *other);
 
 /// whether the two hold the same elems, byte for byte
 /// @param a one vec
-/// @param b must have the same elem_size (asserted); a different length gives false
+/// @param b must have the same elem layout (asserted); a different length gives false
 /// @return whether the lengths match and the bytes do
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -166,12 +166,13 @@ bool tda_vec_eq(const tda_Vec *a, const tda_Vec *b);
 
 /// whether the two hold equal elems under 'eq'
 /// @param a one vec
-/// @param b must have the same elem_size
+/// @param b must have the same elem layout
 /// @param eq asked of each pair until one fails
+/// @param ctx passed to every call of 'eq'; may be null
 /// @return whether the lengths match and every pair does
 /// @bigo{n}
 [[nodiscard]] TDA_API
-bool tda_vec_eq_by(const tda_Vec *a, const tda_Vec *b, tda_Eq eq);
+bool tda_vec_eq_by(const tda_Vec *a, const tda_Vec *b, tda_Eq eq, void *ctx);
 
 /// @}
 
@@ -194,14 +195,21 @@ size_t tda_vec_cap(const tda_Vec *self);
 
 /// the size of one elem
 /// @param self the vec
-/// @return elem_size
+/// @return elem.size, the size of the elem layout
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_vec_elem_size(const tda_Vec *self);
 
+/// the layout of one elem, as the vec was built with
+/// @param self the vec
+/// @return the size and the alignment; every elem is aligned to it
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Layout tda_vec_elem_layout(const tda_Vec *self);
+
 /// how many bytes the elems take
 /// @param self the vec
-/// @return len * elem_size
+/// @return len * elem.size
 /// @bigo{1}
 [[nodiscard]] TDA_API
 size_t tda_vec_bytes(const tda_Vec *self);
@@ -335,7 +343,7 @@ void tda_vec_clear(tda_Vec *self);
 /// @param self the vec
 /// @param new_cap a capacity at or below the one it has is a no-op
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, or new_cap * elem_size
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow, or new_cap * elem.size
 ///         overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
@@ -367,7 +375,7 @@ void tda_vec_truncate(tda_Vec *self, size_t len);
 
 /// exchanges the contents of two vecs
 /// @param[in,out] self one vec
-/// @param[in,out] other must have the same elem_size and allocator; may be 'self'
+/// @param[in,out] other must have the same elem layout and allocator; may be 'self'
 /// @note a block belongs to the allocator that made it. Across allocators use
 ///       tda_vec_copy_with, then tda_vec_move_assign
 /// @bigo{1}
@@ -389,7 +397,7 @@ void tda_vec_swap_elems(tda_Vec *self, size_t i, size_t j);
 
 /// appends every elem of 'src', in order
 /// @param self the vec
-/// @param src must have the same elem_size and must not view this vec: growing may free
+/// @param src must have the same elem layout and must not view this vec: growing may free
 ///            what it reads
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
@@ -401,7 +409,7 @@ tda_Status tda_vec_extend(tda_Vec *self, tda_Span src);
 /// inserts every elem of 'src' before 'idx', in order
 /// @param self the vec
 /// @param idx asserts idx <= len; idx == len extends
-/// @param src must have the same elem_size and must not view this vec
+/// @param src must have the same elem layout and must not view this vec
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{n}; the tail moves once, where a loop of insert would cost O(len * src.len)
@@ -467,51 +475,51 @@ void tda_vec_print(const tda_Vec *self, tda_FPrint fprint);
 /// @{
 
 /// @cond
-// returns 'self' after checking sizeof(T), so a macro evaluates its handle once;
-// _Generic keeps the handle's constness
+// returns 'self' after checking TDA_LAYOUT_OF(T), so a macro evaluates its handle
+// once; _Generic keeps the handle's constness
 [[nodiscard]]
-static inline const tda_Vec *tda_vec_typed_c_(const tda_Vec *self, [[maybe_unused]] size_t size) {
-    TDA_EXPECT(tda_vec_elem_size(self) == size);
+static inline const tda_Vec *tda_vec_typed_c_(const tda_Vec *self, [[maybe_unused]] tda_Layout elem) {
+    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(self), elem));
     return self;
 }
 
 [[nodiscard]]
-static inline tda_Vec *tda_vec_typed_(tda_Vec *self, [[maybe_unused]] size_t size) {
-    TDA_EXPECT(tda_vec_elem_size(self) == size);
+static inline tda_Vec *tda_vec_typed_(tda_Vec *self, [[maybe_unused]] tda_Layout elem) {
+    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(self), elem));
     return self;
 }
 
 #define TDA_VEC_TYPED_(T, self) \
-    _Generic((self), const tda_Vec *: tda_vec_typed_c_, tda_Vec *: tda_vec_typed_)((self), sizeof(T))
+    _Generic((self), const tda_Vec *: tda_vec_typed_c_, tda_Vec *: tda_vec_typed_)((self), TDA_LAYOUT_OF(T))
 /// @endcond
 
-/// tda_vec_new with sizeof(T) for the elem size
+/// tda_vec_new with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param al the allocator
 /// @param[out] out where the new vec is written
 /// @bigo{1}
 #define TDA_VEC_NEW(T, al, out) \
-    tda_vec_new(sizeof(T), (al), (out))
+    tda_vec_new(TDA_LAYOUT_OF(T), (al), (out))
 
-/// tda_vec_new_len with sizeof(T)
+/// tda_vec_new_len with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param len how many zeroed elems
 /// @param al the allocator
 /// @param[out] out where the new vec is written
 /// @bigo{n}
 #define TDA_VEC_NEW_LEN(T, len, al, out) \
-    tda_vec_new_len((len), sizeof(T), (al), (out))
+    tda_vec_new_len((len), TDA_LAYOUT_OF(T), (al), (out))
 
-/// tda_vec_new_cap with sizeof(T)
+/// tda_vec_new_cap with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param cap how many elems to make room for
 /// @param al the allocator
 /// @param[out] out where the new vec is written
 /// @bigo{n}
 #define TDA_VEC_NEW_CAP(T, cap, al, out) \
-    tda_vec_new_cap((cap), sizeof(T), (al), (out))
+    tda_vec_new_cap((cap), TDA_LAYOUT_OF(T), (al), (out))
 
-/// tda_vec_from_data with sizeof(T)
+/// tda_vec_from_data with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param data the elems, typechecked as const T *
 /// @param len how many to read
@@ -519,7 +527,7 @@ static inline tda_Vec *tda_vec_typed_(tda_Vec *self, [[maybe_unused]] size_t siz
 /// @param[out] out where the new vec is written
 /// @bigo{n}
 #define TDA_VEC_FROM_DATA(T, data, len, al, out) \
-    tda_vec_from_data((const T *){ (data) }, (len), sizeof(T), (al), (out))
+    tda_vec_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new vec from the elems written out: TDA_VEC_OF(int32_t, al, &v, 5, 3, 1)
 /// @param T the elem type
@@ -531,7 +539,7 @@ static inline tda_Vec *tda_vec_typed_(tda_Vec *self, [[maybe_unused]] size_t siz
     tda_vec_from_data(                                  \
         (const T[]){ __VA_ARGS__ },                     \
         sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
-        sizeof(T), (al), (out))
+        TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_vec_front as a const T *
 /// @param T the elem type

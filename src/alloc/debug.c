@@ -3,6 +3,7 @@
 #include "tda/alloc/alloc.h"
 #include "tda/alloc/default.h"
 #include "tda/core/hash.h"
+#include "tda/core/util.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -31,7 +32,7 @@ static constexpr size_t TABLE_MIN_CAP = 64;
 
 typedef struct {
     uintptr_t addr; // 0 marks an empty slot; an allocator never hands out null
-    size_t size;
+    tda_Layout layout;
     uint64_t serial;
 } Entry;
 
@@ -44,7 +45,7 @@ typedef struct {
 
 typedef struct {
     void *ptr;
-    size_t size;
+    tda_Layout layout;
     uint64_t serial;
 } Freed;
 
@@ -62,9 +63,20 @@ typedef struct {
 } DebugCtx;
 
 [[nodiscard]]
-static void *debug_alloc(void *ctx, size_t size);
+static void *debug_alloc(void *ctx, tda_Layout layout);
 
-static void debug_dealloc(void *ctx, void *ptr, size_t size);
+/// moves nothing: the wrapper's alloc, copy and dealloc keep both blocks checked. It is
+/// there to check the old layout before that copy reads 'old.size' bytes of the block
+[[nodiscard]]
+static void *debug_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size);
+
+static void debug_dealloc(void *ctx, void *ptr, tda_Layout layout);
+
+/// the record of the live block at 'ptr', which must have been made with 'layout'; any
+/// other pointer or layout is reported, as being 'given back' or 'resized' to say which
+/// call did it. 'take' also takes the record out of the table
+[[nodiscard]]
+static Entry checked_entry(DebugCtx *debug_ctx, void *ptr, tda_Layout layout, bool take, const char *as);
 
 /// writes "tda debug: ..." to stderr and aborts
 [[noreturn]]
@@ -85,14 +97,14 @@ static void release_oldest(DebugCtx *debug_ctx);
 [[nodiscard]]
 static bool all_equal(const unsigned char *ptr, size_t n, unsigned char fill);
 
-/// what a block of 'size' costs the parent, the guard included. True when that does not
-/// fit in size_t
+/// what a block of 'layout' costs the parent, the guard included. True when that does
+/// not fit in size_t
 [[nodiscard]]
-static bool ckd_parent_size(size_t *out, size_t size);
+static bool ckd_parent_layout(tda_Layout *out, tda_Layout layout);
 
-/// ckd_parent_size for a block already handed out, which therefore fits
+/// ckd_parent_layout for a block already handed out, which therefore fits
 [[nodiscard]]
-static size_t parent_size(size_t size);
+static tda_Layout parent_layout(tda_Layout layout);
 
 /// the slot a probe for 'addr' starts from
 [[nodiscard]]
@@ -120,26 +132,29 @@ static bool table_take(Table *table, uintptr_t addr, Entry *out);
 tda_Al *tda_al_debug_new(tda_Al *parent) {
     assert(parent);
 
-    DebugCtx *debug_ctx = tda_alloc(parent, sizeof(DebugCtx));
+    DebugCtx *debug_ctx = TDA_ALLOC(DebugCtx, parent, 1);
     if (!debug_ctx) {
         return nullptr;
     }
 
-    tda_Al *obj = tda_alloc(parent, sizeof(tda_Al));
+    tda_Al *obj = TDA_ALLOC(tda_Al, parent, 1);
     if (!obj) {
-        tda_dealloc(parent, debug_ctx, sizeof(DebugCtx));
+        TDA_DEALLOC(DebugCtx, parent, debug_ctx, 1);
         return nullptr;
     }
 
     *debug_ctx = (DebugCtx){.parent = parent, .fail_after = SIZE_MAX};
 
-    // no calloc and no realloc: the wrappers build them from alloc and dealloc, so every
-    // block passes the checks and a realloc always moves
-    obj->ctx = debug_ctx;
-    obj->alloc = debug_alloc;
-    obj->calloc = nullptr;
-    obj->realloc = nullptr;
-    obj->dealloc = debug_dealloc;
+    // no resize, and a remap that only checks: every growth moves, through the wrapper's
+    // alloc, copy and dealloc, so every block passes the checks
+    *obj = (tda_Al){
+        .ctx = debug_ctx,
+        .alloc = debug_alloc,
+        .alloc_zeroed = nullptr,
+        .resize = nullptr,
+        .remap = debug_remap,
+        .dealloc = debug_dealloc,
+    };
 
     return obj;
 }
@@ -159,8 +174,8 @@ void tda_al_debug_drop(tda_Al *self) {
     TDA_DEALLOC(Entry, tda_al_default(), debug_ctx->table.slots, debug_ctx->table.cap);
 
     tda_Al *parent = debug_ctx->parent;
-    tda_dealloc(parent, debug_ctx, sizeof(DebugCtx));
-    tda_dealloc(parent, self, sizeof(tda_Al));
+    TDA_DEALLOC(DebugCtx, parent, debug_ctx, 1);
+    TDA_DEALLOC(tda_Al, parent, self, 1);
 }
 
 /* ========== stats ========== */
@@ -191,7 +206,7 @@ size_t tda_al_debug_fprint_leaks(const tda_Al *self, FILE *stream) {
             fprintf(
                 stream,
                 "tda debug: leak: block #%llu, %zu bytes at %p\n",
-                (unsigned long long) e->serial, e->size, (void *) e->addr
+                (unsigned long long) e->serial, e->layout.size, (void *) e->addr
             );
         }
     }
@@ -224,9 +239,9 @@ void tda_al_debug_break_at(tda_Al *self, uint64_t serial) {
 
 /* ========== internals ========== */
 
-static void *debug_alloc(void *ctx, size_t size) {
+static void *debug_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
-    assert(size > 0); // tda_alloc answers a request for nothing itself
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
     DebugCtx *debug_ctx = ctx;
 
@@ -235,26 +250,26 @@ static void *debug_alloc(void *ctx, size_t size) {
         return nullptr;
     }
 
-    size_t bytes;
-    if (ckd_parent_size(&bytes, size)) {
+    tda_Layout with_guard;
+    if (ckd_parent_layout(&with_guard, layout)) {
         return nullptr;
     }
 
-    unsigned char *block = tda_alloc(debug_ctx->parent, bytes);
+    unsigned char *block = tda_alloc(debug_ctx->parent, with_guard);
     if (!block) {
         return nullptr;
     }
 
-    const Entry entry = {.addr = (uintptr_t) block, .size = size, .serial = serial};
+    const Entry entry = {.addr = (uintptr_t) block, .layout = layout, .serial = serial};
     if (!table_insert(&debug_ctx->table, entry)) {
-        tda_dealloc(debug_ctx->parent, block, bytes);
+        tda_dealloc(debug_ctx->parent, block, with_guard);
         return nullptr;
     }
 
-    memset(block, FILL_NEW, size);
-    memset(block + size, FILL_GUARD, GUARD_SIZE);
+    memset(block, FILL_NEW, layout.size);
+    memset(block + layout.size, FILL_GUARD, GUARD_SIZE);
 
-    debug_ctx->live_bytes += size;
+    debug_ctx->live_bytes += layout.size;
     if (debug_ctx->live_bytes > debug_ctx->peak_bytes) {
         debug_ctx->peak_bytes = debug_ctx->live_bytes;
     }
@@ -262,14 +277,51 @@ static void *debug_alloc(void *ctx, size_t size) {
     return block;
 }
 
-static void debug_dealloc(void *ctx, void *ptr, size_t size) {
+static void *debug_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
+    assert(ctx);
+    TDA_UNUSED(new_size);
+
+    [[maybe_unused]] const Entry entry = checked_entry(ctx, ptr, old, false, "resized");
+
+    return nullptr;
+}
+
+static void debug_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     assert(ctx);
     assert(ptr); // tda_dealloc takes null itself
 
     DebugCtx *debug_ctx = ctx;
 
+    const Entry entry = checked_entry(debug_ctx, ptr, layout, true, "given back");
+
+    unsigned char *block = ptr;
+    if (!all_equal(block + layout.size, GUARD_SIZE, FILL_GUARD)) {
+        report(
+            "block #%llu at %p (%zu bytes) was written past its end",
+            (unsigned long long) entry.serial, ptr, layout.size
+        );
+    }
+
+    debug_ctx->live_bytes -= layout.size;
+    memset(block, FILL_FREED, parent_layout(layout).size);
+
+    if (debug_ctx->quarantine_len == QUARANTINE_LEN) {
+        release_oldest(debug_ctx);
+    }
+    ++debug_ctx->quarantine_len;
+    *quarantined(debug_ctx, debug_ctx->quarantine_len - 1) =
+            (Freed){.ptr = ptr, .layout = layout, .serial = entry.serial};
+}
+
+static Entry checked_entry(DebugCtx *debug_ctx, void *ptr, tda_Layout layout, bool take, const char *as) {
+    Table *table = &debug_ctx->table;
+    const uintptr_t addr = (uintptr_t) ptr;
+
     Entry entry;
-    if (!table_take(&debug_ctx->table, (uintptr_t) ptr, &entry)) {
+    const bool found = take
+        ? table_take(table, addr, &entry)
+        : table->cap > 0 && (entry = table->slots[table_probe(table, addr)]).addr != 0;
+    if (!found) {
         for (size_t i = 0; i < debug_ctx->quarantine_len; ++i) {
             const Freed *f = quarantined(debug_ctx, i);
             if (f->ptr == ptr) {
@@ -280,30 +332,15 @@ static void debug_dealloc(void *ctx, void *ptr, size_t size) {
         report("%p was not handed out by this allocator, or was freed long ago", ptr);
     }
 
-    if (entry.size != size) {
+    if (entry.layout.size != layout.size || entry.layout.align != layout.align) {
         report(
-            "block #%llu at %p made with %zu bytes, given back with %zu",
-            (unsigned long long) entry.serial, ptr, entry.size, size
+            "block #%llu at %p made with %zu bytes at %zu, %s with %zu at %zu",
+            (unsigned long long) entry.serial, ptr, entry.layout.size, entry.layout.align,
+            as, layout.size, layout.align
         );
     }
 
-    unsigned char *block = ptr;
-    if (!all_equal(block + size, GUARD_SIZE, FILL_GUARD)) {
-        report(
-            "block #%llu at %p (%zu bytes) was written past its end",
-            (unsigned long long) entry.serial, ptr, size
-        );
-    }
-
-    debug_ctx->live_bytes -= size;
-    memset(block, FILL_FREED, parent_size(size));
-
-    if (debug_ctx->quarantine_len == QUARANTINE_LEN) {
-        release_oldest(debug_ctx);
-    }
-    ++debug_ctx->quarantine_len;
-    *quarantined(debug_ctx, debug_ctx->quarantine_len - 1) =
-            (Freed){.ptr = ptr, .size = size, .serial = entry.serial};
+    return entry;
 }
 
 static void report(const char *fmt, ...) {
@@ -343,14 +380,15 @@ static void release_oldest(DebugCtx *debug_ctx) {
     debug_ctx->quarantine_head = (debug_ctx->quarantine_head + 1) % QUARANTINE_LEN;
     --debug_ctx->quarantine_len;
 
-    if (!all_equal(f.ptr, parent_size(f.size), FILL_FREED)) {
+    const tda_Layout with_guard = parent_layout(f.layout);
+    if (!all_equal(f.ptr, with_guard.size, FILL_FREED)) {
         report(
             "block #%llu at %p (%zu bytes) was written after it was freed",
-            (unsigned long long) f.serial, f.ptr, f.size
+            (unsigned long long) f.serial, f.ptr, f.layout.size
         );
     }
 
-    tda_dealloc(debug_ctx->parent, f.ptr, parent_size(f.size));
+    tda_dealloc(debug_ctx->parent, f.ptr, with_guard);
 }
 
 static bool all_equal(const unsigned char *ptr, size_t n, unsigned char fill) {
@@ -359,19 +397,22 @@ static bool all_equal(const unsigned char *ptr, size_t n, unsigned char fill) {
             return false;
         }
     }
+
     return true;
 }
 
-static bool ckd_parent_size(size_t *out, size_t size) {
-    return ckd_add(out, size, GUARD_SIZE);
+static bool ckd_parent_layout(tda_Layout *out, tda_Layout layout) {
+    out->align = layout.align;
+
+    return ckd_add(&out->size, layout.size, GUARD_SIZE);
 }
 
-static size_t parent_size(size_t size) {
-    size_t bytes;
-    [[maybe_unused]] const bool overflow = ckd_parent_size(&bytes, size);
+static tda_Layout parent_layout(tda_Layout layout) {
+    tda_Layout out;
+    [[maybe_unused]] const bool overflow = ckd_parent_layout(&out, layout);
     assert(!overflow);
 
-    return bytes;
+    return out;
 }
 
 static size_t table_home(const Table *table, uintptr_t addr) {
@@ -380,7 +421,8 @@ static size_t table_home(const Table *table, uintptr_t addr) {
     // the low bits of a block address are zeros of its alignment; the mixer spreads the
     // rest over all of them
     const uint64_t key = addr;
-    return (size_t) tda_hash_u64(&key) & (table->cap - 1);
+
+    return (size_t) tda_hash_u64(&key, nullptr) & (table->cap - 1);
 }
 
 static size_t table_probe(const Table *table, uintptr_t addr) {
@@ -388,6 +430,7 @@ static size_t table_probe(const Table *table, uintptr_t addr) {
     while (table->slots[i].addr != 0 && table->slots[i].addr != addr) {
         i = (i + 1) & (table->cap - 1);
     }
+
     return i;
 }
 
@@ -396,7 +439,7 @@ static bool table_insert(Table *table, Entry entry) {
 
     if (2 * (table->len + 1) > table->cap) {
         const size_t new_cap = table->cap ? 2 * table->cap : TABLE_MIN_CAP;
-        Entry *slots = TDA_CALLOC(Entry, tda_al_default(), new_cap);
+        Entry *slots = TDA_ALLOC_ZEROED(Entry, tda_al_default(), new_cap);
         if (!slots) {
             return false;
         }
@@ -416,6 +459,7 @@ static bool table_insert(Table *table, Entry entry) {
 
     table->slots[i] = entry;
     ++table->len;
+
     return true;
 }
 

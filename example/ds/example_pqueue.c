@@ -18,7 +18,7 @@ int main() {
     tda_Al *al = tda_al_default();
 
     tda_PQueue *q = nullptr;
-    if (TDA_STATUS_IS_ERR(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, al, &q, 3, 1, 4, 1, 5))) {
+    if (TDA_STATUS_IS_ERR(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, al, &q, 3, 1, 4, 1, 5))) {
         return 1;
     }
 
@@ -50,7 +50,7 @@ int main() {
     // the comparator belongs to the queue, not to a call, so a min-queue is the same type
     // built with a descending comparator
     tda_PQueue *least = nullptr;
-    if (TDA_STATUS_IS_ERR(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, al, &least, 3, 1, 4))) {
+    if (TDA_STATUS_IS_ERR(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, al, &least, 3, 1, 4))) {
         goto out;
     }
     printf("%" PRId32 "\n", *TDA_PQUEUE_TOP_AS(int32_t, least)); // 1
@@ -70,7 +70,7 @@ int main() {
 
     // the comparator does NOT travel with the elems, so name it again. The heap was built
     // descending, so sorting under the same order puts the greatest first
-    tda_span_sort_heap(tda_vec_to_span_mut(v), tda_cmp_desc_i32);
+    tda_span_sort_heap(tda_vec_to_span_mut(v), tda_cmp_desc_i32, nullptr);
     tda_vec_print(v, tda_fprint_i32); // [4, 3, 1]
 
     rc = 0;
@@ -78,6 +78,7 @@ out:
     // a null handle is a no-op, so this exit is safe from anywhere above
     tda_vec_drop(v);
     tda_pqueue_drop(q);
+
     return rc;
     /// [into]
 }

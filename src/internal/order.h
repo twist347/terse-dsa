@@ -12,6 +12,6 @@
 
 /// whether 'right' goes before 'left', the elem that came first
 [[nodiscard]]
-static inline bool tda_right_goes_first(tda_Cmp cmp, const void *left, const void *right) {
-    return cmp(right, left) < 0;
+static inline bool tda_right_goes_first(tda_Cmp cmp, void *ctx, const void *left, const void *right) {
+    return cmp(right, left, ctx) < 0;
 }

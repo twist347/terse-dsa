@@ -21,6 +21,7 @@ jobs:
           - { name: clang-debug-san, cc: clang-22, type: Debug, shared: "ON", flags: "-fsanitize=address,undefined,implicit-conversion,local-bounds -fno-sanitize-recover=all" }
           - { name: gcc-debug, cc: gcc-15, type: Debug, shared: "ON", flags: "" }
           - { name: gcc-release-static, cc: gcc-15, type: Release, shared: "OFF", flags: "", bench: "ON" }
+          - { name: clang-release-static, cc: clang-22, type: Release, shared: "OFF", flags: "" }
           - { name: clang-release-hardened, cc: clang-22, type: Release, shared: "ON", flags: "", hardened: "ON" }
 
     steps:

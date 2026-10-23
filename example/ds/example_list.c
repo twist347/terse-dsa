@@ -35,13 +35,13 @@ int main() {
     /// [walk]
     // there is no index: elems are reached by walking, and null ends the walk
     TDA_LIST_FOR_EACH (node, l) {
-        printf("%" PRId32 " ", *TDA_LIST_NODE_ELEM_AS(int32_t, node));
+        printf("%" PRId32 " ", *TDA_LIST_NODE_ELEM_AS(int32_t, l, node));
     }
     putchar('\n'); // 4 3 1 2 5
 
     // and backwards, using the node's second pointer
     for (const tda_ListNode *node = tda_list_back_node(l); node; node = tda_list_node_prev(node)) {
-        printf("%" PRId32 " ", *TDA_LIST_NODE_ELEM_AS(int32_t, node));
+        printf("%" PRId32 " ", *TDA_LIST_NODE_ELEM_AS(int32_t, l, node));
     }
     putchar('\n'); // 5 2 1 3 4
     /// [walk]
@@ -64,22 +64,22 @@ int main() {
     tda_list_pop_front(l);
     tda_list_remove(l, tda_list_front_node_mut(l));
     tda_list_print(l, tda_fprint_i32); // [3, 8, 1, 2, 5]
-    printf("%" PRId32 "\n", *TDA_LIST_NODE_ELEM_AS(int32_t, at)); // 3
+    printf("%" PRId32 "\n", *TDA_LIST_NODE_ELEM_AS(int32_t, l, at)); // 3
     /// [positions]
 
     /// [relink]
     // sort relinks the NODES and leaves the elems where they are, so 'at' still names the
     // same 3. A copy sorted by algo/sort could not keep that, so a list sorts itself
-    tda_list_sort(l, tda_cmp_i32);
+    tda_list_sort(l, tda_cmp_i32, nullptr);
     tda_list_print(l, tda_fprint_i32); // [1, 2, 3, 5, 8]
-    printf("%" PRId32 "\n", *TDA_LIST_NODE_ELEM_AS(int32_t, at)); // 3
+    printf("%" PRId32 "\n", *TDA_LIST_NODE_ELEM_AS(int32_t, l, at)); // 3
 
     // merging two sorted lists also relinks: O(n + m), no allocation, and 'src' is left
     // empty, not dropped
     if (TDA_STATUS_IS_ERR(TDA_LIST_OF(int32_t, al, &other, 0, 4, 9))) {
         goto out;
     }
-    if (TDA_STATUS_IS_ERR(tda_list_merge(l, other, tda_cmp_i32))) {
+    if (TDA_STATUS_IS_ERR(tda_list_merge(l, other, tda_cmp_i32, nullptr))) {
         goto out;
     }
     tda_list_print(l, tda_fprint_i32); // [0, 1, 2, 3, 4, 5, 8, 9]
@@ -93,6 +93,7 @@ out:
     // a null handle is a no-op, so this exit is safe from anywhere above
     tda_list_drop(other);
     tda_list_drop(l);
+
     return rc;
     /// [relink]
 }

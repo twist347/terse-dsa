@@ -28,7 +28,7 @@ int main() {
     tda_Al *al = tda_al_default();
 
     tda_HSet *s = nullptr;
-    if (TDA_STATUS_IS_ERR(TDA_HSET_NEW(int32_t, tda_hash_i32, tda_eq_i32, al, &s))) {
+    if (TDA_STATUS_IS_ERR(TDA_HSET_NEW(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &s))) {
         return 1;
     }
 
@@ -66,14 +66,14 @@ int main() {
     // do. The order follows the buckets and is unspecified
     int32_t sum = 0;
     TDA_HSET_FOR_EACH (node, s) {
-        sum += *TDA_HSET_NODE_KEY_AS(int32_t, node);
+        sum += *TDA_HSET_NODE_KEY_AS(int32_t, s, node);
     }
     printf("%" PRId32 "\n", sum); // 80
 
     // two sets are equal when they hold the same keys, regardless of insertion order and
     // bucket count
     tda_HSet *twin = nullptr;
-    if (TDA_STATUS_IS_ERR(TDA_HSET_NEW_CAP(int32_t, 64, tda_hash_i32, tda_eq_i32, al, &twin))) {
+    if (TDA_STATUS_IS_ERR(TDA_HSET_NEW_CAP(int32_t, 64, tda_hash_i32, tda_eq_i32, nullptr, al, &twin))) {
         goto out;
     }
     for (int32_t i = 4; i >= 1; --i) {
@@ -93,7 +93,7 @@ int main() {
     const tda_Span keys = TDA_SPAN_OF(int32_t, 1, 2, 2, 3, 3, 3);
 
     tda_HSet *bulk = nullptr;
-    if (TDA_STATUS_IS_ERR(tda_hset_from_span(keys, tda_hash_i32, tda_eq_i32, al, &bulk))) {
+    if (TDA_STATUS_IS_ERR(tda_hset_from_span(keys, tda_hash_i32, tda_eq_i32, nullptr, al, &bulk))) {
         goto out_twin;
     }
     if (TDA_STATUS_IS_ERR(TDA_HSET_EXTEND(int32_t, bulk, 3, 4, 5, 6))) {
@@ -113,6 +113,7 @@ out_twin:
 out:
     // a null handle is a no-op, so this exit is safe from anywhere above
     tda_hset_drop(s);
+
     return rc;
     /// [bulk]
 }

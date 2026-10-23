@@ -13,7 +13,7 @@
 /// @ingroup algo
 /// @brief copying elems from one span to another as raw bytes
 ///
-/// Both spans must have the same elem_size; nothing is converted. To change the elem
+/// Both spans must have the same elem layout; nothing is converted. To change the elem
 /// type, use algo/transform.
 ///
 /// @par Example
@@ -26,7 +26,7 @@
 /// @{
 
 /// copies 'src' over 'dst'
-/// @param dst asserts the same len and elem_size as 'src'
+/// @param dst asserts the same len and elem layout as 'src'
 /// @param src must not overlap 'dst' unless it is exactly 'dst'
 /// @bigo{n}
 TDA_API
@@ -43,7 +43,7 @@ void tda_span_copy(tda_SpanMut dst, tda_Span src);
 size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx);
 
 /// tda_span_copy where the two may overlap
-/// @param dst asserts the same len and elem_size as 'src'
+/// @param dst asserts the same len and elem layout as 'src'
 /// @param src may overlap 'dst' in any way
 /// @bigo{n}; memmove instead of memcpy
 TDA_API

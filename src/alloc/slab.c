@@ -15,16 +15,18 @@
 // steps of 1.5x and 2x, so the rounding wastes at most a third of a block
 static constexpr size_t CLASS_SIZES[] = {16, 32, 48, 64, 96, 128, 192, 256, 384, 512};
 static constexpr size_t CLASS_COUNT = sizeof(CLASS_SIZES) / sizeof(CLASS_SIZES[0]);
-static constexpr size_t SMALL_MAX = 512;
-
-// every class is a multiple of 16, so blocks carved from an aligned chunk stay aligned
-static_assert(alignof(max_align_t) <= 16);
 
 static constexpr size_t CHUNK_BYTES = 4096;
 
+// blocks are carved from the start of a chunk at a multiple of their class, so a block
+// is aligned to the largest power of two dividing its class, as long as the chunk is
+// aligned to at least that. 512 covers every class
+static constexpr size_t CHUNK_ALIGN = 512;
+
 typedef struct Chunk Chunk;
 
-// the front of every chunk, linking it for the drop
+// the back of every chunk, linking it for the drop; at the back so the blocks start at
+// the chunk's own alignment
 struct Chunk {
     Chunk *next;
 };
@@ -52,20 +54,30 @@ typedef struct {
 } SlabCtx;
 
 [[nodiscard]]
-static void *slab_alloc(void *ctx, size_t size);
+static void *slab_alloc(void *ctx, tda_Layout layout);
+
+/// in place while the class stays the same; a large block asks the parent
+[[nodiscard]]
+static bool slab_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size);
+
+/// a large block that stays large is the parent's to move; anything else has no move
+/// cheaper than the wrapper's copy
+[[nodiscard]]
+static void *slab_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size);
+
+static void slab_dealloc(void *ctx, void *ptr, tda_Layout layout);
+
+/// the class serving 'layout', or CLASS_COUNT when it goes to the parent; the one place
+/// a request meets the class table
+[[nodiscard]]
+static size_t class_of(tda_Layout layout);
+
+/// the chunk whose link is 'chunk', from its first byte
+[[nodiscard]]
+static unsigned char *chunk_start(const Chunk *chunk);
 
 [[nodiscard]]
-static void *slab_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size);
-
-static void slab_dealloc(void *ctx, void *ptr, size_t size);
-
-/// the class serving a small 'size'; the one place a size meets the class table
-[[nodiscard]]
-static size_t class_of(size_t size);
-
-/// where the blocks of a chunk start: past its header, on the alignment grid
-[[nodiscard]]
-static size_t chunk_head_bytes();
+static tda_Layout chunk_layout();
 
 /// a new chunk from the parent, made the carving ground of 'cls'; false when refused
 [[nodiscard]]
@@ -84,24 +96,27 @@ static bool slab_owns(const SlabCtx *slab_ctx, const void *ptr);
 tda_Al *tda_al_slab_new(tda_Al *parent) {
     assert(parent);
 
-    SlabCtx *slab_ctx = tda_alloc(parent, sizeof(SlabCtx));
+    SlabCtx *slab_ctx = TDA_ALLOC(SlabCtx, parent, 1);
     if (!slab_ctx) {
         return nullptr;
     }
 
-    tda_Al *obj = tda_alloc(parent, sizeof(tda_Al));
+    tda_Al *obj = TDA_ALLOC(tda_Al, parent, 1);
     if (!obj) {
-        tda_dealloc(parent, slab_ctx, sizeof(SlabCtx));
+        TDA_DEALLOC(SlabCtx, parent, slab_ctx, 1);
         return nullptr;
     }
 
     *slab_ctx = (SlabCtx){.parent = parent};
 
-    obj->ctx = slab_ctx;
-    obj->alloc = slab_alloc;
-    obj->calloc = nullptr;
-    obj->realloc = slab_realloc;
-    obj->dealloc = slab_dealloc;
+    *obj = (tda_Al){
+        .ctx = slab_ctx,
+        .alloc = slab_alloc,
+        .alloc_zeroed = nullptr,
+        .resize = slab_resize,
+        .remap = slab_remap,
+        .dealloc = slab_dealloc,
+    };
 
     return obj;
 }
@@ -118,11 +133,11 @@ void tda_al_slab_drop(tda_Al *self) {
 
     for (Chunk *chunk = slab_ctx->chunks, *next; chunk; chunk = next) {
         next = chunk->next;
-        tda_dealloc(parent, chunk, CHUNK_BYTES);
+        tda_dealloc(parent, chunk_start(chunk), chunk_layout());
     }
 
-    tda_dealloc(parent, slab_ctx, sizeof(SlabCtx));
-    tda_dealloc(parent, self, sizeof(tda_Al));
+    TDA_DEALLOC(SlabCtx, parent, slab_ctx, 1);
+    TDA_DEALLOC(tda_Al, parent, self, 1);
 }
 
 /* ========== stats ========== */
@@ -142,21 +157,21 @@ tda_AlSlabStats tda_al_slab_stats(const tda_Al *self) {
 
 /* ========== internals ========== */
 
-static void *slab_alloc(void *ctx, size_t size) {
+static void *slab_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
-    assert(size > 0); // tda_alloc answers a request for nothing itself
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
     SlabCtx *slab_ctx = ctx;
 
-    if (size > SMALL_MAX) {
-        void *ptr = tda_alloc(slab_ctx->parent, size);
+    const size_t c = class_of(layout);
+    if (c == CLASS_COUNT) {
+        void *ptr = tda_alloc(slab_ctx->parent, layout);
         if (ptr) {
             ++slab_ctx->large_blocks;
         }
         return ptr;
     }
 
-    const size_t c = class_of(size);
     SizeClass *cls = &slab_ctx->classes[c];
 
     void *ptr;
@@ -179,50 +194,47 @@ static void *slab_alloc(void *ctx, size_t size) {
     return ptr;
 }
 
-static void *slab_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size) {
+static bool slab_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
-    assert(new_size > 0); // tda_realloc answers a request for nothing itself
 
     SlabCtx *slab_ctx = ctx;
 
-    if (!ptr) {
-        return slab_alloc(ctx, new_size);
-    }
+    const tda_Layout new_layout = {.size = new_size, .align = old.align};
+    const size_t old_class = class_of(old);
+    const size_t new_class = class_of(new_layout);
 
-    const bool old_small = old_size <= SMALL_MAX;
-    const bool new_small = new_size <= SMALL_MAX;
+    if (old_class == CLASS_COUNT && new_class == CLASS_COUNT) {
+        return tda_resize(slab_ctx->parent, ptr, old, new_size);
+    }
 
     // one class on both sides: the block already has the room
-    if (old_small && new_small && class_of(old_size) == class_of(new_size)) {
-        return ptr;
-    }
-
-    // large on both sides: the parent may resize in place
-    if (!old_small && !new_small) {
-        return tda_realloc(slab_ctx->parent, ptr, old_size, new_size);
-    }
-
-    void *moved = slab_alloc(ctx, new_size);
-    if (!moved) {
-        return nullptr;
-    }
-
-    memcpy(moved, ptr, old_size < new_size ? old_size : new_size);
-    slab_dealloc(ctx, ptr, old_size);
-
-    return moved;
+    return old_class == new_class;
 }
 
-static void slab_dealloc(void *ctx, void *ptr, size_t size) {
+static void *slab_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
+    assert(ctx);
+
+    SlabCtx *slab_ctx = ctx;
+
+    const tda_Layout new_layout = {.size = new_size, .align = old.align};
+    if (class_of(old) == CLASS_COUNT && class_of(new_layout) == CLASS_COUNT) {
+        return tda_remap(slab_ctx->parent, ptr, old, new_size);
+    }
+
+    return nullptr;
+}
+
+static void slab_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     assert(ctx);
     assert(ptr); // tda_dealloc takes null itself
 
     SlabCtx *slab_ctx = ctx;
 
-    if (size > SMALL_MAX) {
+    const size_t c = class_of(layout);
+    if (c == CLASS_COUNT) {
         assert(slab_ctx->large_blocks > 0);
         --slab_ctx->large_blocks;
-        tda_dealloc(slab_ctx->parent, ptr, size);
+        tda_dealloc(slab_ctx->parent, ptr, layout);
         return;
     }
 
@@ -231,7 +243,7 @@ static void slab_dealloc(void *ctx, void *ptr, size_t size) {
     assert(slab_owns(slab_ctx, ptr));
     assert(slab_ctx->small_blocks > 0);
 
-    SizeClass *cls = &slab_ctx->classes[class_of(size)];
+    SizeClass *cls = &slab_ctx->classes[c];
     FreeBlock *block = ptr;
     block->next = cls->free_head;
     cls->free_head = block;
@@ -239,36 +251,43 @@ static void slab_dealloc(void *ctx, void *ptr, size_t size) {
     --slab_ctx->small_blocks;
 }
 
-static size_t class_of(size_t size) {
-    assert(size > 0 && size <= SMALL_MAX);
+static size_t class_of(tda_Layout layout) {
+    assert(layout.size > 0);
 
-    size_t c = 0;
-    while (CLASS_SIZES[c] < size) {
-        ++c;
+    // a block at a multiple of its class from an aligned chunk is aligned to the lowest
+    // set bit of the class, so a class serves an alignment up to that bit. Every class
+    // takes a pointer-aligned free-list link, which 16 already covers
+    for (size_t c = 0; c < CLASS_COUNT; ++c) {
+        const size_t cls = CLASS_SIZES[c];
+        if (cls >= layout.size && (cls & -cls) >= layout.align) {
+            return c;
+        }
     }
-    return c;
+
+    return CLASS_COUNT;
 }
 
-static size_t chunk_head_bytes() {
-    return tda_align_up(sizeof(Chunk), TDA_DEFAULT_ALIGNMENT);
+static unsigned char *chunk_start(const Chunk *chunk) {
+    return (unsigned char *) chunk - (CHUNK_BYTES - sizeof(Chunk));
+}
+
+static tda_Layout chunk_layout() {
+    return (tda_Layout){.size = CHUNK_BYTES, .align = CHUNK_ALIGN};
 }
 
 static bool add_chunk(SlabCtx *slab_ctx, SizeClass *cls) {
-    unsigned char *bytes = tda_alloc(slab_ctx->parent, CHUNK_BYTES);
+    unsigned char *bytes = tda_alloc(slab_ctx->parent, chunk_layout());
     if (!bytes) {
         return false;
     }
 
-    // blocks are carved on this grid from the start of the chunk; see the tda_Al contract
-    TDA_EXPECT(tda_ptr_is_aligned(bytes, TDA_DEFAULT_ALIGNMENT));
-
-    Chunk *chunk = (Chunk *) bytes;
+    Chunk *chunk = (Chunk *) (bytes + CHUNK_BYTES - sizeof(Chunk));
     chunk->next = slab_ctx->chunks;
     slab_ctx->chunks = chunk;
     ++slab_ctx->chunk_count;
 
-    cls->carve = bytes + chunk_head_bytes();
-    cls->carve_end = bytes + CHUNK_BYTES;
+    cls->carve = bytes;
+    cls->carve_end = (unsigned char *) chunk;
 
     return true;
 }
@@ -279,11 +298,12 @@ static bool slab_owns(const SlabCtx *slab_ctx, const void *ptr) {
     const uintptr_t addr = (uintptr_t) ptr;
 
     for (const Chunk *chunk = slab_ctx->chunks; chunk; chunk = chunk->next) {
-        const uintptr_t begin = (uintptr_t) chunk + chunk_head_bytes();
-        const uintptr_t end = (uintptr_t) chunk + CHUNK_BYTES;
+        const uintptr_t begin = (uintptr_t) chunk_start(chunk);
+        const uintptr_t end = (uintptr_t) chunk;
         if (addr >= begin && addr < end) {
             return true;
         }
     }
+
     return false;
 }

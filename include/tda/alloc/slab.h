@@ -13,6 +13,8 @@
 ///
 /// A request of up to 512 bytes is rounded up to one of a few size classes, from 16 to
 /// 512, and served from that class's pool; anything larger goes to the parent as it is.
+/// A class gives the alignments that divide it, 16 at least, so a request at 64 lands in
+/// the 64-byte class or above; one aligned past 512 goes to the parent too.
 /// Each pool takes 4 KiB chunks from the parent as it needs them and threads freed
 /// blocks onto a list of its own, so alloc and dealloc of a small block are a pointer
 /// move.
@@ -26,8 +28,8 @@
 /// freed block goes back to its pool, not to the parent, so the memory a peak took
 /// stays held until tda_al_slab_drop.
 ///
-/// No block carries a header: the class is found again from the size handed to
-/// tda_dealloc, which is why that size must match.
+/// No block carries a header: the class is found again from the layout handed to
+/// tda_dealloc, which is why that layout must match.
 ///
 /// @par Example
 /// @snippet alloc/example_slab.c build

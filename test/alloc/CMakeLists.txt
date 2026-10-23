@@ -1,4 +1,3 @@
-tda_add_test(test_alloc_aligned test_aligned.c)
 tda_add_test(test_alloc_alloc test_alloc.c)
 tda_add_test(test_alloc_arena test_arena.c)
 tda_add_test(test_alloc_debug test_debug.c)
@@ -13,7 +12,10 @@ target_link_libraries(test_alloc_debug_misuse PRIVATE tda::tda)
 target_compile_options(test_alloc_debug_misuse PRIVATE ${TDA_WARNINGS})
 
 set(debug_misuse_cases
-    "wrong_size|made with 32 bytes, given back with 24"
+    "wrong_size|made with 32 bytes at 8, given back with 24 at 8"
+    "wrong_align|made with 32 bytes at 64, given back with 32 at 8"
+    "realloc_wrong_size|made with 8 bytes at 8, resized with 64 at 8"
+    "realloc_wrong_align|made with 64 bytes at 64, resized with 64 at 8"
     "double_free|freed twice"
     "foreign_pointer|was not handed out by this allocator"
     "write_past_end|was written past its end"

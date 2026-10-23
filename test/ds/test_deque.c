@@ -58,6 +58,7 @@ static tda_Deque *make_deque(size_t len) {
     for (size_t i = 0; i < len; ++i) {
         push_back_int(d, (int32_t) i);
     }
+
     return d;
 }
 
@@ -103,6 +104,7 @@ static tda_Deque *make_at(size_t cap, size_t head, size_t len) {
     }
 
     TEST_ASSERT_EQUAL_size_t(cap, tda_deque_cap(d));
+
     return d;
 }
 
@@ -542,6 +544,7 @@ static void test_for_each_goes_on_past_a_continue() {
 
 static tda_Deque *counted(tda_Deque *d, size_t *calls) {
     ++*calls;
+
     return d;
 }
 
@@ -757,7 +760,7 @@ static void test_the_span_pair_carries_the_deque_through_algo() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, tda_deque_len(d));
 
     tda_deque_copy_to_span(d, s);
-    tda_span_sort(s, tda_cmp_i32);
+    tda_span_sort(s, tda_cmp_i32, nullptr);
     tda_deque_copy_from_span(d, tda_span_mut_to_span(s));
 
     assert_elems(d, (int32_t[]){2, 3, 4, 5}, 4);
@@ -802,8 +805,8 @@ static void test_to_spans_of_a_fresh_deque_are_empty() {
 
     TEST_ASSERT_EQUAL_size_t(0, front.len);
     TEST_ASSERT_EQUAL_size_t(0, back.len);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), front.elem_size);
-    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), back.elem_size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), front.elem.size);
+    TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), back.elem.size);
 
     tda_deque_drop(d);
 }
@@ -1174,6 +1177,7 @@ static void test_remove_range_shifts_the_shorter_side() {
 // pushes each elem it sees onto the deque at 'ctx' and keeps them all
 static bool record(const void *elem, void *ctx) {
     TDA_TEST_OK(tda_deque_push_back(ctx, elem));
+
     return true;
 }
 
@@ -1567,7 +1571,7 @@ static void test_eq_matches_the_same_elems() {
     TEST_ASSERT_TRUE(tda_deque_eq(a, a));
     TEST_ASSERT_TRUE(tda_deque_eq(a, b));
     TEST_ASSERT_TRUE(tda_deque_eq(b, a));
-    TEST_ASSERT_TRUE(tda_deque_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_deque_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_deque_drop(a);
     tda_deque_drop(b);
@@ -1579,7 +1583,7 @@ static void test_eq_parts_one_differing_elem() {
     TDA_DEQUE_SET(int32_t, b, 3, 99);
 
     TEST_ASSERT_FALSE(tda_deque_eq(a, b));
-    TEST_ASSERT_FALSE(tda_deque_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_deque_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_deque_drop(a);
     tda_deque_drop(b);
@@ -1602,7 +1606,7 @@ static void test_eq_of_two_empties() {
     tda_Deque *one = make_deque(1);
 
     TEST_ASSERT_TRUE(tda_deque_eq(a, b));
-    TEST_ASSERT_TRUE(tda_deque_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_deque_eq_by(a, b, tda_eq_i32, nullptr));
     TEST_ASSERT_FALSE(tda_deque_eq(a, one));
 
     tda_deque_drop(a);
@@ -1623,7 +1627,7 @@ static void test_eq_ignores_where_the_ring_starts() {
     TEST_ASSERT_FALSE(wraps(straight));
     TEST_ASSERT_TRUE(tda_deque_eq(straight, wrapped));
     TEST_ASSERT_TRUE(tda_deque_eq(wrapped, straight));
-    TEST_ASSERT_TRUE(tda_deque_eq_by(wrapped, straight, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_deque_eq_by(wrapped, straight, tda_eq_i32, nullptr));
 
     tda_deque_drop(straight);
     tda_deque_drop(wrapped);
@@ -1655,7 +1659,7 @@ static void test_eq_by_asks_the_equality() {
     TDA_TEST_OK(TDA_DEQUE_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
     TEST_ASSERT_FALSE(tda_deque_eq(a, b));
-    TEST_ASSERT_TRUE(tda_deque_eq_by(a, b, tda_test_pair_eq_a));
+    TEST_ASSERT_TRUE(tda_deque_eq_by(a, b, tda_test_pair_eq_a, nullptr));
 
     tda_deque_drop(a);
     tda_deque_drop(b);

@@ -3,6 +3,7 @@
 #include "tda/algo/sort.h"
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
+#include "tda/alloc/pool.h"
 #include "tda/core/cmp.h"
 #include "tda/core/print.h"
 #include "tda/core/util.h"
@@ -36,6 +37,7 @@ static tda_List *make_list(size_t len) {
     for (size_t i = 0; i < len; ++i) {
         push_int(l, (int32_t) i);
     }
+
     return l;
 }
 
@@ -47,7 +49,7 @@ static void assert_elems(const tda_List *l, const int32_t *want, size_t n) {
     size_t seen = 0;
     for (const tda_ListNode *node = tda_list_front_node(l); node; node = tda_list_node_next(node)) {
         TEST_ASSERT_TRUE_MESSAGE(seen < n, "forward walk is longer than expected");
-        TEST_ASSERT_EQUAL_INT32(want[seen], *TDA_LIST_NODE_ELEM_AS(int32_t, node));
+        TEST_ASSERT_EQUAL_INT32(want[seen], *TDA_LIST_NODE_ELEM_AS(int32_t, l, node));
         ++seen;
     }
     TEST_ASSERT_EQUAL_size_t(n, seen);
@@ -55,7 +57,7 @@ static void assert_elems(const tda_List *l, const int32_t *want, size_t n) {
     seen = 0;
     for (const tda_ListNode *node = tda_list_back_node(l); node; node = tda_list_node_prev(node)) {
         TEST_ASSERT_TRUE_MESSAGE(seen < n, "backward walk is longer than expected");
-        TEST_ASSERT_EQUAL_INT32(want[n - seen - 1], *TDA_LIST_NODE_ELEM_AS(int32_t, node));
+        TEST_ASSERT_EQUAL_INT32(want[n - seen - 1], *TDA_LIST_NODE_ELEM_AS(int32_t, l, node));
         ++seen;
     }
     TEST_ASSERT_EQUAL_size_t(n, seen);
@@ -76,6 +78,7 @@ static tda_ListNode *node_at(tda_List *l, size_t idx) {
         node = tda_list_node_next_mut(node);
     }
     TEST_ASSERT_NOT_NULL(node);
+
     return node;
 }
 
@@ -109,6 +112,9 @@ static void assert_empty(const tda_List *l) {
     assert_elems(l, nullptr, 0);
 }
 
+// a type layout so large that the header in front of it overflows size_t
+static constexpr tda_Layout HUGE_ELEM = {.size = SIZE_MAX - 7, .align = 8};
+
 /* ========== lifetime ========== */
 
 static void test_new_starts_empty() {
@@ -120,17 +126,77 @@ static void test_new_starts_empty() {
     tda_list_drop(l);
 }
 
-// a node is a header plus the elem; an elem size near SIZE_MAX overflows that sum, which
-// the constructor refuses before anything is allocated
+// a node is a header plus the elem; an elem layout near SIZE_MAX overflows that sum,
+// which the constructor refuses before anything is allocated
 static void test_new_refuses_an_elem_size_that_overflows_the_node() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_List *out = nullptr;
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_new(SIZE_MAX - 8, &al, &out));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_new(HUGE_ELEM, &al, &out));
     TEST_ASSERT_NULL(out);
     TEST_ASSERT_EQUAL_size_t(0, probe.alloc_calls);
+}
+
+// a pool built on block_layout carries the struct and every node, small elem or large,
+// loosely aligned or not, and gets each block back on the drop
+static void test_block_layout_fits_a_pool_to_the_list() {
+    constexpr tda_Layout elems[] = {
+        {.size = 1, .align = 1},
+        {.size = 4, .align = 4},
+        {.size = 24, .align = 8},
+        {.size = 64, .align = 64},
+        {.size = 200, .align = 8},
+    };
+    constexpr size_t count = 8;
+
+    for (size_t k = 0; k < sizeof(elems) / sizeof(elems[0]); ++k) {
+        tda_Al *pool = tda_al_pool_new(tda_al_default(), tda_list_block_layout(elems[k]), count);
+        TEST_ASSERT_NOT_NULL(pool);
+
+        tda_List *l = nullptr;
+        TDA_TEST_OK(tda_list_new(elems[k], pool, &l));
+
+        unsigned char val[200] = {};
+        for (size_t i = 0; i + 1 < count; ++i) {
+            TDA_TEST_OK(tda_list_push_back(l, val));
+        }
+        TEST_ASSERT_EQUAL_size_t(0, tda_al_pool_stats(pool).free);
+
+        tda_list_drop(l);
+        TEST_ASSERT_EQUAL_size_t(count, tda_al_pool_stats(pool).free);
+        tda_al_pool_drop(pool);
+    }
+}
+
+// the case block_layout is for: a block cut to a small node cannot take the struct
+static void test_new_fails_on_a_pool_cut_to_the_node_alone() {
+    const tda_Layout node = {.size = 2 * sizeof(void *) + sizeof(int32_t), .align = alignof(max_align_t)};
+    tda_Al *pool = tda_al_pool_new(tda_al_default(), node, 4);
+    TEST_ASSERT_NOT_NULL(pool);
+    TEST_ASSERT_LESS_THAN_size_t(tda_list_block_layout(TDA_LAYOUT_OF(int32_t)).size,
+                                 tda_al_pool_stats(pool).block_size);
+
+    tda_List *l = nullptr;
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_new(TDA_LAYOUT_OF(int32_t), pool, &l));
+    TEST_ASSERT_NULL(l);
+
+    tda_al_pool_drop(pool);
+}
+
+static tda_Layout bytes(size_t size) {
+    return (tda_Layout){.size = size, .align = 1};
+}
+
+static void test_block_layout_grows_with_the_elem() {
+    TEST_ASSERT_GREATER_OR_EQUAL_size_t(64, tda_list_block_layout(bytes(64)).size);
+    TEST_ASSERT_EQUAL_size_t(tda_list_block_layout(bytes(64)).size + 1000, tda_list_block_layout(bytes(1064)).size);
+    TEST_ASSERT_EQUAL_size_t(tda_list_block_layout(bytes(1)).size, tda_list_block_layout(bytes(2)).size);
+
+    // the links set the floor of the alignment, and an elem above it raises it
+    TEST_ASSERT_EQUAL_size_t(alignof(void *), tda_list_block_layout(bytes(1)).align);
+    TEST_ASSERT_EQUAL_size_t(64, tda_list_block_layout((tda_Layout){.size = 64, .align = 64}).align);
 }
 
 static void test_new_keeps_elem_size_and_allocator() {
@@ -161,7 +227,7 @@ static void test_from_data_copies_and_detaches_the_source() {
 
 static void test_from_data_empty_is_empty() {
     tda_List *l = nullptr;
-    TDA_TEST_OK(tda_list_from_data(nullptr, 0, sizeof(int32_t), tda_al_default(), &l));
+    TDA_TEST_OK(tda_list_from_data(nullptr, 0, TDA_LAYOUT_OF(int32_t), tda_al_default(), &l));
 
     assert_empty(l);
 
@@ -291,7 +357,7 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
 
     assert_elems(dst, (int32_t[]){1, 2, 3}, 3);
     TEST_ASSERT_EQUAL_PTR(node, tda_list_front_node(dst));
-    TEST_ASSERT_EQUAL_INT32(1, *TDA_LIST_NODE_ELEM_AS(int32_t, node));
+    TEST_ASSERT_EQUAL_INT32(1, *TDA_LIST_NODE_ELEM_AS(int32_t, dst, node));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_list_len(src));
     TEST_ASSERT_NULL(tda_list_front_node(src));
@@ -570,7 +636,7 @@ static void test_node_prev_mut_writes_through_the_backward_walk() {
 
     size_t seen = 0;
     for (tda_ListNode *node = tda_list_back_node_mut(l); node; node = tda_list_node_prev_mut(node)) {
-        *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, node) *= 10;
+        *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, l, node) *= 10;
         ++seen;
     }
     TEST_ASSERT_EQUAL_size_t(4, seen);
@@ -601,7 +667,7 @@ static void test_node_elem_mut_writes_through() {
     tda_List *l = make_list(3);
 
     tda_ListNode *mid = tda_list_node_next_mut(tda_list_front_node_mut(l));
-    *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, mid) = 9;
+    *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, l, mid) = 9;
 
     assert_elems(l, (int32_t[]){0, 9, 2}, 3);
 
@@ -743,8 +809,8 @@ static void test_the_new_node_is_reachable_from_the_anchor() {
     TDA_TEST_OK(TDA_LIST_INSERT_BEFORE(int32_t, l, mid, 7));
     TDA_TEST_OK(TDA_LIST_INSERT_AFTER(int32_t, l, mid, 8));
 
-    TEST_ASSERT_EQUAL_INT32(7, *TDA_LIST_NODE_ELEM_AS(int32_t, tda_list_node_prev(mid)));
-    TEST_ASSERT_EQUAL_INT32(8, *TDA_LIST_NODE_ELEM_AS(int32_t, tda_list_node_next(mid)));
+    TEST_ASSERT_EQUAL_INT32(7, *TDA_LIST_NODE_ELEM_AS(int32_t, l, tda_list_node_prev(mid)));
+    TEST_ASSERT_EQUAL_INT32(8, *TDA_LIST_NODE_ELEM_AS(int32_t, l, tda_list_node_next(mid)));
 
     tda_list_drop(l);
 }
@@ -1052,11 +1118,11 @@ static void test_find_returns_the_first_node_holding_the_elem() {
     tda_List *l = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 1, 2, 3, 2));
 
-    const tda_ListNode *node = TDA_LIST_FIND(int32_t, l, 2, tda_eq_i32);
+    const tda_ListNode *node = TDA_LIST_FIND(int32_t, l, 2, tda_eq_i32, nullptr);
     TEST_ASSERT_NOT_NULL(node);
 
     // the first match: the one whose next holds 3
-    TEST_ASSERT_EQUAL_INT32(3, *TDA_LIST_NODE_ELEM_AS(int32_t, tda_list_node_next(node)));
+    TEST_ASSERT_EQUAL_INT32(3, *TDA_LIST_NODE_ELEM_AS(int32_t, l, tda_list_node_next(node)));
 
     tda_list_drop(l);
 }
@@ -1064,7 +1130,7 @@ static void test_find_returns_the_first_node_holding_the_elem() {
 static void test_find_of_a_missing_elem_is_null() {
     tda_List *l = make_list(4);
 
-    TEST_ASSERT_NULL(TDA_LIST_FIND(int32_t, l, 99, tda_eq_i32));
+    TEST_ASSERT_NULL(TDA_LIST_FIND(int32_t, l, 99, tda_eq_i32, nullptr));
 
     tda_list_drop(l);
 }
@@ -1072,7 +1138,7 @@ static void test_find_of_a_missing_elem_is_null() {
 static void test_find_of_an_empty_list_is_null() {
     tda_List *l = make_list(0);
 
-    TEST_ASSERT_NULL(TDA_LIST_FIND(int32_t, l, 0, tda_eq_i32));
+    TEST_ASSERT_NULL(TDA_LIST_FIND(int32_t, l, 0, tda_eq_i32, nullptr));
 
     tda_list_drop(l);
 }
@@ -1081,10 +1147,10 @@ static void test_find_of_an_empty_list_is_null() {
 static void test_find_mut_gives_a_position_to_write_through() {
     tda_List *l = make_list(4);
 
-    tda_ListNode *at = TDA_LIST_FIND_MUT(int32_t, l, 2, tda_eq_i32);
+    tda_ListNode *at = TDA_LIST_FIND_MUT(int32_t, l, 2, tda_eq_i32, nullptr);
     TEST_ASSERT_NOT_NULL(at);
 
-    *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, at) = 20;
+    *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, l, at) = 20;
     TDA_TEST_OK(TDA_LIST_INSERT_BEFORE(int32_t, l, at, 9));
 
     assert_elems(l, (int32_t[]){0, 1, 9, 20, 3}, 5);
@@ -1100,8 +1166,8 @@ static void test_find_asks_the_equality_it_is_given() {
     tda_List *l = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 1, -2, 3));
 
-    TEST_ASSERT_NULL(TDA_LIST_FIND(int32_t, l, 2, tda_eq_i32));
-    TEST_ASSERT_NOT_NULL(TDA_LIST_FIND(int32_t, l, 2, tda_test_i32_eq_abs));
+    TEST_ASSERT_NULL(TDA_LIST_FIND(int32_t, l, 2, tda_eq_i32, nullptr));
+    TEST_ASSERT_NOT_NULL(TDA_LIST_FIND(int32_t, l, 2, tda_test_i32_eq_abs, nullptr));
 
     tda_list_drop(l);
 }
@@ -1112,7 +1178,7 @@ static void test_for_each_walks_front_to_back() {
     int32_t seen[4];
     size_t n = 0;
     TDA_LIST_FOR_EACH(node, l) {
-        seen[n++] = *TDA_LIST_NODE_ELEM_AS(int32_t, node);
+        seen[n++] = *TDA_LIST_NODE_ELEM_AS(int32_t, l, node);
     }
 
     TEST_ASSERT_EQUAL_size_t(4, n);
@@ -1139,7 +1205,7 @@ static void test_for_each_mut_writes_through_every_position() {
     tda_List *l = make_list(4);
 
     TDA_LIST_FOR_EACH_MUT(node, l) {
-        *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, node) *= 10;
+        *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, l, node) *= 10;
     }
 
     assert_elems(l, (int32_t[]){0, 10, 20, 30}, 4);
@@ -1233,7 +1299,7 @@ static void test_splice_node_keeps_the_node_address() {
     TDA_TEST_OK(tda_list_splice_node(b, nullptr, a, node_at(a, 2)));
 
     TEST_ASSERT_EQUAL_PTR(moved, tda_list_back_node(b));
-    TEST_ASSERT_EQUAL_INT32(2, *TDA_LIST_NODE_ELEM_AS(int32_t, moved));
+    TEST_ASSERT_EQUAL_INT32(2, *TDA_LIST_NODE_ELEM_AS(int32_t, b, moved));
 
     tda_list_drop(a);
     tda_list_drop(b);
@@ -1390,7 +1456,7 @@ static void test_sort_orders_the_elems() {
     tda_List *l = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 5, 1, 9, 3, 7, 2));
 
-    tda_list_sort(l, tda_cmp_i32);
+    tda_list_sort(l, tda_cmp_i32, nullptr);
 
     constexpr int32_t want[6] = {1, 2, 3, 5, 7, 9};
     assert_elems(l, want, 6);
@@ -1400,12 +1466,12 @@ static void test_sort_orders_the_elems() {
 
 static void test_sort_of_empty_and_single_is_a_noop() {
     tda_List *empty = make_list(0);
-    tda_list_sort(empty, tda_cmp_i32);
+    tda_list_sort(empty, tda_cmp_i32, nullptr);
     assert_empty(empty);
     tda_list_drop(empty);
 
     tda_List *one = make_list(1);
-    tda_list_sort(one, tda_cmp_i32);
+    tda_list_sort(one, tda_cmp_i32, nullptr);
     constexpr int32_t want[1] = {0};
     assert_elems(one, want, 1);
     tda_list_drop(one);
@@ -1415,7 +1481,7 @@ static void test_sort_handles_duplicates() {
     tda_List *l = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 3, 1, 3, 1, 3));
 
-    tda_list_sort(l, tda_cmp_i32);
+    tda_list_sort(l, tda_cmp_i32, nullptr);
 
     constexpr int32_t want[5] = {1, 1, 3, 3, 3};
     assert_elems(l, want, 5);
@@ -1427,7 +1493,7 @@ static void test_sort_takes_a_descending_comparator() {
     tda_List *l = nullptr;
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 5, 1, 9, 3));
 
-    tda_list_sort(l, tda_cmp_desc_i32);
+    tda_list_sort(l, tda_cmp_desc_i32, nullptr);
 
     constexpr int32_t want[4] = {9, 5, 3, 1};
     assert_elems(l, want, 4);
@@ -1447,13 +1513,13 @@ static void test_sort_works_at_every_length() {
             push_int(l, (int32_t) (n - i));
         }
 
-        tda_list_sort(l, tda_cmp_i32);
+        tda_list_sort(l, tda_cmp_i32, nullptr);
 
         TEST_ASSERT_EQUAL_size_t(n, tda_list_len(l));
         int32_t prev = 0;
         size_t seen = 0;
         for (const tda_ListNode *node = tda_list_front_node(l); node; node = tda_list_node_next(node)) {
-            const int32_t val = *TDA_LIST_NODE_ELEM_AS(int32_t, node);
+            const int32_t val = *TDA_LIST_NODE_ELEM_AS(int32_t, l, node);
             if (seen > 0) {
                 TEST_ASSERT_TRUE_MESSAGE(prev <= val, "the sorted list is out of order");
             }
@@ -1476,12 +1542,12 @@ static void test_sort_is_stable() {
         TDA_TEST_OK(tda_list_push_back(l, &src[i]));
     }
 
-    tda_list_sort(l, tda_test_pair_cmp_a);
+    tda_list_sort(l, tda_test_pair_cmp_a, nullptr);
 
     constexpr Pair want[6] = {{1, 1}, {1, 2}, {1, 3}, {2, 1}, {2, 2}, {2, 3}};
     size_t i = 0;
     for (const tda_ListNode *node = tda_list_front_node(l); node; node = tda_list_node_next(node)) {
-        const Pair *got = TDA_LIST_NODE_ELEM_AS(Pair, node);
+        const Pair *got = TDA_LIST_NODE_ELEM_AS(Pair, l, node);
         TEST_ASSERT_EQUAL_INT64(want[i].a, got->a);
         TEST_ASSERT_EQUAL_INT64(want[i].b, got->b);
         ++i;
@@ -1501,10 +1567,10 @@ static void test_sort_keeps_every_node_and_its_elem() {
     collect_nodes(l, before, 4);
     const tda_ListNode *node_of_nine = before[2];
 
-    tda_list_sort(l, tda_cmp_i32);
+    tda_list_sort(l, tda_cmp_i32, nullptr);
 
     assert_same_nodes(l, before, 4);
-    TEST_ASSERT_EQUAL_INT32(9, *TDA_LIST_NODE_ELEM_AS(int32_t, node_of_nine));
+    TEST_ASSERT_EQUAL_INT32(9, *TDA_LIST_NODE_ELEM_AS(int32_t, l, node_of_nine));
     TEST_ASSERT_EQUAL_PTR(node_of_nine, tda_list_back_node(l));
 
     tda_list_drop(l);
@@ -1520,7 +1586,7 @@ static void test_sort_never_allocates() {
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &l, 5, 1, 9, 3, 7, 2, 8));
 
     const size_t requests = tda_test_probe_requests(&probe);
-    tda_list_sort(l, tda_cmp_i32);
+    tda_list_sort(l, tda_cmp_i32, nullptr);
 
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
@@ -1539,7 +1605,7 @@ static void test_merge_interleaves_two_sorted_lists() {
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &a, 1, 4, 7));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &b, 2, 3, 8, 9));
 
-    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32));
+    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32, nullptr));
 
     constexpr int32_t want[7] = {1, 2, 3, 4, 7, 8, 9};
     assert_elems(a, want, 7);
@@ -1553,7 +1619,7 @@ static void test_merge_with_an_empty_source_changes_nothing() {
     tda_List *a = make_list(3);
     tda_List *b = make_list(0);
 
-    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32));
+    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32, nullptr));
 
     constexpr int32_t want[3] = {0, 1, 2};
     assert_elems(a, want, 3);
@@ -1567,7 +1633,7 @@ static void test_merge_into_an_empty_list_takes_everything() {
     tda_List *a = make_list(0);
     tda_List *b = make_list(4);
 
-    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32));
+    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32, nullptr));
 
     constexpr int32_t want[4] = {0, 1, 2, 3};
     assert_elems(a, want, 4);
@@ -1591,12 +1657,12 @@ static void test_merge_keeps_equal_elems_of_self_first() {
         TDA_TEST_OK(tda_list_push_back(b, &from_b[i]));
     }
 
-    TDA_TEST_OK(tda_list_merge(a, b, tda_test_pair_cmp_a));
+    TDA_TEST_OK(tda_list_merge(a, b, tda_test_pair_cmp_a, nullptr));
 
     constexpr Pair want[4] = {{1, 100}, {1, 200}, {2, 100}, {2, 200}};
     size_t i = 0;
     for (const tda_ListNode *node = tda_list_front_node(a); node; node = tda_list_node_next(node)) {
-        const Pair *got = TDA_LIST_NODE_ELEM_AS(Pair, node);
+        const Pair *got = TDA_LIST_NODE_ELEM_AS(Pair, a, node);
         TEST_ASSERT_EQUAL_INT64(want[i].a, got->a);
         TEST_ASSERT_EQUAL_INT64(want[i].b, got->b);
         ++i;
@@ -1618,7 +1684,7 @@ static void test_merge_on_one_allocator_never_allocates() {
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &b, 2, 3));
 
     const size_t requests = tda_test_probe_requests(&probe);
-    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32));
+    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32, nullptr));
 
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
 
@@ -1640,7 +1706,7 @@ static void test_merge_across_allocators_copies_the_elems() {
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &a, 1, 5));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, arena, &b, 2, 9));
 
-    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32));
+    TDA_TEST_OK(tda_list_merge(a, b, tda_cmp_i32, nullptr));
 
     constexpr int32_t want[4] = {1, 2, 5, 9};
     assert_elems(a, want, 4);
@@ -1703,7 +1769,7 @@ static void test_copy_from_span_keeps_the_nodes() {
     tda_list_copy_from_span(l, TDA_SPAN_FROM_DATA(int32_t, src, 3));
 
     assert_same_nodes(l, before, 3);
-    TEST_ASSERT_EQUAL_INT32(7, *TDA_LIST_NODE_ELEM_AS(int32_t, before[0]));
+    TEST_ASSERT_EQUAL_INT32(7, *TDA_LIST_NODE_ELEM_AS(int32_t, l, before[0]));
 
     tda_list_drop(l);
 }
@@ -1720,14 +1786,14 @@ static void test_the_copy_reaches_algo_and_comes_back() {
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4);
     tda_list_copy_to_span(l, s);
 
-    TEST_ASSERT_EQUAL_size_t(2, tda_span_max_elem(tda_span_mut_to_span(s), tda_cmp_i32));
+    TEST_ASSERT_EQUAL_size_t(2, tda_span_max_elem(tda_span_mut_to_span(s), tda_cmp_i32, nullptr));
 
-    tda_span_sort(s, tda_cmp_i32);
+    tda_span_sort(s, tda_cmp_i32, nullptr);
     tda_list_copy_from_span(l, tda_span_mut_to_span(s));
 
     constexpr int32_t want[4] = {1, 3, 5, 9};
     assert_elems(l, want, 4);
-    TEST_ASSERT_EQUAL_INT32(5, *TDA_LIST_NODE_ELEM_AS(int32_t, node_of_nine));
+    TEST_ASSERT_EQUAL_INT32(5, *TDA_LIST_NODE_ELEM_AS(int32_t, l, node_of_nine));
 
     tda_list_drop(l);
 }
@@ -1907,7 +1973,7 @@ static void test_merge_across_allocators_reports_failure() {
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &b, 2, 9));
     tda_test_arena_leave(arena, 0);
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_merge(a, b, tda_cmp_i32));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_list_merge(a, b, tda_cmp_i32, nullptr));
 
     constexpr int32_t want_a[2] = {1, 5};
     constexpr int32_t want_b[2] = {2, 9};
@@ -1959,8 +2025,8 @@ static void test_macro_node_elem_as_reads_and_writes() {
     tda_List *l = make_list(2);
     tda_ListNode *head = tda_list_front_node_mut(l);
 
-    TEST_ASSERT_EQUAL_INT32(0, *TDA_LIST_NODE_ELEM_AS(int32_t, head));
-    *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, head) = 5;
+    TEST_ASSERT_EQUAL_INT32(0, *TDA_LIST_NODE_ELEM_AS(int32_t, l, head));
+    *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, l, head) = 5;
 
     assert_elems(l, (int32_t[]){5, 1}, 2);
 
@@ -1976,7 +2042,7 @@ static void test_eq_matches_the_same_elems() {
     TEST_ASSERT_TRUE(tda_list_eq(a, a));
     TEST_ASSERT_TRUE(tda_list_eq(a, b));
     TEST_ASSERT_TRUE(tda_list_eq(b, a));
-    TEST_ASSERT_TRUE(tda_list_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_list_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_list_drop(a);
     tda_list_drop(b);
@@ -1989,7 +2055,7 @@ static void test_eq_parts_one_differing_elem() {
     tda_list_pop_front(b);
 
     TEST_ASSERT_FALSE(tda_list_eq(a, b));
-    TEST_ASSERT_FALSE(tda_list_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_FALSE(tda_list_eq_by(a, b, tda_eq_i32, nullptr));
 
     tda_list_drop(a);
     tda_list_drop(b);
@@ -2012,7 +2078,7 @@ static void test_eq_of_two_empties() {
     tda_List *one = make_list(1);
 
     TEST_ASSERT_TRUE(tda_list_eq(a, b));
-    TEST_ASSERT_TRUE(tda_list_eq_by(a, b, tda_eq_i32));
+    TEST_ASSERT_TRUE(tda_list_eq_by(a, b, tda_eq_i32, nullptr));
     TEST_ASSERT_FALSE(tda_list_eq(a, one));
 
     tda_list_drop(a);
@@ -2045,7 +2111,7 @@ static void test_eq_by_asks_the_equality() {
     TDA_TEST_OK(TDA_LIST_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
     TEST_ASSERT_FALSE(tda_list_eq(a, b));
-    TEST_ASSERT_TRUE(tda_list_eq_by(a, b, tda_test_pair_eq_a));
+    TEST_ASSERT_TRUE(tda_list_eq_by(a, b, tda_test_pair_eq_a, nullptr));
 
     tda_list_drop(a);
     tda_list_drop(b);
@@ -2111,6 +2177,9 @@ int main() {
     RUN_TEST(test_new_starts_empty);
     RUN_TEST(test_new_keeps_elem_size_and_allocator);
     RUN_TEST(test_new_refuses_an_elem_size_that_overflows_the_node);
+    RUN_TEST(test_block_layout_fits_a_pool_to_the_list);
+    RUN_TEST(test_new_fails_on_a_pool_cut_to_the_node_alone);
+    RUN_TEST(test_block_layout_grows_with_the_elem);
     RUN_TEST(test_from_data_copies_and_detaches_the_source);
     RUN_TEST(test_from_data_empty_is_empty);
     RUN_TEST(test_from_data_copies_whole_elems);

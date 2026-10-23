@@ -1,3 +1,4 @@
+tda_add_test(test_ds_align test_align.c)
 tda_add_test(test_ds_arr test_arr.c)
 tda_add_test(test_ds_bitset test_bitset.c)
 tda_add_test(test_ds_deque test_deque.c)
