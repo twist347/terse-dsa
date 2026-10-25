@@ -32,8 +32,7 @@ static void sorted_copy(int32_t *dst, const int32_t *src, size_t n) {
 // true when both hold the same elems in any order; a reordering algorithm must never
 // invent, drop or duplicate one
 static bool same_elems(const int32_t *a, const int32_t *b, size_t n) {
-    int32_t sorted_a[64];
-    int32_t sorted_b[64];
+    int32_t sorted_a[64], sorted_b[64];
     TEST_ASSERT_TRUE(n <= 64);
 
     sorted_copy(sorted_a, a, n);
@@ -151,8 +150,7 @@ static int cmp_wide_in_place(const void *lhs, const void *rhs, void *) {
     wide_strays += (uintptr_t) lhs < wide_first || (uintptr_t) lhs >= wide_end;
     wide_strays += (uintptr_t) rhs < wide_first || (uintptr_t) rhs >= wide_end;
 
-    const Wide *a = lhs;
-    const Wide *b = rhs;
+    const Wide *a = lhs, *b = rhs;
 
     return (a->key > b->key) - (a->key < b->key);
 }
@@ -630,8 +628,7 @@ static int adversary_ctx;
 static int cmp_adversary(const void *lhs, const void *rhs, void *ctx) {
     TEST_ASSERT_EQUAL_PTR(&adversary_ctx, ctx);
     ++cmp_calls;
-    const int32_t a = *(const int32_t *) lhs;
-    const int32_t b = *(const int32_t *) rhs;
+    const int32_t a = *(const int32_t *) lhs, b = *(const int32_t *) rhs;
 
     if (adversary_val[a] == adversary_gas && adversary_val[b] == adversary_gas) {
         adversary_val[a == adversary_candidate ? a : b] = adversary_solid++;
@@ -659,8 +656,7 @@ static void adversary_arm(int32_t *buf, int32_t *val) {
 
 // 3.7x n*log n with the cap. Without it 29x at 4096, 98x at 16384 and 342x here
 static void test_sort_stays_n_log_n_against_an_adversary() {
-    static int32_t buf[SCALE_N];
-    static int32_t val[SCALE_N];
+    static int32_t buf[SCALE_N], val[SCALE_N];
 
     adversary_arm(buf, val);
 
@@ -676,8 +672,7 @@ static void test_sort_stays_n_log_n_against_an_adversary() {
 // the same hole in nth_elem, which partial_sort goes through: 268M comparisons here
 // without the cap, 5.9M with it
 static void test_nth_elem_stays_n_log_n_against_an_adversary() {
-    static int32_t buf[SCALE_N];
-    static int32_t val[SCALE_N];
+    static int32_t buf[SCALE_N], val[SCALE_N];
     adversary_arm(buf, val);
 
     constexpr size_t nth = SCALE_N / 2;
@@ -695,8 +690,7 @@ static void test_nth_elem_stays_n_log_n_against_an_adversary() {
 
 // 269M without the cap in nth_elem, 6.4M with it
 static void test_partial_sort_stays_n_log_n_against_an_adversary() {
-    static int32_t buf[SCALE_N];
-    static int32_t val[SCALE_N];
+    static int32_t buf[SCALE_N], val[SCALE_N];
     adversary_arm(buf, val);
 
     constexpr size_t count = SCALE_N / 2;

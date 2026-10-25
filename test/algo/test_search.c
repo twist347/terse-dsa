@@ -546,8 +546,7 @@ static void test_starts_and_ends_with_agree_with_a_plain_comparison() {
                         run[i] = (int32_t) (run_bits >> i & 1);
                     }
 
-                    bool head = run_len <= len;
-                    bool tail = run_len <= len;
+                    bool head = run_len <= len, tail = run_len <= len;
                     for (size_t i = 0; i < run_len && run_len <= len; ++i) {
                         head = head && buf[i] == run[i];
                         tail = tail && buf[len - run_len + i] == run[i];

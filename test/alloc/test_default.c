@@ -34,8 +34,7 @@ static void assert_ramp(const unsigned char *p, size_t n) {
 
 // the default allocator is a static singleton: every call returns the same object
 static void test_default_is_a_singleton() {
-    const tda_Al *a = tda_al_default();
-    const tda_Al *b = tda_al_default();
+    const tda_Al *a = tda_al_default(), *b = tda_al_default();
 
     TEST_ASSERT_NOT_NULL(a);
     TEST_ASSERT_EQUAL_PTR(a, b);
@@ -91,8 +90,7 @@ static void test_alloc_gives_the_alignment_asked_for() {
 static void test_allocations_are_independent() {
     tda_Al *al = tda_al_default();
 
-    unsigned char *a = tda_alloc(al, bytes(16));
-    unsigned char *b = tda_alloc(al, bytes(16));
+    unsigned char *a = tda_alloc(al, bytes(16)), *b = tda_alloc(al, bytes(16));
     TEST_ASSERT_NOT_NULL(a);
     TEST_ASSERT_NOT_NULL(b);
     TEST_ASSERT_TRUE(a != b);

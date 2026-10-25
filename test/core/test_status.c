@@ -53,8 +53,7 @@ static void test_status_to_str_spells_every_status() {
 static void test_status_to_str_gives_each_status_its_own_name() {
     for (size_t i = 0; i < NAMED_LEN; ++i) {
         for (size_t j = i + 1; j < NAMED_LEN; ++j) {
-            const char *a = tda_status_to_str(NAMED[i].st);
-            const char *b = tda_status_to_str(NAMED[j].st);
+            const char *a = tda_status_to_str(NAMED[i].st), *b = tda_status_to_str(NAMED[j].st);
 
             TEST_ASSERT_NOT_EQUAL_INT(0, strcmp(a, b));
         }

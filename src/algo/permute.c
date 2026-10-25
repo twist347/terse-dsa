@@ -4,7 +4,6 @@
 #include "tda/core/check.h"
 
 #include "internal/emit.h"
-#include "internal/overlap.h"
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -106,8 +105,7 @@ size_t tda_span_partition(tda_SpanMut s, tda_Pred pred, void *ctx) {
 
 tda_Status tda_span_partition_stable(
     tda_SpanMut s,
-    tda_Pred pred,
-    void *ctx,
+    tda_Pred pred, void *ctx,
     tda_Al *al,
     size_t *out_boundary
 ) {
@@ -204,8 +202,7 @@ void tda_span_shuffle_prefix(tda_SpanMut s, size_t count, tda_Rng *rng) {
 /* ========== internals ========== */
 
 static bool goes_before(tda_Span s, tda_Cmp cmp, void *ctx, bool asc, size_t i, size_t j) {
-    const void *lhs = tda_span_get(s, i);
-    const void *rhs = tda_span_get(s, j);
+    const void *lhs = tda_span_get(s, i), *rhs = tda_span_get(s, j);
 
     return asc ? cmp(lhs, rhs, ctx) < 0 : cmp(rhs, lhs, ctx) < 0;
 }

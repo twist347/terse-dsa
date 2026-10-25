@@ -270,8 +270,7 @@ static void test_stats_count_live_peak_and_requests() {
     tda_debug_init(&parent, &debug);
     tda_Al *al = TDA_AL(&debug);
 
-    void *a = tda_alloc(al, bytes(10));
-    void *b = tda_alloc(al, bytes(30));
+    void *a = tda_alloc(al, bytes(10)), *b = tda_alloc(al, bytes(30));
     tda_dealloc(al, a, bytes(10));
     void *c = tda_alloc(al, bytes(5));
 
@@ -295,8 +294,7 @@ static void test_leaks_are_listed_by_serial() {
 
     TEST_ASSERT_EQUAL_size_t(0, tda_debug_fprint_leaks(&debug, stream));
 
-    void *a = tda_alloc(al, bytes(12));
-    void *b = tda_alloc(al, bytes(7));
+    void *a = tda_alloc(al, bytes(12)), *b = tda_alloc(al, bytes(7));
     tda_dealloc(al, a, bytes(12));
     TEST_ASSERT_EQUAL_size_t(1, tda_debug_fprint_leaks(&debug, stream));
 

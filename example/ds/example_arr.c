@@ -13,8 +13,7 @@
 
 // an equality looser than bytewise: elems equal under it may differ in their bytes
 static bool eq_abs_i32(const void *lhs, const void *rhs, void *) {
-    const int32_t a = *(const int32_t *) lhs;
-    const int32_t b = *(const int32_t *) rhs;
+    const int32_t a = *(const int32_t *) lhs, b = *(const int32_t *) rhs;
 
     return (a < 0 ? -a : a) == (b < 0 ? -b : b);
 }
@@ -69,9 +68,7 @@ int main() {
     /// [copy]
     // every allocating op can fail and C has no defer: once a resource is held, failures
     // jump to a common exit instead of returning early
-    tda_Arr copy = {};
-    tda_Arr shorter = {};
-    tda_Arr in_arena = {};
+    tda_Arr copy = {}, shorter = {}, in_arena = {};
     tda_Arena arena = {};
     int rc = 1;
 

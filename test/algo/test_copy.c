@@ -366,11 +366,9 @@ static void test_sample_reaches_every_pick_equally_often() {
 
 static void test_sample_replays_the_same_seed() {
     constexpr int32_t src[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    int32_t a[4] = {0};
-    int32_t b[4] = {0};
+    int32_t a[4] = {0}, b[4] = {0};
 
-    tda_Rng one = tda_rng_from_seed(5);
-    tda_Rng two = tda_rng_from_seed(5);
+    tda_Rng one = tda_rng_from_seed(5), two = tda_rng_from_seed(5);
 
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, src, 10);
     TEST_ASSERT_EQUAL_size_t(4, tda_span_sample(TDA_SPAN_FROM_DATA_MUT(int32_t, a, 4), s, &one));

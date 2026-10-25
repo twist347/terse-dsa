@@ -294,8 +294,7 @@ static void test_is_permutation_matches_the_counts_everywhere() {
 
         for (size_t i = 0; i < arrays; ++i) {
             for (size_t j = 0; j < arrays; ++j) {
-                int32_t a[5];
-                int32_t b[5];
+                int32_t a[5], b[5];
                 nth_array(a, n, i);
                 nth_array(b, n, j);
 
@@ -318,16 +317,14 @@ static void test_is_permutation_matches_the_counts_everywhere() {
 
 // catches checking only that each elem of one occurs somewhere in the other
 static void test_is_permutation_counts_the_repeats() {
-    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 1, 2);
-    const tda_Span b = TDA_SPAN_OF(int32_t, 1, 2, 2);
+    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 1, 2), b = TDA_SPAN_OF(int32_t, 1, 2, 2);
 
     TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32, nullptr));
     TEST_ASSERT_FALSE(tda_span_is_permutation(b, a, tda_eq_i32, nullptr));
 }
 
 static void test_is_permutation_of_different_lengths_is_false() {
-    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 2);
-    const tda_Span b = TDA_SPAN_OF(int32_t, 2, 1, 1);
+    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 2), b = TDA_SPAN_OF(int32_t, 2, 1, 1);
 
     TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32, nullptr));
 }
@@ -340,8 +337,7 @@ static void test_is_permutation_of_empty_spans() {
 
 // equal under the predicate, not by the bytes: {1, -2} is {2, -1} by absolute value
 static void test_is_permutation_honours_the_equality() {
-    const tda_Span a = TDA_SPAN_OF(int32_t, 1, -2, 3);
-    const tda_Span b = TDA_SPAN_OF(int32_t, -3, 2, -1);
+    const tda_Span a = TDA_SPAN_OF(int32_t, 1, -2, 3), b = TDA_SPAN_OF(int32_t, -3, 2, -1);
 
     TEST_ASSERT_TRUE(tda_span_is_permutation(a, b, tda_test_i32_eq_abs, nullptr));
     TEST_ASSERT_FALSE(tda_span_is_permutation(a, b, tda_eq_i32, nullptr));

@@ -11,8 +11,7 @@
 
 int main() {
     /// [merge]
-    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 4, 7);
-    const tda_Span b = TDA_SPAN_OF(int32_t, 2, 3, 8);
+    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 4, 7), b = TDA_SPAN_OF(int32_t, 2, 3, 8);
 
     int32_t buf[6];
     const tda_SpanMut dst = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6);

@@ -33,8 +33,7 @@ int main() {
     }
 
     int rc = 1;
-    int32_t *a = TDA_ALLOC(int32_t, TDA_AL(&arena), 4);
-    int32_t *b = TDA_ALLOC(int32_t, TDA_AL(&arena), 4);
+    int32_t *a = TDA_ALLOC(int32_t, TDA_AL(&arena), 4), *b = TDA_ALLOC(int32_t, TDA_AL(&arena), 4);
     if (!a || !b) {
         goto out;
     }

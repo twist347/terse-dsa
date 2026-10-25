@@ -25,8 +25,7 @@ int main() {
     tda_Rng rng = tda_rng_from_seed(2026);
 
     // two draws, two statements: argument evaluation order is unspecified
-    const int32_t first = tda_rng_i32_range(&rng, 1, 6);
-    const int32_t second = tda_rng_i32_range(&rng, 1, 6);
+    const int32_t first = tda_rng_i32_range(&rng, 1, 6), second = tda_rng_i32_range(&rng, 1, 6);
     printf("%" PRId32 " %" PRId32 "\n", first, second); // 3 4
     /// [seed]
 

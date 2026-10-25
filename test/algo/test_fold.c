@@ -154,8 +154,7 @@ static void test_fold_back_walks_back_to_front() {
 // with an associative operation the direction cannot be observed...
 static void test_fold_back_agrees_with_fold_when_associative() {
     constexpr int32_t buf[4] = {1, 2, 3, 4};
-    int64_t left = 0;
-    int64_t right = 0;
+    int64_t left = 0, right = 0;
 
     tda_span_fold(TDA_SPAN_FROM_DATA(int32_t, buf, 4), &left, sum_i32_into_i64, nullptr);
     tda_span_fold_back(TDA_SPAN_FROM_DATA(int32_t, buf, 4), &right, sum_i32_into_i64, nullptr);
@@ -166,8 +165,7 @@ static void test_fold_back_agrees_with_fold_when_associative() {
 // ...and with an order-sensitive one it decides the answer
 static void test_fold_back_differs_from_fold_when_order_matters() {
     constexpr int32_t buf[4] = {1, 2, 3, 4};
-    int32_t left = 0;
-    int32_t right = 0;
+    int32_t left = 0, right = 0;
 
     tda_span_fold(TDA_SPAN_FROM_DATA(int32_t, buf, 4), &left, horner_i32, nullptr);
     tda_span_fold_back(TDA_SPAN_FROM_DATA(int32_t, buf, 4), &right, horner_i32, nullptr);

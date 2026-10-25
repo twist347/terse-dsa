@@ -3,7 +3,6 @@
 #include "tda/core/check.h"
 
 #include "internal/emit.h"
-#include "internal/overlap.h"
 
 #include <assert.h>
 #include <string.h>

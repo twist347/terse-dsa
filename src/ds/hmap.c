@@ -174,11 +174,8 @@ tda_Status tda_hmap_init_cap(
 }
 
 tda_Status tda_hmap_from_spans(
-    tda_Span keys,
-    tda_Span vals,
-    tda_Hasher hasher,
-    tda_Eq eq,
-    void *ctx,
+    tda_Span keys, tda_Span vals,
+    tda_Hasher hasher, tda_Eq eq, void *ctx,
     tda_Al *al,
     tda_HMap *out
 ) {
@@ -208,7 +205,8 @@ tda_Status tda_hmap_from_spans(
 }
 
 tda_Status tda_hmap_init_raw_(
-    size_t cap, tda_Layout key, tda_Layout val,
+    size_t cap,
+    tda_Layout key, tda_Layout val,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
     tda_Al *al,
     tda_HMap *out
@@ -225,8 +223,7 @@ tda_Status tda_hmap_init_raw_(
     // No real type comes near overflowing it; a layout built by hand might, and its nodes
     // would be too short for what is copied into them
     tda_Layout node = TDA_LAYOUT_OF(tda_HMapNode);
-    size_t key_offset = 0;
-    size_t val_offset = 0;
+    size_t key_offset = 0, val_offset = 0;
     [[maybe_unused]] const bool overflow = tda_layout_ckd_extend(&node, key, &key_offset)
         || (val.size > 0 && tda_layout_ckd_extend(&node, val, &val_offset))
         || tda_layout_ckd_pad(&node);

@@ -92,8 +92,7 @@ static void test_unused_silences_a_nodiscard_result() {
 /* ========== swap ========== */
 
 static void test_swap_exchanges_scalars() {
-    int32_t a = 1;
-    int32_t b = 2;
+    int32_t a = 1, b = 2;
 
     TDA_SWAP(a, b);
 
@@ -115,8 +114,7 @@ static void test_swap_exchanges_structs() {
 }
 
 static void test_swap_exchanges_pointers() {
-    int32_t x = 1;
-    int32_t y = 2;
+    int32_t x = 1, y = 2;
     int32_t *p = &x;
     int32_t *q = &y;
 
@@ -131,8 +129,7 @@ static void test_swap_exchanges_pointers() {
 static void test_swap_exchanges_through_dereferenced_pointers() {
     Pair x = {.a = 1, .b = 2};
     Pair y = {.a = 3, .b = 4};
-    Pair *px = &x;
-    Pair *py = &y;
+    Pair *px = &x, *py = &y;
 
     TDA_SWAP(*px, *py);
 
@@ -161,8 +158,7 @@ static void test_swap_exchanges_whole_spans() {
 // macro.
 static void test_swap_evaluates_each_side_exactly_once() {
     int32_t v[4] = {10, 20, 30, 40};
-    size_t i = 0;
-    size_t j = 2;
+    size_t i = 0, j = 2;
 
     TDA_SWAP(v[i++], v[j++]);
 
@@ -186,8 +182,7 @@ static void test_swap_with_itself_changes_nothing() {
 
 // without the do/while(0) wrapper this else would belong to nothing
 static void test_swap_is_a_single_statement() {
-    int32_t a = 1;
-    int32_t b = 2;
+    int32_t a = 1, b = 2;
 
     if (a < b)
         TDA_SWAP(a, b);
@@ -212,8 +207,7 @@ static void test_swap_survives_a_caller_variable_named_like_its_temporary() {
 
 // twice in a row: the second call must not see anything left by the first
 static void test_swap_is_repeatable() {
-    int32_t a = 1;
-    int32_t b = 2;
+    int32_t a = 1, b = 2;
 
     TDA_SWAP(a, b);
     TDA_SWAP(a, b);

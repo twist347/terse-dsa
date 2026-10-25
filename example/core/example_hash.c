@@ -24,8 +24,7 @@ static tda_Hash hash_point(const void *key, void *) {
 }
 
 static bool eq_point(const void *lhs, const void *rhs, void *) {
-    const Point *a = lhs;
-    const Point *b = rhs;
+    const Point *a = lhs, *b = rhs;
 
     return a->x == b->x && a->y == b->y;
 }

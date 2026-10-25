@@ -98,8 +98,7 @@ static void test_ckd_extend_lays_fields_out_as_a_struct_does() {
     } Mixed;
 
     tda_Layout l = TDA_LAYOUT_OF(char);
-    size_t off_i;
-    size_t off_s;
+    size_t off_i, off_s;
     TEST_ASSERT_FALSE(tda_layout_ckd_extend(&l, TDA_LAYOUT_OF(int64_t), &off_i));
     TEST_ASSERT_FALSE(tda_layout_ckd_extend(&l, TDA_LAYOUT_OF(int16_t), &off_s));
     TEST_ASSERT_EQUAL_size_t(offsetof(Mixed, i), off_i);

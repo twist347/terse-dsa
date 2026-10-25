@@ -52,8 +52,7 @@ static void test_rng_matches_the_reference_stream() {
 
 // the point of a seeded generator: a failure on the 4000th draw can be replayed
 static void test_rng_replays_the_same_seed() {
-    tda_Rng a = tda_rng_from_seed(12345);
-    tda_Rng b = tda_rng_from_seed(12345);
+    tda_Rng a = tda_rng_from_seed(12345), b = tda_rng_from_seed(12345);
 
     for (size_t i = 0; i < 1000; ++i) {
         TEST_ASSERT_EQUAL_UINT64(tda_rng_u64(&a), tda_rng_u64(&b));
@@ -94,8 +93,7 @@ static void test_rng_copies_as_a_value() {
 // u32 is the top half of a whole draw: it must replay and advance the generator exactly
 // as u64 does, and must not be the low half, the weaker one here
 static void test_rng_u32_is_the_top_half_of_a_draw() {
-    tda_Rng a = tda_rng_from_seed(12345);
-    tda_Rng b = tda_rng_from_seed(12345);
+    tda_Rng a = tda_rng_from_seed(12345), b = tda_rng_from_seed(12345);
 
     for (size_t i = 0; i < 100; ++i) {
         TEST_ASSERT_EQUAL_UINT32((uint32_t) (tda_rng_u64(&a) >> 32), tda_rng_u32(&b));
@@ -234,8 +232,7 @@ static void test_rng_i32_range_holds_its_ends() {
         TEST_ASSERT_EQUAL_INT32(-7, tda_rng_i32_range(&rng, -7, -7));
     }
 
-    bool saw_lo = false;
-    bool saw_hi = false;
+    bool saw_lo = false, saw_hi = false;
     for (size_t i = 0; i < 1000; ++i) {
         const int32_t val = tda_rng_i32_range(&rng, -2, 2);
         TEST_ASSERT_TRUE(val >= -2 && val <= 2);
@@ -254,8 +251,7 @@ static void test_rng_i32_range_holds_its_ends() {
 static void test_rng_i32_range_survives_the_whole_width() {
     tda_Rng rng = tda_rng_from_seed(8);
 
-    bool saw_negative = false;
-    bool saw_positive = false;
+    bool saw_negative = false, saw_positive = false;
 
     for (size_t i = 0; i < 1000; ++i) {
         const int32_t val = tda_rng_i32_range(&rng, INT32_MIN, INT32_MAX);
@@ -274,8 +270,7 @@ static void test_rng_i64_range_survives_the_whole_width() {
         TEST_ASSERT_EQUAL_INT64(42, tda_rng_i64_range(&rng, 42, 42));
     }
 
-    bool saw_negative = false;
-    bool saw_positive = false;
+    bool saw_negative = false, saw_positive = false;
 
     for (size_t i = 0; i < 1000; ++i) {
         const int64_t val = tda_rng_i64_range(&rng, INT64_MIN, INT64_MAX);
@@ -292,8 +287,7 @@ static void test_rng_i64_range_survives_the_whole_width() {
 static void test_rng_f64_stays_below_one() {
     tda_Rng rng = tda_rng_from_seed(10);
 
-    double lowest = 1.0;
-    double highest = 0.0;
+    double lowest = 1.0, highest = 0.0;
 
     for (size_t i = 0; i < TRIALS; ++i) {
         const double val = tda_rng_f64(&rng);

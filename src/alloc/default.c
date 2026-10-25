@@ -86,7 +86,7 @@ static void *default_alloc(void *, tda_Layout layout) {
 #else
     // aligned_alloc takes a size that is a multiple of the alignment
     size_t size;
-    if (tda_ckd_align_up(&size, layout.size, layout.align)) {
+    if (tda_align_ckd_up(&size, layout.size, layout.align)) {
         return nullptr;
     }
 

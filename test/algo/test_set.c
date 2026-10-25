@@ -286,9 +286,7 @@ static size_t expand_counts(const int *c, int32_t *out) {
 }
 
 static void check_pair(const int32_t *a, size_t an, const int32_t *b, size_t bn) {
-    int ca[ALPHA];
-    int cb[ALPHA];
-    int want_counts[ALPHA];
+    int ca[ALPHA], cb[ALPHA], want_counts[ALPHA];
     int32_t want[2 * MAXLEN];
 
     count_values(a, an, ca);
@@ -303,8 +301,7 @@ static void check_pair(const int32_t *a, size_t an, const int32_t *b, size_t bn)
 
     for (size_t k = 0; k < 4; ++k) {
         for (int v = 0; v < ALPHA; ++v) {
-            const int m = ca[v];
-            const int n = cb[v];
+            const int m = ca[v], n = cb[v];
             switch (k) {
                 case 0: want_counts[v] = m > n ? m : n;
                     break;

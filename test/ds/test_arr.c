@@ -186,8 +186,7 @@ static void test_copy_is_independent() {
 }
 
 static void test_copy_assign_grow_shrink_empty() {
-    tda_Arr src = make_arr(6);
-    tda_Arr dst = make_arr(2);
+    tda_Arr src = make_arr(6), dst = make_arr(2);
 
     // grow: 2 -> 6
     TDA_TEST_OK(tda_arr_copy_assign(&dst, &src));
@@ -225,8 +224,7 @@ static void test_copy_assign_of_itself_changes_nothing() {
 /* ========== mods / views ========== */
 
 static void test_swap_exchanges_contents() {
-    tda_Arr a = make_arr(2);
-    tda_Arr b = make_arr(5);
+    tda_Arr a = make_arr(2), b = make_arr(5);
 
     tda_arr_swap(&a, &b);
 
@@ -403,11 +401,9 @@ static void test_swap_of_itself_changes_nothing() {
 
 // one allocator on both sides: the buffers are handed over, never copied
 static void test_swap_same_allocator_hands_over_buffers() {
-    tda_Arr a = make_arr(2);
-    tda_Arr b = make_arr(5);
+    tda_Arr a = make_arr(2), b = make_arr(5);
 
-    const void *pa = tda_arr_data(&a);
-    const void *pb = tda_arr_data(&b);
+    const void *pa = tda_arr_data(&a), *pb = tda_arr_data(&b);
 
     tda_arr_swap(&a, &b);
 
@@ -729,8 +725,7 @@ static void test_copy_assign_of_the_same_length_never_allocates() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Arr self = {};
-    tda_Arr other = {};
+    tda_Arr self = {}, other = {};
     TDA_TEST_OK(TDA_ARR_OF(int32_t, &al, &self, 1, 2, 3));
     TDA_TEST_OK(TDA_ARR_OF(int32_t, &al, &other, 9, 9, 9));
 
@@ -889,8 +884,7 @@ static void test_bytes_agrees_with_the_span() {
 /* ========== compare ========== */
 
 static void test_eq_matches_the_same_elems() {
-    tda_Arr a = make_arr(4);
-    tda_Arr b = make_arr(4);
+    tda_Arr a = make_arr(4), b = make_arr(4);
 
     TEST_ASSERT_TRUE(tda_arr_eq(&a, &a));
     TEST_ASSERT_TRUE(tda_arr_eq(&a, &b));
@@ -902,8 +896,7 @@ static void test_eq_matches_the_same_elems() {
 }
 
 static void test_eq_parts_one_differing_elem() {
-    tda_Arr a = make_arr(4);
-    tda_Arr b = make_arr(4);
+    tda_Arr a = make_arr(4), b = make_arr(4);
     TDA_ARR_SET(int32_t, &b, 3, 99);
 
     TEST_ASSERT_FALSE(tda_arr_eq(&a, &b));
@@ -948,8 +941,7 @@ static void test_eq_by_asks_the_equality() {
     constexpr Pair lhs[2] = {{1, 10}, {2, 20}};
     constexpr Pair rhs[2] = {{1, 70}, {2, 80}};
 
-    tda_Arr a = {};
-    tda_Arr b = {};
+    tda_Arr a = {}, b = {};
     TDA_TEST_OK(TDA_ARR_FROM_DATA(Pair, lhs, 2, tda_al_default(), &a));
     TDA_TEST_OK(TDA_ARR_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
@@ -1016,15 +1008,12 @@ static void test_print_writes_to_stdout() {
 
 // each side keeps the allocator its elems came from, and each is given back to it
 static void test_swap_across_allocators_carries_each_allocator() {
-    tda_TestProbe pa;
-    tda_TestProbe pb;
+    tda_TestProbe pa, pb;
     tda_test_probe_reset(&pa);
     tda_test_probe_reset(&pb);
-    tda_Al al_a = tda_test_probe_full(&pa);
-    tda_Al al_b = tda_test_probe_full(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
-    tda_Arr a = {};
-    tda_Arr b = {};
+    tda_Arr a = {}, b = {};
     TDA_TEST_OK(TDA_ARR_OF(int32_t, &al_a, &a, 1, 2));
     TDA_TEST_OK(TDA_ARR_OF(int32_t, &al_b, &b, 3, 4, 5));
 

@@ -3,7 +3,6 @@
 #include "tda/core/check.h"
 
 #include "internal/emit.h"
-#include "internal/overlap.h"
 
 #include <assert.h>
 
@@ -24,8 +23,7 @@ size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, 
     size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *lhs = tda_span_get(a, i);
-        const void *rhs = tda_span_get(b, j);
+        const void *lhs = tda_span_get(a, i), *rhs = tda_span_get(b, j);
         const int order = cmp(lhs, rhs, ctx);
 
         if (order < 0) {
@@ -64,8 +62,7 @@ size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cm
     size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *lhs = tda_span_get(a, i);
-        const void *rhs = tda_span_get(b, j);
+        const void *lhs = tda_span_get(a, i), *rhs = tda_span_get(b, j);
         const int order = cmp(lhs, rhs, ctx);
 
         if (order < 0) {
@@ -99,8 +96,7 @@ size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp 
     size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *lhs = tda_span_get(a, i);
-        const void *rhs = tda_span_get(b, j);
+        const void *lhs = tda_span_get(a, i), *rhs = tda_span_get(b, j);
         const int order = cmp(lhs, rhs, ctx);
 
         if (order < 0) {
@@ -134,8 +130,7 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
     size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *lhs = tda_span_get(a, i);
-        const void *rhs = tda_span_get(b, j);
+        const void *lhs = tda_span_get(a, i), *rhs = tda_span_get(b, j);
         const int order = cmp(lhs, rhs, ctx);
 
         if (order < 0) {

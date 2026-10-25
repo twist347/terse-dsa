@@ -31,8 +31,7 @@ static bool is_even_counting(const void *elem, void *ctx) {
 // the multiset must survive a permutation, whatever the order
 static void assert_same_elems(const int32_t *got, const int32_t *want, size_t n) {
     for (size_t i = 0; i < n; ++i) {
-        size_t got_count = 0;
-        size_t want_count = 0;
+        size_t got_count = 0, want_count = 0;
         for (size_t j = 0; j < n; ++j) {
             got_count += got[j] == want[i];
             want_count += want[j] == want[i];
@@ -198,8 +197,7 @@ static void test_swap_ranges_works_on_halves_of_one_buffer() {
 }
 
 static void test_swap_ranges_empty_is_noop() {
-    int32_t a[1] = {1};
-    int32_t b[1] = {2};
+    int32_t a[1] = {1}, b[1] = {2};
 
     tda_span_swap_ranges(TDA_SPAN_FROM_DATA_MUT(int32_t, a, 0), TDA_SPAN_FROM_DATA_MUT(int32_t, b, 0));
 
@@ -803,8 +801,7 @@ static void test_shuffle_replays_the_same_seed() {
     int32_t a[] = {1, 2, 3, 4, 5, 6, 7, 8};
     int32_t b[] = {1, 2, 3, 4, 5, 6, 7, 8};
 
-    tda_Rng one = tda_rng_from_seed(4);
-    tda_Rng two = tda_rng_from_seed(4);
+    tda_Rng one = tda_rng_from_seed(4), two = tda_rng_from_seed(4);
 
     tda_span_shuffle(TDA_SPAN_FROM_DATA_MUT(int32_t, a, 8), &one);
     tda_span_shuffle(TDA_SPAN_FROM_DATA_MUT(int32_t, b, 8), &two);

@@ -37,8 +37,7 @@ fail:
 
 int main() {
     /// [report]
-    tda_Arr arr;
-    tda_Arr copy;
+    tda_Arr arr, copy;
     const tda_Status st = arr_and_copy(tda_al_default(), &arr, &copy);
 
     printf("%s\n", tda_status_to_str(st)); // TDA_STATUS_OK

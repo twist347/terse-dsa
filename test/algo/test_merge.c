@@ -197,8 +197,7 @@ static void test_merge_writes_only_into_the_destination_view() {
 // the oracle is libc qsort over a copy: merging two sorted runs equals sorting their
 // concatenation, and qsort shares no code with what is tested
 static void assert_merges_in_place(const int32_t *src, size_t len, size_t mid, tda_Al *al) {
-    int32_t buf[16];
-    int32_t want[16];
+    int32_t buf[16], want[16];
     TEST_ASSERT_TRUE(len <= 16);
 
     memcpy(buf, src, len * sizeof(int32_t));

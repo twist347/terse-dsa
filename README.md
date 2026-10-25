@@ -107,6 +107,7 @@ uses stays the better habit.
 | `status.h` | `tda_Status`, what every fallible operation returns |
 | `span.h` | `tda_Span` / `tda_SpanMut`, a non-owning view over contiguous elems |
 | `layout.h` | `tda_Layout` — a block's size and alignment as one value, and `TDA_LAYOUT_OF(T)` |
+| `align.h` | rounding sizes and addresses up to an alignment, for an allocator of one's own |
 | `cmp.h` | `tda_Cmp` and `tda_Eq`, plus ready-made ones for the built-in types |
 | `hash.h` | `tda_Hasher`, `tda_Hash`, hashers for the built-in types and `tda_hash_combine` |
 | `rng.h` | `tda_Rng` — a seeded generator, and uniform ints, floats and bools drawn from one |

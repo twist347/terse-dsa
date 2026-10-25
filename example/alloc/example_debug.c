@@ -14,8 +14,7 @@ int main() {
     tda_debug_init(tda_al_default(), &debug);
     tda_Al *al = TDA_AL(&debug);
 
-    int32_t *kept = TDA_ALLOC(int32_t, al, 4);
-    int32_t *dropped = TDA_ALLOC(int32_t, al, 8);
+    int32_t *kept = TDA_ALLOC(int32_t, al, 4), *dropped = TDA_ALLOC(int32_t, al, 8);
     TDA_DEALLOC(int32_t, al, dropped, 8);
 
     // tda debug: leak: block #1, 16 bytes at 0x...

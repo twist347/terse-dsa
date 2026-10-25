@@ -3,7 +3,6 @@
 #include "tda/core/check.h"
 
 #include "internal/order.h"
-#include "internal/overlap.h"
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -773,8 +772,7 @@ static bool eq_impl(const tda_Deque *a, const tda_Deque *b, tda_Eq eq, void *ctx
     // by index and not by memcmp over the buffers: two rings holding the same elems start
     // at different slots, and the bytes outside the contents are not contents
     for (size_t i = 0; i < a->len_; ++i) {
-        const void *lhs = elem_at(a, i);
-        const void *rhs = elem_at(b, i);
+        const void *lhs = elem_at(a, i), *rhs = elem_at(b, i);
         if (!tda_elem_eq(eq, ctx, lhs, rhs, a->elem_.size)) {
             return false;
         }

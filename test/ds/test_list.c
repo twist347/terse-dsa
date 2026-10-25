@@ -209,8 +209,7 @@ static void test_from_data_copies_whole_elems() {
     tda_List l = {};
     TDA_TEST_OK(TDA_LIST_FROM_DATA(Pair, src, 2, tda_al_default(), &l));
 
-    const Pair *first = TDA_LIST_FRONT_AS(Pair, &l);
-    const Pair *last = TDA_LIST_BACK_AS(Pair, &l);
+    const Pair *first = TDA_LIST_FRONT_AS(Pair, &l), *last = TDA_LIST_BACK_AS(Pair, &l);
 
     TEST_ASSERT_EQUAL_INT64(1, first->a);
     TEST_ASSERT_EQUAL_INT64(2, first->b);
@@ -405,8 +404,7 @@ static void test_copy_of_empty_is_empty() {
 }
 
 static void test_copy_assign_grows_the_target() {
-    tda_List src = make_list(4);
-    tda_List dst = make_list(1);
+    tda_List src = make_list(4), dst = make_list(1);
 
     TDA_TEST_OK(tda_list_copy_assign(&dst, &src));
 
@@ -418,8 +416,7 @@ static void test_copy_assign_grows_the_target() {
 }
 
 static void test_copy_assign_shrinks_the_target() {
-    tda_List src = make_list(1);
-    tda_List dst = make_list(4);
+    tda_List src = make_list(1), dst = make_list(4);
 
     TDA_TEST_OK(tda_list_copy_assign(&dst, &src));
 
@@ -430,8 +427,7 @@ static void test_copy_assign_shrinks_the_target() {
 }
 
 static void test_copy_assign_from_empty_empties_the_target() {
-    tda_List src = make_list(0);
-    tda_List dst = make_list(3);
+    tda_List src = make_list(0), dst = make_list(3);
 
     TDA_TEST_OK(tda_list_copy_assign(&dst, &src));
 
@@ -444,8 +440,7 @@ static void test_copy_assign_from_empty_empties_the_target() {
 }
 
 static void test_copy_assign_to_empty_target() {
-    tda_List src = make_list(2);
-    tda_List dst = make_list(0);
+    tda_List src = make_list(2), dst = make_list(0);
 
     TDA_TEST_OK(tda_list_copy_assign(&dst, &src));
 
@@ -469,8 +464,7 @@ static void test_copy_assign_keeps_the_target_allocator() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    tda_List src = make_list(2);
-    tda_List dst = {};
+    tda_List src = make_list(2), dst = {};
     TDA_LIST_INIT(int32_t, TDA_AL(&arena), &dst);
 
     TDA_TEST_OK(tda_list_copy_assign(&dst, &src));
@@ -489,12 +483,10 @@ static void test_copy_assign_reuses_the_target_nodes() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_bare(&probe);
 
-    tda_List src = make_list(2);
-    tda_List dst = {};
+    tda_List src = make_list(2), dst = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &dst, 7, 8));
 
-    const tda_ListNode *head = tda_list_front_node(&dst);
-    const tda_ListNode *tail = tda_list_back_node(&dst);
+    const tda_ListNode *head = tda_list_front_node(&dst), *tail = tda_list_back_node(&dst);
     const size_t before = tda_test_probe_requests(&probe);
 
     TDA_TEST_OK(tda_list_copy_assign(&dst, &src));
@@ -971,8 +963,7 @@ static void test_retain_frees_the_dropped_nodes() {
 /* ========== splice ========== */
 
 static void test_splice_back_appends_and_empties_the_source() {
-    tda_List dst = make_list(2);
-    tda_List src = {};
+    tda_List dst = make_list(2), src = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &src, 7, 8));
 
     TDA_TEST_OK(tda_list_splice_back(&dst, &src));
@@ -985,8 +976,7 @@ static void test_splice_back_appends_and_empties_the_source() {
 }
 
 static void test_splice_front_prepends_and_empties_the_source() {
-    tda_List dst = make_list(2);
-    tda_List src = {};
+    tda_List dst = make_list(2), src = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &src, 7, 8));
 
     TDA_TEST_OK(tda_list_splice_front(&dst, &src));
@@ -999,8 +989,7 @@ static void test_splice_front_prepends_and_empties_the_source() {
 }
 
 static void test_splice_into_an_empty_list() {
-    tda_List dst = make_list(0);
-    tda_List src = make_list(3);
+    tda_List dst = make_list(0), src = make_list(3);
 
     TDA_TEST_OK(tda_list_splice_back(&dst, &src));
 
@@ -1012,8 +1001,7 @@ static void test_splice_into_an_empty_list() {
 }
 
 static void test_splice_front_into_an_empty_list() {
-    tda_List dst = make_list(0);
-    tda_List src = make_list(2);
+    tda_List dst = make_list(0), src = make_list(2);
 
     TDA_TEST_OK(tda_list_splice_front(&dst, &src));
 
@@ -1025,8 +1013,7 @@ static void test_splice_front_into_an_empty_list() {
 }
 
 static void test_splice_from_an_empty_list_is_noop() {
-    tda_List dst = make_list(2);
-    tda_List src = make_list(0);
+    tda_List dst = make_list(2), src = make_list(0);
 
     TDA_TEST_OK(tda_list_splice_back(&dst, &src));
     TDA_TEST_OK(tda_list_splice_front(&dst, &src));
@@ -1045,8 +1032,7 @@ static void test_splice_moves_the_nodes_without_allocating() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_bare(&probe);
 
-    tda_List dst = {};
-    tda_List src = {};
+    tda_List dst = {}, src = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &dst, 1, 2));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &src, 3, 4));
 
@@ -1071,8 +1057,7 @@ static void test_splice_across_allocators_copies_the_elems() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_bare(&probe);
 
-    tda_List dst = make_list(2);
-    tda_List src = {};
+    tda_List dst = make_list(2), src = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &src, 7, 8));
 
     TDA_TEST_OK(tda_list_splice_back(&dst, &src));
@@ -1188,8 +1173,7 @@ static void test_for_each_mut_writes_through_every_position() {
 }
 
 static void test_swap_exchanges_the_contents() {
-    tda_List a = make_list(3);
-    tda_List b = {};
+    tda_List a = make_list(3), b = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &b, 9));
 
     tda_list_swap(&a, &b);
@@ -1203,11 +1187,9 @@ static void test_swap_exchanges_the_contents() {
 
 // the nodes stay put and only change list, so swap is O(1) and borrowed nodes stay valid
 static void test_swap_keeps_the_nodes_alive() {
-    tda_List a = make_list(2);
-    tda_List b = make_list(1);
+    tda_List a = make_list(2), b = make_list(1);
 
-    const tda_ListNode *a_head = tda_list_front_node(&a);
-    const tda_ListNode *b_head = tda_list_front_node(&b);
+    const tda_ListNode *a_head = tda_list_front_node(&a), *b_head = tda_list_front_node(&b);
 
     tda_list_swap(&a, &b);
 
@@ -1266,8 +1248,7 @@ static void test_splice_node_moves_one_node_between_lists() {
 
 // the node itself changes lists, so a pointer held before the move still names it
 static void test_splice_node_keeps_the_node_address() {
-    tda_List a = make_list(3);
-    tda_List b = make_list(1);
+    tda_List a = make_list(3), b = make_list(1);
 
     const tda_ListNode *moved = node_at(&a, 2);
     TDA_TEST_OK(tda_list_splice_node(&b, nullptr, &a, node_at(&a, 2)));
@@ -1280,8 +1261,7 @@ static void test_splice_node_keeps_the_node_address() {
 }
 
 static void test_splice_node_at_null_appends_to_the_back() {
-    tda_List a = make_list(2); // 0, 1
-    tda_List b = {};
+    tda_List a = make_list(2), b = {}; // 0, 1
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &b, 7, 8));
 
     TDA_TEST_OK(tda_list_splice_node(&b, nullptr, &a, node_at(&a, 0)));
@@ -1333,8 +1313,7 @@ static void test_splice_node_one_step_forward() {
 }
 
 static void test_splice_node_of_the_only_node_empties_the_source() {
-    tda_List a = make_list(1);
-    tda_List b = make_list(2);
+    tda_List a = make_list(1), b = make_list(2);
 
     TDA_TEST_OK(tda_list_splice_node(&b, tda_list_front_node_mut(&b), &a, node_at(&a, 0)));
 
@@ -1352,8 +1331,7 @@ static void test_splice_node_across_allocators_copies_the_elem() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    tda_List a = make_list(3); // default: 0, 1, 2
-    tda_List b = {};
+    tda_List a = make_list(3), b = {}; // default: 0, 1, 2
     TDA_TEST_OK(TDA_LIST_OF(int32_t, TDA_AL(&arena), &b, 9));
 
     const tda_ListNode *before = node_at(&a, 1);
@@ -1574,8 +1552,7 @@ static void test_sort_never_allocates() {
 /* ========== merge ========== */
 
 static void test_merge_interleaves_two_sorted_lists() {
-    tda_List a = {};
-    tda_List b = {};
+    tda_List a = {}, b = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &a, 1, 4, 7));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &b, 2, 3, 8, 9));
 
@@ -1590,8 +1567,7 @@ static void test_merge_interleaves_two_sorted_lists() {
 }
 
 static void test_merge_with_an_empty_source_changes_nothing() {
-    tda_List a = make_list(3);
-    tda_List b = make_list(0);
+    tda_List a = make_list(3), b = make_list(0);
 
     TDA_TEST_OK(tda_list_merge(&a, &b, tda_cmp_i32, nullptr));
 
@@ -1604,8 +1580,7 @@ static void test_merge_with_an_empty_source_changes_nothing() {
 }
 
 static void test_merge_into_an_empty_list_takes_everything() {
-    tda_List a = make_list(0);
-    tda_List b = make_list(4);
+    tda_List a = make_list(0), b = make_list(4);
 
     TDA_TEST_OK(tda_list_merge(&a, &b, tda_cmp_i32, nullptr));
 
@@ -1619,8 +1594,7 @@ static void test_merge_into_an_empty_list_takes_everything() {
 
 // equal elems of 'self' come before those of 'src', as in algo/merge
 static void test_merge_keeps_equal_elems_of_self_first() {
-    tda_List a = {};
-    tda_List b = {};
+    tda_List a = {}, b = {};
     TDA_LIST_INIT(Pair, tda_al_default(), &a);
     TDA_LIST_INIT(Pair, tda_al_default(), &b);
 
@@ -1652,8 +1626,7 @@ static void test_merge_on_one_allocator_never_allocates() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_List a = {};
-    tda_List b = {};
+    tda_List a = {}, b = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &a, 1, 4, 7));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &b, 2, 3));
 
@@ -1675,8 +1648,7 @@ static void test_merge_across_allocators_copies_the_elems() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
 
-    tda_List a = {};
-    tda_List b = {};
+    tda_List a = {}, b = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &a, 1, 5));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, TDA_AL(&arena), &b, 2, 9));
 
@@ -1864,8 +1836,7 @@ static void test_copy_assign_reports_a_refused_block_and_changes_nothing() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_bare(&probe);
 
-    tda_List src = make_list(4);
-    tda_List dst = {};
+    tda_List src = make_list(4), dst = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al, &dst, 7, 8));
     const size_t live = probe.live;
 
@@ -1907,8 +1878,7 @@ static void test_splice_node_across_allocators_reports_an_exhausted_arena() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
 
-    tda_List a = make_list(3); // default: 0, 1, 2
-    tda_List b = {};
+    tda_List a = make_list(3), b = {}; // default: 0, 1, 2
     TDA_TEST_OK(TDA_LIST_OF(int32_t, TDA_AL(&arena), &b, 9));
     tda_test_arena_leave(&arena, 0);
 
@@ -1928,8 +1898,7 @@ static void test_merge_across_allocators_reports_an_exhausted_arena() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
 
-    tda_List a = {};
-    tda_List b = {};
+    tda_List a = {}, b = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, TDA_AL(&arena), &a, 1, 5));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &b, 2, 9));
     tda_test_arena_leave(&arena, 0);
@@ -1997,8 +1966,7 @@ static void test_macro_node_elem_as_reads_and_writes() {
 /* ========== compare ========== */
 
 static void test_eq_matches_the_same_elems() {
-    tda_List a = make_list(4);
-    tda_List b = make_list(4);
+    tda_List a = make_list(4), b = make_list(4);
 
     TEST_ASSERT_TRUE(tda_list_eq(&a, &a));
     TEST_ASSERT_TRUE(tda_list_eq(&a, &b));
@@ -2010,8 +1978,7 @@ static void test_eq_matches_the_same_elems() {
 }
 
 static void test_eq_parts_one_differing_elem() {
-    tda_List a = make_list(4);
-    tda_List b = make_list(4);
+    tda_List a = make_list(4), b = make_list(4);
     TDA_TEST_OK(TDA_LIST_PUSH_BACK(int32_t, &b, 99));
     tda_list_pop_front(&b);
 
@@ -2049,8 +2016,7 @@ static void test_eq_of_two_empties() {
 
 // the same elems in another order are different contents, so the walk compares in order
 static void test_eq_is_order_sensitive() {
-    tda_List a = make_list(4);
-    tda_List b = make_list(4);
+    tda_List a = make_list(4), b = make_list(4);
 
     tda_list_reverse(&b);
     TEST_ASSERT_FALSE(tda_list_eq(&a, &b));
@@ -2066,8 +2032,7 @@ static void test_eq_by_asks_the_equality() {
     constexpr Pair lhs[2] = {{1, 10}, {2, 20}};
     constexpr Pair rhs[2] = {{1, 70}, {2, 80}};
 
-    tda_List a = {};
-    tda_List b = {};
+    tda_List a = {}, b = {};
     TDA_TEST_OK(TDA_LIST_FROM_DATA(Pair, lhs, 2, tda_al_default(), &a));
     TDA_TEST_OK(TDA_LIST_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
@@ -2134,15 +2099,12 @@ static void test_print_writes_to_stdout() {
 
 // each side keeps the allocator its elems came from, and each is given back to it
 static void test_swap_across_allocators_carries_each_allocator() {
-    tda_TestProbe pa;
-    tda_TestProbe pb;
+    tda_TestProbe pa, pb;
     tda_test_probe_reset(&pa);
     tda_test_probe_reset(&pb);
-    tda_Al al_a = tda_test_probe_full(&pa);
-    tda_Al al_b = tda_test_probe_full(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
-    tda_List a = {};
-    tda_List b = {};
+    tda_List a = {}, b = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al_a, &a, 1, 2));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, &al_b, &b, 3, 4, 5));
 

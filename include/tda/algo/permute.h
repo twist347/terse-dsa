@@ -121,8 +121,7 @@ size_t tda_span_partition(tda_SpanMut s, tda_Pred pred, void *ctx);
 [[nodiscard]] TDA_API
 tda_Status tda_span_partition_stable(
     tda_SpanMut s,
-    tda_Pred pred,
-    void *ctx,
+    tda_Pred pred, void *ctx,
     tda_Al *al,
     size_t *out_boundary
 );

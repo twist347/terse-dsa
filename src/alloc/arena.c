@@ -158,9 +158,8 @@ static void *arena_alloc(void *ctx, tda_Layout layout) {
 
     // the padding is a count, checked against the capacity before an address is formed
     const void *cursor = tda_byte_offset(self->data_, 1, self->offset_);
-    size_t start;
-    size_t end;
-    if (ckd_add(&start, self->offset_, tda_ptr_align_pad(cursor, layout.align))
+    size_t start, end;
+    if (ckd_add(&start, self->offset_, tda_align_pad(cursor, layout.align))
         || !block_end(self, start, layout.size, &end)) {
         return nullptr;
     }

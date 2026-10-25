@@ -45,6 +45,18 @@ int main() {
     tda_span_mut_print(tail, tda_fprint_i32); // [3, 1, 4, 9]
     /// [sub]
 
+    /// [overlap]
+    // the two halves of a split share no byte; a view and a subspan of it do, which is
+    // what an algo that must not write over its input asks the caller to rule out
+    tda_Span front, back;
+    tda_span_split_at(tda_span_mut_to_span(s), 2, &front, &back);
+    printf(
+        "%d %d\n",
+        tda_span_overlap(front, back),
+        tda_span_overlap(tda_span_mut_to_span(s), back)
+    ); // 0 1
+    /// [overlap]
+
     /// [bridge]
     // ds hands out a view and algo works in place through it
     tda_span_sort(s, tda_cmp_i32, nullptr);

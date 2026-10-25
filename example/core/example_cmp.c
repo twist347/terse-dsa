@@ -19,8 +19,7 @@ typedef struct {
 } Person;
 
 static int cmp_person_by_age(const void *lhs, const void *rhs, void *) {
-    const Person *a = lhs;
-    const Person *b = rhs;
+    const Person *a = lhs, *b = rhs;
 
     return tda_cmp_i32(&a->age, &b->age, nullptr);
 }

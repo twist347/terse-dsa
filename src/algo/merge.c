@@ -6,7 +6,6 @@
 
 #include "internal/emit.h"
 #include "internal/order.h"
-#include "internal/overlap.h"
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -42,8 +41,7 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *
     size_t write = 0;
 
     while (i < a.len && j < b.len) {
-        const void *lhs = tda_span_get(a, i);
-        const void *rhs = tda_span_get(b, j);
+        const void *lhs = tda_span_get(a, i), *rhs = tda_span_get(b, j);
 
         // a tie takes from 'a', keeping equal elems in order; this is what makes
         // tda_span_sort_stable stable
@@ -70,8 +68,7 @@ void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, t
     assert(cmp);
     TDA_EXPECT(mid <= s.len);
 
-    const size_t left_len = mid;
-    const size_t right_len = s.len - mid;
+    const size_t left_len = mid, right_len = s.len - mid;
 
     if (left_len == 0 || right_len == 0) {
         return;
@@ -107,8 +104,7 @@ void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, t
  * fine without an explicit stack.
  */
 static void merge_in_place(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx) {
-    const size_t left_len = mid;
-    const size_t right_len = s.len - mid;
+    const size_t left_len = mid, right_len = s.len - mid;
 
     if (left_len == 0 || right_len == 0) {
         return;
@@ -123,8 +119,7 @@ static void merge_in_place(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx) {
     }
 
     const tda_Span view = tda_span_mut_to_span(s);
-    size_t left_cut;
-    size_t right_cut;
+    size_t left_cut, right_cut;
 
     if (left_len > right_len) {
         left_cut = left_len / 2;
@@ -170,12 +165,10 @@ static void merge_forward(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, tda
     const tda_Span view = tda_span_mut_to_span(s);
 
     size_t write = 0;
-    size_t parked_idx = 0;
-    size_t right_idx = mid;
+    size_t parked_idx = 0, right_idx = mid;
 
     while (parked_idx < parked.len && right_idx < s.len) {
-        const void *lhs = tda_span_get(parked, parked_idx);
-        const void *rhs = tda_span_get(view, right_idx);
+        const void *lhs = tda_span_get(parked, parked_idx), *rhs = tda_span_get(view, right_idx);
 
         // a tie keeps the buffered left run ahead of an equal elem on the right
         if (tda_right_goes_first(cmp, ctx, lhs, rhs)) {
@@ -196,8 +189,7 @@ static void merge_backward(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, td
     const tda_Span view = tda_span_mut_to_span(s);
 
     size_t write = s.len;
-    size_t left_idx = mid;
-    size_t parked_idx = parked.len;
+    size_t left_idx = mid, parked_idx = parked.len;
 
     while (left_idx > 0 && parked_idx > 0) {
         // filling from the back, the left elem is placed only when the right one goes

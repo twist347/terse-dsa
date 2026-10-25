@@ -137,11 +137,8 @@ tda_Status tda_hmap_init_cap(
 /// @bigo{n} expected
 [[nodiscard]] TDA_API
 tda_Status tda_hmap_from_spans(
-    tda_Span keys,
-    tda_Span vals,
-    tda_Hasher hasher,
-    tda_Eq eq,
-    void *ctx,
+    tda_Span keys, tda_Span vals,
+    tda_Hasher hasher, tda_Eq eq, void *ctx,
     tda_Al *al,
     tda_HMap *out
 );

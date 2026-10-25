@@ -31,8 +31,7 @@ static void sorted_copy(int32_t *dst, const int32_t *src, size_t n) {
 
 // a rearranging op must never invent, drop or duplicate an elem
 static bool same_elems(const int32_t *a, const int32_t *b, size_t n) {
-    int32_t sorted_a[64];
-    int32_t sorted_b[64];
+    int32_t sorted_a[64], sorted_b[64];
     TEST_ASSERT_TRUE(n <= 64);
 
     sorted_copy(sorted_a, a, n);

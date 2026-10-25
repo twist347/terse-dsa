@@ -1,3 +1,4 @@
+tda_add_test(test_core_align test_align.c)
 tda_add_test(test_core_cmp test_cmp.c)
 tda_add_test(test_core_hash test_hash.c)
 tda_add_test(test_core_layout test_layout.c)

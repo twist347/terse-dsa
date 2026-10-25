@@ -832,8 +832,7 @@ static void test_copy_assign_keeps_the_target_allocator() {
 
 static void test_eq_matches_the_same_members() {
     constexpr size_t want[] = {0, 64, 128};
-    tda_BitSet a = make_bitset(129, want, 3);
-    tda_BitSet b = make_bitset(129, want, 3);
+    tda_BitSet a = make_bitset(129, want, 3), b = make_bitset(129, want, 3);
 
     TEST_ASSERT_TRUE(tda_bitset_eq(&a, &a));
     TEST_ASSERT_TRUE(tda_bitset_eq(&a, &b));
@@ -868,8 +867,7 @@ static void test_union_adds_the_other_members() {
     constexpr size_t rhs[] = {64, 128};
     constexpr size_t want[] = {0, 64, 128};
 
-    tda_BitSet a = make_bitset(129, lhs, 2);
-    tda_BitSet b = make_bitset(129, rhs, 2);
+    tda_BitSet a = make_bitset(129, lhs, 2), b = make_bitset(129, rhs, 2);
 
     tda_bitset_union(&a, &b);
     assert_members(&a, 129, want, 3);
@@ -884,8 +882,7 @@ static void test_intersection_keeps_what_both_hold() {
     constexpr size_t rhs[] = {64, 128};
     constexpr size_t want[] = {64};
 
-    tda_BitSet a = make_bitset(129, lhs, 2);
-    tda_BitSet b = make_bitset(129, rhs, 2);
+    tda_BitSet a = make_bitset(129, lhs, 2), b = make_bitset(129, rhs, 2);
 
     tda_bitset_intersection(&a, &b);
     assert_members(&a, 129, want, 1);
@@ -900,8 +897,7 @@ static void test_difference_drops_what_the_other_holds() {
     constexpr size_t rhs[] = {64, 128};
     constexpr size_t want[] = {0};
 
-    tda_BitSet a = make_bitset(129, lhs, 2);
-    tda_BitSet b = make_bitset(129, rhs, 2);
+    tda_BitSet a = make_bitset(129, lhs, 2), b = make_bitset(129, rhs, 2);
 
     tda_bitset_difference(&a, &b);
     assert_members(&a, 129, want, 1);
@@ -916,8 +912,7 @@ static void test_symmetric_difference_keeps_what_exactly_one_holds() {
     constexpr size_t rhs[] = {64, 128};
     constexpr size_t want[] = {0, 128};
 
-    tda_BitSet a = make_bitset(129, lhs, 2);
-    tda_BitSet b = make_bitset(129, rhs, 2);
+    tda_BitSet a = make_bitset(129, lhs, 2), b = make_bitset(129, rhs, 2);
 
     tda_bitset_symmetric_difference(&a, &b);
     assert_members(&a, 129, want, 2);
@@ -954,8 +949,7 @@ static void test_the_pairwise_ops_keep_the_tail_clear() {
     for (size_t s = 0; s < sizeof(SEAMS) / sizeof(SEAMS[0]); ++s) {
         const size_t nbits = SEAMS[s];
 
-        tda_BitSet a = make_full(nbits);
-        tda_BitSet b = make_full(nbits);
+        tda_BitSet a = make_full(nbits), b = make_full(nbits);
 
         tda_bitset_union(&a, &b);
         TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_count(&a));
@@ -1015,8 +1009,7 @@ static void test_intersects() {
 }
 
 static void test_the_set_ops_survive_an_empty_universe() {
-    tda_BitSet a = make_bitset(0, nullptr, 0);
-    tda_BitSet b = make_bitset(0, nullptr, 0);
+    tda_BitSet a = make_bitset(0, nullptr, 0), b = make_bitset(0, nullptr, 0);
 
     tda_bitset_union(&a, &b);
     tda_bitset_intersection(&a, &b);
@@ -1159,15 +1152,12 @@ static void test_copy_assign_of_the_same_universe_never_allocates() {
 
 // each side keeps the allocator its elems came from, and each is given back to it
 static void test_swap_across_allocators_carries_each_allocator() {
-    tda_TestProbe pa;
-    tda_TestProbe pb;
+    tda_TestProbe pa, pb;
     tda_test_probe_reset(&pa);
     tda_test_probe_reset(&pb);
-    tda_Al al_a = tda_test_probe_full(&pa);
-    tda_Al al_b = tda_test_probe_full(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
-    tda_BitSet a = {};
-    tda_BitSet b = {};
+    tda_BitSet a = {}, b = {};
     TDA_TEST_OK(tda_bitset_init_len(64, &al_a, &a));
     TDA_TEST_OK(tda_bitset_init_len(200, &al_b, &b));
     tda_bitset_set(&b, 1);

@@ -232,6 +232,38 @@ static void test_bytes_tracks_elem_size() {
     TEST_ASSERT_EQUAL_size_t(2 * sizeof(Pair), tda_span_bytes(TDA_SPAN_OF(Pair, {1, 2}, {3, 4})));
 }
 
+/* ========== overlap ========== */
+
+static void test_overlap_needs_a_shared_byte() {
+    constexpr int32_t buf[6] = {0, 1, 2, 3, 4, 5};
+    const tda_Span all = TDA_SPAN_FROM_DATA(int32_t, buf, 6);
+
+    TEST_ASSERT_TRUE(tda_span_overlap(all, tda_span_sub(all, 2, 2)));
+    TEST_ASSERT_TRUE(tda_span_overlap(tda_span_sub(all, 0, 3), tda_span_sub(all, 2, 3)));
+    // touching ends share no byte
+    TEST_ASSERT_FALSE(tda_span_overlap(tda_span_sub(all, 0, 3), tda_span_sub(all, 3, 3)));
+    TEST_ASSERT_FALSE(tda_span_overlap(tda_span_sub(all, 3, 3), tda_span_sub(all, 0, 3)));
+}
+
+static void test_overlap_of_an_empty_view_is_false() {
+    constexpr int32_t buf[3] = {0, 1, 2};
+    const tda_Span all = TDA_SPAN_FROM_DATA(int32_t, buf, 3);
+
+    // an empty view inside another still holds no byte
+    TEST_ASSERT_FALSE(tda_span_overlap(all, tda_span_sub(all, 1, 0)));
+    TEST_ASSERT_FALSE(tda_span_overlap(TDA_SPAN_FROM_DATA(int32_t, nullptr, 0), all));
+}
+
+static void test_apart_or_same_takes_the_same_elems_too() {
+    constexpr int32_t buf[6] = {0, 1, 2, 3, 4, 5};
+    const tda_Span all = TDA_SPAN_FROM_DATA(int32_t, buf, 6);
+
+    TEST_ASSERT_TRUE(tda_span_apart_or_same(tda_span_sub(all, 0, 3), tda_span_sub(all, 3, 3)));
+    TEST_ASSERT_TRUE(tda_span_apart_or_same(tda_span_sub(all, 1, 3), tda_span_sub(all, 1, 3)));
+    // shifted by one elem: neither apart nor the same
+    TEST_ASSERT_FALSE(tda_span_apart_or_same(tda_span_sub(all, 0, 3), tda_span_sub(all, 1, 3)));
+}
+
 /* ========== access ========== */
 
 static void test_get_reads_through() {
@@ -341,8 +373,7 @@ static void test_sub_mut_writes_reach_the_source() {
 static void test_split_at_cuts_into_head_and_tail() {
     const tda_Span s = TDA_SPAN_OF(Pair, {1, 2}, {3, 4}, {5, 6});
 
-    tda_Span head;
-    tda_Span tail;
+    tda_Span head, tail;
     tda_span_split_at(s, 1, &head, &tail);
 
     TEST_ASSERT_EQUAL_PTR(s.data, head.data);
@@ -355,8 +386,7 @@ static void test_split_at_cuts_into_head_and_tail() {
 // 0 and len are both legal and leave one side empty, the other the whole view
 static void test_split_at_either_end_leaves_one_side_empty() {
     const tda_Span s = TDA_SPAN_OF(int32_t, 0, 1, 2);
-    tda_Span head;
-    tda_Span tail;
+    tda_Span head, tail;
 
     tda_span_split_at(s, 0, &head, &tail);
     TEST_ASSERT_EQUAL_size_t(0, head.len);
@@ -369,8 +399,7 @@ static void test_split_at_either_end_leaves_one_side_empty() {
 
 static void test_split_at_of_null_view_stays_null() {
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, nullptr, 0);
-    tda_Span head;
-    tda_Span tail;
+    tda_Span head, tail;
 
     tda_span_split_at(s, 0, &head, &tail);
     TEST_ASSERT_NULL(head.data);
@@ -380,8 +409,7 @@ static void test_split_at_of_null_view_stays_null() {
 // the halves are disjoint views of the same memory, each writable on its own
 static void test_split_at_mut_writes_reach_the_source() {
     int32_t buf[4] = {0, 1, 2, 3};
-    tda_SpanMut head;
-    tda_SpanMut tail;
+    tda_SpanMut head, tail;
     tda_span_split_at_mut(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 2, &head, &tail);
 
     TDA_SPAN_SET(int32_t, head, 1, 11);
@@ -486,6 +514,10 @@ int main() {
     RUN_TEST(test_bytes);
     RUN_TEST(test_bytes_of_null_view_is_zero);
     RUN_TEST(test_bytes_tracks_elem_size);
+
+    RUN_TEST(test_overlap_needs_a_shared_byte);
+    RUN_TEST(test_overlap_of_an_empty_view_is_false);
+    RUN_TEST(test_apart_or_same_takes_the_same_elems_too);
 
     RUN_TEST(test_get_reads_through);
     RUN_TEST(test_set_and_get_mut_write_to_the_source);

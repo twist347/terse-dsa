@@ -391,8 +391,7 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx) {
     TDA_EXPECT(s.len > 0);
 
     tda_MinMax out = {.min = 0, .max = 0};
-    const void *min_p = tda_span_get(s, 0);
-    const void *max_p = min_p;
+    const void *min_p = tda_span_get(s, 0), *max_p = min_p;
 
     for (size_t i = 1; i < s.len; ++i) {
         const void *cur = tda_span_get(s, i);

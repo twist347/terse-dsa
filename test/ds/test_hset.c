@@ -36,8 +36,7 @@ static tda_Hash hash_pair(const void *key, void *) {
 }
 
 static bool eq_pair(const void *lhs, const void *rhs, void *) {
-    const Pair *a = lhs;
-    const Pair *b = rhs;
+    const Pair *a = lhs, *b = rhs;
 
     return a->a == b->a && a->b == b->b;
 }
@@ -847,8 +846,7 @@ static void test_swap_exchanges_the_keys_and_the_hashers() {
 }
 
 static void test_swap_keeps_the_nodes_alive() {
-    tda_HSet a = make_filled(tda_hash_i32, nullptr, 4);
-    tda_HSet b = make_set(tda_hash_i32, nullptr);
+    tda_HSet a = make_filled(tda_hash_i32, nullptr, 4), b = make_set(tda_hash_i32, nullptr);
 
     const tda_HSetNode *held = TDA_HSET_FIND(int32_t, &a, 2);
     TEST_ASSERT_NOT_NULL(held);
@@ -1155,8 +1153,7 @@ static void test_eq_looks_the_keys_up_with_the_hasher_of_the_other() {
 
 // the same number of keys, one in place of another
 static void test_eq_parts_a_differing_key() {
-    tda_HSet a = make_filled(tda_hash_i32, nullptr, 8);
-    tda_HSet b = make_filled(tda_hash_i32, nullptr, 8);
+    tda_HSet a = make_filled(tda_hash_i32, nullptr, 8), b = make_filled(tda_hash_i32, nullptr, 8);
     TEST_ASSERT_TRUE(TDA_HSET_REMOVE(int32_t, &b, 3));
     put(&b, 100);
 
@@ -1461,15 +1458,12 @@ static void test_print_writes_to_stdout() {
 
 // each side keeps the allocator its elems came from, and each is given back to it
 static void test_swap_across_allocators_carries_each_allocator() {
-    tda_TestProbe pa;
-    tda_TestProbe pb;
+    tda_TestProbe pa, pb;
     tda_test_probe_reset(&pa);
     tda_test_probe_reset(&pb);
-    tda_Al al_a = tda_test_probe_full(&pa);
-    tda_Al al_b = tda_test_probe_full(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
-    tda_HSet a = {};
-    tda_HSet b = {};
+    tda_HSet a = {}, b = {};
     TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al_a, &a);
     for (int32_t i = 0; i < 2; ++i) {
         TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &a, i, nullptr));

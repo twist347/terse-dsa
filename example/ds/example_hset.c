@@ -26,8 +26,7 @@ int main() {
     tda_HSet s;
     TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &s);
 
-    tda_HSet twin = {}; // used below; declared here so the exit can see them
-    tda_HSet bulk = {};
+    tda_HSet twin = {}, bulk = {}; // used below; declared here so the exit can see them
     int rc = 1;
     for (int32_t i = 1; i <= 4; ++i) {
         if (TDA_STATUS_IS_ERR(TDA_HSET_INSERT(int32_t, &s, i * 10, nullptr))) {

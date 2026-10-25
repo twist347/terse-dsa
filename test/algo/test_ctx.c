@@ -108,8 +108,7 @@ static void test_find_matches_under_the_ctx() {
     constexpr int32_t buf[4] = {1, 12, 23, 34};
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 4);
     constexpr int32_t key = 44;
-    int32_t ten = 10;
-    int32_t eleven = 11;
+    int32_t ten = 10, eleven = 11;
 
     size_t at;
     TEST_ASSERT_TRUE(tda_span_find(s, &key, eq_mod, &ten, &at));
@@ -287,38 +286,32 @@ static void test_every_eq_by_passes_the_ctx() {
     int32_t ten = 10;
     tda_Al *al = tda_al_default();
 
-    tda_Arr aa = {};
-    tda_Arr ab = {};
+    tda_Arr aa = {}, ab = {};
     TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &aa, 1, 2));
     TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &ab, 11, 22));
     TEST_ASSERT_TRUE(tda_arr_eq_by(&aa, &ab, eq_mod, &ten));
 
-    tda_Vec va = {};
-    tda_Vec vb = {};
+    tda_Vec va = {}, vb = {};
     TDA_TEST_OK(TDA_VEC_OF(int32_t, al, &va, 1, 2));
     TDA_TEST_OK(TDA_VEC_OF(int32_t, al, &vb, 11, 22));
     TEST_ASSERT_TRUE(tda_vec_eq_by(&va, &vb, eq_mod, &ten));
 
-    tda_Deque da = {};
-    tda_Deque db = {};
+    tda_Deque da = {}, db = {};
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al, &da, 1, 2));
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al, &db, 11, 22));
     TEST_ASSERT_TRUE(tda_deque_eq_by(&da, &db, eq_mod, &ten));
 
-    tda_List la = {};
-    tda_List lb = {};
+    tda_List la = {}, lb = {};
     TDA_TEST_OK(TDA_LIST_OF(int32_t, al, &la, 1, 2));
     TDA_TEST_OK(TDA_LIST_OF(int32_t, al, &lb, 11, 22));
     TEST_ASSERT_TRUE(tda_list_eq_by(&la, &lb, eq_mod, &ten));
 
-    tda_Queue qa = {};
-    tda_Queue qb = {};
+    tda_Queue qa = {}, qb = {};
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, al, &qa, 1, 2));
     TDA_TEST_OK(TDA_QUEUE_OF(int32_t, al, &qb, 11, 22));
     TEST_ASSERT_TRUE(tda_queue_eq_by(&qa, &qb, eq_mod, &ten));
 
-    tda_Stack sa = {};
-    tda_Stack sb = {};
+    tda_Stack sa = {}, sb = {};
     TDA_TEST_OK(TDA_STACK_OF(int32_t, al, &sa, 1, 2));
     TDA_TEST_OK(TDA_STACK_OF(int32_t, al, &sb, 11, 22));
     TEST_ASSERT_TRUE(tda_stack_eq_by(&sa, &sb, eq_mod, &ten));
@@ -434,9 +427,7 @@ static void sweep_fill(int32_t *buf) {
 }
 
 static void test_every_algo_hands_the_ctx_to_every_call() {
-    static int32_t buf[SWEEP_N];
-    static int32_t other[SWEEP_N];
-    static int32_t out[2 * SWEEP_N];
+    static int32_t buf[SWEEP_N], other[SWEEP_N], out[2 * SWEEP_N];
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, SWEEP_N);
     const tda_Span v = tda_span_mut_to_span(s);
     const tda_SpanMut o = TDA_SPAN_FROM_DATA_MUT(int32_t, other, SWEEP_N);
@@ -588,8 +579,7 @@ static void test_container_lookups_hand_the_ctx_on() {
     sweep_calls = 0;
     sweep_wrong = 0;
 
-    tda_HMap a = {};
-    tda_HMap b = {};
+    tda_HMap a = {}, b = {};
     TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &a);
     TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &b);
     for (int32_t i = 0; i < 10; ++i) {
@@ -765,16 +755,13 @@ static void test_hash_containers_from_spans_hash_under_the_ctx() {
 // each side is searched with its own hasher and ctx, so sets salted apart still compare
 // and combine, as long as their equalities agree
 static void test_hash_containers_of_differing_seeds_meet() {
-    tda_Hash seed_a = 0x1234;
-    tda_Hash seed_b = 0xabcd0000;
+    tda_Hash seed_a = 0x1234, seed_b = 0xabcd0000;
     tda_Al *al = tda_al_default();
 
-    tda_HSet a = {};
-    tda_HSet b = {};
+    tda_HSet a = {}, b = {};
     TDA_HSET_INIT(int32_t, hash_seeded, tda_eq_i32, &seed_a, al, &a);
     TDA_HSET_INIT(int32_t, hash_seeded, tda_eq_i32, &seed_b, al, &b);
-    tda_HMap m = {};
-    tda_HMap n = {};
+    tda_HMap m = {}, n = {};
     TDA_HMAP_INIT(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_a, al, &m);
     TDA_HMAP_INIT(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_b, al, &n);
 
@@ -802,12 +789,10 @@ static void test_hash_containers_of_differing_seeds_meet() {
 // every copy takes the ctx along with the hasher and the equality, every move hands it
 // over, a swap trades it
 static void test_hmap_and_hset_carry_their_ctx() {
-    int32_t ten = 10;
-    int32_t seven = 7;
+    int32_t ten = 10, seven = 7;
     tda_Al *al = tda_al_default();
 
-    tda_HMap m = {};
-    tda_HMap n = {};
+    tda_HMap m = {}, n = {};
     TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &ten, al, &m);
     TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &seven, al, &n);
 
@@ -823,8 +808,7 @@ static void test_hmap_and_hset_carry_their_ctx() {
     tda_hmap_move_assign(&m, &n);
     TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(&m));
 
-    tda_HSet s = {};
-    tda_HSet u = {};
+    tda_HSet s = {}, u = {};
     TDA_HSET_INIT(int32_t, hash_mod, eq_mod, &ten, al, &s);
     TDA_HSET_INIT(int32_t, hash_mod, eq_mod, &seven, al, &u);
     TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(&s));
@@ -850,10 +834,8 @@ static void test_hmap_and_hset_carry_their_ctx() {
 
 // a move hands the comparator over with its ctx, and a swap trades both
 static void test_pqueue_ctx_travels_with_its_comparator() {
-    int32_t a_ctx[1] = {0};
-    int32_t b_ctx[1] = {0};
-    tda_PQueue a = {};
-    tda_PQueue b = {};
+    int32_t a_ctx[1] = {0}, b_ctx[1] = {0};
+    tda_PQueue a = {}, b = {};
     TDA_PQUEUE_INIT(size_t, cmp_by_key, a_ctx, tda_al_default(), &a);
     TDA_PQUEUE_INIT(size_t, cmp_by_key, b_ctx, tda_al_default(), &b);
 
@@ -915,8 +897,7 @@ static void test_list_sorts_and_finds_under_the_ctx() {
 }
 
 static void test_list_merges_under_the_ctx() {
-    tda_List a = {};
-    tda_List b = {};
+    tda_List a = {}, b = {};
     TDA_TEST_OK(TDA_LIST_OF(size_t, tda_al_default(), &a, 3, 6, 0, 4)); // keys 10 30 70 80
     TDA_TEST_OK(TDA_LIST_OF(size_t, tda_al_default(), &b, 1, 5, 2, 7)); // keys 20 40 50 60
 

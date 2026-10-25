@@ -12,8 +12,7 @@ int main() {
     /// [ops]
     // both sides sorted by the same cmp; equal elems are counted, not collapsed: 'a'
     // holds two 2s and 'b' holds one
-    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 2, 2, 5);
-    const tda_Span b = TDA_SPAN_OF(int32_t, 2, 3, 5);
+    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 2, 2, 5), b = TDA_SPAN_OF(int32_t, 2, 3, 5);
 
     // 'dst' must fit the worst case; the return says how much was filled
     int32_t buf[7];

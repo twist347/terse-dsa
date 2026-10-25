@@ -183,9 +183,7 @@ static void test_hash_cstr_is_bytes_over_the_length() {
 static void test_hash_cstr_follows_content_not_address() {
     constexpr char first[] = "hello";
     constexpr char second[] = "hello";
-    const char *a = first;
-    const char *b = second;
-    const char *c = "hellp";
+    const char *a = first, *b = second, *c = "hellp";
 
     TEST_ASSERT_NOT_EQUAL(a, b); // two distinct buffers holding the same text
     TEST_ASSERT_TRUE(tda_eq_cstr(&a, &b, nullptr));

@@ -454,8 +454,7 @@ static void test_macro_realloc_reads_each_count_once() {
 
     int32_t *p = TDA_ALLOC(int32_t, &al, 4);
 
-    size_t old_n = 4;
-    size_t new_n = 8;
+    size_t old_n = 4, new_n = 8;
     int32_t *q = TDA_REALLOC(int32_t, &al, p, old_n++, new_n++);
     TEST_ASSERT_NOT_NULL(q);
     TEST_ASSERT_EQUAL_size_t(5, old_n);

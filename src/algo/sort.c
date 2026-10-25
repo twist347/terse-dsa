@@ -118,8 +118,7 @@ tda_Status tda_span_sort_stable(tda_SpanMut s, tda_Cmp cmp, void *ctx, tda_Al *a
         return TDA_STATUS_ERR_NO_MEM;
     }
 
-    tda_SpanMut src = s;
-    tda_SpanMut dst = tda_span_from_data_mut(buf, s.len, s.elem);
+    tda_SpanMut src = s, dst = tda_span_from_data_mut(buf, s.len, s.elem);
 
     // bottom-up merge sort: merge runs of width 1, 2, 4, ...
     for (size_t width = 1; width < s.len; width *= 2) {
@@ -195,8 +194,7 @@ void tda_span_nth_elem(tda_SpanMut s, size_t nth, tda_Cmp cmp, void *ctx) {
         const size_t pivot_idx = ninther(tda_span_mut_to_span(s), left, right, cmp, ctx);
 
         const Split split = partition3(s, left, right, pivot_idx, cmp, ctx);
-        const size_t lt = split.lt;
-        const size_t gt = split.gt;
+        const size_t lt = split.lt, gt = split.gt;
 
         if (nth < lt) {
             right = lt - 1;
@@ -222,8 +220,7 @@ size_t tda_span_is_sorted_until(tda_Span s, tda_Cmp cmp, void *ctx) {
     assert(cmp);
 
     for (size_t i = 1; i < s.len; ++i) {
-        const void *prev = tda_span_get(s, i - 1);
-        const void *cur = tda_span_get(s, i);
+        const void *prev = tda_span_get(s, i - 1), *cur = tda_span_get(s, i);
         if (tda_right_goes_first(cmp, ctx, prev, cur)) {
             return i;
         }
@@ -239,9 +236,7 @@ static size_t median3(tda_Span s, size_t a, size_t b, size_t c, tda_Cmp cmp, voi
     const void *b_ptr = tda_span_get(s, b);
     const void *c_ptr = tda_span_get(s, c);
 
-    const int ab = cmp(a_ptr, b_ptr, ctx);
-    const int ac = cmp(a_ptr, c_ptr, ctx);
-    const int bc = cmp(b_ptr, c_ptr, ctx);
+    const int ab = cmp(a_ptr, b_ptr, ctx), ac = cmp(a_ptr, c_ptr, ctx), bc = cmp(b_ptr, c_ptr, ctx);
 
     // A between B and C: either c <= a <= b, or b <= a <= c
     if ((ab <= 0 && ac >= 0) || (ab >= 0 && ac <= 0)) return a;
@@ -275,9 +270,7 @@ static Split partition3(tda_SpanMut s, size_t left, size_t right, size_t pivot_i
 
     const tda_Span view = tda_span_mut_to_span(s);
 
-    size_t lo = left;
-    size_t i = left + 1;
-    size_t hi = right;
+    size_t lo = left, i = left + 1, hi = right;
 
     // invariant: [left, lo-1] < pivot, [lo, i-1] == pivot, [i, hi] untouched,
     // [hi+1, right] > pivot. The equal run always holds at least the pivot elem, so
@@ -345,8 +338,7 @@ static void quicksort(tda_SpanMut s, size_t left, size_t right, size_t depth, td
         // three-way, so a run of equal keys is settled in one pass. A two-way split
         // peels those off one elem at a time, which is quadratic on repeated keys.
         const Split split = partition3(s, left, right, pivot_idx, cmp, ctx);
-        const size_t lt = split.lt;
-        const size_t gt = split.gt;
+        const size_t lt = split.lt, gt = split.gt;
 
         // recurse into the shorter side and loop on the longer one: the recursion then
         // halves its range every time, so the stack stays O(log n) whatever the data

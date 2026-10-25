@@ -472,8 +472,7 @@ bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other) {
     assert(tda_hmap_key_eq(&self->map_) == tda_hmap_key_eq(&other->map_));
 
     // intersection is symmetric, so walk the shorter set and look up in the longer
-    const tda_HSet *walked = self;
-    const tda_HSet *asked = other;
+    const tda_HSet *walked = self, *asked = other;
     if (tda_hmap_len(&other->map_) < tda_hmap_len(&self->map_)) {
         walked = other;
         asked = self;

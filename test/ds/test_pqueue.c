@@ -542,8 +542,7 @@ static void test_shrink_to_fit_keeps_the_order() {
 /* ========== copy ========== */
 
 static void test_copy_is_independent() {
-    tda_PQueue src = make_queue(SPREAD, SPREAD_LEN);
-    tda_PQueue dst = {};
+    tda_PQueue src = make_queue(SPREAD, SPREAD_LEN), dst = {};
     TDA_TEST_OK(tda_pqueue_copy(&src, &dst));
 
     push_int(&dst, 1000);
@@ -705,8 +704,7 @@ static void test_move_assign_of_itself_changes_nothing() {
 }
 
 static void test_copy_drains_the_same_as_its_source() {
-    tda_PQueue src = make_queue_from(SPREAD, SPREAD_LEN);
-    tda_PQueue dst = {};
+    tda_PQueue src = make_queue_from(SPREAD, SPREAD_LEN), dst = {};
     TDA_TEST_OK(tda_pqueue_copy(&src, &dst));
 
     assert_drains_sorted(&dst, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
@@ -716,8 +714,7 @@ static void test_copy_drains_the_same_as_its_source() {
 }
 
 static void test_copy_of_empty_stays_empty() {
-    tda_PQueue src = make_queue(nullptr, 0);
-    tda_PQueue dst = {};
+    tda_PQueue src = make_queue(nullptr, 0), dst = {};
     TDA_TEST_OK(tda_pqueue_copy(&src, &dst));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_pqueue_len(&dst));
@@ -758,8 +755,7 @@ static void test_copy_assign_of_itself_changes_nothing() {
 /* ========== swap ========== */
 
 static void test_swap_exchanges_the_elems_and_the_comparators() {
-    tda_PQueue a = {};
-    tda_PQueue b = {};
+    tda_PQueue a = {}, b = {};
     TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, tda_al_default(), &a, 1, 2, 3));
     TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_desc_i32, nullptr, tda_al_default(), &b, 10, 20, 30));
 
@@ -1013,15 +1009,12 @@ static void test_print_writes_to_stdout() {
 
 // each side keeps the allocator its elems came from, and each is given back to it
 static void test_swap_across_allocators_carries_each_allocator() {
-    tda_TestProbe pa;
-    tda_TestProbe pb;
+    tda_TestProbe pa, pb;
     tda_test_probe_reset(&pa);
     tda_test_probe_reset(&pb);
-    tda_Al al_a = tda_test_probe_full(&pa);
-    tda_Al al_b = tda_test_probe_full(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
-    tda_PQueue a = {};
-    tda_PQueue b = {};
+    tda_PQueue a = {}, b = {};
     TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, &al_a, &a, 1, 2));
     TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, &al_b, &b, 3, 4, 5));
 

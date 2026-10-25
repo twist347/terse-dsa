@@ -676,8 +676,7 @@ static void test_move_assign_of_itself_changes_nothing() {
 }
 
 static void test_copy_assign_overwrites_a_longer_target() {
-    tda_Deque src = make_deque(2);
-    tda_Deque dst = make_deque(6);
+    tda_Deque src = make_deque(2), dst = make_deque(6);
 
     TDA_TEST_OK(tda_deque_copy_assign(&dst, &src));
 
@@ -688,8 +687,7 @@ static void test_copy_assign_overwrites_a_longer_target() {
 }
 
 static void test_copy_assign_grows_a_shorter_target() {
-    tda_Deque src = make_wrapped();
-    tda_Deque dst = make_deque(1);
+    tda_Deque src = make_wrapped(), dst = make_deque(1);
 
     TDA_TEST_OK(tda_deque_copy_assign(&dst, &src));
 
@@ -1422,11 +1420,9 @@ static void test_a_run_of_resizes_stays_amortized() {
 }
 
 static void test_swap_on_one_allocator_hands_over_the_buffers() {
-    tda_Deque a = make_deque(2);
-    tda_Deque b = make_wrapped();
+    tda_Deque a = make_deque(2), b = make_wrapped();
 
-    const size_t a_cap = tda_deque_cap(&a);
-    const size_t b_cap = tda_deque_cap(&b);
+    const size_t a_cap = tda_deque_cap(&a), b_cap = tda_deque_cap(&b);
 
     tda_deque_swap(&a, &b);
 
@@ -1582,8 +1578,7 @@ static void test_the_ends_do_not_allocate_while_the_capacity_holds() {
 /* ========== compare ========== */
 
 static void test_eq_matches_the_same_elems() {
-    tda_Deque a = make_deque(4);
-    tda_Deque b = make_deque(4);
+    tda_Deque a = make_deque(4), b = make_deque(4);
 
     TEST_ASSERT_TRUE(tda_deque_eq(&a, &a));
     TEST_ASSERT_TRUE(tda_deque_eq(&a, &b));
@@ -1595,8 +1590,7 @@ static void test_eq_matches_the_same_elems() {
 }
 
 static void test_eq_parts_one_differing_elem() {
-    tda_Deque a = make_deque(4);
-    tda_Deque b = make_deque(4);
+    tda_Deque a = make_deque(4), b = make_deque(4);
     TDA_DEQUE_SET(int32_t, &b, 3, 99);
 
     TEST_ASSERT_FALSE(tda_deque_eq(&a, &b));
@@ -1652,8 +1646,7 @@ static void test_eq_ignores_where_the_ring_starts() {
 
 // the same elems rotated by one: equal as multisets, unequal as deques
 static void test_eq_is_order_sensitive() {
-    tda_Deque a = make_deque(4);
-    tda_Deque b = make_deque(4);
+    tda_Deque a = make_deque(4), b = make_deque(4);
 
     const int32_t front = *TDA_DEQUE_FRONT_AS(int32_t, &b);
     tda_deque_pop_front(&b);
@@ -1670,8 +1663,7 @@ static void test_eq_by_asks_the_equality() {
     constexpr Pair lhs[2] = {{1, 10}, {2, 20}};
     constexpr Pair rhs[2] = {{1, 70}, {2, 80}};
 
-    tda_Deque a = {};
-    tda_Deque b = {};
+    tda_Deque a = {}, b = {};
     TDA_TEST_OK(TDA_DEQUE_FROM_DATA(Pair, lhs, 2, tda_al_default(), &a));
     TDA_TEST_OK(TDA_DEQUE_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
@@ -1738,15 +1730,12 @@ static void test_print_writes_to_stdout() {
 
 // each side keeps the allocator its elems came from, and each is given back to it
 static void test_swap_across_allocators_carries_each_allocator() {
-    tda_TestProbe pa;
-    tda_TestProbe pb;
+    tda_TestProbe pa, pb;
     tda_test_probe_reset(&pa);
     tda_test_probe_reset(&pb);
-    tda_Al al_a = tda_test_probe_full(&pa);
-    tda_Al al_b = tda_test_probe_full(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
-    tda_Deque a = {};
-    tda_Deque b = {};
+    tda_Deque a = {}, b = {};
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al_a, &a, 1, 2));
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al_b, &b, 3, 4, 5));
 

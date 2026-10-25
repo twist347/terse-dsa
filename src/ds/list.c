@@ -67,11 +67,8 @@ static void dealloc_node(const tda_List *self, tda_ListNode *node);
 /// neighbour stands for that end of the list
 static void link_chain(
     tda_List *self,
-    tda_ListNode *first,
-    tda_ListNode *last,
-    size_t count,
-    tda_ListNode *prev,
-    tda_ListNode *next
+    tda_ListNode *first, tda_ListNode *last, size_t count,
+    tda_ListNode *prev, tda_ListNode *next
 );
 
 /// link_chain for one node
@@ -717,11 +714,8 @@ static void dealloc_node(const tda_List *self, tda_ListNode *node) {
 
 static void link_chain(
     tda_List *self,
-    tda_ListNode *first,
-    tda_ListNode *last,
-    size_t count,
-    tda_ListNode *prev,
-    tda_ListNode *next
+    tda_ListNode *first, tda_ListNode *last, size_t count,
+    tda_ListNode *prev, tda_ListNode *next
 ) {
     first->prev = prev;
     last->next = next;
@@ -793,8 +787,7 @@ static void splice_nodes(tda_List *self, tda_List *src, bool front) {
     assert(tda_layout_eq(self->elem_, src->elem_));
     assert(src->len_ > 0);
 
-    tda_ListNode *prev = front ? nullptr : self->tail_;
-    tda_ListNode *next = front ? self->head_ : nullptr;
+    tda_ListNode *prev = front ? nullptr : self->tail_, *next = front ? self->head_ : nullptr;
     link_chain(self, src->head_, src->tail_, src->len_, prev, next);
     set_empty(src);
 
@@ -856,8 +849,7 @@ static bool eq_impl(const tda_List *a, const tda_List *b, tda_Eq eq, void *ctx) 
     }
 
     for (const tda_ListNode *node_a = a->head_, *node_b = b->head_; node_a; node_a = node_a->next, node_b = node_b->next) {
-        const void *lhs = elem_of(a, node_a);
-        const void *rhs = elem_of(b, node_b);
+        const void *lhs = elem_of(a, node_a), *rhs = elem_of(b, node_b);
         if (!tda_elem_eq(eq, ctx, lhs, rhs, a->elem_.size)) {
             return false;
         }

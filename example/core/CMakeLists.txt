@@ -1,3 +1,4 @@
+tda_add_example(example_core_align example_align.c)
 tda_add_example(example_core_check example_check.c)
 tda_add_example(example_core_cmp example_cmp.c)
 tda_add_example(example_core_hash example_hash.c)

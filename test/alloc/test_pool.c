@@ -484,8 +484,7 @@ static void test_reset_recovers_from_a_scrambled_free_list() {
     tda_Pool pool;
     TDA_TEST_OK(tda_pool_init(tda_al_default(), block(32), 3, &pool));
 
-    void *a = tda_alloc(TDA_AL(&pool), block(32));
-    void *b = tda_alloc(TDA_AL(&pool), block(32));
+    void *a = tda_alloc(TDA_AL(&pool), block(32)), *b = tda_alloc(TDA_AL(&pool), block(32));
     tda_dealloc(TDA_AL(&pool), a, block(32));
     tda_dealloc(TDA_AL(&pool), b, block(32));
 

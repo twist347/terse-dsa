@@ -45,8 +45,7 @@ static tda_Hash hash_pair(const void *key, void *) {
 }
 
 static bool eq_pair(const void *lhs, const void *rhs, void *) {
-    const Pair *a = lhs;
-    const Pair *b = rhs;
+    const Pair *a = lhs, *b = rhs;
 
     return a->a == b->a && a->b == b->b;
 }
@@ -602,8 +601,7 @@ static void test_remove_node_drops_the_entry_it_names() {
 static void test_take_hands_the_key_and_the_value_out() {
     tda_HMap m = make_filled(tda_hash_i32, nullptr, 5);
 
-    int32_t key = -1;
-    int32_t val = -1;
+    int32_t key = -1, val = -1;
     TEST_ASSERT_TRUE(TDA_HMAP_TAKE(int32_t, int32_t, &m, 3, &key, &val));
 
     TEST_ASSERT_EQUAL_INT32(3, key);
@@ -618,8 +616,7 @@ static void test_take_hands_the_key_and_the_value_out() {
 static void test_take_of_a_missing_key_writes_nothing() {
     tda_HMap m = make_filled(tda_hash_i32, nullptr, 3);
 
-    int32_t key = -1;
-    int32_t val = -1;
+    int32_t key = -1, val = -1;
     TEST_ASSERT_FALSE(TDA_HMAP_TAKE(int32_t, int32_t, &m, 99, &key, &val));
 
     TEST_ASSERT_EQUAL_INT32(-1, key);
@@ -1417,8 +1414,7 @@ static void test_swap_exchanges_the_entries_and_the_hashers() {
 
 // the nodes change map without moving, which is why swap needs one allocator
 static void test_swap_keeps_the_nodes_alive() {
-    tda_HMap a = make_filled(tda_hash_i32, nullptr, 4);
-    tda_HMap b = make_map(tda_hash_i32, nullptr);
+    tda_HMap a = make_filled(tda_hash_i32, nullptr, 4), b = make_map(tda_hash_i32, nullptr);
 
     const tda_HMapNode *held = TDA_HMAP_FIND(int32_t, &a, 2);
     TEST_ASSERT_NOT_NULL(held);
@@ -1829,8 +1825,7 @@ static void test_eq_looks_the_keys_up_with_the_hasher_of_the_other() {
 }
 
 static void test_eq_parts_a_differing_value() {
-    tda_HMap a = make_filled(tda_hash_i32, nullptr, 8);
-    tda_HMap b = make_filled(tda_hash_i32, nullptr, 8);
+    tda_HMap a = make_filled(tda_hash_i32, nullptr, 8), b = make_filled(tda_hash_i32, nullptr, 8);
     put(&b, 3, -30);
 
     TEST_ASSERT_EQUAL_size_t(tda_hmap_len(&a), tda_hmap_len(&b));
@@ -1847,8 +1842,7 @@ static void test_eq_parts_a_differing_value() {
 
 // the same number of entries, one key in place of another
 static void test_eq_parts_a_differing_key() {
-    tda_HMap a = make_filled(tda_hash_i32, nullptr, 8);
-    tda_HMap b = make_filled(tda_hash_i32, nullptr, 8);
+    tda_HMap a = make_filled(tda_hash_i32, nullptr, 8), b = make_filled(tda_hash_i32, nullptr, 8);
     TEST_ASSERT_TRUE(TDA_HMAP_REMOVE(int32_t, &b, 3));
     put(&b, 100, 30);
 
@@ -1903,8 +1897,7 @@ static void test_eq_walks_whole_chains() {
 // a value field that does not count is what eq_by is for: these Pairs agree in the
 // first field and differ in the second
 static void test_eq_by_asks_the_equality_for_the_value_side() {
-    tda_HMap a = {};
-    tda_HMap b = {};
+    tda_HMap a = {}, b = {};
     TDA_HMAP_INIT(int32_t, Pair, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &a);
     TDA_HMAP_INIT(int32_t, Pair, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &b);
 
@@ -1998,15 +1991,12 @@ static void test_print_writes_to_stdout() {
 
 // each side keeps the allocator its elems came from, and each is given back to it
 static void test_swap_across_allocators_carries_each_allocator() {
-    tda_TestProbe pa;
-    tda_TestProbe pb;
+    tda_TestProbe pa, pb;
     tda_test_probe_reset(&pa);
     tda_test_probe_reset(&pb);
-    tda_Al al_a = tda_test_probe_full(&pa);
-    tda_Al al_b = tda_test_probe_full(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
-    tda_HMap a = {};
-    tda_HMap b = {};
+    tda_HMap a = {}, b = {};
     TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al_a, &a);
     for (int32_t i = 0; i < 2; ++i) {
         TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &a, i, i, nullptr));

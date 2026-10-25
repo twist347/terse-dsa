@@ -12,12 +12,12 @@
 
 /* ========== internals ========== */
 
-#define ASSERT_ARR(a)                                                         \
-    (assert(a),                                                               \
-     assert(tda_layout_is_type((a)->elem_)),                                  \
-     assert((a)->len_ == 0 || (a)->data_),                                    \
-     assert(!(a)->data_ || (a)->len_ > 0),                                    \
-     assert(!(a)->data_ || tda_ptr_is_aligned((a)->data_, (a)->elem_.align)), \
+#define ASSERT_ARR(a)                                                      \
+    (assert(a),                                                            \
+     assert(tda_layout_is_type((a)->elem_)),                               \
+     assert((a)->len_ == 0 || (a)->data_),                                 \
+     assert(!(a)->data_ || (a)->len_ > 0),                                 \
+     assert(!(a)->data_ || tda_align_meets((a)->data_, (a)->elem_.align)), \
      assert((a)->al_))
 
 #define EXPECT_SAME_ARR(a, b) \
@@ -116,8 +116,7 @@ tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
         return TDA_STATUS_OK;
     }
 
-    const size_t self_bytes = len_bytes(self);
-    const size_t other_bytes = len_bytes(other);
+    const size_t self_bytes = len_bytes(self), other_bytes = len_bytes(other);
 
     if (self_bytes != other_bytes) {
         void *ptr = tda_realloc(self->al_, self->data_, block_layout(self), other_bytes);

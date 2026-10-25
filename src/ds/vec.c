@@ -3,7 +3,6 @@
 #include "tda/algo/compare.h"
 #include "tda/core/check.h"
 
-#include "internal/overlap.h"
 #include "internal/ptr.h"
 
 #include <assert.h>

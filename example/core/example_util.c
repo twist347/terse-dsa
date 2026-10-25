@@ -20,8 +20,7 @@ static void put_line(const char *line) {
 
 int main() {
     /// [swap]
-    int32_t a = 1;
-    int32_t b = 2;
+    int32_t a = 1, b = 2;
 
     TDA_SWAP(a, b);
     printf("%" PRId32 " %" PRId32 "\n", a, b); // 2 1
@@ -29,8 +28,7 @@ int main() {
     // both operands are addressed before anything moves, so an argument with a side
     // effect is evaluated once
     int32_t v[] = {10, 20, 30, 40};
-    size_t i = 0;
-    size_t j = 3;
+    size_t i = 0, j = 3;
 
     TDA_SWAP(v[i++], v[j--]);
     printf(
@@ -45,8 +43,7 @@ int main() {
 
     // through pointers, name the pointees: TDA_SWAP(pa, pb) also typechecks, but swaps the
     // two local pointers and leaves 'a' and 'b' alone
-    int32_t *pa = &a;
-    int32_t *pb = &b;
+    int32_t *pa = &a, *pb = &b;
 
     TDA_SWAP(*pa, *pb);
     printf("%" PRId32 " %" PRId32 "\n", a, b); // 1 2 — the pointees went back

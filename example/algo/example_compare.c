@@ -9,8 +9,7 @@
 
 int main() {
     /// [compare]
-    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 2, 3);
-    const tda_Span b = TDA_SPAN_OF(int32_t, 1, 2, 4);
+    const tda_Span a = TDA_SPAN_OF(int32_t, 1, 2, 3), b = TDA_SPAN_OF(int32_t, 1, 2, 4);
 
     printf("%d %d\n", tda_span_eq(a, b), tda_span_eq_by(a, b, tda_eq_i32, nullptr)); // 0 0
 
@@ -28,8 +27,7 @@ int main() {
     ); // -1 -1
 
     // the same elems in another order, each as many times
-    const tda_Span shuffled = TDA_SPAN_OF(int32_t, 3, 1, 2);
-    const tda_Span skewed = TDA_SPAN_OF(int32_t, 3, 1, 1);
+    const tda_Span shuffled = TDA_SPAN_OF(int32_t, 3, 1, 2), skewed = TDA_SPAN_OF(int32_t, 3, 1, 1);
     printf(
         "%d %d\n",
         tda_span_is_permutation(a, shuffled, tda_eq_i32, nullptr),

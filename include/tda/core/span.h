@@ -41,6 +41,7 @@
 /// @snippet core/example_span.c build
 /// @snippet core/example_span.c access
 /// @snippet core/example_span.c sub
+/// @snippet core/example_span.c overlap
 /// @snippet core/example_span.c bridge
 /// @{
 
@@ -225,6 +226,46 @@ static inline size_t tda_span_bytes(tda_Span self) {
 
 /// @}
 
+/// @name overlap
+/// @{
+
+/// whether two views share a byte, what an algo output that must not overlap an input
+/// forbids; a writable view converts first
+/// @param a one view
+/// @param b the other
+/// @return false when either is empty
+/// @bigo{1}
+[[nodiscard]]
+static inline bool tda_span_overlap(tda_Span a, tda_Span b) {
+    TDA_SPAN_ASSERT(a);
+    TDA_SPAN_ASSERT(b);
+
+    if (a.len == 0 || b.len == 0) {
+        return false;
+    }
+
+    // as integers: '<' between pointers into different objects is undefined
+    const uintptr_t pa = (uintptr_t) a.data, pb = (uintptr_t) b.data;
+
+    return pa < pb + tda_span_bytes(b) && pb < pa + tda_span_bytes(a);
+}
+
+/// whether two views are apart or the very same elems, the two cases an elementwise op
+/// such as tda_span_copy takes
+/// @param a one view
+/// @param b the other
+/// @return true when they share no byte or start at the same one
+/// @bigo{1}
+[[nodiscard]]
+static inline bool tda_span_apart_or_same(tda_Span a, tda_Span b) {
+    TDA_SPAN_ASSERT(a);
+    TDA_SPAN_ASSERT(b);
+
+    return a.data == b.data || !tda_span_overlap(a, b);
+}
+
+/// @}
+
 /// @name access
 /// @{
 
@@ -287,8 +328,7 @@ static inline void tda_span_swap_elems(tda_SpanMut self, size_t i, size_t j) {
         return;
     }
 
-    unsigned char *a = tda_span_get_mut(self, i);
-    unsigned char *b = tda_span_get_mut(self, j);
+    unsigned char *a = tda_span_get_mut(self, i), *b = tda_span_get_mut(self, j);
     for (size_t k = 0; k < self.elem.size; ++k) {
         TDA_SWAP(a[k], b[k]);
     }

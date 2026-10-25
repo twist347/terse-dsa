@@ -83,8 +83,7 @@ int main() {
     /// [algo]
     // an algo that reads run by run takes the ring as it lies: at most two views, the
     // front run and the back one, nothing copied
-    tda_Span front;
-    tda_Span back;
+    tda_Span front, back;
     tda_deque_to_spans(&d, &front, &back);
 
     constexpr int32_t key = 9;

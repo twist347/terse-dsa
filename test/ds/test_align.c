@@ -55,8 +55,7 @@ static Wide wide(int32_t id) {
 }
 
 static int cmp_wide(const void *lhs, const void *rhs, void *) {
-    const int32_t a = ((const Wide *) lhs)->id;
-    const int32_t b = ((const Wide *) rhs)->id;
+    const int32_t a = ((const Wide *) lhs)->id, b = ((const Wide *) rhs)->id;
 
     return (a > b) - (a < b);
 }

@@ -93,7 +93,7 @@ tda_Status tda_pool_init_buf(void *buf, size_t cap, tda_Layout block, tda_Pool *
     }
 
     // the blocks start on their own alignment, which may be past the buffer's
-    const size_t pad = tda_ptr_align_pad(buf, block.align);
+    const size_t pad = tda_align_pad(buf, block.align);
     if (pad > cap || cap - pad < block.size) {
         return TDA_STATUS_ERR_NO_MEM;
     }
@@ -212,12 +212,12 @@ static bool ckd_block(tda_Layout *out, tda_Layout block) {
 
     out->align = align;
 
-    return tda_ckd_align_up(&out->size, size, align);
+    return tda_align_ckd_up(&out->size, size, align);
 }
 
 static void fill(tda_Pool *obj, tda_Al *parent, void *data, tda_Layout block, size_t block_count) {
     assert(tda_layout_is_type(block));
-    assert(tda_ptr_is_aligned(data, block.align));
+    assert(tda_align_meets(data, block.align));
 
     *obj = (tda_Pool){
         .al_ = {

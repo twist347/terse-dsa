@@ -55,8 +55,7 @@ int main() {
     /// [set_ops]
     // the pairwise ops write into the left operand and only read the right; both must
     // have the same universe
-    tda_BitSet b = {};
-    tda_BitSet both = {};
+    tda_BitSet b = {}, both = {};
     int rc = 1;
 
     if (TDA_STATUS_IS_ERR(tda_bitset_init_len(12, al, &b))) {

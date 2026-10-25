@@ -713,8 +713,7 @@ static void test_the_span_reaches_algo_and_the_stack_is_untouched() {
 /* ========== swap ========== */
 
 static void test_swap_exchanges_the_elems() {
-    tda_Stack a = {};
-    tda_Stack b = {};
+    tda_Stack a = {}, b = {};
     TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_al_default(), &a, 1, 2, 3));
     TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_al_default(), &b, 10, 20));
 
@@ -812,8 +811,7 @@ static void test_reserve_reports_an_exhausted_arena() {
 static void test_eq_matches_the_same_elems() {
     constexpr int32_t src[3] = {7, 8, 9};
 
-    tda_Stack a = make_stack(src, 3);
-    tda_Stack b = make_stack_from(src, 3);
+    tda_Stack a = make_stack(src, 3), b = make_stack_from(src, 3);
 
     TEST_ASSERT_TRUE(tda_stack_eq(&a, &a));
     TEST_ASSERT_TRUE(tda_stack_eq(&a, &b));
@@ -828,8 +826,7 @@ static void test_eq_parts_one_differing_elem() {
     constexpr int32_t lhs[3] = {7, 8, 9};
     constexpr int32_t rhs[3] = {7, 8, 99};
 
-    tda_Stack a = make_stack(lhs, 3);
-    tda_Stack b = make_stack(rhs, 3);
+    tda_Stack a = make_stack(lhs, 3), b = make_stack(rhs, 3);
 
     TEST_ASSERT_FALSE(tda_stack_eq(&a, &b));
     TEST_ASSERT_FALSE(tda_stack_eq_by(&a, &b, tda_eq_i32, nullptr));
@@ -872,8 +869,7 @@ static void test_eq_forgets_a_popped_elem() {
     constexpr int32_t lhs[2] = {7, 8};
     constexpr int32_t rhs[3] = {7, 8, 9};
 
-    tda_Stack a = make_stack(lhs, 2);
-    tda_Stack b = make_stack(rhs, 3);
+    tda_Stack a = make_stack(lhs, 2), b = make_stack(rhs, 3);
 
     TEST_ASSERT_FALSE(tda_stack_eq(&a, &b));
     tda_stack_pop(&b);
@@ -887,8 +883,7 @@ static void test_eq_by_asks_the_equality() {
     constexpr Pair lhs[2] = {{1, 10}, {2, 20}};
     constexpr Pair rhs[2] = {{1, 70}, {2, 80}};
 
-    tda_Stack a = {};
-    tda_Stack b = {};
+    tda_Stack a = {}, b = {};
     TDA_TEST_OK(TDA_STACK_FROM_DATA(Pair, lhs, 2, tda_al_default(), &a));
     TDA_TEST_OK(TDA_STACK_FROM_DATA(Pair, rhs, 2, tda_al_default(), &b));
 
@@ -1022,15 +1017,12 @@ static void test_print_writes_to_stdout() {
 
 // each side keeps the allocator its elems came from, and each is given back to it
 static void test_swap_across_allocators_carries_each_allocator() {
-    tda_TestProbe pa;
-    tda_TestProbe pb;
+    tda_TestProbe pa, pb;
     tda_test_probe_reset(&pa);
     tda_test_probe_reset(&pb);
-    tda_Al al_a = tda_test_probe_full(&pa);
-    tda_Al al_b = tda_test_probe_full(&pb);
+    tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
-    tda_Stack a = {};
-    tda_Stack b = {};
+    tda_Stack a = {}, b = {};
     TDA_TEST_OK(TDA_STACK_OF(int32_t, &al_a, &a, 1, 2));
     TDA_TEST_OK(TDA_STACK_OF(int32_t, &al_b, &b, 3, 4, 5));
 

@@ -23,8 +23,7 @@ static int show_allocators() {
     /// [allocators]
     // a vec carries its allocator, so two on different allocators swap in O(1) and each
     // block still goes back to the allocator that made it
-    tda_Vec a;
-    tda_Vec b;
+    tda_Vec a, b;
     TDA_VEC_INIT(int32_t, al, &a);
     TDA_VEC_INIT(int32_t, TDA_AL(&arena), &b);
     int rc = 1;
