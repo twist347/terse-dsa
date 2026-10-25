@@ -16,6 +16,10 @@
     (assert(q),          \
      assert((q)->cmp_))
 
+/// whether the two hold elems of one layout
+[[nodiscard]] [[maybe_unused]]
+static bool same_elem(const tda_PQueue *a, const tda_PQueue *b);
+
 // A vec plus its comparator. Every mutation keeps the vec a heap (algo/heap); growth
 // and allocator are the vec's.
 
@@ -125,7 +129,7 @@ tda_Status tda_pqueue_copy_with(const tda_PQueue *self, tda_Al *al, tda_PQueue *
 tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
-    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), tda_vec_elem_layout(&other->vec_)));
+    TDA_EXPECT(same_elem(self, other));
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -148,7 +152,7 @@ tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
 void tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
-    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), tda_vec_elem_layout(&other->vec_)));
+    TDA_EXPECT(same_elem(self, other));
 
     if (self == other) {
         return;
@@ -234,7 +238,7 @@ tda_Status tda_pqueue_shrink_to_fit(tda_PQueue *self) {
 void tda_pqueue_swap(tda_PQueue *self, tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
-    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), tda_vec_elem_layout(&other->vec_)));
+    TDA_EXPECT(same_elem(self, other));
 
     if (self == other) {
         return;
@@ -255,4 +259,10 @@ void tda_pqueue_print(const tda_PQueue *self, tda_FPrint fprint) {
     ASSERT_PQUEUE(self);
 
     tda_vec_print(&self->vec_, fprint);
+}
+
+/* ========== internals ========== */
+
+static bool same_elem(const tda_PQueue *a, const tda_PQueue *b) {
+    return tda_layout_eq(tda_vec_elem_layout(&a->vec_), tda_vec_elem_layout(&b->vec_));
 }

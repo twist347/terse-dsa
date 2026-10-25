@@ -245,7 +245,7 @@ static tda_Status init_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al *al
 }
 
 static tda_Layout block_layout(const tda_Arr *self) {
-    return (tda_Layout){.size = len_bytes(self), .align = self->elem_.align};
+    return tda_elems_layout(self->elem_, self->len_);
 }
 
 static size_t len_bytes(const tda_Arr *self) {

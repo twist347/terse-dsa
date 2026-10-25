@@ -79,6 +79,15 @@ static tda_Layout chunk_layout();
 [[nodiscard]]
 static bool add_chunk(tda_Slab *self, SizeClass *cls);
 
+/// whether the chunk 'cls' carves from has room for one more block of 'size'
+[[nodiscard]]
+static bool can_carve(const SizeClass *cls, size_t size);
+
+/// a fresh block of 'size' from the chunk of 'cls', starting a new chunk when that one
+/// is used up; null when the parent refuses
+[[nodiscard]]
+static void *carve(tda_Slab *self, SizeClass *cls, size_t size);
+
 [[nodiscard]] [[maybe_unused]]
 static bool owns_block(const tda_Slab *self, const void *ptr);
 
@@ -162,14 +171,10 @@ static void *slab_alloc(void *ctx, tda_Layout layout) {
         ptr = cls->free_head_;
         cls->free_head_ = cls->free_head_->next;
     } else {
-        // a class not yet started has no chunk to carve, and null pointers do not
-        // subtract; the tail of a chunk too short for one more block is left unused
-        const bool room = cls->carve_ && (size_t) (cls->carve_end_ - cls->carve_) >= CLASS_SIZES[idx];
-        if (!room && !add_chunk(self, cls)) {
+        ptr = carve(self, cls, CLASS_SIZES[idx]);
+        if (!ptr) {
             return nullptr;
         }
-        ptr = cls->carve_;
-        cls->carve_ += CLASS_SIZES[idx];
     }
 
     ++self->small_blocks_;
@@ -274,6 +279,23 @@ static bool add_chunk(tda_Slab *self, SizeClass *cls) {
     cls->carve_end_ = (unsigned char *) chunk;
 
     return true;
+}
+
+static bool can_carve(const SizeClass *cls, size_t size) {
+    // a class not yet started has no chunk to carve, and null pointers do not subtract
+    return cls->carve_ && (size_t) (cls->carve_end_ - cls->carve_) >= size;
+}
+
+static void *carve(tda_Slab *self, SizeClass *cls, size_t size) {
+    // the tail of a chunk too short for one more block is left unused
+    if (!can_carve(cls, size) && !add_chunk(self, cls)) {
+        return nullptr;
+    }
+
+    void *ptr = cls->carve_;
+    cls->carve_ += size;
+
+    return ptr;
 }
 
 static bool owns_block(const tda_Slab *self, const void *ptr) {

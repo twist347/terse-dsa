@@ -14,6 +14,12 @@
 
 /* ========== bit queries ========== */
 
+/// whether 'n' has exactly one bit set
+[[nodiscard]]
+static inline bool tda_is_pow2(size_t n) {
+    return n > 0 && (n & (n - 1)) == 0;
+}
+
 [[nodiscard]]
 static inline size_t tda_bit_count(uint64_t word) {
 #ifdef TDA_HAS_STDBIT

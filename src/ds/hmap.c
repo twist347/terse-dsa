@@ -3,6 +3,7 @@
 #include "tda/core/check.h"
 #include "tda/core/util.h"
 
+#include "internal/bits.h"
 #include "internal/hmap_impl.h"
 #include "internal/order.h"
 #include "internal/ptr.h"
@@ -13,16 +14,21 @@
 
 /* ========== internals ========== */
 
-#define ASSERT_HMAP(m)                                                \
-    (assert(m),                                                       \
-     assert(tda_layout_is_type((m)->key_)),                           \
-     assert((m)->hasher_),                                            \
-     assert((m)->eq_),                                                \
-     assert((m)->al_),                                                \
-     assert(((m)->bucket_count_ == 0) == ((m)->buckets_ == nullptr)), \
-     assert((m)->bucket_count_ == 0                                   \
-            || ((m)->bucket_count_ & ((m)->bucket_count_ - 1)) == 0), \
+#define ASSERT_HMAP(m)                                                   \
+    (assert(m),                                                          \
+     assert(tda_layout_is_type((m)->key_)),                              \
+     assert((m)->hasher_),                                               \
+     assert((m)->eq_),                                                   \
+     assert((m)->al_),                                                   \
+     assert(((m)->bucket_count_ == 0) == ((m)->buckets_ == nullptr)),    \
+     assert((m)->bucket_count_ == 0 || tda_is_pow2((m)->bucket_count_)), \
      assert((m)->len_ == 0 || (m)->bucket_count_ > 0))
+
+// two maps whose entries can pass between them or be compared: one key layout, one
+// value layout
+#define EXPECT_SAME_LAYOUTS(a, b)                     \
+    (TDA_EXPECT(tda_layout_eq((a)->key_, (b)->key_)), \
+     TDA_EXPECT(tda_layout_eq((a)->val_, (b)->val_)))
 
 static constexpr size_t HMAP_BUCKETS_BASE = 8;
 static constexpr size_t HMAP_GROWTH_FACTOR = 2;
@@ -122,6 +128,9 @@ static void free_nodes(tda_HMap *self);
 /// frees the nodes and the bucket array, leaving a map that owns nothing, like any
 /// container after a move
 static void release_buckets(tda_HMap *self);
+
+/// the state release_buckets and a move leave: no buckets, no entries; frees nothing
+static void forget_buckets(tda_HMap *self);
 
 /// shared by eq and eq_by; a null 'val_eq' compares bytes
 [[nodiscard]]
@@ -304,8 +313,7 @@ tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap *out) {
 tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    TDA_EXPECT(tda_layout_eq(self->key_, other->key_));
-    TDA_EXPECT(tda_layout_eq(self->val_, other->val_));
+    EXPECT_SAME_LAYOUTS(self, other);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -329,8 +337,7 @@ tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
 void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    TDA_EXPECT(tda_layout_eq(self->key_, other->key_));
-    TDA_EXPECT(tda_layout_eq(self->val_, other->val_));
+    EXPECT_SAME_LAYOUTS(self, other);
 
     if (self == other) {
         return;
@@ -340,9 +347,7 @@ void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
     // 'other' keeps all of them and is left with no buckets
     tda_hmap_deinit(self);
     *self = *other;
-    other->buckets_ = nullptr;
-    other->bucket_count_ = 0;
-    other->len_ = 0;
+    forget_buckets(other);
 
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
@@ -353,8 +358,7 @@ void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
 bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b) {
     ASSERT_HMAP(a);
     ASSERT_HMAP(b);
-    TDA_EXPECT(tda_layout_eq(a->key_, b->key_));
-    TDA_EXPECT(tda_layout_eq(a->val_, b->val_));
+    EXPECT_SAME_LAYOUTS(a, b);
     TDA_EXPECT(a->eq_ == b->eq_);
 
     return eq_impl(a, b, nullptr, nullptr);
@@ -363,8 +367,7 @@ bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b) {
 bool tda_hmap_eq_by(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq, void *ctx) {
     ASSERT_HMAP(a);
     ASSERT_HMAP(b);
-    TDA_EXPECT(tda_layout_eq(a->key_, b->key_));
-    TDA_EXPECT(tda_layout_eq(a->val_, b->val_));
+    EXPECT_SAME_LAYOUTS(a, b);
     TDA_EXPECT(a->eq_ == b->eq_);
     assert(val_eq);
 
@@ -651,8 +654,7 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
 void tda_hmap_swap(tda_HMap *self, tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    TDA_EXPECT(tda_layout_eq(self->key_, other->key_));
-    TDA_EXPECT(tda_layout_eq(self->val_, other->val_));
+    EXPECT_SAME_LAYOUTS(self, other);
 
     if (self == other) {
         return;
@@ -731,7 +733,7 @@ static void dealloc_node(const tda_HMap *self, tda_HMapNode *node) {
 }
 
 static size_t bucket_in(tda_Hash hash, size_t count) {
-    assert(count > 0 && (count & (count - 1)) == 0);
+    assert(tda_is_pow2(count));
 
     return (size_t) hash & (count - 1);
 }
@@ -834,8 +836,7 @@ static size_t buckets_for(size_t len) {
 }
 
 static tda_Status rehash(tda_HMap *self, size_t new_count) {
-    assert(new_count > 0);
-    assert((new_count & (new_count - 1)) == 0);
+    assert(tda_is_pow2(new_count));
 
     tda_HMapNode **buckets = TDA_ALLOC_ZEROED(tda_HMapNode *, self->al_, new_count);
     if (!buckets) {
@@ -902,6 +903,10 @@ static void free_nodes(tda_HMap *self) {
 static void release_buckets(tda_HMap *self) {
     free_nodes(self);
     TDA_DEALLOC(tda_HMapNode *, self->al_, self->buckets_, self->bucket_count_);
+    forget_buckets(self);
+}
+
+static void forget_buckets(tda_HMap *self) {
     self->buckets_ = nullptr;
     self->bucket_count_ = 0;
     self->len_ = 0;

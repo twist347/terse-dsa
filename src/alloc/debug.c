@@ -73,6 +73,13 @@ static FreedBlock *quarantined(tda_Debug *self, size_t i);
 /// moves the oldest quarantined block back to the parent, checking its fill
 static void release_oldest(tda_Debug *self);
 
+/// holds 'freed' as the newest block, releasing the oldest when the quarantine is full
+static void quarantine_push(tda_Debug *self, FreedBlock freed);
+
+/// the quarantined block at 'ptr', or null when it is not held
+[[nodiscard]]
+static const FreedBlock *quarantine_find(tda_Debug *self, const void *ptr);
+
 /// whether 'n' bytes at 'ptr' all equal 'fill'
 [[nodiscard]]
 static bool all_equal(const unsigned char *ptr, size_t n, unsigned char fill);
@@ -286,12 +293,7 @@ static void debug_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     self->live_bytes_ -= layout.size;
     memset(block, FILL_FREED, parent_layout(layout).size);
 
-    if (self->quarantine_len_ == QUARANTINE_LEN) {
-        release_oldest(self);
-    }
-    ++self->quarantine_len_;
-    *quarantined(self, self->quarantine_len_ - 1) =
-            (FreedBlock){.ptr = ptr, .layout = layout, .serial = entry.serial};
+    quarantine_push(self, (FreedBlock){.ptr = ptr, .layout = layout, .serial = entry.serial});
 }
 
 static BlockRecord checked_entry(tda_Debug *self, const void *ptr, tda_Layout layout, bool take, const char *as) {
@@ -301,12 +303,9 @@ static BlockRecord checked_entry(tda_Debug *self, const void *ptr, tda_Layout la
     BlockRecord entry;
     const bool found = take ? table_take(table, addr, &entry) : table_find(table, addr, &entry);
     if (!found) {
-        for (size_t i = 0; i < self->quarantine_len_; ++i) {
-            const FreedBlock *freed = quarantined(self, i);
-            if (freed->ptr == ptr) {
-                const unsigned long long serial = freed->serial;
-                report("block #%llu at %p freed twice", serial, ptr);
-            }
+        const FreedBlock *freed = quarantine_find(self, ptr);
+        if (freed) {
+            report("block #%llu at %p freed twice", (unsigned long long) freed->serial, ptr);
         }
         report("%p was not handed out by this allocator, or was freed long ago", ptr);
     }
@@ -368,6 +367,26 @@ static void release_oldest(tda_Debug *self) {
     }
 
     tda_dealloc(self->parent_, freed.ptr, with_guard);
+}
+
+static void quarantine_push(tda_Debug *self, FreedBlock freed) {
+    if (self->quarantine_len_ == QUARANTINE_LEN) {
+        release_oldest(self);
+    }
+
+    ++self->quarantine_len_;
+    *quarantined(self, self->quarantine_len_ - 1) = freed;
+}
+
+static const FreedBlock *quarantine_find(tda_Debug *self, const void *ptr) {
+    for (size_t i = 0; i < self->quarantine_len_; ++i) {
+        const FreedBlock *freed = quarantined(self, i);
+        if (freed->ptr == ptr) {
+            return freed;
+        }
+    }
+
+    return nullptr;
 }
 
 static bool all_equal(const unsigned char *ptr, size_t n, unsigned char fill) {

@@ -45,11 +45,12 @@ static tda_Status reserve_one(tda_Vec *self);
 [[nodiscard]]
 static tda_Status reserve_for(tda_Vec *self, size_t new_len);
 
+/// moves the elems into a block of exactly 'new_cap', which holds them all
 [[nodiscard]]
-static size_t len_bytes(const tda_Vec *self);
+static tda_Status set_cap(tda_Vec *self, size_t new_cap);
 
 [[nodiscard]]
-static size_t cap_bytes(const tda_Vec *self);
+static size_t len_bytes(const tda_Vec *self);
 
 /// the block as it was allocated: cap elems at the elem's alignment
 [[nodiscard]]
@@ -293,19 +294,7 @@ tda_Status tda_vec_reserve(tda_Vec *self, size_t new_cap) {
         return TDA_STATUS_OK;
     }
 
-    size_t new_bytes;
-    if (ckd_mul(&new_bytes, new_cap, self->elem_.size)) {
-        return TDA_STATUS_ERR_NO_MEM;
-    }
-    void *ptr = tda_realloc(self->al_, self->data_, block_layout(self), new_bytes);
-    if (!ptr) {
-        return TDA_STATUS_ERR_NO_MEM;
-    }
-
-    self->data_ = ptr;
-    self->cap_ = new_cap;
-
-    return TDA_STATUS_OK;
+    return set_cap(self, new_cap);
 }
 
 tda_Status tda_vec_shrink_to_fit(tda_Vec *self) {
@@ -320,17 +309,11 @@ tda_Status tda_vec_shrink_to_fit(tda_Vec *self) {
         return TDA_STATUS_OK;
     }
 
-    void *ptr = tda_realloc(self->al_, self->data_, block_layout(self), len_bytes(self));
-    if (!ptr) {
-        return TDA_STATUS_ERR_NO_MEM;
-    }
-
-    self->data_ = ptr;
-    self->cap_ = self->len_;
+    const tda_Status st = set_cap(self, self->len_);
 
     ASSERT_VEC(self);
 
-    return TDA_STATUS_OK;
+    return st;
 }
 
 tda_Status tda_vec_resize(tda_Vec *self, size_t new_len) {
@@ -341,11 +324,9 @@ tda_Status tda_vec_resize(tda_Vec *self, size_t new_len) {
         return TDA_STATUS_OK;
     }
 
-    if (new_len > self->cap_) {
-        const tda_Status st = reserve_for(self, new_len);
-        if (TDA_STATUS_IS_ERR(st)) {
-            return st;
-        }
+    const tda_Status st = reserve_for(self, new_len);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
     }
 
     // zero init tail
@@ -468,11 +449,9 @@ static tda_Status insert_raw(tda_Vec *self, size_t idx, const void *src, size_t 
         return TDA_STATUS_ERR_NO_MEM;
     }
 
-    if (new_len > self->cap_) {
-        const tda_Status st = reserve_for(self, new_len);
-        if (TDA_STATUS_IS_ERR(st)) {
-            return st;
-        }
+    const tda_Status st = reserve_for(self, new_len);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
     }
 
     // one move for the whole run, not one per elem
@@ -541,18 +520,40 @@ static tda_Status reserve_one(tda_Vec *self) {
     return reserve_for(self, self->cap_ + 1);
 }
 
+static tda_Status set_cap(tda_Vec *self, size_t new_cap) {
+    assert(new_cap >= self->len_);
+    assert(new_cap > 0);
+
+    tda_Layout block;
+    if (tda_layout_ckd_array(&block, self->elem_, new_cap)) {
+        return TDA_STATUS_ERR_NO_MEM;
+    }
+
+    void *ptr = tda_realloc(self->al_, self->data_, block_layout(self), block.size);
+    if (!ptr) {
+        return TDA_STATUS_ERR_NO_MEM;
+    }
+
+    self->data_ = ptr;
+    self->cap_ = new_cap;
+
+    return TDA_STATUS_OK;
+}
+
 static tda_Status reserve_for(tda_Vec *self, size_t new_len) {
-    assert(new_len > self->cap_);
+    if (new_len <= self->cap_) {
+        return TDA_STATUS_OK;
+    }
 
     const size_t eager = next_cap(self);
     if (eager > new_len) {
-        const tda_Status st = tda_vec_reserve(self, eager);
+        const tda_Status st = set_cap(self, eager);
         if (TDA_STATUS_IS_OK(st)) {
             return st;
         }
     }
 
-    return tda_vec_reserve(self, new_len);
+    return set_cap(self, new_len);
 }
 
 static void release_data(tda_Vec *self) {
@@ -566,12 +567,8 @@ static size_t len_bytes(const tda_Vec *self) {
     return self->len_ * self->elem_.size;
 }
 
-static size_t cap_bytes(const tda_Vec *self) {
-    return self->cap_ * self->elem_.size;
-}
-
 static tda_Layout block_layout(const tda_Vec *self) {
-    return (tda_Layout){.size = cap_bytes(self), .align = self->elem_.align};
+    return tda_elems_layout(self->elem_, self->cap_);
 }
 
 static const unsigned char *elem_at(const tda_Vec *self, size_t idx) {

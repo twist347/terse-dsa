@@ -1,7 +1,8 @@
 #include "tda/algo/modify.h"
 
+#include "internal/emit.h"
+
 #include <assert.h>
-#include <string.h>
 
 /* ========== internals ========== */
 
@@ -39,10 +40,7 @@ size_t tda_span_unique(tda_SpanMut s, tda_Eq eq, void *ctx) {
         // compare against the last elem KEPT, not the previous one read: its
         // slot may already hold a different value
         if (!eq(tda_span_get(view, write - 1), cur, ctx)) {
-            if (write != read) {
-                memcpy(tda_span_get_mut(s, write), cur, s.elem.size);
-            }
-            ++write;
+            write = tda_emit_over(s, write, cur);
         }
     }
 
@@ -72,10 +70,7 @@ size_t tda_span_remove_if(tda_SpanMut s, tda_Pred pred, void *ctx) {
         const void *cur = tda_span_get(view, read);
 
         if (!pred(cur, ctx)) {
-            if (write != read) {
-                memcpy(tda_span_get_mut(s, write), cur, s.elem.size);
-            }
-            ++write;
+            write = tda_emit_over(s, write, cur);
         }
     }
 

@@ -12,6 +12,10 @@
     (assert(s),         \
      assert((s)->vec_.al_))
 
+/// whether the two hold elems of one layout
+[[nodiscard]] [[maybe_unused]]
+static bool same_elem(const tda_Stack *a, const tda_Stack *b);
+
 // A stack is a vec with fewer ops. Growth, allocator and copy semantics are the vec's.
 
 /* ========== lifetime ========== */
@@ -82,7 +86,7 @@ tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al *al, tda_Stack *out
 tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
-    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), tda_vec_elem_layout(&other->vec_)));
+    TDA_EXPECT(same_elem(self, other));
 
     // no self-assignment guard: the vec already returns early on it
     return tda_vec_copy_assign(&self->vec_, &other->vec_);
@@ -91,7 +95,7 @@ tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
 void tda_stack_move_assign(tda_Stack *self, tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
-    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), tda_vec_elem_layout(&other->vec_)));
+    TDA_EXPECT(same_elem(self, other));
 
     // self-move is handled by the vec, as in copy_assign
     tda_vec_move_assign(&self->vec_, &other->vec_);
@@ -145,7 +149,7 @@ tda_Status tda_stack_shrink_to_fit(tda_Stack *self) {
 void tda_stack_swap(tda_Stack *self, tda_Stack *other) {
     ASSERT_STACK(self);
     ASSERT_STACK(other);
-    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), tda_vec_elem_layout(&other->vec_)));
+    TDA_EXPECT(same_elem(self, other));
 
     // self-swap is handled by the vec, as in copy_assign
     tda_vec_swap(&self->vec_, &other->vec_);
@@ -163,4 +167,10 @@ void tda_stack_print(const tda_Stack *self, tda_FPrint fprint) {
     ASSERT_STACK(self);
 
     tda_vec_print(&self->vec_, fprint);
+}
+
+/* ========== internals ========== */
+
+static bool same_elem(const tda_Stack *a, const tda_Stack *b) {
+    return tda_layout_eq(tda_vec_elem_layout(&a->vec_), tda_vec_elem_layout(&b->vec_));
 }

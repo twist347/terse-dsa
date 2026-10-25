@@ -12,6 +12,10 @@
     (assert(q),         \
      assert((q)->deque_.al_))
 
+/// whether the two hold elems of one layout
+[[nodiscard]] [[maybe_unused]]
+static bool same_elem(const tda_Queue *a, const tda_Queue *b);
+
 // The deque does all the work; this type only hides the ops a queue should not have.
 
 /* ========== lifetime ========== */
@@ -82,7 +86,7 @@ tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue *out
 tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
-    TDA_EXPECT(tda_layout_eq(tda_deque_elem_layout(&self->deque_), tda_deque_elem_layout(&other->deque_)));
+    TDA_EXPECT(same_elem(self, other));
 
     // no self-assignment guard: the deque already returns early on it
     return tda_deque_copy_assign(&self->deque_, &other->deque_);
@@ -91,7 +95,7 @@ tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
 void tda_queue_move_assign(tda_Queue *self, tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
-    TDA_EXPECT(tda_layout_eq(tda_deque_elem_layout(&self->deque_), tda_deque_elem_layout(&other->deque_)));
+    TDA_EXPECT(same_elem(self, other));
 
     // self-move is handled by the deque, as in copy_assign
     tda_deque_move_assign(&self->deque_, &other->deque_);
@@ -165,7 +169,7 @@ tda_Status tda_queue_shrink_to_fit(tda_Queue *self) {
 void tda_queue_swap(tda_Queue *self, tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
-    TDA_EXPECT(tda_layout_eq(tda_deque_elem_layout(&self->deque_), tda_deque_elem_layout(&other->deque_)));
+    TDA_EXPECT(same_elem(self, other));
 
     // self-swap is handled by the deque, as in copy_assign
     tda_deque_swap(&self->deque_, &other->deque_);
@@ -183,4 +187,10 @@ void tda_queue_print(const tda_Queue *self, tda_FPrint fprint) {
     ASSERT_QUEUE(self);
 
     tda_deque_print(&self->deque_, fprint);
+}
+
+/* ========== internals ========== */
+
+static bool same_elem(const tda_Queue *a, const tda_Queue *b) {
+    return tda_layout_eq(tda_deque_elem_layout(&a->deque_), tda_deque_elem_layout(&b->deque_));
 }

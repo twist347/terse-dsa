@@ -103,6 +103,10 @@ static tda_ListNode *find_node(const tda_List *self, const void *key, tda_Eq eq,
 
 static void clear_nodes(tda_List *self);
 
+/// the node an insert before 'at' goes after; a null 'at' stands for the end
+[[nodiscard]]
+static tda_ListNode *prev_of(const tda_List *self, tda_ListNode *at);
+
 /// the node 'n' steps on from 'node', or null when the chain ends first
 [[nodiscard]]
 static tda_ListNode *skip(tda_ListNode *node, size_t n);
@@ -513,8 +517,7 @@ tda_Status tda_list_splice_node(tda_List *self, tda_ListNode *at, tda_List *src,
     if (self->al_ != src->al_) {
         // a node belongs to the allocator that made it, so copy the elem into a new node
         // of 'self' and release the old one
-        tda_ListNode *prev = at ? at->prev : self->tail_;
-        const tda_Status st = insert_between(self, prev, at, elem_of(src, node));
+        const tda_Status st = insert_between(self, prev_of(self, at), at, elem_of(src, node));
         if (TDA_STATUS_IS_ERR(st)) {
             return st;
         }
@@ -530,7 +533,7 @@ tda_Status tda_list_splice_node(tda_List *self, tda_ListNode *at, tda_List *src,
     // unlink first so 'self == src' works: 'at->prev' is then read from a list without
     // 'node', so moving a node one step forward lands in the right place
     unlink_node(src, node);
-    link_node(self, node, at ? at->prev : self->tail_, at);
+    link_node(self, node, prev_of(self, at), at);
 
     ASSERT_LIST(self);
     ASSERT_LIST(src);
@@ -874,6 +877,10 @@ static void clear_nodes(tda_List *self) {
     }
 
     set_empty(self);
+}
+
+static tda_ListNode *prev_of(const tda_List *self, tda_ListNode *at) {
+    return at ? at->prev : self->tail_;
 }
 
 static tda_ListNode *skip(tda_ListNode *node, size_t n) {

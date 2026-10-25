@@ -3,6 +3,7 @@
 #include "tda/algo/copy.h"
 #include "tda/core/check.h"
 
+#include "internal/emit.h"
 #include "internal/overlap.h"
 #include "internal/ptr.h"
 
@@ -140,15 +141,11 @@ tda_Status tda_span_partition_stable(
     for (size_t i = 0; i < s.len; ++i) {
         const void *elem = tda_span_get(view, i);
 
+        // kept never runs ahead of i, so this only overwrites elems already read
         if (pred(elem, ctx)) {
-            // kept never runs ahead of i, so this only overwrites elems already read
-            if (kept != i) {
-                tda_span_set(s, kept, elem);
-            }
-            ++kept;
+            kept = tda_emit_over(s, kept, elem);
         } else {
-            tda_span_set(rejected, dropped, elem);
-            ++dropped;
+            dropped = tda_emit(rejected, dropped, elem);
         }
     }
 

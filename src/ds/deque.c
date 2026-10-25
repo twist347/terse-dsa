@@ -54,6 +54,12 @@ static size_t len_bytes(const tda_Deque *self);
 [[nodiscard]]
 static tda_Layout block_layout(const tda_Deque *self, size_t cap);
 
+/// hands the block back to the allocator; the fields still describe it
+static void free_block(tda_Deque *self);
+
+/// frees the old block and takes 'ptr', of 'cap' elems, laid out from slot 0
+static void adopt_block(tda_Deque *self, void *ptr, size_t cap);
+
 /// moves the contents into a new block of 'new_cap' elems, unwrapped from slot 0. The
 /// caller has checked that the byte count fits
 [[nodiscard]]
@@ -175,7 +181,7 @@ void tda_deque_deinit(tda_Deque *self) {
 
     ASSERT_DEQUE(self);
 
-    tda_dealloc(self->al_, self->data_, block_layout(self, self->cap_));
+    free_block(self);
     *self = (tda_Deque){};
 }
 
@@ -225,9 +231,7 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
             return TDA_STATUS_ERR_NO_MEM;
         }
 
-        tda_dealloc(self->al_, self->data_, block_layout(self, self->cap_));
-        self->data_ = ptr;
-        self->cap_ = other->len_;
+        adopt_block(self, ptr, other->len_);
     }
 
     // whatever 'self' held is gone, so its ring is laid out afresh from slot 0
@@ -426,8 +430,8 @@ tda_Status tda_deque_reserve(tda_Deque *self, size_t new_cap) {
         return TDA_STATUS_OK;
     }
 
-    size_t new_bytes;
-    if (ckd_mul(&new_bytes, new_cap, self->elem_.size)) {
+    tda_Layout block;
+    if (tda_layout_ckd_array(&block, self->elem_, new_cap)) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
@@ -715,11 +719,7 @@ static tda_Status relocate(tda_Deque *self, size_t new_cap) {
     }
 
     copy_out(self, ptr);
-    tda_dealloc(self->al_, self->data_, block_layout(self, self->cap_));
-
-    self->data_ = ptr;
-    self->cap_ = new_cap;
-    self->head_ = 0;
+    adopt_block(self, ptr, new_cap);
 
     ASSERT_DEQUE(self);
 
@@ -749,7 +749,7 @@ static bool eq_impl(const tda_Deque *a, const tda_Deque *b, tda_Eq eq, void *ctx
 }
 
 static void release_data(tda_Deque *self) {
-    tda_dealloc(self->al_, self->data_, block_layout(self, self->cap_));
+    free_block(self);
     self->data_ = nullptr;
     self->len_ = 0;
     self->cap_ = 0;
@@ -761,7 +761,18 @@ static size_t len_bytes(const tda_Deque *self) {
 }
 
 static tda_Layout block_layout(const tda_Deque *self, size_t cap) {
-    return (tda_Layout){.size = cap * self->elem_.size, .align = self->elem_.align};
+    return tda_elems_layout(self->elem_, cap);
+}
+
+static void free_block(tda_Deque *self) {
+    tda_dealloc(self->al_, self->data_, block_layout(self, self->cap_));
+}
+
+static void adopt_block(tda_Deque *self, void *ptr, size_t cap) {
+    free_block(self);
+    self->data_ = ptr;
+    self->cap_ = cap;
+    self->head_ = 0;
 }
 
 static size_t slot_fwd(const tda_Deque *self, size_t slot, size_t count) {

@@ -47,8 +47,7 @@ static inline tda_Layout tda_elems_layout(tda_Layout elem, size_t len) {
 
 [[nodiscard]]
 static inline size_t tda_align_up(size_t val, size_t alignment) {
-    assert(alignment > 0);
-    assert((alignment & (alignment - 1)) == 0);
+    assert(tda_layout_is_align(alignment));
     assert(val <= SIZE_MAX - (alignment - 1));
 
     return (val + (alignment - 1)) & ~(alignment - 1);
@@ -59,8 +58,7 @@ static inline size_t tda_align_up(size_t val, size_t alignment) {
 [[nodiscard]]
 static inline bool tda_ckd_align_up(size_t *out, size_t val, size_t alignment) {
     assert(out);
-    assert(alignment > 0);
-    assert((alignment & (alignment - 1)) == 0);
+    assert(tda_layout_is_align(alignment));
 
     if (val > SIZE_MAX - (alignment - 1)) {
         return true;
@@ -76,8 +74,7 @@ static inline bool tda_ckd_align_up(size_t *out, size_t val, size_t alignment) {
 [[nodiscard]]
 static inline size_t tda_ptr_align_pad(const void *ptr, size_t alignment) {
     assert(ptr);
-    assert(alignment > 0);
-    assert((alignment & (alignment - 1)) == 0);
+    assert(tda_layout_is_align(alignment));
 
     return -(uintptr_t) ptr & (alignment - 1);
 }
@@ -85,8 +82,7 @@ static inline size_t tda_ptr_align_pad(const void *ptr, size_t alignment) {
 [[nodiscard]]
 static inline bool tda_ptr_is_aligned(const void *ptr, size_t alignment) {
     assert(ptr);
-    assert(alignment > 0);
-    assert((alignment & (alignment - 1)) == 0);
+    assert(tda_layout_is_align(alignment));
 
     return ((uintptr_t) ptr & (alignment - 1)) == 0;
 }
