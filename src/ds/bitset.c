@@ -35,6 +35,10 @@ static constexpr uint64_t WORD_ONES = ~UINT64_C(0);
     assert((b)->nwords_ == 0 || ((b)->words_[(b)->nwords_ - 1] & ~tail_mask((b)->nbits_)) == 0), \
     assert((b)->al_))
 
+// two bitsets a pairwise op can combine: one universe, so one word count
+#define EXPECT_SAME_BITSET(a, b) \
+    (TDA_EXPECT((a)->nbits_ == (b)->nbits_))
+
 [[nodiscard]]
 static size_t words_for(size_t nbits);
 
@@ -127,6 +131,7 @@ void tda_bitset_deinit(tda_BitSet *self) {
 
 tda_Status tda_bitset_copy(const tda_BitSet *self, tda_BitSet *out) {
     ASSERT_BITSET(self);
+    assert(out);
 
     return tda_bitset_copy_with(self, self->al_, out);
 }
@@ -211,6 +216,9 @@ void tda_bitset_swap(tda_BitSet *self, tda_BitSet *other) {
 /* ========== one bit ========== */
 
 void tda_bitset_set_to(tda_BitSet *self, size_t idx, bool val) {
+    ASSERT_BITSET(self);
+    TDA_EXPECT(idx < self->nbits_);
+
     if (val) {
         tda_bitset_set(self, idx);
     } else {
@@ -227,12 +235,16 @@ void tda_bitset_set_all(tda_BitSet *self) {
     fill_words(self, 0xFF);
 
     clear_tail(self);
+
+    ASSERT_BITSET(self);
 }
 
 void tda_bitset_reset_all(tda_BitSet *self) {
     ASSERT_BITSET(self);
 
     fill_words(self, 0);
+
+    ASSERT_BITSET(self);
 }
 
 void tda_bitset_flip_all(tda_BitSet *self) {
@@ -243,6 +255,8 @@ void tda_bitset_flip_all(tda_BitSet *self) {
     }
 
     clear_tail(self);
+
+    ASSERT_BITSET(self);
 }
 
 /* ========== info ========== */
@@ -339,47 +353,55 @@ bool tda_bitset_eq(const tda_BitSet *a, const tda_BitSet *b) {
 void tda_bitset_union(tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits_ == other->nbits_);
+    EXPECT_SAME_BITSET(self, other);
 
     for (size_t w = 0; w < self->nwords_; ++w) {
         self->words_[w] |= other->words_[w];
     }
+
+    ASSERT_BITSET(self);
 }
 
 void tda_bitset_intersection(tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits_ == other->nbits_);
+    EXPECT_SAME_BITSET(self, other);
 
     for (size_t w = 0; w < self->nwords_; ++w) {
         self->words_[w] &= other->words_[w];
     }
+
+    ASSERT_BITSET(self);
 }
 
 void tda_bitset_difference(tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits_ == other->nbits_);
+    EXPECT_SAME_BITSET(self, other);
 
     for (size_t w = 0; w < self->nwords_; ++w) {
         self->words_[w] &= ~other->words_[w];
     }
+
+    ASSERT_BITSET(self);
 }
 
 void tda_bitset_symmetric_difference(tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits_ == other->nbits_);
+    EXPECT_SAME_BITSET(self, other);
 
     for (size_t w = 0; w < self->nwords_; ++w) {
         self->words_[w] ^= other->words_[w];
     }
+
+    ASSERT_BITSET(self);
 }
 
 bool tda_bitset_is_subset(const tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits_ == other->nbits_);
+    EXPECT_SAME_BITSET(self, other);
 
     for (size_t w = 0; w < self->nwords_; ++w) {
         if ((self->words_[w] & ~other->words_[w]) != 0) {
@@ -393,7 +415,7 @@ bool tda_bitset_is_subset(const tda_BitSet *self, const tda_BitSet *other) {
 bool tda_bitset_intersects(const tda_BitSet *self, const tda_BitSet *other) {
     ASSERT_BITSET(self);
     ASSERT_BITSET(other);
-    TDA_EXPECT(self->nbits_ == other->nbits_);
+    EXPECT_SAME_BITSET(self, other);
 
     for (size_t w = 0; w < self->nwords_; ++w) {
         if ((self->words_[w] & other->words_[w]) != 0) {
@@ -426,6 +448,8 @@ void tda_bitset_fprint(const tda_BitSet *self, FILE *stream) {
 }
 
 void tda_bitset_print(const tda_BitSet *self) {
+    ASSERT_BITSET(self);
+
     tda_bitset_fprint(self, stdout);
 }
 

@@ -34,9 +34,9 @@ void tda_span_fold_back(tda_Span s, void *acc, tda_Fold fold, void *ctx) {
 void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
+    assert(op);
     TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
     TDA_EXPECT(dst.len == src.len);
-    assert(op);
     assert(tda_span_apart_or_same(tda_span_mut_to_span(dst), src));
 
     if (src.len == 0) {
@@ -56,9 +56,9 @@ void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx
 void tda_span_adjacent_difference(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
+    assert(op);
     TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
     TDA_EXPECT(dst.len == src.len);
-    assert(op);
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), src));
 
     if (src.len == 0) {

@@ -9,15 +9,16 @@
 /* ========== internals ========== */
 
 // the map asserts the rest of its invariants on every call
-#define ASSERT_HSET(s) \
-    (assert(s),        \
-     assert((s)->map_.al_))
+#define ASSERT_HSET(s)                                     \
+    (assert(s),                                            \
+     assert((s)->map_.al_),                                \
+     assert(tda_hmap_val_layout(&(s)->map_).size == 0))
 
-// two sets an op can combine: the same key layout and the same key equality. Their ctx
-// may differ, as two seeds do: each set is searched with its own hasher and ctx
-#define EXPECT_SAME_KEYS(a, b)                                                                    \
-    (TDA_EXPECT(tda_layout_eq(tda_hmap_key_layout(&(a)->map_), tda_hmap_key_layout(&(b)->map_))), \
-     TDA_EXPECT(tda_hmap_key_eq(&(a)->map_) == tda_hmap_key_eq(&(b)->map_)))
+// two sets whose keys can pass between them: one key layout. The ops whose answer also
+// needs one key equality assert it on their own; the ctx may differ, as two seeds do,
+// since each set is searched with its own hasher and ctx
+#define EXPECT_SAME_HSET(a, b) \
+    (TDA_EXPECT(tda_layout_eq(tda_hmap_key_layout(&(a)->map_), tda_hmap_key_layout(&(b)->map_))))
 
 // A set wraps a map: chaining, growth and the allocator are the map's, and the set only
 // limits which operations are forwarded.
@@ -49,6 +50,12 @@ static bool keys_all_in(const tda_HMap *a, const tda_HMap *b);
 /* ========== lifetime ========== */
 
 void tda_hset_init(tda_Layout key, tda_Hasher hasher, tda_Eq eq, void *ctx, tda_Al *al, tda_HSet *out) {
+    assert(tda_layout_is_type(key));
+    assert(hasher);
+    assert(eq);
+    assert(al);
+    assert(out);
+
     // with no room asked for nothing is allocated, so this cannot fail
     [[maybe_unused]] const tda_Status st = tda_hset_init_cap(0, key, hasher, eq, ctx, al, out);
     assert(TDA_STATUS_IS_OK(st));
@@ -78,6 +85,9 @@ tda_Status tda_hset_from_span(
     tda_HSet *out
 ) {
     TDA_SPAN_ASSERT(s);
+    assert(hasher);
+    assert(eq);
+    assert(al);
     assert(out);
 
     tda_HSet obj;
@@ -107,6 +117,7 @@ void tda_hset_deinit(tda_HSet *self) {
 
 tda_Status tda_hset_copy(const tda_HSet *self, tda_HSet *out) {
     ASSERT_HSET(self);
+    assert(out);
 
     return tda_hset_copy_with(self, tda_hmap_al(&self->map_), out);
 }
@@ -122,17 +133,26 @@ tda_Status tda_hset_copy_with(const tda_HSet *self, tda_Al *al, tda_HSet *out) {
 tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
+    EXPECT_SAME_HSET(self, other);
 
     // the map handles self assignment; a guard here would be untestable
-    return tda_hmap_copy_assign(&self->map_, &other->map_);
+    const tda_Status st = tda_hmap_copy_assign(&self->map_, &other->map_);
+
+    ASSERT_HSET(self);
+
+    return st;
 }
 
 void tda_hset_move_assign(tda_HSet *self, tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
+    EXPECT_SAME_HSET(self, other);
 
     // the map handles self assignment; a guard here would be untestable
     tda_hmap_move_assign(&self->map_, &other->map_);
+
+    ASSERT_HSET(self);
+    ASSERT_HSET(other);
 }
 
 /* ========== compare ========== */
@@ -140,7 +160,8 @@ void tda_hset_move_assign(tda_HSet *self, tda_HSet *other) {
 bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b) {
     ASSERT_HSET(a);
     ASSERT_HSET(b);
-    EXPECT_SAME_KEYS(a, b);
+    EXPECT_SAME_HSET(a, b);
+    assert(tda_hmap_key_eq(&a->map_) == tda_hmap_key_eq(&b->map_));
 
     if (a == b) {
         return true;
@@ -219,7 +240,11 @@ tda_Status tda_hset_insert(tda_HSet *self, const void *key, bool *out_is_new) {
     assert(key);
 
     // no value: the map's value has size 0
-    return tda_hmap_insert(&self->map_, key, nullptr, out_is_new);
+    const tda_Status st = tda_hmap_insert(&self->map_, key, nullptr, out_is_new);
+
+    ASSERT_HSET(self);
+
+    return st;
 }
 
 tda_Status tda_hset_extend(tda_HSet *self, tda_Span src) {
@@ -230,9 +255,12 @@ tda_Status tda_hset_extend(tda_HSet *self, tda_Span src) {
     for (size_t i = 0; i < src.len; ++i) {
         const tda_Status st = tda_hmap_insert(&self->map_, tda_span_get(src, i), nullptr, nullptr);
         if (TDA_STATUS_IS_ERR(st)) {
+            ASSERT_HSET(self);
             return st;
         }
     }
+
+    ASSERT_HSET(self);
 
     return TDA_STATUS_OK;
 }
@@ -241,7 +269,11 @@ bool tda_hset_remove(tda_HSet *self, const void *key) {
     ASSERT_HSET(self);
     assert(key);
 
-    return tda_hmap_remove(&self->map_, key);
+    const bool removed = tda_hmap_remove(&self->map_, key);
+
+    ASSERT_HSET(self);
+
+    return removed;
 }
 
 void tda_hset_remove_node(tda_HSet *self, tda_HSetNode *node) {
@@ -249,6 +281,8 @@ void tda_hset_remove_node(tda_HSet *self, tda_HSetNode *node) {
     assert(node);
 
     tda_hmap_remove_node(&self->map_, node);
+
+    ASSERT_HSET(self);
 }
 
 bool tda_hset_take(tda_HSet *self, const void *key, void *out_key) {
@@ -256,7 +290,11 @@ bool tda_hset_take(tda_HSet *self, const void *key, void *out_key) {
     assert(key);
 
     // the map has no values, so only the key is copied out
-    return tda_hmap_take(&self->map_, key, out_key, nullptr);
+    const bool taken = tda_hmap_take(&self->map_, key, out_key, nullptr);
+
+    ASSERT_HSET(self);
+
+    return taken;
 }
 
 void tda_hset_retain(tda_HSet *self, tda_Pred pred, void *ctx) {
@@ -264,31 +302,47 @@ void tda_hset_retain(tda_HSet *self, tda_Pred pred, void *ctx) {
     assert(pred);
 
     tda_hmap_retain(&self->map_, key_passes, &(KeyPred){pred, ctx});
+
+    ASSERT_HSET(self);
 }
 
 void tda_hset_clear(tda_HSet *self) {
     ASSERT_HSET(self);
 
     tda_hmap_clear(&self->map_);
+
+    ASSERT_HSET(self);
 }
 
 tda_Status tda_hset_reserve(tda_HSet *self, size_t new_cap) {
     ASSERT_HSET(self);
 
-    return tda_hmap_reserve(&self->map_, new_cap);
+    const tda_Status st = tda_hmap_reserve(&self->map_, new_cap);
+
+    ASSERT_HSET(self);
+
+    return st;
 }
 
 tda_Status tda_hset_shrink_to_fit(tda_HSet *self) {
     ASSERT_HSET(self);
 
-    return tda_hmap_shrink_to_fit(&self->map_);
+    const tda_Status st = tda_hmap_shrink_to_fit(&self->map_);
+
+    ASSERT_HSET(self);
+
+    return st;
 }
 
 void tda_hset_swap(tda_HSet *self, tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
+    EXPECT_SAME_HSET(self, other);
 
     tda_hmap_swap(&self->map_, &other->map_);
+
+    ASSERT_HSET(self);
+    ASSERT_HSET(other);
 }
 
 /* ========== set ops ========== */
@@ -296,7 +350,8 @@ void tda_hset_swap(tda_HSet *self, tda_HSet *other) {
 tda_Status tda_hset_union(tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
-    EXPECT_SAME_KEYS(self, other);
+    EXPECT_SAME_HSET(self, other);
+    assert(tda_hmap_key_eq(&self->map_) == tda_hmap_key_eq(&other->map_));
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -305,9 +360,12 @@ tda_Status tda_hset_union(tda_HSet *self, const tda_HSet *other) {
     TDA_HMAP_FOR_EACH(node, &other->map_) {
         const tda_Status st = tda_hmap_insert(&self->map_, tda_hmap_node_key(&other->map_, node), nullptr, nullptr);
         if (TDA_STATUS_IS_ERR(st)) {
+            ASSERT_HSET(self);
             return st;
         }
     }
+
+    ASSERT_HSET(self);
 
     return TDA_STATUS_OK;
 }
@@ -315,7 +373,8 @@ tda_Status tda_hset_union(tda_HSet *self, const tda_HSet *other) {
 void tda_hset_intersection(tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
-    EXPECT_SAME_KEYS(self, other);
+    EXPECT_SAME_HSET(self, other);
+    assert(tda_hmap_key_eq(&self->map_) == tda_hmap_key_eq(&other->map_));
 
     if (self == other) {
         return;
@@ -324,15 +383,19 @@ void tda_hset_intersection(tda_HSet *self, const tda_HSet *other) {
     // the predicate's ctx is not const, so it gets the address of a pointer to the map
     const tda_HMap *map = &other->map_;
     tda_hmap_retain(&self->map_, held_by, &map);
+
+    ASSERT_HSET(self);
 }
 
 void tda_hset_difference(tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
-    EXPECT_SAME_KEYS(self, other);
+    EXPECT_SAME_HSET(self, other);
+    assert(tda_hmap_key_eq(&self->map_) == tda_hmap_key_eq(&other->map_));
 
     if (self == other) {
         tda_hmap_clear(&self->map_);
+        ASSERT_HSET(self);
         return;
     }
 
@@ -342,20 +405,25 @@ void tda_hset_difference(tda_HSet *self, const tda_HSet *other) {
         TDA_HMAP_FOR_EACH(node, &other->map_) {
             tda_hmap_remove(&self->map_, tda_hmap_node_key(&other->map_, node));
         }
+        ASSERT_HSET(self);
         return;
     }
 
     const tda_HMap *map = &other->map_;
     tda_hmap_retain(&self->map_, not_held_by, &map);
+
+    ASSERT_HSET(self);
 }
 
 tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
-    EXPECT_SAME_KEYS(self, other);
+    EXPECT_SAME_HSET(self, other);
+    assert(tda_hmap_key_eq(&self->map_) == tda_hmap_key_eq(&other->map_));
 
     if (self == other) {
         tda_hmap_clear(&self->map_);
+        ASSERT_HSET(self);
         return TDA_STATUS_OK;
     }
 
@@ -369,9 +437,12 @@ tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other) 
 
         const tda_Status st = tda_hmap_insert(&self->map_, key, nullptr, nullptr);
         if (TDA_STATUS_IS_ERR(st)) {
+            ASSERT_HSET(self);
             return st;
         }
     }
+
+    ASSERT_HSET(self);
 
     return TDA_STATUS_OK;
 }
@@ -379,7 +450,8 @@ tda_Status tda_hset_symmetric_difference(tda_HSet *self, const tda_HSet *other) 
 bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
-    EXPECT_SAME_KEYS(self, other);
+    EXPECT_SAME_HSET(self, other);
+    assert(tda_hmap_key_eq(&self->map_) == tda_hmap_key_eq(&other->map_));
 
     if (self == other) {
         return true;
@@ -396,7 +468,8 @@ bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other) {
 bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(self);
     ASSERT_HSET(other);
-    EXPECT_SAME_KEYS(self, other);
+    EXPECT_SAME_HSET(self, other);
+    assert(tda_hmap_key_eq(&self->map_) == tda_hmap_key_eq(&other->map_));
 
     // intersection is symmetric, so walk the shorter set and look up in the longer
     const tda_HSet *walked = self;
@@ -435,6 +508,9 @@ void tda_hset_fprint(const tda_HSet *self, FILE *stream, tda_FPrint fprint) {
 }
 
 void tda_hset_print(const tda_HSet *self, tda_FPrint fprint) {
+    ASSERT_HSET(self);
+    assert(fprint);
+
     tda_hset_fprint(self, stdout, fprint);
 }
 

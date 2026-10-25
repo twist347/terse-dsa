@@ -91,9 +91,9 @@ bool tda_span_find_last_if(tda_Span s, tda_Pred pred, void *ctx, size_t *out_idx
 bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, void *ctx, size_t *out_idx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(sub);
-    TDA_EXPECT(tda_layout_eq(s.elem, sub.elem));
     assert(eq);
     assert(out_idx);
+    TDA_EXPECT(tda_layout_eq(s.elem, sub.elem));
 
     if (sub.len == 0) {
         *out_idx = 0;
@@ -118,9 +118,9 @@ bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, void *ctx, size_t *o
 bool tda_span_find_last_sub(tda_Span s, tda_Span sub, tda_Eq eq, void *ctx, size_t *out_idx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(sub);
-    TDA_EXPECT(tda_layout_eq(s.elem, sub.elem));
     assert(eq);
     assert(out_idx);
+    TDA_EXPECT(tda_layout_eq(s.elem, sub.elem));
 
     if (sub.len == 0) {
         *out_idx = s.len;
@@ -170,9 +170,9 @@ bool tda_span_find_run(tda_Span s, const void *key, size_t count, tda_Eq eq, voi
 bool tda_span_find_any_of(tda_Span s, tda_Span set, tda_Eq eq, void *ctx, size_t *out_idx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(set);
-    TDA_EXPECT(tda_layout_eq(s.elem, set.elem));
     assert(eq);
     assert(out_idx);
+    TDA_EXPECT(tda_layout_eq(s.elem, set.elem));
 
     for (size_t i = 0; i < s.len; ++i) {
         const void *elem = tda_span_get(s, i);
@@ -352,8 +352,8 @@ bool tda_span_none_of(tda_Span s, tda_Pred pred, void *ctx) {
 bool tda_span_starts_with(tda_Span s, tda_Span prefix, tda_Eq eq, void *ctx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(prefix);
-    TDA_EXPECT(tda_layout_eq(s.elem, prefix.elem));
     assert(eq);
+    TDA_EXPECT(tda_layout_eq(s.elem, prefix.elem));
 
     return prefix.len <= s.len && matches_at(s, prefix, 0, eq, ctx);
 }
@@ -361,8 +361,8 @@ bool tda_span_starts_with(tda_Span s, tda_Span prefix, tda_Eq eq, void *ctx) {
 bool tda_span_ends_with(tda_Span s, tda_Span suffix, tda_Eq eq, void *ctx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(suffix);
-    TDA_EXPECT(tda_layout_eq(s.elem, suffix.elem));
     assert(eq);
+    TDA_EXPECT(tda_layout_eq(s.elem, suffix.elem));
 
     return suffix.len <= s.len && matches_at(s, suffix, s.len - suffix.len, eq, ctx);
 }

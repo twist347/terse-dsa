@@ -181,6 +181,7 @@ bool tda_stack_eq_by(const tda_Stack *a, const tda_Stack *b, tda_Eq eq, void *ct
 [[nodiscard]]
 static inline size_t tda_stack_len(const tda_Stack *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_len(&self->vec_);
 }
@@ -192,6 +193,7 @@ static inline size_t tda_stack_len(const tda_Stack *self) {
 [[nodiscard]]
 static inline size_t tda_stack_cap(const tda_Stack *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_cap(&self->vec_);
 }
@@ -203,6 +205,7 @@ static inline size_t tda_stack_cap(const tda_Stack *self) {
 [[nodiscard]]
 static inline tda_Layout tda_stack_elem_layout(const tda_Stack *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_elem_layout(&self->vec_);
 }
@@ -214,6 +217,7 @@ static inline tda_Layout tda_stack_elem_layout(const tda_Stack *self) {
 [[nodiscard]]
 static inline tda_Al *tda_stack_al(const tda_Stack *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_al(&self->vec_);
 }
@@ -230,6 +234,7 @@ static inline tda_Al *tda_stack_al(const tda_Stack *self) {
 [[nodiscard]]
 static inline const void *tda_stack_top(const tda_Stack *self) {
     assert(self);
+    assert(self->vec_.al_);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);
 
     return tda_vec_back(&self->vec_);
@@ -240,6 +245,7 @@ static inline const void *tda_stack_top(const tda_Stack *self) {
 [[nodiscard]]
 static inline void *tda_stack_top_mut(tda_Stack *self) {
     assert(self);
+    assert(self->vec_.al_);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);
 
     return tda_vec_back_mut(&self->vec_);
@@ -264,6 +270,7 @@ tda_Status tda_stack_push(tda_Stack *self, const void *val);
 /// @bigo{1}
 static inline void tda_stack_pop(tda_Stack *self) {
     assert(self);
+    assert(self->vec_.al_);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);
 
     tda_vec_pop(&self->vec_);
@@ -281,6 +288,7 @@ void tda_stack_pop_to(tda_Stack *self, void *out);
 /// @bigo{1}
 static inline void tda_stack_clear(tda_Stack *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     tda_vec_clear(&self->vec_);
 }
@@ -323,6 +331,7 @@ void tda_stack_swap(tda_Stack *self, tda_Stack *other);
 [[nodiscard]]
 static inline tda_Span tda_stack_to_span(const tda_Stack *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_to_span(&self->vec_);
 }

@@ -4,6 +4,7 @@
 #include "tda/alloc/default.h"
 #include "tda/core/check.h"
 #include "tda/core/hash.h"
+#include "tda/core/util.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -176,7 +177,6 @@ void tda_debug_flush_quarantine(tda_Debug *self) {
 tda_DebugStats tda_debug_stats(const tda_Debug *self) {
     ASSERT_DEBUG(self);
 
-
     return (tda_DebugStats){
         .live_blocks = self->table_.len,
         .live_bytes = self->live_bytes_,
@@ -215,7 +215,6 @@ size_t tda_debug_fprint_leaks(const tda_Debug *self, FILE *stream) {
 void tda_debug_fail_after(tda_Debug *self, size_t count) {
     ASSERT_DEBUG(self);
 
-
     size_t at;
     self->fail_after_ = ckd_add(&at, (size_t) self->requests_, count) ? SIZE_MAX : at;
 }
@@ -230,9 +229,9 @@ void tda_debug_break_at(tda_Debug *self, uint64_t serial) {
 
 static void *debug_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
-    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
-
     tda_Debug *self = ctx;
+    ASSERT_DEBUG(self);
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
     const uint64_t serial = next_serial(self);
     if (serial == 0) {
@@ -266,19 +265,25 @@ static void *debug_alloc(void *ctx, tda_Layout layout) {
     return block;
 }
 
-static void *debug_remap(void *ctx, void *ptr, tda_Layout old, size_t) {
+static void *debug_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
+    tda_Debug *self = ctx;
+    ASSERT_DEBUG(self);
+    assert(ptr);
+    assert(old.size > 0);
+    assert(new_size > 0);
+    TDA_UNUSED(new_size); // only the check reads it, and a release build drops that
 
-    [[maybe_unused]] const BlockRecord entry = checked_entry(ctx, ptr, old, false, "resized");
+    [[maybe_unused]] const BlockRecord entry = checked_entry(self, ptr, old, false, "resized");
 
     return nullptr;
 }
 
 static void debug_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     assert(ctx);
-    assert(ptr); // tda_dealloc takes null itself
-
     tda_Debug *self = ctx;
+    ASSERT_DEBUG(self);
+    assert(ptr); // tda_dealloc takes null itself
 
     const BlockRecord entry = checked_entry(self, ptr, layout, true, "given back");
 

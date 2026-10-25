@@ -34,9 +34,9 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *
     assert(cmp);
     TDA_EXPECT(tda_layout_eq(dst.elem, a.elem));
     TDA_EXPECT(tda_layout_eq(dst.elem, b.elem));
+    TDA_EXPECT(dst.len == a.len + b.len);
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
-    TDA_EXPECT(dst.len == a.len + b.len);
 
     size_t i = 0, j = 0;
     size_t write = 0;

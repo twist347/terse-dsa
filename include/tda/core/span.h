@@ -183,9 +183,9 @@ static inline tda_SpanMut tda_span_sub_mut(tda_SpanMut self, size_t idx, size_t 
 /// @bigo{1}; nothing is copied
 static inline void tda_span_split_at(tda_Span self, size_t idx, tda_Span *out_head, tda_Span *out_tail) {
     TDA_SPAN_ASSERT(self);
-    TDA_EXPECT(idx <= self.len);
     assert(out_head);
     assert(out_tail);
+    TDA_EXPECT(idx <= self.len);
 
     *out_head = tda_span_sub(self, 0, idx);
     *out_tail = tda_span_sub(self, idx, self.len - idx);
@@ -199,9 +199,9 @@ static inline void tda_span_split_at(tda_Span self, size_t idx, tda_Span *out_he
 /// @bigo{1}; nothing is copied
 static inline void tda_span_split_at_mut(tda_SpanMut self, size_t idx, tda_SpanMut *out_head, tda_SpanMut *out_tail) {
     TDA_SPAN_ASSERT(self);
-    TDA_EXPECT(idx <= self.len);
     assert(out_head);
     assert(out_tail);
+    TDA_EXPECT(idx <= self.len);
 
     *out_head = tda_span_sub_mut(self, 0, idx);
     *out_tail = tda_span_sub_mut(self, idx, self.len - idx);
@@ -260,7 +260,9 @@ static inline void *tda_span_get_mut(tda_SpanMut self, size_t idx) {
 /// @param val the address of the value; elem.size bytes are read from it
 /// @bigo{1}
 static inline void tda_span_set(tda_SpanMut self, size_t idx, const void *val) {
+    TDA_SPAN_ASSERT(self);
     assert(val);
+    TDA_EXPECT(idx < self.len);
 
     // memmove: 'val' may be the very elem being set
     memmove(tda_span_get_mut(self, idx), val, self.elem.size);
@@ -363,12 +365,14 @@ static inline void tda_span_mut_print(tda_SpanMut self, tda_FPrint fprint) {
 
 [[nodiscard]]
 static inline tda_Span tda_span_typed_(tda_Span s, [[maybe_unused]] tda_Layout elem) {
+    TDA_SPAN_ASSERT(s);
     TDA_EXPECT(tda_layout_eq(s.elem, elem));
     return s;
 }
 
 [[nodiscard]]
 static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] tda_Layout elem) {
+    TDA_SPAN_ASSERT(s);
     TDA_EXPECT(tda_layout_eq(s.elem, elem));
     return s;
 }

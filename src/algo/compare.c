@@ -27,8 +27,8 @@ bool tda_span_eq(tda_Span a, tda_Span b) {
 bool tda_span_eq_by(tda_Span a, tda_Span b, tda_Eq eq, void *ctx) {
     TDA_SPAN_ASSERT(a);
     TDA_SPAN_ASSERT(b);
-    TDA_EXPECT(tda_layout_eq(a.elem, b.elem));
     assert(eq);
+    TDA_EXPECT(tda_layout_eq(a.elem, b.elem));
 
     if (a.len != b.len) {
         return false;

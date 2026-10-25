@@ -74,6 +74,8 @@ static size_t plain_size(size_t size, size_t align) {
 }
 
 static void *default_alloc(void *, tda_Layout layout) {
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
+
     if (is_plain(layout.align)) {
         return malloc(plain_size(layout.size, layout.align));
     }
@@ -93,9 +95,10 @@ static void *default_alloc(void *, tda_Layout layout) {
 }
 
 static void *default_alloc_zeroed(void *ctx, tda_Layout layout) {
+    assert(layout.size > 0); // tda_alloc_zeroed answers a request for nothing itself
+
     // calloc's large blocks come from the system already zeroed, and it skips the memset
     if (is_plain(layout.align)) {
-        TDA_UNUSED(ctx);
         return calloc(1, plain_size(layout.size, layout.align));
     }
 
@@ -108,6 +111,10 @@ static void *default_alloc_zeroed(void *ctx, tda_Layout layout) {
 }
 
 static void *default_remap(void *, void *ptr, tda_Layout old, size_t new_size) {
+    assert(ptr);
+    assert(old.size > 0);
+    assert(new_size > 0);
+
     // realloc may move a large block by remapping its pages instead of copying them, but
     // it keeps only malloc's own alignment, and only what the new size is owed
     if (!is_plain(old.align)) {
@@ -118,6 +125,8 @@ static void *default_remap(void *, void *ptr, tda_Layout old, size_t new_size) {
 }
 
 static void default_dealloc(void *, void *ptr, tda_Layout layout) {
+    assert(ptr); // tda_dealloc takes null itself
+
 #ifdef _WIN32
     if (!is_plain(layout.align)) {
         _aligned_free(ptr);

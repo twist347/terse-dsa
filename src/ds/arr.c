@@ -20,6 +20,9 @@
      assert(!(a)->data_ || tda_ptr_is_aligned((a)->data_, (a)->elem_.align)), \
      assert((a)->al_))
 
+#define EXPECT_SAME_ARR(a, b) \
+    (TDA_EXPECT(tda_layout_eq((a)->elem_, (b)->elem_)))
+
 [[nodiscard]]
 static tda_Status init_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out);
 
@@ -91,6 +94,7 @@ void tda_arr_deinit(tda_Arr *self) {
 
 tda_Status tda_arr_copy(const tda_Arr *self, tda_Arr *out) {
     ASSERT_ARR(self);
+    assert(out);
 
     return tda_arr_copy_with(self, self->al_, out);
 }
@@ -98,6 +102,7 @@ tda_Status tda_arr_copy(const tda_Arr *self, tda_Arr *out) {
 tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr *out) {
     ASSERT_ARR(self);
     assert(al);
+    assert(out);
 
     return tda_arr_from_span(tda_arr_to_span(self), al, out);
 }
@@ -105,7 +110,7 @@ tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr *out) {
 tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
+    EXPECT_SAME_ARR(self, other);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -136,7 +141,7 @@ tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
 void tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
+    EXPECT_SAME_ARR(self, other);
 
     if (self == other) {
         return;
@@ -156,6 +161,7 @@ void tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
 bool tda_arr_eq(const tda_Arr *a, const tda_Arr *b) {
     ASSERT_ARR(a);
     ASSERT_ARR(b);
+    EXPECT_SAME_ARR(a, b);
 
     return tda_span_eq(tda_arr_to_span(a), tda_arr_to_span(b));
 }
@@ -164,6 +170,7 @@ bool tda_arr_eq_by(const tda_Arr *a, const tda_Arr *b, tda_Eq eq, void *ctx) {
     ASSERT_ARR(a);
     ASSERT_ARR(b);
     assert(eq);
+    EXPECT_SAME_ARR(a, b);
 
     return tda_span_eq_by(tda_arr_to_span(a), tda_arr_to_span(b), eq, ctx);
 }
@@ -183,7 +190,7 @@ void tda_arr_set(tda_Arr *self, size_t idx, const void *val) {
 void tda_arr_swap(tda_Arr *self, tda_Arr *other) {
     ASSERT_ARR(self);
     ASSERT_ARR(other);
-    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
+    EXPECT_SAME_ARR(self, other);
 
     if (self == other) {
         return;
@@ -197,6 +204,8 @@ void tda_arr_swap(tda_Arr *self, tda_Arr *other) {
 
 void tda_arr_swap_elems(tda_Arr *self, size_t i, size_t j) {
     ASSERT_ARR(self);
+    TDA_EXPECT(i < self->len_);
+    TDA_EXPECT(j < self->len_);
 
     tda_span_swap_elems(tda_arr_to_span_mut(self), i, j);
 }

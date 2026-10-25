@@ -132,8 +132,9 @@ fail and returns `void`.
   points back at it, and every container on it keeps that pointer. `TDA_AL(&arena)`
   hands the interface out, one macro for the five kinds, since no function takes all
   five types. Each of its own functions `TDA_EXPECT`s that `ctx` is still itself, the
-  one sign a moved or copied allocator leaves; a request through the `tda_Al` cannot
-  check, since all it gets is the `ctx`.
+  one sign a moved or copied allocator leaves. A hook runs the same `ASSERT_<KIND>` on
+  the `self` it recovers from `ctx`; there `ctx` is itself by construction, and what
+  catches a stale `ctx` is the check that the struct still carries this kind's hooks.
 - **No elem has size 0.** A layout is a type's (`tda_layout_is_type`): a power-of-two
   alignment and a size above zero, a multiple of it.
 - **Nothing locks.** A container or an allocator is guarded by its caller, and an
@@ -184,7 +185,30 @@ an error cannot be silently dropped.
   `TDA_EXPECT`, which `TDA_HARDENED` keeps in release, and so is an allocator's block
   that misses the alignment the contract promises. Invariants, anything above O(1) and a
   breach that only gives a wrong answer, such as an output overlapping an input in algo,
-  stay `assert`.
+  stay `assert`. The debug allocator is the one exception: what it catches it reports
+  and aborts on in every build, since catching it is its whole job.
+- **One shape for the checks.** A public function opens with them as one paragraph, in
+  this order: `ASSERT_<TYPE>` on each container argument, `TDA_SPAN_ASSERT` on each span,
+  `assert` on each pointer and callback that must not be null, the `TDA_EXPECT`s, and
+  last the plain asserts that cost more than O(1) or only guard a wrong answer (an
+  overlap, `owns_node`, two containers agreeing on an equality). Within a group the
+  parameters keep their order. `ctx` and a pointer documented as nullable are never
+  asserted.
+- **A function checks all its own arguments**, even when it forwards to another that
+  checks them again: what a function promises to catch should not depend on how it is
+  written today. A hardened build pays the second check, which is a branch.
+- **Two containers of one type meet through `EXPECT_SAME_<TYPE>(a, b)`**, a macro next
+  to `ASSERT_<TYPE>` holding the `TDA_EXPECT`s on their layouts. Two hmaps or hsets that
+  must also agree on an equality say so in a separate `assert`, where the
+  answer depends on it. A container and a span meet through
+  `TDA_EXPECT(tda_layout_eq(<container>, <span>.elem))`, the container first.
+- **A mutator that changes the structure checks it on the way out**: one that changes a
+  length, a capacity, a head, a block, links or tail bits ends with `ASSERT_<TYPE>` on
+  every container it changed, on every path that changed it. One that only rewrites
+  elem bytes does not.
+- **An inline accessor in a header checks lightly.** It cannot see the private
+  `ASSERT_<TYPE>`, so it asserts `self` and the field that marks the inert state, then
+  its own `TDA_EXPECT`s. An adapter's accessor asserts the inner container's.
 - **Typed macros check their type's layout.** A `*_AS`, `SET`, `PUSH` and kin passes its
   container pointer through `tda_<slug>_typed_`, which `TDA_EXPECT`s `TDA_LAYOUT_OF(T)`
   against the elem layout and hands the pointer back — one evaluation, constness kept by a `_Generic`

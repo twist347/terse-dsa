@@ -181,6 +181,7 @@ void tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other);
 [[nodiscard]]
 static inline size_t tda_pqueue_len(const tda_PQueue *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_len(&self->vec_);
 }
@@ -192,6 +193,7 @@ static inline size_t tda_pqueue_len(const tda_PQueue *self) {
 [[nodiscard]]
 static inline size_t tda_pqueue_cap(const tda_PQueue *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_cap(&self->vec_);
 }
@@ -203,6 +205,7 @@ static inline size_t tda_pqueue_cap(const tda_PQueue *self) {
 [[nodiscard]]
 static inline tda_Layout tda_pqueue_elem_layout(const tda_PQueue *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_elem_layout(&self->vec_);
 }
@@ -214,6 +217,7 @@ static inline tda_Layout tda_pqueue_elem_layout(const tda_PQueue *self) {
 [[nodiscard]]
 static inline tda_Al *tda_pqueue_al(const tda_PQueue *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_al(&self->vec_);
 }
@@ -225,7 +229,7 @@ static inline tda_Al *tda_pqueue_al(const tda_PQueue *self) {
 [[nodiscard]]
 static inline tda_Cmp tda_pqueue_cmp(const tda_PQueue *self) {
     assert(self);
-    assert(self->cmp_);
+    assert(self->vec_.al_);
 
     return self->cmp_;
 }
@@ -237,7 +241,7 @@ static inline tda_Cmp tda_pqueue_cmp(const tda_PQueue *self) {
 [[nodiscard]]
 static inline void *tda_pqueue_cmp_ctx(const tda_PQueue *self) {
     assert(self);
-    assert(self->cmp_);
+    assert(self->vec_.al_);
 
     return self->ctx_;
 }
@@ -254,6 +258,7 @@ static inline void *tda_pqueue_cmp_ctx(const tda_PQueue *self) {
 [[nodiscard]]
 static inline const void *tda_pqueue_top(const tda_PQueue *self) {
     assert(self);
+    assert(self->vec_.al_);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);
 
     return tda_vec_front(&self->vec_);
@@ -338,6 +343,7 @@ void tda_pqueue_swap(tda_PQueue *self, tda_PQueue *other);
 [[nodiscard]]
 static inline tda_Span tda_pqueue_to_span(const tda_PQueue *self) {
     assert(self);
+    assert(self->vec_.al_);
 
     return tda_vec_to_span(&self->vec_);
 }

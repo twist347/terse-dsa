@@ -3,6 +3,7 @@
 #include "tda/algo/compare.h"
 #include "tda/core/check.h"
 
+#include "internal/overlap.h"
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -18,6 +19,9 @@
      assert((v)->cap_ == 0 || (v)->data_),   \
      assert(!(v)->data_ || (v)->cap_ > 0),   \
      assert((v)->al_))
+
+#define EXPECT_SAME_VEC(a, b) \
+    (TDA_EXPECT(tda_layout_eq((a)->elem_, (b)->elem_)))
 
 static constexpr size_t VEC_GROWTH_BASE = 1;
 static constexpr size_t VEC_GROWTH_FACTOR = 2;
@@ -55,6 +59,10 @@ static size_t len_bytes(const tda_Vec *self);
 /// the block as it was allocated: cap elems at the elem's alignment
 [[nodiscard]]
 static tda_Layout block_layout(const tda_Vec *self);
+
+/// the whole block as a view, the slots past the length included: what growth may free
+[[nodiscard]] [[maybe_unused]]
+static tda_Span block_span(const tda_Vec *self);
 
 [[nodiscard]]
 static const unsigned char *elem_at(const tda_Vec *self, size_t idx);
@@ -136,6 +144,7 @@ void tda_vec_deinit(tda_Vec *self) {
 
 tda_Status tda_vec_copy(const tda_Vec *self, tda_Vec *out) {
     ASSERT_VEC(self);
+    assert(out);
 
     return tda_vec_copy_with(self, self->al_, out);
 }
@@ -143,6 +152,7 @@ tda_Status tda_vec_copy(const tda_Vec *self, tda_Vec *out) {
 tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al *al, tda_Vec *out) {
     ASSERT_VEC(self);
     assert(al);
+    assert(out);
 
     return tda_vec_from_span(tda_vec_to_span(self), al, out);
 }
@@ -150,7 +160,7 @@ tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al *al, tda_Vec *out) {
 tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other) {
     ASSERT_VEC(self);
     ASSERT_VEC(other);
-    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
+    EXPECT_SAME_VEC(self, other);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -175,7 +185,7 @@ tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other) {
 void tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
     ASSERT_VEC(self);
     ASSERT_VEC(other);
-    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
+    EXPECT_SAME_VEC(self, other);
 
     if (self == other) {
         return;
@@ -195,6 +205,7 @@ void tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
 bool tda_vec_eq(const tda_Vec *a, const tda_Vec *b) {
     ASSERT_VEC(a);
     ASSERT_VEC(b);
+    EXPECT_SAME_VEC(a, b);
 
     return tda_span_eq(tda_vec_to_span(a), tda_vec_to_span(b));
 }
@@ -203,6 +214,7 @@ bool tda_vec_eq_by(const tda_Vec *a, const tda_Vec *b, tda_Eq eq, void *ctx) {
     ASSERT_VEC(a);
     ASSERT_VEC(b);
     assert(eq);
+    EXPECT_SAME_VEC(a, b);
 
     return tda_span_eq_by(tda_vec_to_span(a), tda_vec_to_span(b), eq, ctx);
 }
@@ -223,6 +235,8 @@ void tda_vec_set(tda_Vec *self, size_t idx, const void *val) {
 tda_Status tda_vec_push(tda_Vec *self, const void *val) {
     ASSERT_VEC(self);
     assert(val);
+    // growing frees the block 'val' would be read from
+    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self).size, val));
 
     const tda_Status st = reserve_one(self);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -231,6 +245,8 @@ tda_Status tda_vec_push(tda_Vec *self, const void *val) {
 
     memcpy(elem_at_mut(self, self->len_), val, self->elem_.size);
     ++self->len_;
+
+    ASSERT_VEC(self);
 
     return TDA_STATUS_OK;
 }
@@ -247,6 +263,8 @@ tda_Status tda_vec_add_one(tda_Vec *self, void **out) {
     *out = elem_at_mut(self, self->len_);
     ++self->len_;
 
+    ASSERT_VEC(self);
+
     return TDA_STATUS_OK;
 }
 
@@ -258,12 +276,16 @@ void tda_vec_pop_to(tda_Vec *self, void *out) {
     --self->len_;
     // memmove: 'out' may alias the dropped slot
     memmove(out, elem_at(self, self->len_), self->elem_.size);
+
+    ASSERT_VEC(self);
 }
 
 tda_Status tda_vec_insert(tda_Vec *self, size_t idx, const void *val) {
     ASSERT_VEC(self);
     assert(val);
     TDA_EXPECT(idx <= self->len_);
+    // growing frees the block 'val' would be read from
+    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self).size, val));
 
     // straight from 'val', not through a span, which would ask it to be aligned
     return insert_raw(self, idx, val, 1);
@@ -285,6 +307,8 @@ void tda_vec_swap_remove(tda_Vec *self, size_t idx) {
     if (idx != self->len_) {
         memcpy(elem_at_mut(self, idx), elem_at(self, self->len_), self->elem_.size);
     }
+
+    ASSERT_VEC(self);
 }
 
 tda_Status tda_vec_reserve(tda_Vec *self, size_t new_cap) {
@@ -294,7 +318,11 @@ tda_Status tda_vec_reserve(tda_Vec *self, size_t new_cap) {
         return TDA_STATUS_OK;
     }
 
-    return set_cap(self, new_cap);
+    const tda_Status st = set_cap(self, new_cap);
+
+    ASSERT_VEC(self);
+
+    return st;
 }
 
 tda_Status tda_vec_shrink_to_fit(tda_Vec *self) {
@@ -306,6 +334,7 @@ tda_Status tda_vec_shrink_to_fit(tda_Vec *self) {
 
     if (self->len_ == 0) {
         release_data(self);
+        ASSERT_VEC(self);
         return TDA_STATUS_OK;
     }
 
@@ -321,6 +350,7 @@ tda_Status tda_vec_resize(tda_Vec *self, size_t new_len) {
 
     if (new_len <= self->len_) {
         self->len_ = new_len;
+        ASSERT_VEC(self);
         return TDA_STATUS_OK;
     }
 
@@ -334,6 +364,8 @@ tda_Status tda_vec_resize(tda_Vec *self, size_t new_len) {
     memset(elem_at_mut(self, self->len_), 0, add_bytes);
     self->len_ = new_len;
 
+    ASSERT_VEC(self);
+
     return TDA_STATUS_OK;
 }
 
@@ -343,12 +375,14 @@ void tda_vec_truncate(tda_Vec *self, size_t new_len) {
     if (new_len < self->len_) {
         self->len_ = new_len;
     }
+
+    ASSERT_VEC(self);
 }
 
 void tda_vec_swap(tda_Vec *self, tda_Vec *other) {
     ASSERT_VEC(self);
     ASSERT_VEC(other);
-    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
+    EXPECT_SAME_VEC(self, other);
 
     if (self == other) {
         return;
@@ -362,6 +396,8 @@ void tda_vec_swap(tda_Vec *self, tda_Vec *other) {
 
 void tda_vec_swap_elems(tda_Vec *self, size_t i, size_t j) {
     ASSERT_VEC(self);
+    TDA_EXPECT(i < self->len_);
+    TDA_EXPECT(j < self->len_);
 
     tda_span_swap_elems(tda_vec_to_span_mut(self), i, j);
 }
@@ -371,7 +407,9 @@ void tda_vec_swap_elems(tda_Vec *self, size_t i, size_t j) {
 tda_Status tda_vec_extend(tda_Vec *self, tda_Span src) {
     ASSERT_VEC(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(tda_layout_eq(src.elem, self->elem_));
+    TDA_EXPECT(tda_layout_eq(self->elem_, src.elem));
+    // growing may free what 'src' views
+    TDA_EXPECT(!tda_span_overlap(block_span(self), src));
 
     return tda_vec_insert_span(self, self->len_, src);
 }
@@ -379,8 +417,10 @@ tda_Status tda_vec_extend(tda_Vec *self, tda_Span src) {
 tda_Status tda_vec_insert_span(tda_Vec *self, size_t idx, tda_Span src) {
     ASSERT_VEC(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(tda_layout_eq(src.elem, self->elem_));
+    TDA_EXPECT(tda_layout_eq(self->elem_, src.elem));
     TDA_EXPECT(idx <= self->len_);
+    // growing may free what 'src' views
+    TDA_EXPECT(!tda_span_overlap(block_span(self), src));
 
     return insert_raw(self, idx, src.data, src.len);
 }
@@ -400,6 +440,8 @@ void tda_vec_remove_range(tda_Vec *self, size_t idx, size_t count) {
     }
 
     self->len_ -= count;
+
+    ASSERT_VEC(self);
 }
 
 void tda_vec_retain(tda_Vec *self, tda_Pred pred, void *ctx) {
@@ -418,6 +460,8 @@ void tda_vec_retain(tda_Vec *self, tda_Pred pred, void *ctx) {
         ++kept;
     }
     self->len_ = kept;
+
+    ASSERT_VEC(self);
 }
 
 /* ========== print ========== */
@@ -462,6 +506,8 @@ static tda_Status insert_raw(tda_Vec *self, size_t idx, const void *src, size_t 
 
     memcpy(elem_at_mut(self, idx), src, count * self->elem_.size);
     self->len_ = new_len;
+
+    ASSERT_VEC(self);
 
     return TDA_STATUS_OK;
 }
@@ -569,6 +615,10 @@ static size_t len_bytes(const tda_Vec *self) {
 
 static tda_Layout block_layout(const tda_Vec *self) {
     return tda_elems_layout(self->elem_, self->cap_);
+}
+
+static tda_Span block_span(const tda_Vec *self) {
+    return (tda_Span){.data = self->data_, .len = self->cap_, .elem = self->elem_};
 }
 
 static const unsigned char *elem_at(const tda_Vec *self, size_t idx) {

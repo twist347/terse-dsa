@@ -151,9 +151,9 @@ tda_SlabStats tda_slab_stats(const tda_Slab *self) {
 
 static void *slab_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
-    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
-
     tda_Slab *self = ctx;
+    ASSERT_SLAB(self);
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
     const size_t idx = class_of(layout);
     if (idx == CLASS_COUNT) {
@@ -184,8 +184,13 @@ static void *slab_alloc(void *ctx, tda_Layout layout) {
 
 static bool slab_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
-
     const tda_Slab *self = ctx;
+    ASSERT_SLAB(self);
+    assert(ptr);
+    assert(old.size > 0);
+    assert(new_size > 0);
+    // a large block is the parent's, which checks it; the walk keeps this to debug builds
+    assert(class_of(old) == CLASS_COUNT || owns_block(self, ptr));
 
     if (stays_large(old, new_size)) {
         return tda_resize(self->parent_, ptr, old, new_size);
@@ -197,8 +202,13 @@ static bool slab_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
 
 static void *slab_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
-
     const tda_Slab *self = ctx;
+    ASSERT_SLAB(self);
+    assert(ptr);
+    assert(old.size > 0);
+    assert(new_size > 0);
+    // a large block is the parent's, which checks it; the walk keeps this to debug builds
+    assert(class_of(old) == CLASS_COUNT || owns_block(self, ptr));
 
     if (stays_large(old, new_size)) {
         return tda_remap(self->parent_, ptr, old, new_size);
@@ -209,24 +219,27 @@ static void *slab_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
 
 static void slab_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     assert(ctx);
-    assert(ptr); // tda_dealloc takes null itself
-
     tda_Slab *self = ctx;
+    ASSERT_SLAB(self);
+    assert(ptr); // tda_dealloc takes null itself
 
     const size_t idx = class_of(layout);
     if (idx == CLASS_COUNT) {
-        assert(self->large_blocks_ > 0);
+        TDA_EXPECT(self->large_blocks_ > 0);
         --self->large_blocks_;
         tda_dealloc(self->parent_, ptr, layout);
         return;
     }
 
-    // a foreign block would be handed out again as this slab's own; the check walks the
-    // chunks, so only debug builds make it
-    assert(owns_block(self, ptr));
-    assert(self->small_blocks_ > 0);
-
+    // a block freed twice is caught, as in the pool, only while it is still the head of
+    // its class's list or would take the count below zero. A foreign block would be
+    // handed out again as this slab's own; that check walks the chunks, so only debug
+    // builds make it
     SizeClass *cls = &self->classes_[idx];
+    TDA_EXPECT(self->small_blocks_ > 0);
+    TDA_EXPECT(ptr != cls->free_head_);
+    assert(owns_block(self, ptr));
+
     FreeBlock *block = ptr;
     block->next = cls->free_head_;
     cls->free_head_ = block;

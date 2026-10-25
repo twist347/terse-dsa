@@ -188,6 +188,7 @@ bool tda_queue_eq_by(const tda_Queue *a, const tda_Queue *b, tda_Eq eq, void *ct
 [[nodiscard]]
 static inline size_t tda_queue_len(const tda_Queue *self) {
     assert(self);
+    assert(self->deque_.al_);
 
     return tda_deque_len(&self->deque_);
 }
@@ -199,6 +200,7 @@ static inline size_t tda_queue_len(const tda_Queue *self) {
 [[nodiscard]]
 static inline size_t tda_queue_cap(const tda_Queue *self) {
     assert(self);
+    assert(self->deque_.al_);
 
     return tda_deque_cap(&self->deque_);
 }
@@ -210,6 +212,7 @@ static inline size_t tda_queue_cap(const tda_Queue *self) {
 [[nodiscard]]
 static inline tda_Layout tda_queue_elem_layout(const tda_Queue *self) {
     assert(self);
+    assert(self->deque_.al_);
 
     return tda_deque_elem_layout(&self->deque_);
 }
@@ -221,6 +224,7 @@ static inline tda_Layout tda_queue_elem_layout(const tda_Queue *self) {
 [[nodiscard]]
 static inline tda_Al *tda_queue_al(const tda_Queue *self) {
     assert(self);
+    assert(self->deque_.al_);
 
     return tda_deque_al(&self->deque_);
 }
@@ -237,6 +241,7 @@ static inline tda_Al *tda_queue_al(const tda_Queue *self) {
 [[nodiscard]]
 static inline const void *tda_queue_front(const tda_Queue *self) {
     assert(self);
+    assert(self->deque_.al_);
     TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
 
     return tda_deque_front(&self->deque_);
@@ -247,6 +252,7 @@ static inline const void *tda_queue_front(const tda_Queue *self) {
 [[nodiscard]]
 static inline void *tda_queue_front_mut(tda_Queue *self) {
     assert(self);
+    assert(self->deque_.al_);
     TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
 
     return tda_deque_front_mut(&self->deque_);
@@ -259,6 +265,7 @@ static inline void *tda_queue_front_mut(tda_Queue *self) {
 [[nodiscard]]
 static inline const void *tda_queue_back(const tda_Queue *self) {
     assert(self);
+    assert(self->deque_.al_);
     TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
 
     return tda_deque_back(&self->deque_);
@@ -269,6 +276,7 @@ static inline const void *tda_queue_back(const tda_Queue *self) {
 [[nodiscard]]
 static inline void *tda_queue_back_mut(tda_Queue *self) {
     assert(self);
+    assert(self->deque_.al_);
     TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
 
     return tda_deque_back_mut(&self->deque_);

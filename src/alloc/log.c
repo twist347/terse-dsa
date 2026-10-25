@@ -80,8 +80,9 @@ void tda_log_deinit(tda_Log *self) {
 
 static void *log_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
-
     const tda_Log *self = ctx;
+    ASSERT_LOG(self);
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
     void *ptr = tda_alloc(self->parent_, layout);
     log_line(self, "[TDA] alloc size = %zu align = %zu -> %p\n", layout.size, layout.align, ptr);
@@ -91,8 +92,9 @@ static void *log_alloc(void *ctx, tda_Layout layout) {
 
 static void *log_alloc_zeroed(void *ctx, tda_Layout layout) {
     assert(ctx);
-
     const tda_Log *self = ctx;
+    ASSERT_LOG(self);
+    assert(layout.size > 0); // tda_alloc_zeroed answers a request for nothing itself
 
     void *ptr = tda_alloc_zeroed(self->parent_, layout);
     log_line(self, "[TDA] alloc_zeroed size = %zu align = %zu -> %p\n", layout.size, layout.align, ptr);
@@ -102,8 +104,11 @@ static void *log_alloc_zeroed(void *ctx, tda_Layout layout) {
 
 static bool log_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
-
     const tda_Log *self = ctx;
+    ASSERT_LOG(self);
+    assert(ptr);
+    assert(old.size > 0);
+    assert(new_size > 0);
 
     const bool done = tda_resize(self->parent_, ptr, old, new_size);
     log_line(
@@ -117,8 +122,11 @@ static bool log_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
 
 static void *log_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
-
     const tda_Log *self = ctx;
+    ASSERT_LOG(self);
+    assert(ptr);
+    assert(old.size > 0);
+    assert(new_size > 0);
 
     // after a move 'ptr' is indeterminate and even reading it is undefined, so the
     // address is saved as an integer beforehand
@@ -135,8 +143,9 @@ static void *log_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
 
 static void log_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     assert(ctx);
-
     const tda_Log *self = ctx;
+    ASSERT_LOG(self);
+    assert(ptr); // tda_dealloc takes null itself
 
     log_line(self, "[TDA] dealloc %p size = %zu align = %zu\n", ptr, layout.size, layout.align);
     tda_dealloc(self->parent_, ptr, layout);

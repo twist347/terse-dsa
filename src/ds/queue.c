@@ -12,9 +12,9 @@
     (assert(q),         \
      assert((q)->deque_.al_))
 
-/// whether the two hold elems of one layout
-[[nodiscard]] [[maybe_unused]]
-static bool same_elem(const tda_Queue *a, const tda_Queue *b);
+// two queues whose elems can pass between them or be compared: one elem layout
+#define EXPECT_SAME_QUEUE(a, b) \
+    (TDA_EXPECT(tda_layout_eq(tda_deque_elem_layout(&(a)->deque_), tda_deque_elem_layout(&(b)->deque_))))
 
 // The deque does all the work; this type only hides the ops a queue should not have.
 
@@ -37,6 +37,7 @@ tda_Status tda_queue_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Queue
 }
 
 tda_Status tda_queue_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Queue *out) {
+    assert(data || len == 0);
     assert(tda_layout_is_type(elem));
     assert(al);
     assert(out);
@@ -71,6 +72,7 @@ void tda_queue_into_deque(tda_Queue *self, tda_Deque *out) {
 
 tda_Status tda_queue_copy(const tda_Queue *self, tda_Queue *out) {
     ASSERT_QUEUE(self);
+    assert(out);
 
     return tda_queue_copy_with(self, tda_deque_al(&self->deque_), out);
 }
@@ -86,24 +88,33 @@ tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue *out
 tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
-    TDA_EXPECT(same_elem(self, other));
+    EXPECT_SAME_QUEUE(self, other);
 
     // no self-assignment guard: the deque already returns early on it
-    return tda_deque_copy_assign(&self->deque_, &other->deque_);
+    const tda_Status st = tda_deque_copy_assign(&self->deque_, &other->deque_);
+
+    ASSERT_QUEUE(self);
+
+    return st;
 }
 
 void tda_queue_move_assign(tda_Queue *self, tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
-    TDA_EXPECT(same_elem(self, other));
+    EXPECT_SAME_QUEUE(self, other);
 
     // self-move is handled by the deque, as in copy_assign
     tda_deque_move_assign(&self->deque_, &other->deque_);
+
+    ASSERT_QUEUE(self);
+    ASSERT_QUEUE(other);
 }
 
 void tda_queue_copy_to_span(const tda_Queue *self, tda_SpanMut dst) {
     ASSERT_QUEUE(self);
     TDA_SPAN_ASSERT(dst);
+    TDA_EXPECT(tda_layout_eq(tda_deque_elem_layout(&self->deque_), dst.elem));
+    TDA_EXPECT(dst.len == tda_deque_len(&self->deque_));
 
     tda_deque_copy_to_span(&self->deque_, dst);
 }
@@ -113,6 +124,7 @@ void tda_queue_copy_to_span(const tda_Queue *self, tda_SpanMut dst) {
 bool tda_queue_eq(const tda_Queue *a, const tda_Queue *b) {
     ASSERT_QUEUE(a);
     ASSERT_QUEUE(b);
+    EXPECT_SAME_QUEUE(a, b);
 
     return tda_deque_eq(&a->deque_, &b->deque_);
 }
@@ -120,6 +132,8 @@ bool tda_queue_eq(const tda_Queue *a, const tda_Queue *b) {
 bool tda_queue_eq_by(const tda_Queue *a, const tda_Queue *b, tda_Eq eq, void *ctx) {
     ASSERT_QUEUE(a);
     ASSERT_QUEUE(b);
+    assert(eq);
+    EXPECT_SAME_QUEUE(a, b);
 
     return tda_deque_eq_by(&a->deque_, &b->deque_, eq, ctx);
 }
@@ -130,7 +144,11 @@ tda_Status tda_queue_push(tda_Queue *self, const void *val) {
     ASSERT_QUEUE(self);
     assert(val);
 
-    return tda_deque_push_back(&self->deque_, val);
+    const tda_Status st = tda_deque_push_back(&self->deque_, val);
+
+    ASSERT_QUEUE(self);
+
+    return st;
 }
 
 void tda_queue_pop(tda_Queue *self) {
@@ -138,6 +156,8 @@ void tda_queue_pop(tda_Queue *self) {
     TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
 
     tda_deque_pop_front(&self->deque_);
+
+    ASSERT_QUEUE(self);
 }
 
 void tda_queue_pop_to(tda_Queue *self, void *out) {
@@ -146,51 +166,63 @@ void tda_queue_pop_to(tda_Queue *self, void *out) {
     TDA_EXPECT(tda_deque_len(&self->deque_) > 0);
 
     tda_deque_pop_front_to(&self->deque_, out);
+
+    ASSERT_QUEUE(self);
 }
 
 void tda_queue_clear(tda_Queue *self) {
     ASSERT_QUEUE(self);
 
     tda_deque_clear(&self->deque_);
+
+    ASSERT_QUEUE(self);
 }
 
 tda_Status tda_queue_reserve(tda_Queue *self, size_t new_cap) {
     ASSERT_QUEUE(self);
 
-    return tda_deque_reserve(&self->deque_, new_cap);
+    const tda_Status st = tda_deque_reserve(&self->deque_, new_cap);
+
+    ASSERT_QUEUE(self);
+
+    return st;
 }
 
 tda_Status tda_queue_shrink_to_fit(tda_Queue *self) {
     ASSERT_QUEUE(self);
 
-    return tda_deque_shrink_to_fit(&self->deque_);
+    const tda_Status st = tda_deque_shrink_to_fit(&self->deque_);
+
+    ASSERT_QUEUE(self);
+
+    return st;
 }
 
 void tda_queue_swap(tda_Queue *self, tda_Queue *other) {
     ASSERT_QUEUE(self);
     ASSERT_QUEUE(other);
-    TDA_EXPECT(same_elem(self, other));
+    EXPECT_SAME_QUEUE(self, other);
 
     // self-swap is handled by the deque, as in copy_assign
     tda_deque_swap(&self->deque_, &other->deque_);
+
+    ASSERT_QUEUE(self);
+    ASSERT_QUEUE(other);
 }
 
 /* ========== print ========== */
 
 void tda_queue_fprint(const tda_Queue *self, FILE *stream, tda_FPrint fprint) {
     ASSERT_QUEUE(self);
+    assert(stream);
+    assert(fprint);
 
     tda_deque_fprint(&self->deque_, stream, fprint);
 }
 
 void tda_queue_print(const tda_Queue *self, tda_FPrint fprint) {
     ASSERT_QUEUE(self);
+    assert(fprint);
 
     tda_deque_print(&self->deque_, fprint);
-}
-
-/* ========== internals ========== */
-
-static bool same_elem(const tda_Queue *a, const tda_Queue *b) {
-    return tda_layout_eq(tda_deque_elem_layout(&a->deque_), tda_deque_elem_layout(&b->deque_));
 }

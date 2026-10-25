@@ -19,6 +19,7 @@ void *tda_alloc(tda_Al *al, tda_Layout layout) {
 
 void *tda_alloc_zeroed(tda_Al *al, tda_Layout layout) {
     assert(al);
+    assert(al->alloc);
     assert(tda_layout_is_align(layout.align));
 
     if (layout.size == 0) {
@@ -57,7 +58,7 @@ void *tda_remap(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
 
 void *tda_realloc(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
     assert(al);
-    assert(ptr || old.size == 0);
+    assert((ptr == nullptr) == (old.size == 0)); // no block has size 0
     assert(tda_layout_is_align(old.align));
 
     if (new_size == 0) {
@@ -93,6 +94,7 @@ void *tda_realloc(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
 void tda_dealloc(tda_Al *al, void *ptr, tda_Layout layout) {
     assert(al);
     assert(al->dealloc);
+    assert(!ptr || layout.size > 0);
     assert(tda_layout_is_align(layout.align));
 
     if (!ptr) {

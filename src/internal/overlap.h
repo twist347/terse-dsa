@@ -6,8 +6,8 @@
 
 /*
  * Overlap checks for the algorithms whose result is wrong, not unsafe, when an output
- * shares memory with an input: merge, the set ops, copy and the scans. A breach is a
- * wrong answer, so callers assert rather than TDA_EXPECT.
+ * shares memory with an input: merge, the set ops, copy, the scans and transform. A breach
+ * is a wrong answer, so callers assert rather than TDA_EXPECT.
  */
 
 /// whether two views share a byte. The addresses are compared as uintptr_t, since '<'
@@ -29,4 +29,15 @@ static inline bool tda_span_overlap(tda_Span a, tda_Span b) {
 [[nodiscard]]
 static inline bool tda_span_apart_or_same(tda_Span a, tda_Span b) {
     return a.data == b.data || !tda_span_overlap(a, b);
+}
+
+/// whether a destination may take a source of another layout: apart, or the very same
+/// elems with the destination's no wider, so each position is read before it is written
+[[nodiscard]]
+static inline bool tda_span_may_write_over(tda_SpanMut dst, tda_Span src) {
+    if (dst.data == src.data) {
+        return dst.elem.size <= src.elem.size;
+    }
+
+    return !tda_span_overlap(tda_span_mut_to_span(dst), src);
 }

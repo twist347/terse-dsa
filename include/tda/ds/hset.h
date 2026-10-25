@@ -166,6 +166,7 @@ void tda_hset_move_assign(tda_HSet *self, tda_HSet *other);
 [[nodiscard]]
 static inline size_t tda_hset_len(const tda_HSet *self) {
     assert(self);
+    assert(self->map_.al_);
 
     return tda_hmap_len(&self->map_);
 }
@@ -177,6 +178,7 @@ static inline size_t tda_hset_len(const tda_HSet *self) {
 [[nodiscard]]
 static inline size_t tda_hset_bucket_count(const tda_HSet *self) {
     assert(self);
+    assert(self->map_.al_);
 
     return tda_hmap_bucket_count(&self->map_);
 }
@@ -188,6 +190,7 @@ static inline size_t tda_hset_bucket_count(const tda_HSet *self) {
 [[nodiscard]]
 static inline tda_Layout tda_hset_key_layout(const tda_HSet *self) {
     assert(self);
+    assert(self->map_.al_);
 
     return tda_hmap_key_layout(&self->map_);
 }
@@ -199,6 +202,7 @@ static inline tda_Layout tda_hset_key_layout(const tda_HSet *self) {
 [[nodiscard]]
 static inline tda_Al *tda_hset_al(const tda_HSet *self) {
     assert(self);
+    assert(self->map_.al_);
 
     return tda_hmap_al(&self->map_);
 }
@@ -210,6 +214,7 @@ static inline tda_Al *tda_hset_al(const tda_HSet *self) {
 [[nodiscard]]
 static inline tda_Hasher tda_hset_hasher(const tda_HSet *self) {
     assert(self);
+    assert(self->map_.al_);
 
     return tda_hmap_hasher(&self->map_);
 }
@@ -222,6 +227,7 @@ static inline tda_Hasher tda_hset_hasher(const tda_HSet *self) {
 [[nodiscard]]
 static inline tda_Eq tda_hset_key_eq(const tda_HSet *self) {
     assert(self);
+    assert(self->map_.al_);
 
     return tda_hmap_key_eq(&self->map_);
 }
@@ -233,6 +239,7 @@ static inline tda_Eq tda_hset_key_eq(const tda_HSet *self) {
 [[nodiscard]]
 static inline void *tda_hset_key_ctx(const tda_HSet *self) {
     assert(self);
+    assert(self->map_.al_);
 
     return tda_hmap_key_ctx(&self->map_);
 }

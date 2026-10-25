@@ -25,8 +25,9 @@ void tda_span_copy(tda_SpanMut dst, tda_Span src) {
 size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
     assert(pred);
+    TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
+    assert(!tda_span_overlap(tda_span_mut_to_span(dst), src));
 
     // the count is known only at the end, so tda_span_get_mut checks room on each write;
     // 'dst' may be shorter than 'src' as long as the passing elems fit
@@ -58,8 +59,8 @@ void tda_span_copy_overlapping(tda_SpanMut dst, tda_Span src) {
 size_t tda_span_sample(tda_SpanMut dst, tda_Span src, tda_Rng *rng) {
     TDA_SPAN_ASSERT(dst);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
     assert(rng);
+    TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
     assert(!tda_span_overlap(tda_span_mut_to_span(dst), src));
 
     const size_t want = dst.len < src.len ? dst.len : src.len;

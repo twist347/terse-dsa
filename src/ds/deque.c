@@ -3,6 +3,7 @@
 #include "tda/core/check.h"
 
 #include "internal/order.h"
+#include "internal/overlap.h"
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -20,6 +21,9 @@
      assert((d)->cap_ == 0 || (d)->head_ < (d)->cap_), \
      assert((d)->cap_ > 0 || (d)->head_ == 0),         \
      assert((d)->al_))
+
+#define EXPECT_SAME_DEQUE(a, b) \
+    (TDA_EXPECT(tda_layout_eq((a)->elem_, (b)->elem_)))
 
 static constexpr size_t DEQUE_GROWTH_BASE = 1;
 static constexpr size_t DEQUE_GROWTH_FACTOR = 2;
@@ -53,6 +57,10 @@ static size_t len_bytes(const tda_Deque *self);
 /// a block of 'cap' elems at the elem's alignment; the caller has checked that it fits
 [[nodiscard]]
 static tda_Layout block_layout(const tda_Deque *self, size_t cap);
+
+/// the whole ring buffer as a view, the free slots included: what growth may free
+[[nodiscard]] [[maybe_unused]]
+static tda_Span block_span(const tda_Deque *self);
 
 /// hands the block back to the allocator; the fields still describe it
 static void free_block(tda_Deque *self);
@@ -189,6 +197,7 @@ void tda_deque_deinit(tda_Deque *self) {
 
 tda_Status tda_deque_copy(const tda_Deque *self, tda_Deque *out) {
     ASSERT_DEQUE(self);
+    assert(out);
 
     return tda_deque_copy_with(self, self->al_, out);
 }
@@ -216,7 +225,7 @@ tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque *out
 tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
-    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
+    EXPECT_SAME_DEQUE(self, other);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -247,7 +256,7 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
 void tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
-    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
+    EXPECT_SAME_DEQUE(self, other);
 
     if (self == other) {
         return;
@@ -265,7 +274,7 @@ void tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
 void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(dst);
-    TDA_EXPECT(tda_layout_eq(dst.elem, self->elem_));
+    TDA_EXPECT(tda_layout_eq(self->elem_, dst.elem));
     TDA_EXPECT(dst.len == self->len_);
 
     copy_out(self, dst.data);
@@ -274,7 +283,7 @@ void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst) {
 void tda_deque_copy_from_span(tda_Deque *self, tda_Span src) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(tda_layout_eq(src.elem, self->elem_));
+    TDA_EXPECT(tda_layout_eq(self->elem_, src.elem));
     TDA_EXPECT(src.len == self->len_);
 
     copy_range_in(self, 0, src.data, self->len_);
@@ -307,7 +316,7 @@ void tda_deque_to_spans_mut(tda_Deque *self, tda_SpanMut *out_front, tda_SpanMut
 bool tda_deque_eq(const tda_Deque *a, const tda_Deque *b) {
     ASSERT_DEQUE(a);
     ASSERT_DEQUE(b);
-    TDA_EXPECT(tda_layout_eq(a->elem_, b->elem_));
+    EXPECT_SAME_DEQUE(a, b);
 
     return eq_impl(a, b, nullptr, nullptr);
 }
@@ -315,8 +324,8 @@ bool tda_deque_eq(const tda_Deque *a, const tda_Deque *b) {
 bool tda_deque_eq_by(const tda_Deque *a, const tda_Deque *b, tda_Eq eq, void *ctx) {
     ASSERT_DEQUE(a);
     ASSERT_DEQUE(b);
-    TDA_EXPECT(tda_layout_eq(a->elem_, b->elem_));
     assert(eq);
+    EXPECT_SAME_DEQUE(a, b);
 
     return eq_impl(a, b, eq, ctx);
 }
@@ -337,6 +346,8 @@ void tda_deque_set(tda_Deque *self, size_t idx, const void *val) {
 tda_Status tda_deque_push_front(tda_Deque *self, const void *val) {
     ASSERT_DEQUE(self);
     assert(val);
+    // growing frees the block 'val' would be read from
+    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self, self->cap_).size, val));
 
     const tda_Status st = reserve_one(self);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -347,12 +358,16 @@ tda_Status tda_deque_push_front(tda_Deque *self, const void *val) {
     memcpy(slot_at_mut(self, self->head_), val, self->elem_.size);
     ++self->len_;
 
+    ASSERT_DEQUE(self);
+
     return TDA_STATUS_OK;
 }
 
 tda_Status tda_deque_push_back(tda_Deque *self, const void *val) {
     ASSERT_DEQUE(self);
     assert(val);
+    // growing frees the block 'val' would be read from
+    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self, self->cap_).size, val));
 
     const tda_Status st = reserve_one(self);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -361,6 +376,8 @@ tda_Status tda_deque_push_back(tda_Deque *self, const void *val) {
 
     memcpy(elem_at_mut(self, self->len_), val, self->elem_.size);
     ++self->len_;
+
+    ASSERT_DEQUE(self);
 
     return TDA_STATUS_OK;
 }
@@ -371,6 +388,8 @@ void tda_deque_pop_front(tda_Deque *self) {
 
     self->head_ = slot_fwd(self, self->head_, 1);
     --self->len_;
+
+    ASSERT_DEQUE(self);
 }
 
 void tda_deque_pop_back(tda_Deque *self) {
@@ -378,6 +397,8 @@ void tda_deque_pop_back(tda_Deque *self) {
     TDA_EXPECT(self->len_ > 0);
 
     --self->len_;
+
+    ASSERT_DEQUE(self);
 }
 
 void tda_deque_pop_front_to(tda_Deque *self, void *out) {
@@ -404,6 +425,8 @@ tda_Status tda_deque_insert(tda_Deque *self, size_t idx, const void *val) {
     ASSERT_DEQUE(self);
     assert(val);
     TDA_EXPECT(idx <= self->len_);
+    // growing frees the block 'val' would be read from
+    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self, self->cap_).size, val));
 
     // straight from 'val', not through a span, which would ask it to be aligned
     return insert_raw(self, idx, val, 1);
@@ -421,6 +444,8 @@ void tda_deque_clear(tda_Deque *self) {
 
     self->len_ = 0;
     self->head_ = 0;
+
+    ASSERT_DEQUE(self);
 }
 
 tda_Status tda_deque_reserve(tda_Deque *self, size_t new_cap) {
@@ -447,6 +472,7 @@ tda_Status tda_deque_shrink_to_fit(tda_Deque *self) {
 
     if (self->len_ == 0) {
         release_data(self);
+        ASSERT_DEQUE(self);
         return TDA_STATUS_OK;
     }
 
@@ -459,6 +485,7 @@ tda_Status tda_deque_resize(tda_Deque *self, size_t new_len) {
 
     if (new_len <= self->len_) {
         self->len_ = new_len;
+        ASSERT_DEQUE(self);
         return TDA_STATUS_OK;
     }
 
@@ -487,12 +514,14 @@ void tda_deque_truncate(tda_Deque *self, size_t new_len) {
     if (new_len < self->len_) {
         self->len_ = new_len;
     }
+
+    ASSERT_DEQUE(self);
 }
 
 void tda_deque_swap(tda_Deque *self, tda_Deque *other) {
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
-    TDA_EXPECT(tda_layout_eq(self->elem_, other->elem_));
+    EXPECT_SAME_DEQUE(self, other);
 
     if (self == other) {
         return;
@@ -521,7 +550,9 @@ void tda_deque_swap_elems(tda_Deque *self, size_t i, size_t j) {
 tda_Status tda_deque_extend(tda_Deque *self, tda_Span src) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(tda_layout_eq(src.elem, self->elem_));
+    TDA_EXPECT(tda_layout_eq(self->elem_, src.elem));
+    // growing may free what 'src' views
+    TDA_EXPECT(!tda_span_overlap(block_span(self), src));
 
     return tda_deque_insert_span(self, self->len_, src);
 }
@@ -529,8 +560,10 @@ tda_Status tda_deque_extend(tda_Deque *self, tda_Span src) {
 tda_Status tda_deque_insert_span(tda_Deque *self, size_t idx, tda_Span src) {
     ASSERT_DEQUE(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(tda_layout_eq(src.elem, self->elem_));
+    TDA_EXPECT(tda_layout_eq(self->elem_, src.elem));
     TDA_EXPECT(idx <= self->len_);
+    // growing may free what 'src' views
+    TDA_EXPECT(!tda_span_overlap(block_span(self), src));
 
     return insert_raw(self, idx, src.data, src.len);
 }
@@ -573,6 +606,8 @@ void tda_deque_retain(tda_Deque *self, tda_Pred pred, void *ctx) {
         ++kept;
     }
     self->len_ = kept;
+
+    ASSERT_DEQUE(self);
 }
 
 /* ========== print ========== */
@@ -762,6 +797,10 @@ static size_t len_bytes(const tda_Deque *self) {
 
 static tda_Layout block_layout(const tda_Deque *self, size_t cap) {
     return tda_elems_layout(self->elem_, cap);
+}
+
+static tda_Span block_span(const tda_Deque *self) {
+    return (tda_Span){.data = self->data_, .len = self->cap_, .elem = self->elem_};
 }
 
 static void free_block(tda_Deque *self) {

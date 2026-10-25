@@ -34,6 +34,20 @@ static inline ptrdiff_t tda_byte_diff(const void *a, const void *b) {
     return (const unsigned char *) a - (const unsigned char *) b;
 }
 
+/// whether 'ptr' lies in the 'bytes' bytes from 'base'; false for a null 'base'. Compared
+/// as uintptr_t, since ordering pointers into different objects is undefined
+[[nodiscard]]
+static inline bool tda_addr_in(const void *base, size_t bytes, const void *ptr) {
+    if (!base) {
+        return false;
+    }
+
+    const uintptr_t pb = (uintptr_t) base;
+    const uintptr_t pp = (uintptr_t) ptr;
+
+    return pp >= pb && pp - pb < bytes;
+}
+
 /* ========== alignment ========== */
 
 /// room for 'len' elems of 'elem' that already sit in memory somewhere, as a scratch copy

@@ -59,6 +59,7 @@ static bool owns_block(const tda_Pool *self, const void *ptr);
 
 tda_Status tda_pool_init(tda_Al *parent, tda_Layout block, size_t block_count, tda_Pool *out) {
     assert(parent);
+    // not tda_layout_is_type: ckd_block rounds the size up to the alignment
     assert(block.size > 0);
     assert(tda_layout_is_align(block.align));
     assert(block_count > 0);
@@ -82,6 +83,7 @@ tda_Status tda_pool_init(tda_Al *parent, tda_Layout block, size_t block_count, t
 tda_Status tda_pool_init_buf(void *buf, size_t cap, tda_Layout block, tda_Pool *out) {
     assert(buf);
     assert(cap > 0);
+    // not tda_layout_is_type: ckd_block rounds the size up to the alignment
     assert(block.size > 0);
     assert(tda_layout_is_align(block.align));
     assert(out);
@@ -145,13 +147,13 @@ tda_PoolStats tda_pool_stats(const tda_Pool *self) {
 
 static void *pool_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
-    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
-
     tda_Pool *self = ctx;
-
-    // an alignment past the blocks' is how the pool was built, not how full it is; a
-    // size past them is a request it cannot serve, as when it runs out
+    ASSERT_POOL(self);
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
+    // an alignment past the blocks' is how the pool was built, not how full it is
     TDA_EXPECT(layout.align <= self->block_align_);
+
+    // a size past the blocks' is a request the pool cannot serve, as when it runs out
     if (layout.size > self->block_size_) {
         return nullptr;
     }
@@ -169,14 +171,11 @@ static void *pool_alloc(void *ctx, tda_Layout layout) {
 
 static void pool_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     assert(ctx);
-    assert(ptr); // tda_dealloc takes null itself
-
     tda_Pool *self = ctx;
-    TDA_UNUSED(layout); // only the check reads it, and a release build drops that
-
+    ASSERT_POOL(self);
+    assert(ptr); // tda_dealloc takes null itself
     // the layout is what alloc was asked: it fits one block, or the block is not ours
     TDA_EXPECT(layout.size <= self->block_size_ && layout.align <= self->block_align_);
-
     // a foreign block would be threaded into the free list and handed out as the pool's
     // own, so a hardened build keeps these. A block freed twice is caught only when it is
     // still the head of the list or would take 'used' below zero; one freed twice with
@@ -184,17 +183,23 @@ static void pool_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     TDA_EXPECT(owns_block(self, ptr));
     TDA_EXPECT(self->used_ > 0);
     TDA_EXPECT(ptr != self->free_head_);
+    TDA_UNUSED(layout); // only the checks read it, and a release build drops them
 
     push_free(self, ptr);
     --self->used_;
 }
 
-static bool pool_resize(void *ctx, void *ptr, tda_Layout, size_t new_size) {
+static bool pool_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
-    TDA_UNUSED(ptr); // only the ownership check reads it, and a release build drops that
-
     const tda_Pool *self = ctx;
+    ASSERT_POOL(self);
+    assert(ptr);
+    assert(old.size > 0);
+    assert(new_size > 0);
+    TDA_EXPECT(old.size <= self->block_size_ && old.align <= self->block_align_);
     TDA_EXPECT(owns_block(self, ptr));
+    TDA_UNUSED(ptr); // only the checks read these, and a release build drops them
+    TDA_UNUSED(old);
 
     return new_size <= self->block_size_;
 }

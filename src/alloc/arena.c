@@ -1,12 +1,14 @@
 #include "tda/alloc/arena.h"
 
 #include "tda/core/check.h"
+#include "tda/core/util.h"
 
 #include "internal/ptr.h"
 
 #include <assert.h>
 #include <stdckdint.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
 /* ========== internals ========== */
@@ -28,6 +30,10 @@ static void fill(tda_Arena *obj, tda_Al *parent, void *data, size_t cap);
 /// the free tail after it
 [[nodiscard]]
 static bool is_last_block(const tda_Arena *self, const void *ptr, size_t size);
+
+/// whether 'size' bytes at 'ptr' lie inside what the arena has handed out
+[[nodiscard]] [[maybe_unused]]
+static bool owns_block(const tda_Arena *self, const void *ptr, size_t size);
 
 /// how far into the block 'ptr' starts
 [[nodiscard]]
@@ -105,7 +111,6 @@ void tda_arena_reset(tda_Arena *self) {
 
 tda_ArenaMark tda_arena_mark(tda_Arena *self) {
     ASSERT_ARENA(self);
-
     assert(self->floor_ <= self->offset_);
 
     const tda_ArenaMark mark = {
@@ -120,7 +125,6 @@ tda_ArenaMark tda_arena_mark(tda_Arena *self) {
 
 void tda_arena_rewind(tda_Arena *self, tda_ArenaMark mark) {
     ASSERT_ARENA(self);
-
     TDA_EXPECT(mark.arena_ == self);
     // only a rewind or a reset moves the offset below a live mark: a block from under
     // the floor never shrinks it, and one from above stays above. So a mark past the
@@ -148,9 +152,9 @@ tda_ArenaStats tda_arena_stats(const tda_Arena *self) {
 
 static void *arena_alloc(void *ctx, tda_Layout layout) {
     assert(ctx);
-    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
-
     tda_Arena *self = ctx;
+    ASSERT_ARENA(self);
+    assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
     // the padding is a count, checked against the capacity before an address is formed
     const void *cursor = tda_byte_offset(self->data_, 1, self->offset_);
@@ -168,8 +172,14 @@ static void *arena_alloc(void *ctx, tda_Layout layout) {
 
 static bool arena_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ctx);
-
     tda_Arena *self = ctx;
+    ASSERT_ARENA(self);
+    assert(ptr);
+    assert(old.size > 0);
+    assert(new_size > 0);
+    // the start below is a subtraction from the arena's own pointer, and a foreign
+    // block grown in place would set the offset to wherever that lands
+    TDA_EXPECT(owns_block(self, ptr, old.size));
 
     // the last block resizes in place unless it starts under the floor: grown in place
     // it would reach past a mark, and the rewind would hand its tail out again
@@ -189,6 +199,9 @@ static bool arena_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) 
 }
 
 static void fill(tda_Arena *obj, tda_Al *parent, void *data, size_t cap) {
+    assert(data);
+    assert(cap > 0);
+
     *obj = (tda_Arena){
         .al_ = {
             .ctx = obj,
@@ -206,6 +219,15 @@ static bool is_last_block(const tda_Arena *self, const void *ptr, size_t size) {
     return block_start(self, ptr) + size == self->offset_;
 }
 
+static bool owns_block(const tda_Arena *self, const void *ptr, size_t size) {
+    // addresses, not pointers: ordering a pointer from outside the arena against the
+    // arena's own is undefined, and one from outside is exactly what this is here to catch
+    const uintptr_t addr = (uintptr_t) ptr;
+    const uintptr_t begin = (uintptr_t) self->data_;
+
+    return addr >= begin && addr - begin <= self->offset_ && size <= self->offset_ - (addr - begin);
+}
+
 static size_t block_start(const tda_Arena *self, const void *ptr) {
     return (size_t) tda_byte_diff(ptr, self->data_);
 }
@@ -214,7 +236,14 @@ static bool block_end(const tda_Arena *self, size_t start, size_t size, size_t *
     return !ckd_add(out_end, start, size) && *out_end <= self->cap_;
 }
 
-static void arena_dealloc(void *, void *, tda_Layout) {
+static void arena_dealloc(void *ctx, void *ptr, tda_Layout) {
+    assert(ctx);
+    tda_Arena *self = ctx;
+    ASSERT_ARENA(self);
+    assert(ptr); // tda_dealloc takes null itself
+    TDA_UNUSED(self); // only the checks read these, and a release build drops them
+    TDA_UNUSED(ptr);
+
     // the arena frees nothing per block
 }
 

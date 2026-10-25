@@ -3,6 +3,7 @@
 #include "tda/core/export.h"
 #include "tda/core/layout.h"
 
+#include <assert.h>
 #include <stdckdint.h>
 #include <stddef.h>
 
@@ -114,7 +115,7 @@ void *tda_remap(tda_Al *al, void *ptr, tda_Layout old, size_t new_size);
 /// the block at 'ptr', resized to 'new_size' bytes: in place, else by the allocator's
 /// remap, else by alloc, copy and dealloc
 /// @param al the allocator
-/// @param ptr the block to resize; may be null only when 'old.size' is 0
+/// @param ptr the block to resize; null exactly when 'old.size' is 0
 /// @param old what 'ptr' was made with; a moved block keeps its alignment
 /// @param new_size what it should hold; 0 frees 'ptr' and returns null, not a failure
 /// @return the block, which may have moved, or null on failure with 'ptr' untouched
@@ -185,6 +186,15 @@ static inline void *tda_realloc_n_(tda_Al *al, void *ptr, tda_Layout elem, size_
 
     return tda_realloc(al, ptr, old, new_layout.size);
 }
+
+static inline void tda_dealloc_n_(tda_Al *al, void *ptr, tda_Layout elem, size_t count) {
+    // 'ptr' was made as count elems, so the product fits; the call checks the elem layout
+    tda_Layout layout;
+    [[maybe_unused]] const bool overflow = tda_layout_ckd_array(&layout, elem, count);
+    assert(!overflow);
+
+    tda_dealloc(al, ptr, layout);
+}
 /// @endcond
 
 /// tda_alloc for 'count' elems of T, with the multiplication checked
@@ -216,7 +226,7 @@ static inline void *tda_realloc_n_(tda_Al *al, void *ptr, tda_Layout elem, size_
 /// @param ptr the block
 /// @param count what it holds
 #define TDA_DEALLOC(T, al, ptr, count) \
-    tda_dealloc((al), (ptr), (tda_Layout){.size = (count) * sizeof(T), .align = alignof(T)})
+    tda_dealloc_n_((al), (ptr), TDA_LAYOUT_OF(T), (count))
 
 /// @}
 

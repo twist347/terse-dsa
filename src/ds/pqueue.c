@@ -11,14 +11,15 @@
 
 /* ========== internals ========== */
 
-// the vec asserts its own invariants on every call
-#define ASSERT_PQUEUE(q) \
-    (assert(q),          \
+// the vec asserts the rest of its invariants on every call
+#define ASSERT_PQUEUE(q)       \
+    (assert(q),                \
+     assert((q)->vec_.al_),    \
      assert((q)->cmp_))
 
-/// whether the two hold elems of one layout
-[[nodiscard]] [[maybe_unused]]
-static bool same_elem(const tda_PQueue *a, const tda_PQueue *b);
+// two queues whose elems can pass between them: one elem layout
+#define EXPECT_SAME_PQUEUE(a, b) \
+    (TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&(a)->vec_), tda_vec_elem_layout(&(b)->vec_))))
 
 // A vec plus its comparator. Every mutation keeps the vec a heap (algo/heap); growth
 // and allocator are the vec's.
@@ -59,6 +60,7 @@ tda_Status tda_pqueue_from_data(
     tda_Al *al,
     tda_PQueue *out
 ) {
+    assert(data || len == 0);
     assert(tda_layout_is_type(elem));
     assert(cmp);
     assert(al);
@@ -105,6 +107,7 @@ void tda_pqueue_into_vec(tda_PQueue *self, tda_Vec *out) {
 
 tda_Status tda_pqueue_copy(const tda_PQueue *self, tda_PQueue *out) {
     ASSERT_PQUEUE(self);
+    assert(out);
 
     return tda_pqueue_copy_with(self, tda_vec_al(&self->vec_), out);
 }
@@ -129,7 +132,7 @@ tda_Status tda_pqueue_copy_with(const tda_PQueue *self, tda_Al *al, tda_PQueue *
 tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
-    TDA_EXPECT(same_elem(self, other));
+    EXPECT_SAME_PQUEUE(self, other);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -152,7 +155,7 @@ tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
 void tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
-    TDA_EXPECT(same_elem(self, other));
+    EXPECT_SAME_PQUEUE(self, other);
 
     if (self == other) {
         return;
@@ -165,6 +168,7 @@ void tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other) {
     self->ctx_ = other->ctx_;
 
     ASSERT_PQUEUE(self);
+    ASSERT_PQUEUE(other);
 }
 
 /* ========== mods ========== */
@@ -181,6 +185,8 @@ tda_Status tda_pqueue_push(tda_PQueue *self, const void *val) {
     // push_heap expects the new elem last, where the push put it
     tda_span_push_heap(tda_vec_to_span_mut(&self->vec_), self->cmp_, self->ctx_);
 
+    ASSERT_PQUEUE(self);
+
     return TDA_STATUS_OK;
 }
 
@@ -192,6 +198,8 @@ void tda_pqueue_pop(tda_PQueue *self) {
     // drops the tail
     tda_span_pop_heap(tda_vec_to_span_mut(&self->vec_), self->cmp_, self->ctx_);
     tda_vec_pop(&self->vec_);
+
+    ASSERT_PQUEUE(self);
 }
 
 void tda_pqueue_pop_to(tda_PQueue *self, void *out) {
@@ -202,6 +210,8 @@ void tda_pqueue_pop_to(tda_PQueue *self, void *out) {
     // as in tda_pqueue_pop, but the elem moved last is copied out
     tda_span_pop_heap(tda_vec_to_span_mut(&self->vec_), self->cmp_, self->ctx_);
     tda_vec_pop_to(&self->vec_, out);
+
+    ASSERT_PQUEUE(self);
 }
 
 void tda_pqueue_replace_top(tda_PQueue *self, const void *val) {
@@ -221,48 +231,58 @@ void tda_pqueue_clear(tda_PQueue *self) {
     ASSERT_PQUEUE(self);
 
     tda_vec_clear(&self->vec_);
+
+    ASSERT_PQUEUE(self);
 }
 
 tda_Status tda_pqueue_reserve(tda_PQueue *self, size_t new_cap) {
     ASSERT_PQUEUE(self);
 
-    return tda_vec_reserve(&self->vec_, new_cap);
+    const tda_Status st = tda_vec_reserve(&self->vec_, new_cap);
+
+    ASSERT_PQUEUE(self);
+
+    return st;
 }
 
 tda_Status tda_pqueue_shrink_to_fit(tda_PQueue *self) {
     ASSERT_PQUEUE(self);
 
-    return tda_vec_shrink_to_fit(&self->vec_);
+    const tda_Status st = tda_vec_shrink_to_fit(&self->vec_);
+
+    ASSERT_PQUEUE(self);
+
+    return st;
 }
 
 void tda_pqueue_swap(tda_PQueue *self, tda_PQueue *other) {
     ASSERT_PQUEUE(self);
     ASSERT_PQUEUE(other);
-    TDA_EXPECT(same_elem(self, other));
+    EXPECT_SAME_PQUEUE(self, other);
 
     if (self == other) {
         return;
     }
 
     TDA_SWAP(*self, *other);
+
+    ASSERT_PQUEUE(self);
+    ASSERT_PQUEUE(other);
 }
 
 /* ========== print ========== */
 
 void tda_pqueue_fprint(const tda_PQueue *self, FILE *stream, tda_FPrint fprint) {
     ASSERT_PQUEUE(self);
+    assert(stream);
+    assert(fprint);
 
     tda_vec_fprint(&self->vec_, stream, fprint);
 }
 
 void tda_pqueue_print(const tda_PQueue *self, tda_FPrint fprint) {
     ASSERT_PQUEUE(self);
+    assert(fprint);
 
     tda_vec_print(&self->vec_, fprint);
-}
-
-/* ========== internals ========== */
-
-static bool same_elem(const tda_PQueue *a, const tda_PQueue *b) {
-    return tda_layout_eq(tda_vec_elem_layout(&a->vec_), tda_vec_elem_layout(&b->vec_));
 }

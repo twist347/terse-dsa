@@ -34,7 +34,7 @@ void tda_span_copy(tda_SpanMut dst, tda_Span src);
 
 /// copies the elems of 'src' that satisfy 'pred', packed to the front of 'dst'
 /// @param dst asserts room for the elems that pass
-/// @param src the source
+/// @param src must not overlap 'dst'; tda_span_remove_if filters in place
 /// @param pred the test
 /// @param ctx handed to 'pred'
 /// @return how many were written; the rest of 'dst' is untouched

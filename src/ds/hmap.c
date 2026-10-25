@@ -26,7 +26,7 @@
 
 // two maps whose entries can pass between them or be compared: one key layout, one
 // value layout
-#define EXPECT_SAME_LAYOUTS(a, b)                     \
+#define EXPECT_SAME_HMAP(a, b)                        \
     (TDA_EXPECT(tda_layout_eq((a)->key_, (b)->key_)), \
      TDA_EXPECT(tda_layout_eq((a)->val_, (b)->val_)))
 
@@ -144,8 +144,12 @@ void tda_hmap_init(
     tda_Al *al,
     tda_HMap *out
 ) {
-    // the zero belongs to internal/hmap_impl.h and to ds/hset alone
-    assert(tda_layout_is_type(val));
+    assert(tda_layout_is_type(key));
+    assert(tda_layout_is_type(val)); // the zero belongs to internal/hmap_impl.h and to ds/hset alone
+    assert(hasher);
+    assert(eq);
+    assert(al);
+    assert(out);
 
     // with no room asked for nothing is allocated, so this cannot fail
     [[maybe_unused]] const tda_Status st = tda_hmap_init_raw_(0, key, val, hasher, eq, ctx, al, out);
@@ -159,8 +163,12 @@ tda_Status tda_hmap_init_cap(
     tda_Al *al,
     tda_HMap *out
 ) {
-    // the zero belongs to internal/hmap_impl.h and to ds/hset alone
-    assert(tda_layout_is_type(val));
+    assert(tda_layout_is_type(key));
+    assert(tda_layout_is_type(val)); // the zero belongs to internal/hmap_impl.h and to ds/hset alone
+    assert(hasher);
+    assert(eq);
+    assert(al);
+    assert(out);
 
     return tda_hmap_init_raw_(cap, key, val, hasher, eq, ctx, al, out);
 }
@@ -176,8 +184,11 @@ tda_Status tda_hmap_from_spans(
 ) {
     TDA_SPAN_ASSERT(keys);
     TDA_SPAN_ASSERT(vals);
-    TDA_EXPECT(keys.len == vals.len);
+    assert(hasher);
+    assert(eq);
+    assert(al);
     assert(out);
+    TDA_EXPECT(keys.len == vals.len);
 
     tda_HMap obj;
     tda_Status st = tda_hmap_init_cap(keys.len, keys.elem, vals.elem, hasher, eq, ctx, al, &obj);
@@ -269,6 +280,7 @@ void tda_hmap_deinit(tda_HMap *self) {
 
 tda_Status tda_hmap_copy(const tda_HMap *self, tda_HMap *out) {
     ASSERT_HMAP(self);
+    assert(out);
 
     return tda_hmap_copy_with(self, self->al_, out);
 }
@@ -313,7 +325,7 @@ tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap *out) {
 tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    EXPECT_SAME_LAYOUTS(self, other);
+    EXPECT_SAME_HMAP(self, other);
 
     if (self == other) {
         return TDA_STATUS_OK;
@@ -337,7 +349,7 @@ tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
 void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    EXPECT_SAME_LAYOUTS(self, other);
+    EXPECT_SAME_HMAP(self, other);
 
     if (self == other) {
         return;
@@ -358,8 +370,8 @@ void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
 bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b) {
     ASSERT_HMAP(a);
     ASSERT_HMAP(b);
-    EXPECT_SAME_LAYOUTS(a, b);
-    TDA_EXPECT(a->eq_ == b->eq_);
+    EXPECT_SAME_HMAP(a, b);
+    assert(a->eq_ == b->eq_);
 
     return eq_impl(a, b, nullptr, nullptr);
 }
@@ -367,9 +379,9 @@ bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b) {
 bool tda_hmap_eq_by(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq, void *ctx) {
     ASSERT_HMAP(a);
     ASSERT_HMAP(b);
-    EXPECT_SAME_LAYOUTS(a, b);
-    TDA_EXPECT(a->eq_ == b->eq_);
     assert(val_eq);
+    EXPECT_SAME_HMAP(a, b);
+    assert(a->eq_ == b->eq_);
 
     return eq_impl(a, b, val_eq, ctx);
 }
@@ -487,8 +499,12 @@ tda_Status tda_hmap_insert(tda_HMap *self, const void *key, const void *val, boo
         return TDA_STATUS_OK;
     }
 
+    // a refused node may still have grown the bucket array
     tda_HMapNode *node;
     const tda_Status st = add_node(self, key, val, hash, &node);
+
+    ASSERT_HMAP(self);
+
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
@@ -511,9 +527,12 @@ tda_Status tda_hmap_extend(tda_HMap *self, tda_Span keys, tda_Span vals) {
     for (size_t i = 0; i < keys.len; ++i) {
         const tda_Status st = tda_hmap_insert(self, tda_span_get(keys, i), tda_span_get(vals, i), nullptr);
         if (TDA_STATUS_IS_ERR(st)) {
+            ASSERT_HMAP(self);
             return st;
         }
     }
+
+    ASSERT_HMAP(self);
 
     return TDA_STATUS_OK;
 }
@@ -538,14 +557,23 @@ tda_Status tda_hmap_get_or_insert(
         return TDA_STATUS_OK;
     }
 
-    return add_node(self, key, val_if_absent, hash, out_node);
+    // a refused node may still have grown the bucket array
+    const tda_Status st = add_node(self, key, val_if_absent, hash, out_node);
+
+    ASSERT_HMAP(self);
+
+    return st;
 }
 
 bool tda_hmap_remove(tda_HMap *self, const void *key) {
     ASSERT_HMAP(self);
     assert(key);
 
-    return tda_hmap_take(self, key, nullptr, nullptr);
+    const bool removed = tda_hmap_take(self, key, nullptr, nullptr);
+
+    ASSERT_HMAP(self);
+
+    return removed;
 }
 
 bool tda_hmap_take(tda_HMap *self, const void *key, void *out_key, void *out_val) {
@@ -609,6 +637,8 @@ void tda_hmap_retain(tda_HMap *self, tda_EntryPred pred, void *ctx) {
             remove_at(self, link);
         }
     }
+
+    ASSERT_HMAP(self);
 }
 
 void tda_hmap_clear(tda_HMap *self) {
@@ -628,7 +658,11 @@ void tda_hmap_clear(tda_HMap *self) {
 tda_Status tda_hmap_reserve(tda_HMap *self, size_t new_cap) {
     ASSERT_HMAP(self);
 
-    return reserve_buckets(self, new_cap);
+    const tda_Status st = reserve_buckets(self, new_cap);
+
+    ASSERT_HMAP(self);
+
+    return st;
 }
 
 tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
@@ -648,13 +682,17 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self) {
         return TDA_STATUS_OK;
     }
 
-    return rehash(self, want);
+    const tda_Status st = rehash(self, want);
+
+    ASSERT_HMAP(self);
+
+    return st;
 }
 
 void tda_hmap_swap(tda_HMap *self, tda_HMap *other) {
     ASSERT_HMAP(self);
     ASSERT_HMAP(other);
-    EXPECT_SAME_LAYOUTS(self, other);
+    EXPECT_SAME_HMAP(self, other);
 
     if (self == other) {
         return;
@@ -689,6 +727,10 @@ void tda_hmap_fprint(const tda_HMap *self, FILE *stream, tda_FPrint key_fprint, 
 }
 
 void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_fprint) {
+    ASSERT_HMAP(self);
+    assert(key_fprint);
+    assert(val_fprint);
+
     tda_hmap_fprint(self, stdout, key_fprint, val_fprint);
 }
 

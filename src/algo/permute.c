@@ -191,8 +191,8 @@ void tda_span_shuffle(tda_SpanMut s, tda_Rng *rng) {
 
 void tda_span_shuffle_prefix(tda_SpanMut s, size_t count, tda_Rng *rng) {
     TDA_SPAN_ASSERT(s);
-    TDA_EXPECT(count <= s.len);
     assert(rng);
+    TDA_EXPECT(count <= s.len);
 
     // the same walk from the other end, so stopping early leaves the settled positions
     // at the front
