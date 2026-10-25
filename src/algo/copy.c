@@ -19,7 +19,7 @@ void tda_span_copy(tda_SpanMut dst, tda_Span src) {
         return;
     }
 
-    memcpy(dst.data, src.data, dst.len * dst.elem.size);
+    memcpy(dst.data, src.data, tda_span_bytes(src));
 }
 
 size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx) {
@@ -52,7 +52,7 @@ void tda_span_copy_overlapping(tda_SpanMut dst, tda_Span src) {
         return;
     }
 
-    memmove(dst.data, src.data, dst.len * dst.elem.size);
+    memmove(dst.data, src.data, tda_span_bytes(src));
 }
 
 size_t tda_span_sample(tda_SpanMut dst, tda_Span src, tda_Rng *rng) {

@@ -4,6 +4,7 @@
 #include "tda/core/util.h"
 
 #include "internal/hmap_impl.h"
+#include "internal/order.h"
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -283,9 +284,12 @@ tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap *out) {
         return st;
     }
 
-    for (const tda_HMapNode *node = first_from(self, 0); node; node = tda_hmap_node_next(self, node)) {
+    // the keys are distinct and the copy hashes as the source does, so each node goes
+    // straight in under its cached hash, with no search and no hasher call
+    for (const tda_HMapNode *node = first_from(self, 0); node; node = next_node(self, node)) {
         const void *val = self->val_.size > 0 ? node_val(self, node) : nullptr;
-        st = tda_hmap_insert(&obj, node_key(self, node), val, nullptr);
+        tda_HMapNode *added;
+        st = add_node(&obj, node_key(self, node), val, node->hash, &added);
         if (TDA_STATUS_IS_ERR(st)) {
             tda_hmap_deinit(&obj);
             return st;
@@ -670,7 +674,7 @@ void tda_hmap_fprint(const tda_HMap *self, FILE *stream, tda_FPrint key_fprint, 
 
     fputc('{', stream);
     bool first = true;
-    for (const tda_HMapNode *node = first_from(self, 0); node; node = tda_hmap_node_next(self, node)) {
+    for (const tda_HMapNode *node = first_from(self, 0); node; node = next_node(self, node)) {
         if (!first) {
             fputs(", ", stream);
         }
@@ -922,10 +926,7 @@ static bool eq_impl(const tda_HMap *a, const tda_HMap *b, tda_Eq val_eq, void *c
                 return false;
             }
 
-            const void *lhs = node_val(a, node);
-            const void *rhs = node_val(b, found);
-            const bool same = val_eq ? val_eq(lhs, rhs, ctx) : memcmp(lhs, rhs, a->val_.size) == 0;
-            if (!same) {
+            if (!tda_elem_eq(val_eq, ctx, node_val(a, node), node_val(b, found), a->val_.size)) {
                 return false;
             }
         }

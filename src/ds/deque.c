@@ -2,6 +2,7 @@
 
 #include "tda/core/check.h"
 
+#include "internal/order.h"
 #include "internal/ptr.h"
 
 #include <assert.h>
@@ -103,6 +104,9 @@ static void copy_out(const tda_Deque *self, void *dst);
 static void copy_range_in(tda_Deque *self, size_t idx, const void *src, size_t count);
 
 static void move_elem(tda_Deque *self, size_t to, size_t from);
+
+/// memmove over indices: 'count' elems from 'from' to 'to', the ranges may overlap
+static void move_elems(tda_Deque *self, size_t to, size_t from, size_t count);
 
 /* ========== lifetime ========== */
 
@@ -536,16 +540,12 @@ void tda_deque_remove_range(tda_Deque *self, size_t idx, size_t count) {
         return;
     }
 
+    // whichever side is shorter slides over the gap
     if (idx < self->len_ - idx - count) {
-        // the front side is shorter: slide it forward over the gap, back elem first
-        for (size_t i = idx; i > 0; --i) {
-            move_elem(self, i - 1 + count, i - 1);
-        }
+        move_elems(self, count, 0, idx);
         self->head_ = slot_fwd(self, self->head_, count);
     } else {
-        for (size_t i = idx; i + count < self->len_; ++i) {
-            move_elem(self, i, i + count);
-        }
+        move_elems(self, idx, idx + count, self->len_ - idx - count);
     }
 
     self->len_ -= count;
@@ -616,22 +616,15 @@ static tda_Status insert_raw(tda_Deque *self, size_t idx, const void *src, size_
         }
     }
 
-    // whichever side is shorter is shifted to open a gap 'count' wide. The two sides move
-    // in opposite directions, so each loop runs the way that reads an elem before
-    // anything is written over it
-    if (idx < self->len_ - idx) {
+    // whichever side is shorter is shifted to open a gap 'count' wide
+    const size_t old_len = self->len_;
+    if (idx < old_len - idx) {
         self->head_ = slot_back(self, self->head_, count);
         self->len_ = new_len;
-
-        for (size_t i = 0; i < idx; ++i) {
-            move_elem(self, i, i + count);
-        }
+        move_elems(self, 0, count, idx);
     } else {
         self->len_ = new_len;
-
-        for (size_t i = new_len - 1; i >= idx + count; --i) {
-            move_elem(self, i, i - count);
-        }
+        move_elems(self, idx + count, idx, old_len - idx);
     }
 
     copy_range_in(self, idx, src, count);
@@ -747,7 +740,7 @@ static bool eq_impl(const tda_Deque *a, const tda_Deque *b, tda_Eq eq, void *ctx
     for (size_t i = 0; i < a->len_; ++i) {
         const void *lhs = elem_at(a, i);
         const void *rhs = elem_at(b, i);
-        if (eq ? !eq(lhs, rhs, ctx) : memcmp(lhs, rhs, a->elem_.size) != 0) {
+        if (!tda_elem_eq(eq, ctx, lhs, rhs, a->elem_.size)) {
             return false;
         }
     }
@@ -861,4 +854,18 @@ static void copy_range_in(tda_Deque *self, size_t idx, const void *src, size_t c
 static void move_elem(tda_Deque *self, size_t to, size_t from) {
     // two distinct slots of the same ring, so they never overlap
     memcpy(elem_at_mut(self, to), elem_at_mut(self, from), self->elem_.size);
+}
+
+static void move_elems(tda_Deque *self, size_t to, size_t from, size_t count) {
+    // each elem is read before anything is written over it: moving down walks up, moving
+    // up walks down
+    if (to < from) {
+        for (size_t i = 0; i < count; ++i) {
+            move_elem(self, to + i, from + i);
+        }
+    } else {
+        for (size_t i = count; i > 0; --i) {
+            move_elem(self, to + i - 1, from + i - 1);
+        }
+    }
 }

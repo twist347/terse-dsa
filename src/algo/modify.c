@@ -103,8 +103,9 @@ void tda_span_replace_if(tda_SpanMut s, tda_Pred pred, void *ctx, const void *va
     const tda_Span view = tda_span_mut_to_span(s);
 
     for (size_t i = 0; i < s.len; ++i) {
+        // tda_span_set: 'val' may be one of the elems
         if (pred(tda_span_get(view, i), ctx)) {
-            memcpy(tda_span_get_mut(s, i), val, s.elem.size);
+            tda_span_set(s, i, val);
         }
     }
 }

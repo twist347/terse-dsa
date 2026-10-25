@@ -40,6 +40,12 @@ static size_t words_for(size_t nbits);
 [[nodiscard]]
 static size_t words_bytes(const tda_BitSet *self);
 
+/// the words of 'src' over those of 'dst', which has as many
+static void copy_words(tda_BitSet *dst, const tda_BitSet *src);
+
+/// every byte of the words set to 'byte'
+static void fill_words(tda_BitSet *self, unsigned char byte);
+
 [[nodiscard]]
 static size_t word_of(size_t idx);
 
@@ -130,9 +136,7 @@ tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al *al, tda_BitSet *
         return st;
     }
 
-    if (self->nwords_ > 0) {
-        memcpy(copy.words_, self->words_, words_bytes(self));
-    }
+    copy_words(&copy, self);
 
     *out = copy;
 
@@ -160,9 +164,7 @@ tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other) {
 
     self->nbits_ = other->nbits_;
 
-    if (other->nwords_ > 0) {
-        memcpy(self->words_, other->words_, words_bytes(other));
-    }
+    copy_words(self, other);
 
     ASSERT_BITSET(self);
 
@@ -215,10 +217,8 @@ void tda_bitset_set_to(tda_BitSet *self, size_t idx, bool val) {
 void tda_bitset_set_all(tda_BitSet *self) {
     ASSERT_BITSET(self);
 
-    // a byte of ones is a word of ones, and memset over no bytes wants a real pointer
-    if (self->nwords_ > 0) {
-        memset(self->words_, 0xFF, words_bytes(self));
-    }
+    // a byte of ones is a word of ones
+    fill_words(self, 0xFF);
 
     clear_tail(self);
 }
@@ -226,9 +226,7 @@ void tda_bitset_set_all(tda_BitSet *self) {
 void tda_bitset_reset_all(tda_BitSet *self) {
     ASSERT_BITSET(self);
 
-    if (self->nwords_ > 0) {
-        memset(self->words_, 0, words_bytes(self));
-    }
+    fill_words(self, 0);
 }
 
 void tda_bitset_flip_all(tda_BitSet *self) {
@@ -436,6 +434,23 @@ static size_t words_bytes(const tda_BitSet *self) {
     assert(self);
 
     return self->nwords_ * sizeof(uint64_t);
+}
+
+// both skip an empty set: its words are null, and memcpy and memset want a real pointer
+// even for no bytes
+
+static void copy_words(tda_BitSet *dst, const tda_BitSet *src) {
+    assert(dst->nwords_ == src->nwords_);
+
+    if (src->nwords_ > 0) {
+        memcpy(dst->words_, src->words_, words_bytes(src));
+    }
+}
+
+static void fill_words(tda_BitSet *self, unsigned char byte) {
+    if (self->nwords_ > 0) {
+        memset(self->words_, byte, words_bytes(self));
+    }
 }
 
 static size_t word_of(size_t idx) {

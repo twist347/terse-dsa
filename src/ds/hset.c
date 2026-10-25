@@ -42,6 +42,10 @@ static bool held_by(const void *key, const void *val, void *ctx);
 [[nodiscard]]
 static bool not_held_by(const void *key, const void *val, void *ctx);
 
+/// whether every key of 'a' is in 'b'
+[[nodiscard]]
+static bool keys_all_in(const tda_HMap *a, const tda_HMap *b);
+
 /* ========== lifetime ========== */
 
 void tda_hset_init(tda_Layout key, tda_Hasher hasher, tda_Eq eq, void *ctx, tda_Al *al, tda_HSet *out) {
@@ -136,8 +140,7 @@ void tda_hset_move_assign(tda_HSet *self, tda_HSet *other) {
 bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b) {
     ASSERT_HSET(a);
     ASSERT_HSET(b);
-    TDA_EXPECT(tda_layout_eq(tda_hmap_key_layout(&a->map_), tda_hmap_key_layout(&b->map_)));
-    TDA_EXPECT(tda_hmap_key_eq(&a->map_) == tda_hmap_key_eq(&b->map_));
+    EXPECT_SAME_KEYS(a, b);
 
     if (a == b) {
         return true;
@@ -148,13 +151,7 @@ bool tda_hset_eq(const tda_HSet *a, const tda_HSet *b) {
     }
 
     // not tda_hmap_eq: the map's value has size 0, so there are no values to compare
-    TDA_HMAP_FOR_EACH(node, &a->map_) {
-        if (!tda_hmap_contains(&b->map_, tda_hmap_node_key(&a->map_, node))) {
-            return false;
-        }
-    }
-
-    return true;
+    return keys_all_in(&a->map_, &b->map_);
 }
 
 /* ========== lookup ========== */
@@ -393,13 +390,7 @@ bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other) {
         return false;
     }
 
-    TDA_HMAP_FOR_EACH(node, &self->map_) {
-        if (!tda_hmap_contains(&other->map_, tda_hmap_node_key(&self->map_, node))) {
-            return false;
-        }
-    }
-
-    return true;
+    return keys_all_in(&self->map_, &other->map_);
 }
 
 bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other) {
@@ -461,4 +452,14 @@ static bool held_by(const void *key, const void *, void *ctx) {
 
 static bool not_held_by(const void *key, const void *, void *ctx) {
     return !tda_hmap_contains(*(const tda_HMap **) ctx, key);
+}
+
+static bool keys_all_in(const tda_HMap *a, const tda_HMap *b) {
+    TDA_HMAP_FOR_EACH(node, a) {
+        if (!tda_hmap_contains(b, tda_hmap_node_key(a, node))) {
+            return false;
+        }
+    }
+
+    return true;
 }

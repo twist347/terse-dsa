@@ -38,6 +38,9 @@ static void fill(tda_Pool *obj, tda_Al *parent, void *data, tda_Layout block, si
 
 static void build_free_list(tda_Pool *self);
 
+/// makes 'block' the head of the free list
+static void push_free(tda_Pool *self, void *block);
+
 /// the block array, whose size fits: the constructor checked the product
 [[nodiscard]]
 static tda_Layout array_layout(const tda_Pool *self);
@@ -182,10 +185,7 @@ static void pool_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     TDA_EXPECT(self->used_ > 0);
     TDA_EXPECT(ptr != self->free_head_);
 
-    // push onto free list
-    FreeBlock *node = ptr;
-    node->next = self->free_head_;
-    self->free_head_ = node;
+    push_free(self, ptr);
     --self->used_;
 }
 
@@ -237,10 +237,14 @@ static void build_free_list(tda_Pool *self) {
 
     // build list in reverse so that first alloc returns the first block
     for (size_t i = self->block_count_; i > 0; --i) {
-        FreeBlock *node = (FreeBlock *) tda_byte_offset_mut(self->data_, self->block_size_, i - 1);
-        node->next = self->free_head_;
-        self->free_head_ = node;
+        push_free(self, tda_byte_offset_mut(self->data_, self->block_size_, i - 1));
     }
+}
+
+static void push_free(tda_Pool *self, void *block) {
+    FreeBlock *node = block;
+    node->next = self->free_head_;
+    self->free_head_ = node;
 }
 
 static tda_Layout array_layout(const tda_Pool *self) {

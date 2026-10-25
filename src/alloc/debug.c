@@ -94,9 +94,17 @@ static size_t table_home(const BlockTable *table, uintptr_t addr);
 [[nodiscard]]
 static size_t table_probe(const BlockTable *table, uintptr_t addr);
 
+/// doubles the slots and rehashes every entry into them; false when refused
+[[nodiscard]]
+static bool table_grow(BlockTable *table);
+
 /// records a new block; false when the table could not grow
 [[nodiscard]]
 static bool table_insert(BlockTable *table, BlockRecord entry);
+
+/// copies the entry for 'addr' out and leaves it in; false when there is none
+[[nodiscard]]
+static bool table_find(const BlockTable *table, uintptr_t addr, BlockRecord *out);
 
 /// takes the entry for 'addr' out; false when there is none
 [[nodiscard]]
@@ -291,9 +299,7 @@ static BlockRecord checked_entry(tda_Debug *self, const void *ptr, tda_Layout la
     const uintptr_t addr = (uintptr_t) ptr;
 
     BlockRecord entry;
-    const bool found = take
-        ? table_take(table, addr, &entry)
-        : table->cap > 0 && (entry = table->slots[table_probe(table, addr)]).addr != 0;
+    const bool found = take ? table_take(table, addr, &entry) : table_find(table, addr, &entry);
     if (!found) {
         for (size_t i = 0; i < self->quarantine_len_; ++i) {
             const FreedBlock *freed = quarantined(self, i);
@@ -305,7 +311,7 @@ static BlockRecord checked_entry(tda_Debug *self, const void *ptr, tda_Layout la
         report("%p was not handed out by this allocator, or was freed long ago", ptr);
     }
 
-    if (entry.layout.size != layout.size || entry.layout.align != layout.align) {
+    if (!tda_layout_eq(entry.layout, layout)) {
         report(
             "block #%llu at %p made with %zu bytes at %zu, %s with %zu at %zu",
             (unsigned long long) entry.serial, ptr, entry.layout.size, entry.layout.align,
@@ -407,24 +413,30 @@ static size_t table_probe(const BlockTable *table, uintptr_t addr) {
     return i;
 }
 
+static bool table_grow(BlockTable *table) {
+    const size_t new_cap = table->cap ? 2 * table->cap : TABLE_MIN_CAP;
+    BlockRecord *slots = TDA_ALLOC_ZEROED(BlockRecord, tda_al_default(), new_cap);
+    if (!slots) {
+        return false;
+    }
+
+    const BlockTable old = *table;
+    *table = (BlockTable){.slots = slots, .cap = new_cap, .len = old.len};
+    for (size_t i = 0; i < old.cap; ++i) {
+        if (old.slots[i].addr != 0) {
+            table->slots[table_probe(table, old.slots[i].addr)] = old.slots[i];
+        }
+    }
+    TDA_DEALLOC(BlockRecord, tda_al_default(), old.slots, old.cap);
+
+    return true;
+}
+
 static bool table_insert(BlockTable *table, BlockRecord entry) {
     assert(entry.addr != 0);
 
-    if (2 * (table->len + 1) > table->cap) {
-        const size_t new_cap = table->cap ? 2 * table->cap : TABLE_MIN_CAP;
-        BlockRecord *slots = TDA_ALLOC_ZEROED(BlockRecord, tda_al_default(), new_cap);
-        if (!slots) {
-            return false;
-        }
-
-        const BlockTable old = *table;
-        *table = (BlockTable){.slots = slots, .cap = new_cap, .len = old.len};
-        for (size_t i = 0; i < old.cap; ++i) {
-            if (old.slots[i].addr != 0) {
-                table->slots[table_probe(table, old.slots[i].addr)] = old.slots[i];
-            }
-        }
-        TDA_DEALLOC(BlockRecord, tda_al_default(), old.slots, old.cap);
+    if (2 * (table->len + 1) > table->cap && !table_grow(table)) {
+        return false;
     }
 
     const size_t i = table_probe(table, entry.addr);
@@ -432,6 +444,21 @@ static bool table_insert(BlockTable *table, BlockRecord entry) {
 
     table->slots[i] = entry;
     ++table->len;
+
+    return true;
+}
+
+static bool table_find(const BlockTable *table, uintptr_t addr, BlockRecord *out) {
+    if (table->cap == 0) {
+        return false;
+    }
+
+    const BlockRecord *slot = &table->slots[table_probe(table, addr)];
+    if (slot->addr == 0) {
+        return false;
+    }
+
+    *out = *slot;
 
     return true;
 }

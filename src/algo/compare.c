@@ -21,7 +21,7 @@ bool tda_span_eq(tda_Span a, tda_Span b) {
         return true;
     }
 
-    return memcmp(a.data, b.data, a.len * a.elem.size) == 0;
+    return memcmp(a.data, b.data, tda_span_bytes(a)) == 0;
 }
 
 bool tda_span_eq_by(tda_Span a, tda_Span b, tda_Eq eq, void *ctx) {

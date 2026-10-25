@@ -103,6 +103,15 @@ static tda_ListNode *find_node(const tda_List *self, const void *key, tda_Eq eq,
 
 static void clear_nodes(tda_List *self);
 
+/// the node 'n' steps on from 'node', or null when the chain ends first
+[[nodiscard]]
+static tda_ListNode *skip(tda_ListNode *node, size_t n);
+
+/// copies the elems of 'owner' from 'from' on to the back of 'dst'; on failure the
+/// nodes of 'dst' are freed
+[[nodiscard]]
+static tda_Status push_copies(tda_List *dst, const tda_List *owner, const tda_ListNode *from);
+
 [[nodiscard]] [[maybe_unused]]
 static bool owns_node(const tda_List *self, const tda_ListNode *node);
 
@@ -199,12 +208,9 @@ tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List *out) {
     tda_List obj;
     tda_list_init(self->elem_, al, &obj);
 
-    for (const tda_ListNode *node = self->head_; node; node = node->next) {
-        const tda_Status st = tda_list_push_back(&obj, elem_of(self, node));
-        if (TDA_STATUS_IS_ERR(st)) {
-            tda_list_deinit(&obj);
-            return st;
-        }
+    const tda_Status st = push_copies(&obj, self, self->head_);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
     }
 
     *out = obj;
@@ -221,25 +227,14 @@ tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other) {
         return TDA_STATUS_OK;
     }
 
-    const tda_ListNode *src = other->head_;
-    const tda_ListNode *dst = self->head_;
-
-    while (src && dst) {
-        src = src->next;
-        dst = dst->next;
-    }
-
-    // 'src' is the first elem with no node in the target; those nodes are allocated up
-    // front, so a failure happens before any mutation
+    // the elems past the target's length have no node in it; those nodes are allocated
+    // up front, so a failure happens before any mutation
     tda_List spare;
     tda_list_init(self->elem_, self->al_, &spare);
 
-    for (const tda_ListNode *node = src; node; node = node->next) {
-        const tda_Status st = tda_list_push_back(&spare, elem_of(other, node));
-        if (TDA_STATUS_IS_ERR(st)) {
-            clear_nodes(&spare);
-            return st;
-        }
+    const tda_Status st = push_copies(&spare, other, skip(other->head_, self->len_));
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
     }
 
     // from here on nothing can fail
@@ -846,7 +841,7 @@ static bool eq_impl(const tda_List *a, const tda_List *b, tda_Eq eq, void *ctx) 
     for (const tda_ListNode *node_a = a->head_, *node_b = b->head_; node_a; node_a = node_a->next, node_b = node_b->next) {
         const void *lhs = elem_of(a, node_a);
         const void *rhs = elem_of(b, node_b);
-        if (eq ? !eq(lhs, rhs, ctx) : memcmp(lhs, rhs, a->elem_.size) != 0) {
+        if (!tda_elem_eq(eq, ctx, lhs, rhs, a->elem_.size)) {
             return false;
         }
     }
@@ -879,6 +874,26 @@ static void clear_nodes(tda_List *self) {
     }
 
     set_empty(self);
+}
+
+static tda_ListNode *skip(tda_ListNode *node, size_t n) {
+    for (; node && n > 0; --n) {
+        node = node->next;
+    }
+
+    return node;
+}
+
+static tda_Status push_copies(tda_List *dst, const tda_List *owner, const tda_ListNode *from) {
+    for (const tda_ListNode *node = from; node; node = node->next) {
+        const tda_Status st = tda_list_push_back(dst, elem_of(owner, node));
+        if (TDA_STATUS_IS_ERR(st)) {
+            clear_nodes(dst);
+            return st;
+        }
+    }
+
+    return TDA_STATUS_OK;
 }
 
 static tda_ListNode *merge_chains(const tda_List *self, tda_ListNode *a, tda_ListNode *b, tda_Cmp cmp, void *ctx) {
@@ -914,10 +929,7 @@ static tda_ListNode *sort_chain(const tda_List *self, tda_ListNode *head, size_t
     const size_t half = len / 2;
 
     // walk to the last node of the left half, so the chain can be cut after it
-    tda_ListNode *left_tail = head;
-    for (size_t i = 1; i < half; ++i) {
-        left_tail = left_tail->next;
-    }
+    tda_ListNode *left_tail = skip(head, half - 1);
 
     tda_ListNode *right = left_tail->next;
     left_tail->next = nullptr;

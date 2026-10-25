@@ -7,8 +7,9 @@ void tda_span_fill(tda_SpanMut s, const void *val) {
     TDA_SPAN_ASSERT(s);
     assert(val);
 
+    // tda_span_set: 'val' may be one of the elems
     for (size_t i = 0; i < s.len; ++i) {
-        memcpy(tda_span_get_mut(s, i), val, s.elem.size);
+        tda_span_set(s, i, val);
     }
 }
 

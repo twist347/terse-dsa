@@ -23,6 +23,10 @@ static constexpr size_t INSERTION_THRESHOLD = 16;
 // memmove; above it every step is a swap
 static constexpr size_t INSERTION_HELD_MAX = 256;
 
+/// the inclusive range [left, right] as a span
+[[nodiscard]]
+static tda_SpanMut closed_range(tda_SpanMut s, size_t left, size_t right);
+
 [[nodiscard]]
 static size_t median3(tda_Span s, size_t a, size_t b, size_t c, tda_Cmp cmp, void *ctx);
 
@@ -183,7 +187,7 @@ void tda_span_nth_elem(tda_SpanMut s, size_t nth, tda_Cmp cmp, void *ctx) {
         // the same depth ceiling as in sort: past it the pivots have gone bad.
         // Sorting the rest settles nth too, in O(n log n) whatever the data
         if (depth == 0) {
-            tda_span_sort(tda_span_sub_mut(s, left, right - left + 1), cmp, ctx);
+            tda_span_sort(closed_range(s, left, right), cmp, ctx);
             return;
         }
         --depth;
@@ -319,14 +323,14 @@ static size_t depth_limit(size_t len) {
 static void quicksort(tda_SpanMut s, size_t left, size_t right, size_t depth, tda_Cmp cmp, void *ctx) {
     while (left < right) {
         if (right - left + 1 <= INSERTION_THRESHOLD) {
-            tda_span_insertion_sort(tda_span_sub_mut(s, left, right - left + 1), cmp, ctx);
+            tda_span_insertion_sort(closed_range(s, left, right), cmp, ctx);
             return;
         }
 
         // deeper than balanced partitions would ever go, so the pivots have gone
         // bad; heapsort is O(n log n) whatever the data, which caps the worst case
         if (depth == 0) {
-            const tda_SpanMut range = tda_span_sub_mut(s, left, right - left + 1);
+            const tda_SpanMut range = closed_range(s, left, right);
             tda_span_make_heap(range, cmp, ctx);
             tda_span_sort_heap(range, cmp, ctx);
             return;
@@ -361,4 +365,8 @@ static void quicksort(tda_SpanMut s, size_t left, size_t right, size_t depth, td
             right = lt - 1;
         }
     }
+}
+
+static tda_SpanMut closed_range(tda_SpanMut s, size_t left, size_t right) {
+    return tda_span_sub_mut(s, left, right - left + 1);
 }

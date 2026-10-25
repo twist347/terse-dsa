@@ -34,6 +34,9 @@ struct tda_SlabChunk_ {
     Chunk *next;
 };
 
+// the bytes of a chunk left for blocks, and so where its link sits
+static constexpr size_t CHUNK_ROOM = CHUNK_BYTES - sizeof(Chunk);
+
 typedef struct tda_SlabFree_ FreeBlock;
 
 struct tda_SlabFree_ {
@@ -60,6 +63,10 @@ static void slab_dealloc(void *ctx, void *ptr, tda_Layout layout);
 /// a request meets the class table
 [[nodiscard]]
 static size_t class_of(tda_Layout layout);
+
+/// whether a block too large for any class stays so at 'new_size'
+[[nodiscard]]
+static bool stays_large(tda_Layout old, size_t new_size);
 
 /// the chunk whose link is 'chunk', from its first byte
 [[nodiscard]]
@@ -175,16 +182,12 @@ static bool slab_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
 
     const tda_Slab *self = ctx;
 
-    const tda_Layout new_layout = {.size = new_size, .align = old.align};
-    const size_t old_class = class_of(old);
-    const size_t new_class = class_of(new_layout);
-
-    if (old_class == CLASS_COUNT && new_class == CLASS_COUNT) {
+    if (stays_large(old, new_size)) {
         return tda_resize(self->parent_, ptr, old, new_size);
     }
 
     // one class on both sides: the block already has the room
-    return old_class == new_class;
+    return class_of(old) == class_of((tda_Layout){.size = new_size, .align = old.align});
 }
 
 static void *slab_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
@@ -192,8 +195,7 @@ static void *slab_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
 
     const tda_Slab *self = ctx;
 
-    const tda_Layout new_layout = {.size = new_size, .align = old.align};
-    if (class_of(old) == CLASS_COUNT && class_of(new_layout) == CLASS_COUNT) {
+    if (stays_large(old, new_size)) {
         return tda_remap(self->parent_, ptr, old, new_size);
     }
 
@@ -243,8 +245,14 @@ static size_t class_of(tda_Layout layout) {
     return CLASS_COUNT;
 }
 
+static bool stays_large(tda_Layout old, size_t new_size) {
+    const tda_Layout new_layout = {.size = new_size, .align = old.align};
+
+    return class_of(old) == CLASS_COUNT && class_of(new_layout) == CLASS_COUNT;
+}
+
 static unsigned char *chunk_start(Chunk *chunk) {
-    return (unsigned char *) chunk - (CHUNK_BYTES - sizeof(Chunk));
+    return (unsigned char *) chunk - CHUNK_ROOM;
 }
 
 static tda_Layout chunk_layout() {
@@ -257,7 +265,7 @@ static bool add_chunk(tda_Slab *self, SizeClass *cls) {
         return false;
     }
 
-    Chunk *chunk = (Chunk *) (bytes + CHUNK_BYTES - sizeof(Chunk));
+    Chunk *chunk = (Chunk *) (bytes + CHUNK_ROOM);
     chunk->next = self->chunks_;
     self->chunks_ = chunk;
     ++self->chunk_count_;
@@ -275,7 +283,7 @@ static bool owns_block(const tda_Slab *self, const void *ptr) {
 
     for (const Chunk *chunk = self->chunks_; chunk; chunk = chunk->next) {
         const uintptr_t end = (uintptr_t) chunk;
-        const uintptr_t begin = end - (CHUNK_BYTES - sizeof(Chunk));
+        const uintptr_t begin = end - CHUNK_ROOM;
         if (addr >= begin && addr < end) {
             return true;
         }
