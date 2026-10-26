@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.1.0 — unreleased
+## 3.1.0 — 2026-10-26
 
 Additions only, and one change of placement that nothing promised.
 
