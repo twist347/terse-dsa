@@ -418,7 +418,7 @@ static inline tda_Stack *tda_stack_typed_mut_(tda_Stack *self, [[maybe_unused]] 
 /// @param[out] out where the new stack is written
 /// @bigo{n}
 #define TDA_STACK_FROM_DATA(T, data, len, al, out) \
-    tda_stack_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
+    tda_stack_from_data((const typeof(T) *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new stack from the elems written out: TDA_STACK_OF(int32_t, al, &s, 5, 3, 1)
 /// @param T the elem type
@@ -426,10 +426,10 @@ static inline tda_Stack *tda_stack_typed_mut_(tda_Stack *self, [[maybe_unused]] 
 /// @param[out] out where the new stack is written
 /// @param ... the elems, bottom to top, as a T initializer list, not empty
 /// @bigo{n}
-#define TDA_STACK_OF(T, al, out, ...)                   \
-    tda_stack_from_data(                                \
-        (const T[]){ __VA_ARGS__ },                     \
-        sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
+#define TDA_STACK_OF(T, al, out, ...)                           \
+    tda_stack_from_data(                                        \
+        (const typeof(T)[]){ __VA_ARGS__ },                     \
+        sizeof((const typeof(T)[]){ __VA_ARGS__ }) / sizeof(T), \
         TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_stack_top as a const T *
@@ -437,7 +437,7 @@ static inline tda_Stack *tda_stack_typed_mut_(tda_Stack *self, [[maybe_unused]] 
 /// @param self the stack
 /// @bigo{1}
 #define TDA_STACK_TOP_AS(T, self) \
-    ((const T *) tda_stack_top(TDA_STACK_TYPED_(T, self)))
+    ((const typeof(T) *) tda_stack_top(TDA_STACK_TYPED_(T, self)))
 
 /// tda_stack_top_mut as a T *
 /// @copydetails TDA_STACK_TOP_AS

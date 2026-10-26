@@ -143,7 +143,7 @@ tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other);
 /// included, leaving 'other' empty on that allocator
 /// @param[in,out] self must have the same elem layout
 /// @param[in,out] other emptied and still usable; may be 'self'
-/// @bigo{1}
+/// @bigo{k} for the k old nodes of 'self', freed one by one
 TDA_API
 void tda_list_move_assign(tda_List *self, tda_List *other);
 
@@ -595,7 +595,7 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// @param[out] out where the new list is written
 /// @bigo{n}
 #define TDA_LIST_FROM_DATA(T, data, len, al, out) \
-    tda_list_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
+    tda_list_from_data((const typeof(T) *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new list from the elems written out: TDA_LIST_OF(int32_t, al, &l, 5, 3, 1)
 /// @param T the elem type
@@ -603,10 +603,10 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// @param[out] out where the new list is written
 /// @param ... the elems, front to back, as a T initializer list, not empty
 /// @bigo{n}
-#define TDA_LIST_OF(T, al, out, ...)                    \
-    tda_list_from_data(                                 \
-        (const T[]){ __VA_ARGS__ },                     \
-        sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
+#define TDA_LIST_OF(T, al, out, ...)                            \
+    tda_list_from_data(                                         \
+        (const typeof(T)[]){ __VA_ARGS__ },                     \
+        sizeof((const typeof(T)[]){ __VA_ARGS__ }) / sizeof(T), \
         TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_list_front as a const T *
@@ -614,7 +614,7 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// @param self the list
 /// @bigo{1}
 #define TDA_LIST_FRONT_AS(T, self) \
-    ((const T *) tda_list_front(TDA_LIST_TYPED_(T, self)))
+    ((const typeof(T) *) tda_list_front(TDA_LIST_TYPED_(T, self)))
 
 /// tda_list_front_mut as a T *
 /// @copydetails TDA_LIST_FRONT_AS
@@ -624,7 +624,7 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// tda_list_back as a const T *
 /// @copydetails TDA_LIST_FRONT_AS
 #define TDA_LIST_BACK_AS(T, self) \
-    ((const T *) tda_list_back(TDA_LIST_TYPED_(T, self)))
+    ((const typeof(T) *) tda_list_back(TDA_LIST_TYPED_(T, self)))
 
 /// tda_list_back_mut as a T *
 /// @copydetails TDA_LIST_FRONT_AS
@@ -677,7 +677,7 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// @param node the position
 /// @bigo{1}
 #define TDA_LIST_NODE_ELEM_AS(T, self, node) \
-    ((const T *) tda_list_node_elem(TDA_LIST_TYPED_(T, self), (node)))
+    ((const typeof(T) *) tda_list_node_elem(TDA_LIST_TYPED_(T, self), (node)))
 
 /// tda_list_node_elem_mut as a T *
 /// @copydetails TDA_LIST_NODE_ELEM_AS

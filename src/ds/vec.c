@@ -507,7 +507,9 @@ int tda_vec_print(const tda_Vec *self, tda_FPrint fprint, void *ctx) {
     ASSERT_VEC(self);
     assert(fprint);
 
-    return tda_fprint_join_(tda_vec_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
+    const int rc = tda_vec_fprint(self, stdout, fprint, ctx);
+
+    return tda_fprint_join_(rc, fputc('\n', stdout));
 }
 
 /* ========== internals ========== */

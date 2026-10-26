@@ -32,8 +32,8 @@
 /// tda_Status, and out-of-range indices assert. A view must not outlive what it views,
 /// nor survive an op that moves the source block; nothing checks that.
 ///
-/// The typed macros write 'const T', so an elem type already spelled with const needs a
-/// typedef of its own.
+/// The typed macros write 'const typeof(T)', so T may be any type name, a pointer type
+/// such as 'const char *' or one already const included.
 ///
 /// @par Example
 /// @snippet core/example_span.c build
@@ -363,7 +363,7 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 /// @param len elems in the view
 /// @bigo{1}
 #define TDA_SPAN_FROM_DATA(T, data, len) \
-    tda_span_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T))
+    tda_span_from_data((const typeof(T) *){ (data) }, (len), TDA_LAYOUT_OF(T))
 
 /// tda_span_from_data_mut with TDA_LAYOUT_OF(T)
 /// @param T the elem type
@@ -380,10 +380,10 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 ///            length, and an empty list builds one only as a compiler extension
 /// @warning the elems are a compound literal, gone at the end of the enclosing block
 /// @bigo{1}
-#define TDA_SPAN_OF(T, ...)                             \
-    tda_span_from_data(                                 \
-        (const T[]){ __VA_ARGS__ },                     \
-        sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
+#define TDA_SPAN_OF(T, ...)                                     \
+    tda_span_from_data(                                         \
+        (const typeof(T)[]){ __VA_ARGS__ },                     \
+        sizeof((const typeof(T)[]){ __VA_ARGS__ }) / sizeof(T), \
         TDA_LAYOUT_OF(T))
 
 /// TDA_SPAN_OF, writable
@@ -403,7 +403,7 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 /// @param idx the index
 /// @bigo{1}
 #define TDA_SPAN_GET_AS(T, self, idx) \
-    ((const T *) tda_span_get(tda_span_typed_((self), TDA_LAYOUT_OF(T)), (idx)))
+    ((const typeof(T) *) tda_span_get(tda_span_typed_((self), TDA_LAYOUT_OF(T)), (idx)))
 
 /// tda_span_get_mut as a T *
 /// @param T the elem type
@@ -432,7 +432,7 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 #define TDA_SPAN_FOR_EACH_AS(T, elem, self)        \
     TDA_SPAN_WALK_(                                \
         tda_Span,                                  \
-        const T,                                   \
+        const typeof(T),                           \
         elem,                                      \
         tda_span_typed_((self), TDA_LAYOUT_OF(T)), \
         TDA_LINE_NAME_(span_),                     \

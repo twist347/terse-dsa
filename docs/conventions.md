@@ -171,8 +171,8 @@ fail and returns the value.
   allocator under containers on several threads needs it even when the containers are
   never shared, since every growth reaches it.
 - **The allocator is part of a container's value.** `move_assign` and `swap` carry it
-  along with the elems, as Rust's `Vec<T, A>` does, so both are O(1) and cannot fail on
-  any two allocators; `copy_assign` keeps the target's, and `copy_with` puts a copy on
+  along with the elems, as Rust's `Vec<T, A>` does, so neither copies an elem and neither
+  can fail on any two allocators; `copy_assign` keeps the target's, and `copy_with` puts a copy on
   the one asked for.
 
 ## API contracts

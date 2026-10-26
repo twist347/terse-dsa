@@ -528,7 +528,9 @@ int tda_hset_print(const tda_HSet *self, tda_FPrint fprint, void *ctx) {
     ASSERT_HSET(self);
     assert(fprint);
 
-    return tda_fprint_join_(tda_hset_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
+    const int rc = tda_hset_fprint(self, stdout, fprint, ctx);
+
+    return tda_fprint_join_(rc, fputc('\n', stdout));
 }
 
 /* ========== internals ========== */

@@ -423,7 +423,7 @@ static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] 
 /// @param[out] out where the new queue is written
 /// @bigo{n}
 #define TDA_QUEUE_FROM_DATA(T, data, len, al, out) \
-    tda_queue_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
+    tda_queue_from_data((const typeof(T) *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new queue from the elems written out: TDA_QUEUE_OF(int32_t, al, &q, 5, 3, 1)
 /// @param T the elem type
@@ -431,10 +431,10 @@ static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] 
 /// @param[out] out where the new queue is written
 /// @param ... the elems, front to back, as a T initializer list, not empty
 /// @bigo{n}
-#define TDA_QUEUE_OF(T, al, out, ...)                   \
-    tda_queue_from_data(                                \
-        (const T[]){ __VA_ARGS__ },                     \
-        sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
+#define TDA_QUEUE_OF(T, al, out, ...)                           \
+    tda_queue_from_data(                                        \
+        (const typeof(T)[]){ __VA_ARGS__ },                     \
+        sizeof((const typeof(T)[]){ __VA_ARGS__ }) / sizeof(T), \
         TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_queue_front as a const T *
@@ -442,7 +442,7 @@ static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] 
 /// @param self the queue
 /// @bigo{1}
 #define TDA_QUEUE_FRONT_AS(T, self) \
-    ((const T *) tda_queue_front(TDA_QUEUE_TYPED_(T, self)))
+    ((const typeof(T) *) tda_queue_front(TDA_QUEUE_TYPED_(T, self)))
 
 /// tda_queue_front_mut as a T *
 /// @copydetails TDA_QUEUE_FRONT_AS
@@ -452,7 +452,7 @@ static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] 
 /// tda_queue_back as a const T *
 /// @copydetails TDA_QUEUE_FRONT_AS
 #define TDA_QUEUE_BACK_AS(T, self) \
-    ((const T *) tda_queue_back(TDA_QUEUE_TYPED_(T, self)))
+    ((const typeof(T) *) tda_queue_back(TDA_QUEUE_TYPED_(T, self)))
 
 /// tda_queue_back_mut as a T *
 /// @copydetails TDA_QUEUE_FRONT_AS

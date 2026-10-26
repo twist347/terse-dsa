@@ -475,7 +475,9 @@ int tda_bitset_fprint(const tda_BitSet *self, FILE *stream) {
 int tda_bitset_print(const tda_BitSet *self) {
     ASSERT_BITSET(self);
 
-    return tda_fprint_join_(tda_bitset_fprint(self, stdout), fputc('\n', stdout));
+    const int rc = tda_bitset_fprint(self, stdout);
+
+    return tda_fprint_join_(rc, fputc('\n', stdout));
 }
 
 /* ========== internals ========== */

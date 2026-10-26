@@ -217,7 +217,8 @@ int tda_fprint_cstr(FILE *stream, const void *val, void *ctx);
 /// @{
 
 /// @cond
-// the result of a run of writes: the first negative one, or 0 when every write went through
+// the result of a run of writes: the first negative one, or 0 when every write went through;
+// each write is a statement of its own, since C leaves open the order of a call's arguments
 [[nodiscard]]
 static inline int tda_fprint_join_(int acc, int rc) {
     return acc < 0 ? acc : rc < 0 ? rc : 0;
@@ -267,7 +268,9 @@ static inline int tda_span_print(tda_Span self, tda_FPrint fprint, void *ctx) {
     TDA_SPAN_ASSERT(self);
     assert(fprint);
 
-    return tda_fprint_join_(tda_span_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
+    const int rc = tda_span_fprint(self, stdout, fprint, ctx);
+
+    return tda_fprint_join_(rc, fputc('\n', stdout));
 }
 
 /// tda_span_print, over a writable view

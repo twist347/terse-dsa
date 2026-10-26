@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.1.1 — 2026-10-26
+
+### Fixed
+
+- **`print` ends the line after the content under gcc too.** The `*_print` of span,
+  arr, vec, deque, list, hset and bitset, and through them stack, queue and pqueue, passed
+  the write and the newline as two arguments of one call, whose order C leaves open; gcc
+  wrote the newline first, so `[1, 2]` came out as `\n[1, 2]`. hmap's was already right.
+  Broken since 3.0.0. `tda_span_print` is inline, so the consumer's compiler decided.
+- **The `*_AS` read accessors keep a pointer elem const.** They cast to `const T *`, which
+  for `T = const char *` is `const char **`, so `*TDA_VEC_GET_AS(const char *, &v, 0) =`
+  compiled and wrote; through `TDA_HMAP_NODE_KEY_AS` it lost the entry. Every typed macro
+  now writes `const typeof(T)`, so T may be any type name and no longer needs a typedef
+  when it is already const.
+- **`move_assign` of list, hmap and hset is documented O(k)** for the k old nodes it
+  frees, as 1.4.1 had it; 2.0 had put O(1) back.
+
+### Tests
+
+- **`test_ds_typed_const`** checks at compile time that every read accessor and walk
+  hands out a `const T *` for `T = const char *`.
+
 ## 3.1.0 — 2026-10-26
 
 Additions only, and one change of placement that nothing promised.

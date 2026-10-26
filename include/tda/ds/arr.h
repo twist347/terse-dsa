@@ -33,8 +33,8 @@
 /// An arr knows the layout of its elem, size and alignment, and asks the allocator for a
 /// block aligned to it. The typed macros pass TDA_LAYOUT_OF(T).
 ///
-/// The typed macros write 'const T', so an elem type already declared const needs its
-/// own typedef.
+/// The typed macros write 'const typeof(T)', so T may be any type name, a pointer type
+/// such as 'const char *' or one already const included.
 ///
 /// @par Example
 /// @snippet ds/example_arr.c build
@@ -465,7 +465,7 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
 /// @param[out] out where the new arr is written
 /// @bigo{n}
 #define TDA_ARR_FROM_DATA(T, data, len, al, out) \
-    tda_arr_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
+    tda_arr_from_data((const typeof(T) *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new arr from the elems written out: TDA_ARR_OF(int32_t, al, &a, 5, 3, 1)
 /// @param T the elem type
@@ -473,10 +473,10 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
 /// @param[out] out where the new arr is written
 /// @param ... the elems, as a T initializer list, not empty
 /// @bigo{n}
-#define TDA_ARR_OF(T, al, out, ...)                     \
-    tda_arr_from_data(                                  \
-        (const T[]){ __VA_ARGS__ },                     \
-        sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
+#define TDA_ARR_OF(T, al, out, ...)                             \
+    tda_arr_from_data(                                          \
+        (const typeof(T)[]){ __VA_ARGS__ },                     \
+        sizeof((const typeof(T)[]){ __VA_ARGS__ }) / sizeof(T), \
         TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_arr_front as a const T *
@@ -484,7 +484,7 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
 /// @param self the arr
 /// @bigo{1}
 #define TDA_ARR_FRONT_AS(T, self) \
-    ((const T *) tda_arr_front(TDA_ARR_TYPED_(T, self)))
+    ((const typeof(T) *) tda_arr_front(TDA_ARR_TYPED_(T, self)))
 
 /// tda_arr_front_mut as a T *
 /// @copydetails TDA_ARR_FRONT_AS
@@ -494,7 +494,7 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
 /// tda_arr_back as a const T *
 /// @copydetails TDA_ARR_FRONT_AS
 #define TDA_ARR_BACK_AS(T, self) \
-    ((const T *) tda_arr_back(TDA_ARR_TYPED_(T, self)))
+    ((const typeof(T) *) tda_arr_back(TDA_ARR_TYPED_(T, self)))
 
 /// tda_arr_back_mut as a T *
 /// @copydetails TDA_ARR_FRONT_AS
@@ -507,7 +507,7 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
 /// @param idx the index
 /// @bigo{1}
 #define TDA_ARR_GET_AS(T, self, idx) \
-    ((const T *) tda_arr_get(TDA_ARR_TYPED_(T, self), (idx)))
+    ((const typeof(T) *) tda_arr_get(TDA_ARR_TYPED_(T, self), (idx)))
 
 /// tda_arr_get_mut as a T *
 /// @copydetails TDA_ARR_GET_AS

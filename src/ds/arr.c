@@ -251,7 +251,9 @@ int tda_arr_print(const tda_Arr *self, tda_FPrint fprint, void *ctx) {
     ASSERT_ARR(self);
     assert(fprint);
 
-    return tda_fprint_join_(tda_arr_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
+    const int rc = tda_arr_fprint(self, stdout, fprint, ctx);
+
+    return tda_fprint_join_(rc, fputc('\n', stdout));
 }
 
 /* ========== internals ========== */

@@ -185,7 +185,7 @@ tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other);
 /// hasher, equality and ctx included, leaving 'other' empty on that allocator
 /// @param[in,out] self must have the same key and value layouts
 /// @param[in,out] other emptied and still usable; may be 'self'
-/// @bigo{1}
+/// @bigo{k} for the k old entries of 'self', freed one by one
 TDA_API
 void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other);
 
@@ -636,7 +636,7 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HMAP_GET_AS(K, V, self, key) \
-    ((const V *) tda_hmap_get(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0]))
+    ((const typeof(V) *) tda_hmap_get(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0]))
 
 /// tda_hmap_get_mut as a V *
 /// @copydetails TDA_HMAP_GET_AS
@@ -754,7 +754,7 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param node the position
 /// @bigo{1}
 #define TDA_HMAP_NODE_KEY_AS(K, self, node) \
-    ((const K *) tda_hmap_node_key(TDA_HMAP_KEY_TYPED_(K, self), (node)))
+    ((const typeof(K) *) tda_hmap_node_key(TDA_HMAP_KEY_TYPED_(K, self), (node)))
 
 /// tda_hmap_node_val as a const V *
 /// @param V the value type
@@ -762,7 +762,7 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param node the position
 /// @bigo{1}
 #define TDA_HMAP_NODE_VAL_AS(V, self, node) \
-    ((const V *) tda_hmap_node_val(TDA_HMAP_VAL_TYPED_(V, self), (node)))
+    ((const typeof(V) *) tda_hmap_node_val(TDA_HMAP_VAL_TYPED_(V, self), (node)))
 
 /// tda_hmap_node_val_mut as a V *
 /// @copydetails TDA_HMAP_NODE_VAL_AS

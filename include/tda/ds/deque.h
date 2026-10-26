@@ -631,7 +631,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// @param[out] out where the new deque is written
 /// @bigo{n}
 #define TDA_DEQUE_FROM_DATA(T, data, len, al, out) \
-    tda_deque_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
+    tda_deque_from_data((const typeof(T) *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new deque from the elems written out: TDA_DEQUE_OF(int32_t, al, &d, 5, 3, 1)
 /// @param T the elem type
@@ -639,10 +639,10 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// @param[out] out where the new deque is written
 /// @param ... the elems, front to back, as a T initializer list, not empty
 /// @bigo{n}
-#define TDA_DEQUE_OF(T, al, out, ...)                   \
-    tda_deque_from_data(                                \
-        (const T[]){ __VA_ARGS__ },                     \
-        sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
+#define TDA_DEQUE_OF(T, al, out, ...)                           \
+    tda_deque_from_data(                                        \
+        (const typeof(T)[]){ __VA_ARGS__ },                     \
+        sizeof((const typeof(T)[]){ __VA_ARGS__ }) / sizeof(T), \
         TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_deque_front as a const T *
@@ -650,7 +650,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// @param self the deque
 /// @bigo{1}
 #define TDA_DEQUE_FRONT_AS(T, self) \
-    ((const T *) tda_deque_front(TDA_DEQUE_TYPED_(T, self)))
+    ((const typeof(T) *) tda_deque_front(TDA_DEQUE_TYPED_(T, self)))
 
 /// tda_deque_front_mut as a T *
 /// @copydetails TDA_DEQUE_FRONT_AS
@@ -660,7 +660,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// tda_deque_back as a const T *
 /// @copydetails TDA_DEQUE_FRONT_AS
 #define TDA_DEQUE_BACK_AS(T, self) \
-    ((const T *) tda_deque_back(TDA_DEQUE_TYPED_(T, self)))
+    ((const typeof(T) *) tda_deque_back(TDA_DEQUE_TYPED_(T, self)))
 
 /// tda_deque_back_mut as a T *
 /// @copydetails TDA_DEQUE_FRONT_AS
@@ -690,7 +690,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 #define TDA_DEQUE_FOR_EACH_AS(T, elem, self) \
     TDA_DEQUE_WALK_(                         \
         const tda_Deque,                     \
-        const T,                             \
+        const typeof(T),                     \
         elem,                                \
         TDA_DEQUE_TYPED_(T, self),           \
         tda_deque_get,                       \
@@ -721,7 +721,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// @param idx the index, counted from the front
 /// @bigo{1}
 #define TDA_DEQUE_GET_AS(T, self, idx) \
-    ((const T *) tda_deque_get(TDA_DEQUE_TYPED_(T, self), (idx)))
+    ((const typeof(T) *) tda_deque_get(TDA_DEQUE_TYPED_(T, self), (idx)))
 
 /// tda_deque_get_mut as a T *
 /// @copydetails TDA_DEQUE_GET_AS

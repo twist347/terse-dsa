@@ -690,7 +690,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// @param[out] out where the new vec is written
 /// @bigo{n}
 #define TDA_VEC_FROM_DATA(T, data, len, al, out) \
-    tda_vec_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
+    tda_vec_from_data((const typeof(T) *){ (data) }, (len), TDA_LAYOUT_OF(T), (al), (out))
 
 /// a new vec from the elems written out: TDA_VEC_OF(int32_t, al, &v, 5, 3, 1)
 /// @param T the elem type
@@ -698,10 +698,10 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// @param[out] out where the new vec is written
 /// @param ... the elems, as a T initializer list, not empty
 /// @bigo{n}
-#define TDA_VEC_OF(T, al, out, ...)                     \
-    tda_vec_from_data(                                  \
-        (const T[]){ __VA_ARGS__ },                     \
-        sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
+#define TDA_VEC_OF(T, al, out, ...)                             \
+    tda_vec_from_data(                                          \
+        (const typeof(T)[]){ __VA_ARGS__ },                     \
+        sizeof((const typeof(T)[]){ __VA_ARGS__ }) / sizeof(T), \
         TDA_LAYOUT_OF(T), (al), (out))
 
 /// tda_vec_front as a const T *
@@ -709,7 +709,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// @param self the vec
 /// @bigo{1}
 #define TDA_VEC_FRONT_AS(T, self) \
-    ((const T *) tda_vec_front(TDA_VEC_TYPED_(T, self)))
+    ((const typeof(T) *) tda_vec_front(TDA_VEC_TYPED_(T, self)))
 
 /// tda_vec_front_mut as a T *
 /// @copydetails TDA_VEC_FRONT_AS
@@ -719,7 +719,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// tda_vec_back as a const T *
 /// @copydetails TDA_VEC_FRONT_AS
 #define TDA_VEC_BACK_AS(T, self) \
-    ((const T *) tda_vec_back(TDA_VEC_TYPED_(T, self)))
+    ((const typeof(T) *) tda_vec_back(TDA_VEC_TYPED_(T, self)))
 
 /// tda_vec_back_mut as a T *
 /// @copydetails TDA_VEC_FRONT_AS
@@ -732,7 +732,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// @param idx the index
 /// @bigo{1}
 #define TDA_VEC_GET_AS(T, self, idx) \
-    ((const T *) tda_vec_get(TDA_VEC_TYPED_(T, self), (idx)))
+    ((const typeof(T) *) tda_vec_get(TDA_VEC_TYPED_(T, self), (idx)))
 
 /// tda_vec_get_mut as a T *
 /// @copydetails TDA_VEC_GET_AS

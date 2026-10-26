@@ -437,7 +437,7 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
 /// @param[out] out where the new queue is written
 /// @bigo{n}
 #define TDA_PQUEUE_FROM_DATA(T, data, len, cmp, ctx, al, out) \
-    tda_pqueue_from_data((const T *){ (data) }, (len), TDA_LAYOUT_OF(T), (cmp), (ctx), (al), (out))
+    tda_pqueue_from_data((const typeof(T) *){ (data) }, (len), TDA_LAYOUT_OF(T), (cmp), (ctx), (al), (out))
 
 /// a new queue from the elems written out:
 /// TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, al, &q, 5, 3, 1)
@@ -448,10 +448,10 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
 /// @param[out] out where the new queue is written
 /// @param ... the elems, in any order, as a T initializer list, not empty
 /// @bigo{n}
-#define TDA_PQUEUE_OF(T, cmp, ctx, al, out, ...)        \
-    tda_pqueue_from_data(                               \
-        (const T[]){ __VA_ARGS__ },                     \
-        sizeof((const T[]){ __VA_ARGS__ }) / sizeof(T), \
+#define TDA_PQUEUE_OF(T, cmp, ctx, al, out, ...)                \
+    tda_pqueue_from_data(                                       \
+        (const typeof(T)[]){ __VA_ARGS__ },                     \
+        sizeof((const typeof(T)[]){ __VA_ARGS__ }) / sizeof(T), \
         TDA_LAYOUT_OF(T), (cmp), (ctx), (al), (out))
 
 /// tda_pqueue_top as a const T *
@@ -459,7 +459,7 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
 /// @param self the queue
 /// @bigo{1}
 #define TDA_PQUEUE_TOP_AS(T, self) \
-    ((const T *) tda_pqueue_top(TDA_PQUEUE_TYPED_(T, self)))
+    ((const typeof(T) *) tda_pqueue_top(TDA_PQUEUE_TYPED_(T, self)))
 
 /// tda_pqueue_push from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too

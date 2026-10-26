@@ -632,7 +632,9 @@ int tda_deque_print(const tda_Deque *self, tda_FPrint fprint, void *ctx) {
     ASSERT_DEQUE(self);
     assert(fprint);
 
-    return tda_fprint_join_(tda_deque_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
+    const int rc = tda_deque_fprint(self, stdout, fprint, ctx);
+
+    return tda_fprint_join_(rc, fputc('\n', stdout));
 }
 
 /* ========== internals ========== */

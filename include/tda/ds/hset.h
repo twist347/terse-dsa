@@ -150,7 +150,7 @@ tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other);
 /// hasher, equality and ctx included, leaving 'other' empty on that allocator
 /// @param[in,out] self must have the same key layout
 /// @param[in,out] other emptied and still usable; may be 'self'
-/// @bigo{1}
+/// @bigo{k} for the k old keys of 'self', freed one by one
 TDA_API
 void tda_hset_move_assign(tda_HSet *self, tda_HSet *other);
 
@@ -662,7 +662,7 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
 /// @param node the position
 /// @bigo{1}
 #define TDA_HSET_NODE_KEY_AS(K, self, node) \
-    ((const K *) tda_hset_node_key(TDA_HSET_TYPED_(K, self), (node)))
+    ((const typeof(K) *) tda_hset_node_key(TDA_HSET_TYPED_(K, self), (node)))
 
 /// @}
 
