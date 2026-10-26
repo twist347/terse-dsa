@@ -41,4 +41,17 @@ void tda_span_generate(tda_SpanMut s, tda_Gen gen, void *ctx);
 
 /// @}
 
+/// @name macros
+/// @{
+
+/// tda_span_fill from a value rather than an address
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
+/// @param s the span
+/// @param val the value to write
+/// @bigo{n}
+#define TDA_SPAN_FILL(T, s, val) \
+    tda_span_fill(tda_span_mut_typed_((s), TDA_LAYOUT_OF(T)), &(T[1]){ (val) }[0])
+
+/// @}
+
 /// @}

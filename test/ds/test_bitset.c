@@ -171,6 +171,36 @@ static void test_an_empty_universe_owns_no_words() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
+// the indices listed are in, across word seams, and the rest out
+static void test_from_span_puts_the_listed_indices_in() {
+    tda_BitSet b = {};
+    constexpr size_t n = sizeof(SEAMS) / sizeof(SEAMS[0]);
+    TDA_TEST_OK(tda_bitset_from_span(201, TDA_SPAN_FROM_DATA(size_t, SEAMS, n), tda_al_default(), &b));
+
+    assert_members(&b, 201, SEAMS, n);
+
+    tda_bitset_deinit(&b);
+}
+
+// a set has no multiplicity: an index listed twice is in once
+static void test_of_takes_indices_in_any_order_and_repeated() {
+    tda_BitSet b = {};
+    TDA_TEST_OK(TDA_BITSET_OF(70, tda_al_default(), &b, 69, 3, 64, 3));
+
+    assert_members(&b, 70, (const size_t[]){3, 64, 69}, 3);
+
+    tda_bitset_deinit(&b);
+}
+
+static void test_from_an_empty_span_holds_nothing() {
+    tda_BitSet b = {};
+    TDA_TEST_OK(tda_bitset_from_span(10, TDA_SPAN_FROM_DATA(size_t, nullptr, 0), tda_al_default(), &b));
+
+    assert_members(&b, 10, nullptr, 0);
+
+    tda_bitset_deinit(&b);
+}
+
 /* ========== one bit ========== */
 
 static void test_set_and_test_roundtrip() {
@@ -1074,6 +1104,20 @@ static void test_print_writes_to_stdout() {
 
 /* ========== allocation failure ========== */
 
+static void test_from_span_refused_words_leave_nothing_behind() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+    tda_test_probe_fail_after_next(&probe, 0);
+
+    tda_BitSet b;
+    TDA_TEST_POISON(b);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_BITSET_OF(200, al, &b, 1, 2));
+
+    TDA_TEST_ASSERT_POISONED(b);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
 static void test_refused_words_leave_nothing_behind() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);
@@ -1216,6 +1260,9 @@ int main() {
     RUN_TEST(test_deinit_twice_is_noop);
     RUN_TEST(test_deinit_hands_back_everything);
     RUN_TEST(test_an_empty_universe_owns_no_words);
+    RUN_TEST(test_from_span_puts_the_listed_indices_in);
+    RUN_TEST(test_of_takes_indices_in_any_order_and_repeated);
+    RUN_TEST(test_from_an_empty_span_holds_nothing);
 
     RUN_TEST(test_set_and_test_roundtrip);
     RUN_TEST(test_reset_takes_one_out);
@@ -1275,6 +1322,7 @@ int main() {
     RUN_TEST(test_fprint_shows_no_bit_above_the_universe);
     RUN_TEST(test_print_writes_to_stdout);
     RUN_TEST(test_refused_words_leave_nothing_behind);
+    RUN_TEST(test_from_span_refused_words_leave_nothing_behind);
     RUN_TEST(test_copy_reports_an_exhausted_arena);
     RUN_TEST(test_copy_assign_reports_a_refused_block_and_changes_nothing);
     RUN_TEST(test_copy_assign_of_the_same_universe_never_allocates);

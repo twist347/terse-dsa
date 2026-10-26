@@ -123,6 +123,37 @@ tda_Status tda_vec_from_span(tda_Span s, tda_Al al, tda_Vec *out) {
     return tda_vec_from_data(s.data, s.len, s.elem, al, out);
 }
 
+tda_Vec tda_vec_init_raw(tda_SpanMut elems, size_t cap, tda_Al al) {
+    TDA_SPAN_ASSERT(elems);
+    assert(al.vt);
+    TDA_EXPECT(elems.len <= cap);
+    TDA_EXPECT(!elems.data == (cap == 0));
+
+    // a block made as 'cap' elems has a size that fits
+    [[maybe_unused]] tda_Layout block;
+    assert(!tda_layout_ckd_array(&block, elems.elem, cap));
+
+    return (tda_Vec){
+        .data_ = elems.data,
+        .len_ = elems.len,
+        .cap_ = cap,
+        .elem_ = elems.elem,
+        .al_ = al,
+    };
+}
+
+void tda_vec_into_raw(tda_Vec *self, tda_SpanMut *out_elems, size_t *out_cap) {
+    ASSERT_VEC(self);
+    assert(out_elems);
+    assert(out_cap);
+
+    *out_elems = tda_vec_to_span_mut(self);
+    *out_cap = self->cap_;
+
+    // the block is the caller's now: forget it rather than free it
+    *self = (tda_Vec){};
+}
+
 void tda_vec_deinit(tda_Vec *self) {
     assert(self);
 

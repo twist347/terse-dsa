@@ -21,9 +21,9 @@
 ///
 /// The hasher, the equality and their ctx are fixed at construction and travel with the
 /// entries through copy and swap, since the buckets depend on the hash. Keys equal under 'eq'
-/// must hash alike. The bucket comes from the low bits of the hash, so a hasher has to
-/// spread its input over them; an identity hasher on keys that differ only in high bits
-/// sends them all to one chain. The hashers in core/hash do this.
+/// must hash alike. The map mixes the hash before it picks a bucket, so hashes that
+/// differ in any bit spread over the buckets: an identity hasher works, even on keys that
+/// differ only in high bits. Keys a hasher maps to one hash still share a chain.
 ///
 /// A key is stored as its layout's bytes. With tda_hash_cstr and tda_eq_cstr the key is
 /// a const char *, so the map keeps the pointer and not the text: the string must outlive

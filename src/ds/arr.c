@@ -75,6 +75,34 @@ tda_Status tda_arr_from_span(tda_Span s, tda_Al al, tda_Arr *out) {
     return tda_arr_from_data(s.data, s.len, s.elem, al, out);
 }
 
+tda_Arr tda_arr_init_raw(tda_SpanMut elems, tda_Al al) {
+    TDA_SPAN_ASSERT(elems);
+    assert(al.vt);
+    TDA_EXPECT(!elems.data == (elems.len == 0));
+
+    // a block made as 'len' elems has a size that fits
+    [[maybe_unused]] tda_Layout block;
+    assert(!tda_layout_ckd_array(&block, elems.elem, elems.len));
+
+    return (tda_Arr){
+        .data_ = elems.data,
+        .len_ = elems.len,
+        .elem_ = elems.elem,
+        .al_ = al,
+    };
+}
+
+tda_SpanMut tda_arr_into_raw(tda_Arr *self) {
+    ASSERT_ARR(self);
+
+    const tda_SpanMut elems = {.data = self->data_, .len = self->len_, .elem = self->elem_};
+
+    // the block is the caller's now: forget it rather than free it
+    *self = (tda_Arr){};
+
+    return elems;
+}
+
 void tda_arr_deinit(tda_Arr *self) {
     assert(self);
 

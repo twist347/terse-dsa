@@ -113,6 +113,30 @@ tda_Status tda_bitset_init_len(size_t nbits, tda_Al al, tda_BitSet *out) {
     return TDA_STATUS_OK;
 }
 
+tda_Status tda_bitset_from_span(size_t nbits, tda_Span s, tda_Al al, tda_BitSet *out) {
+    TDA_SPAN_ASSERT(s);
+    assert(al.vt);
+    assert(out);
+    TDA_EXPECT(tda_layout_eq(s.elem, TDA_LAYOUT_OF(size_t)));
+
+    tda_BitSet obj;
+    const tda_Status st = tda_bitset_init_len(nbits, al, &obj);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    // tda_bitset_set expects each index below nbits, so a stray one asserts there
+    for (size_t i = 0; i < s.len; ++i) {
+        tda_bitset_set(&obj, *(const size_t *) tda_span_get(s, i));
+    }
+
+    *out = obj;
+
+    ASSERT_BITSET(out);
+
+    return TDA_STATUS_OK;
+}
+
 void tda_bitset_deinit(tda_BitSet *self) {
     assert(self);
 

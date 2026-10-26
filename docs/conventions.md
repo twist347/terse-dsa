@@ -273,7 +273,9 @@ from what is returned, not from which function it is:
   against the elem layout and hands the pointer back — one evaluation, constness kept by a `_Generic`
   choice between it and its mutable twin `tda_<slug>_typed_mut_`, so no cast drops it. A container stores
   no type, so this catches a wrong width or alignment only: `float` passes for
-  `int32_t`. The node macros (`TDA_LIST_NODE_ELEM_AS`, `TDA_HMAP_NODE_KEY_AS`,
+  `int32_t`. An algo macro that takes a key names the key's type `K` first, and checks
+  nothing against it, since a key need not be an elem (see *A key goes to the right*);
+  the value it writes, `TDA_SPAN_FILL`'s or `TDA_SPAN_REPLACE`'s, is checked as an elem. The node macros (`TDA_LIST_NODE_ELEM_AS`, `TDA_HMAP_NODE_KEY_AS`,
   `TDA_HSET_NODE_KEY_AS`) take the container a node is in and check through it, since
   the container knows where in the node the elem lies. A walk macro reads its container
   pointer once too, and names its hidden variables with `TDA_LINE_NAME_`, so walks nest without

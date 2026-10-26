@@ -1063,6 +1063,69 @@ static void test_init_cap_reports_a_refused_block() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
+// into an empty queue: one heapify over everything
+static void test_extend_an_empty_queue() {
+    tda_PQueue q = make_queue(nullptr, 0);
+
+    TDA_TEST_OK(tda_pqueue_extend(&q, TDA_SPAN_FROM_DATA(int32_t, SPREAD, SPREAD_LEN)));
+    assert_drains_sorted(&q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
+
+    tda_pqueue_deinit(&q);
+}
+
+// into a queue that has elems: each new one sifts up past the old
+static void test_extend_a_filled_queue() {
+    tda_PQueue q = make_queue(SPREAD, 5);
+
+    TDA_TEST_OK(tda_pqueue_extend(&q, TDA_SPAN_FROM_DATA(int32_t, SPREAD + 5, SPREAD_LEN - 5)));
+    TDA_TEST_OK(tda_pqueue_extend(&q, TDA_SPAN_FROM_DATA(int32_t, nullptr, 0)));
+    assert_drains_sorted(&q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
+
+    tda_pqueue_deinit(&q);
+}
+
+// the largest of the new elems, and the last of them, has to reach the top past every
+// old one
+static void test_extend_puts_a_new_largest_on_top() {
+    tda_PQueue q = make_queue((const int32_t[]){5, 3, 4}, 3);
+
+    TDA_TEST_OK(TDA_PQUEUE_EXTEND(int32_t, &q, 1, 2, 9));
+    TEST_ASSERT_EQUAL_INT32(9, *TDA_PQUEUE_TOP_AS(int32_t, &q));
+    assert_drains(&q, (const int32_t[]){9, 5, 4, 3, 2, 1}, 6);
+
+    tda_pqueue_deinit(&q);
+}
+
+static void test_extend_macro_takes_whole_elems() {
+    tda_PQueue q = TDA_PQUEUE_INIT(Pair, tda_test_pair_cmp_a, nullptr, tda_al_default());
+
+    TDA_TEST_OK(TDA_PQUEUE_EXTEND(Pair, &q, {1, 10}, {3, 30}, {2, 20}));
+
+    const Pair *top = TDA_PQUEUE_TOP_AS(Pair, &q);
+    TEST_ASSERT_EQUAL_INT64(3, top->a);
+    TEST_ASSERT_EQUAL_INT64(30, top->b);
+
+    tda_pqueue_deinit(&q);
+}
+
+// all or nothing: a refused growth puts none of the elems in, and the heap stands
+static void test_extend_reports_a_refused_growth() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_PQueue x = {};
+    TDA_TEST_OK(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, al, &x, 1));
+
+    tda_test_probe_fail_after_next(&probe, 0);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_PQUEUE_EXTEND(int32_t, &x, 2, 3, 4));
+    assert_drains(&x, (const int32_t[]){1}, 1);
+
+    probe.fail_after = SIZE_MAX;
+    tda_pqueue_deinit(&x);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
 // a refused growth leaves the elems as they were
 static void test_push_reports_a_refused_growth() {
     tda_TestProbe probe;
@@ -1210,6 +1273,11 @@ int main() {
     RUN_TEST(test_from_data_reports_a_refused_block);
     RUN_TEST(test_init_cap_reports_a_refused_block);
     RUN_TEST(test_push_reports_a_refused_growth);
+    RUN_TEST(test_extend_an_empty_queue);
+    RUN_TEST(test_extend_a_filled_queue);
+    RUN_TEST(test_extend_puts_a_new_largest_on_top);
+    RUN_TEST(test_extend_macro_takes_whole_elems);
+    RUN_TEST(test_extend_reports_a_refused_growth);
     RUN_TEST(test_copy_assign_reports_a_refused_block_and_changes_nothing);
 
     RUN_TEST(test_fprint_hands_on_the_ctx_and_the_first_failure);

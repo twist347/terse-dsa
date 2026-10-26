@@ -206,6 +206,105 @@ static void test_a_vec_lives_inside_a_struct() {
     tda_vec_deinit(&node.kids);
 }
 
+/* ========== raw ========== */
+
+// the block changes hands both ways without a call to the allocator, and keeps its spare
+// room
+static void test_into_raw_then_init_raw_moves_the_block() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Vec v = {};
+    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 8, al, &v));
+    push_int(&v, 1);
+    push_int(&v, 2);
+    push_int(&v, 3);
+    const void *block = tda_vec_data(&v);
+    const size_t requests = tda_test_probe_requests(&probe);
+
+    tda_SpanMut elems;
+    size_t cap;
+    tda_vec_into_raw(&v, &elems, &cap);
+
+    TEST_ASSERT_EQUAL_PTR(block, elems.data);
+    TEST_ASSERT_EQUAL_size_t(3, elems.len);
+    TEST_ASSERT_EQUAL_size_t(8, cap);
+
+    tda_Vec w = tda_vec_init_raw(elems, cap, al);
+
+    assert_elems(&w, (const int32_t[]){1, 2, 3}, 3);
+    TEST_ASSERT_EQUAL_size_t(8, tda_vec_cap(&w));
+    TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
+
+    tda_vec_deinit(&w);
+    tda_vec_deinit(&v); // inert after into_raw, so a no-op
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+// the caller frees what into_raw hands out with the layout it reports
+static void test_into_raw_leaves_the_vec_inert_and_the_block_to_the_caller() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Vec v = {};
+    TDA_TEST_OK(TDA_VEC_INIT_LEN(int32_t, 4, al, &v));
+
+    tda_SpanMut elems;
+    size_t cap;
+    tda_vec_into_raw(&v, &elems, &cap);
+
+    TEST_ASSERT_NULL(v.al_.vt);
+    TEST_ASSERT_NULL(v.data_);
+    TEST_ASSERT_EQUAL_size_t(1, probe.live);
+
+    TDA_DEALLOC(int32_t, al, elems.data, cap);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+static void test_into_raw_of_a_vec_with_no_block_gives_none() {
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
+
+    tda_SpanMut elems;
+    size_t cap = 1;
+    tda_vec_into_raw(&v, &elems, &cap);
+
+    TEST_ASSERT_NULL(elems.data);
+    TEST_ASSERT_EQUAL_size_t(0, elems.len);
+    TEST_ASSERT_EQUAL_size_t(0, cap);
+
+    tda_Vec w = tda_vec_init_raw(elems, cap, tda_al_default());
+    TEST_ASSERT_EQUAL_size_t(0, tda_vec_cap(&w));
+    push_int(&w, 5);
+    assert_elems(&w, (const int32_t[]){5}, 1);
+
+    tda_vec_deinit(&w);
+}
+
+// a block the caller filled by hand becomes a vec that grows it in place of a copy
+static void test_init_raw_takes_a_block_filled_by_hand() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    int32_t *block = TDA_ALLOC(int32_t, al, 4);
+    TEST_ASSERT_NOT_NULL(block);
+    block[0] = 10;
+    block[1] = 20;
+
+    tda_Vec v = tda_vec_init_raw(TDA_SPAN_FROM_DATA_MUT(int32_t, block, 2), 4, al);
+    push_int(&v, 30);
+    push_int(&v, 40);
+    TEST_ASSERT_EQUAL_PTR(block, tda_vec_data(&v));
+    push_int(&v, 50);
+
+    assert_elems(&v, (const int32_t[]){10, 20, 30, 40, 50}, 5);
+
+    tda_vec_deinit(&v);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
 /* ========== copy ========== */
 
 static void test_copy_is_independent() {
@@ -2255,6 +2354,11 @@ int main() {
     RUN_TEST(test_deinit_twice_is_noop);
     RUN_TEST(test_init_allocates_nothing);
     RUN_TEST(test_a_vec_lives_inside_a_struct);
+
+    RUN_TEST(test_into_raw_then_init_raw_moves_the_block);
+    RUN_TEST(test_into_raw_leaves_the_vec_inert_and_the_block_to_the_caller);
+    RUN_TEST(test_into_raw_of_a_vec_with_no_block_gives_none);
+    RUN_TEST(test_init_raw_takes_a_block_filled_by_hand);
 
     RUN_TEST(test_copy_is_independent);
     RUN_TEST(test_copy_fits_the_len_not_the_source_capacity);

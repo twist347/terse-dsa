@@ -33,8 +33,12 @@
 static constexpr size_t HMAP_BUCKETS_BASE = 8;
 static constexpr size_t HMAP_GROWTH_FACTOR = 2;
 
-// bucket_in masks, so every bucket count must be a power of two
-static_assert((HMAP_BUCKETS_BASE & (HMAP_BUCKETS_BASE - 1)) == 0);
+// 2^64 / phi, odd, so multiplying by it permutes the hashes
+static constexpr uint64_t FIB_MULTIPLIER = 0x9e37'79b9'7f4a'7c15;
+
+// bucket_in takes the top log2(count) bits, so every bucket count must be a power of two
+// above 1
+static_assert((HMAP_BUCKETS_BASE & (HMAP_BUCKETS_BASE - 1)) == 0 && HMAP_BUCKETS_BASE > 1);
 static_assert((HMAP_GROWTH_FACTOR & (HMAP_GROWTH_FACTOR - 1)) == 0);
 
 // An entry is one allocation: this struct, then the key and the value, each at the first
@@ -63,8 +67,10 @@ static tda_Status alloc_node(const tda_HMap *self, const void *key, const void *
 
 static void dealloc_node(const tda_HMap *self, tda_HMapNode *node);
 
-/// which of 'count' buckets a hash belongs to. The count is a power of two, so this is a
-/// mask, which is safe only because the mixer in core/hash avalanches every bit
+/// which of 'count' buckets a hash belongs to: the top bits of the hash times 2^64/phi.
+/// The product's top bits depend on every bit of the hash, so a hasher that leaves its
+/// low bits alike, the identity on keys that are multiples of a power of two, still
+/// spreads; a mask would put all of them in one chain
 [[nodiscard]]
 static size_t bucket_in(tda_Hash hash, size_t count);
 
@@ -784,9 +790,10 @@ static void dealloc_node(const tda_HMap *self, tda_HMapNode *node) {
 }
 
 static size_t bucket_in(tda_Hash hash, size_t count) {
-    assert(tda_is_pow2(count));
+    assert(tda_is_pow2(count) && count > 1);
 
-    return (size_t) hash & (count - 1);
+    // a shift by 64 would be undefined, hence the count above 1
+    return (size_t) ((hash * FIB_MULTIPLIER) >> (64 - tda_bit_ctz(count)));
 }
 
 static size_t bucket_of(const tda_HMap *self, tda_Hash hash) {

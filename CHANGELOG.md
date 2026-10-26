@@ -1,5 +1,42 @@
 # Changelog
 
+## 3.1.0 — unreleased
+
+Additions only, and one change of placement that nothing promised.
+
+### Added
+
+- **Typed macros over algo.** `TDA_SPAN_FIND`, `TDA_SPAN_FIND_LAST`, `TDA_SPAN_FIND_RUN`,
+  `TDA_SPAN_CONTAINS`, `TDA_SPAN_COUNT`, `TDA_SPAN_LOWER_BOUND`, `TDA_SPAN_UPPER_BOUND`,
+  `TDA_SPAN_EQUAL_RANGE`, `TDA_SPAN_BINARY_SEARCH` and `TDA_SPAN_REMOVE` take the key by
+  value, `TDA_SPAN_FILL` and `TDA_SPAN_REPLACE_IF` the value, and `TDA_SPAN_REPLACE`
+  both, where the functions want addresses. The first argument is the key's type, which
+  need not be the elem's: a span of records is searched with a bare id.
+- **`tda_list_pop_front_to` and `tda_list_pop_back_to`**, with their `*_TO` macros: the
+  list was the one container that could drop an end but not hand it out.
+- **`extend` on `tda_List`, `tda_Stack`, `tda_Queue` and `tda_PQueue`**, with their
+  `*_EXTEND` macros, as vec and deque have it. Each is all or nothing: the adapters grow
+  once, and the list makes its nodes apart and links them in one go. A pqueue extended
+  from empty heapifies once, in O(n).
+- **`tda_bitset_from_span` and `TDA_BITSET_OF`** build a bitset from the indices it
+  holds: `TDA_BITSET_OF(64, al, &b, 1, 5, 7)`.
+- **`into_raw` and `init_raw` on vec and arr** move a vec's block out and back in with no
+  copy: into_raw hands out the elems and the capacity and leaves the vec inert, init_raw
+  takes over a block the caller allocated through the same allocator. `tda_arr_into_raw`
+  and `tda_arr_init_raw` do the same for an arr, whose block is its length, so into_raw
+  returns the span; after `tda_vec_shrink_to_fit`, a vec's block becomes an arr's with no
+  copy. `from_data` stays the way to start from a buffer that is not such a block.
+
+### Changed
+
+- **hmap and hset mix the hash before they pick a bucket.** The bucket is the top bits of
+  the hash times 2^64/phi, where it was the low bits, so a hasher only has to tell keys
+  apart: an identity hasher on keys that differ only in high bits no longer puts them all
+  in one chain. The cost is a multiply per lookup: with the hashers of core/hash, which
+  were fine either way, a lookup measured the same under clang and about 6% slower under
+  gcc, an insert the same under both. Which bucket a key lands in, and so the walk order,
+  changes, which the Compatibility section of the README never promised.
+
 ## 3.0.0 — 2026-10-26
 
 2.0 made containers and allocators values, but an allocator kept its interface inside

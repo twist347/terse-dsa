@@ -142,6 +142,18 @@ tda_Status tda_stack_push(tda_Stack *self, const void *val) {
     return st;
 }
 
+tda_Status tda_stack_extend(tda_Stack *self, tda_Span src) {
+    ASSERT_STACK(self);
+    TDA_SPAN_ASSERT(src);
+    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), src.elem));
+
+    const tda_Status st = tda_vec_extend(&self->vec_, src);
+
+    ASSERT_STACK(self);
+
+    return st;
+}
+
 void tda_stack_pop_to(tda_Stack *self, void *out) {
     ASSERT_STACK(self);
     assert(out);

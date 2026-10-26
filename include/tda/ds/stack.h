@@ -265,6 +265,16 @@ static inline void *tda_stack_top_mut(tda_Stack *self) {
 [[nodiscard]] TDA_API
 tda_Status tda_stack_push(tda_Stack *self, const void *val);
 
+/// pushes every elem of 'src' in order, so its last ends on top
+/// @param self the stack
+/// @param src must have the same elem layout and must not view this stack: growing may
+///            free what it reads
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow; the stack is left unchanged
+/// @bigo{n}; grows at most once
+[[nodiscard]] TDA_API
+tda_Status tda_stack_extend(tda_Stack *self, tda_Span src);
+
 /// drops the top elem, keeping the capacity
 /// @param self asserts the stack is not empty; tda_stack_pop_to keeps a copy
 /// @bigo{1}
@@ -441,6 +451,14 @@ static inline tda_Stack *tda_stack_typed_mut_(tda_Stack *self, [[maybe_unused]] 
 /// @bigo{1} amortized
 #define TDA_STACK_PUSH(T, self, val) \
     tda_stack_push(TDA_STACK_TYPED_(T, self), &(T[1]){ (val) }[0])
+
+/// tda_stack_extend from the elems written out
+/// @param T the elem type
+/// @param self the stack
+/// @param ... the elems, as a T initializer list, not empty; the last ends on top
+/// @bigo{n}
+#define TDA_STACK_EXTEND(T, self, ...) \
+    tda_stack_extend((self), TDA_SPAN_OF(T, __VA_ARGS__))
 
 /// tda_stack_pop_to with 'out' typechecked as T *
 /// @param T the elem type

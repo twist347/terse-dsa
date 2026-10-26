@@ -366,6 +366,16 @@ tda_Status tda_list_push_front(tda_List *self, const void *val);
 [[nodiscard]] TDA_API
 tda_Status tda_list_push_back(tda_List *self, const void *val);
 
+/// puts a copy of every elem of 'src' at the back, in order, each in a node of its own
+/// @param self the list
+/// @param src must have the same elem layout
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated; the list is left
+///         unchanged
+/// @bigo{n}
+[[nodiscard]] TDA_API
+tda_Status tda_list_extend(tda_List *self, tda_Span src);
+
 /// drops the front elem and releases its node
 /// @param self asserts the list is not empty
 /// @bigo{1}
@@ -376,6 +386,18 @@ void tda_list_pop_front(tda_List *self);
 /// @copydetails tda_list_pop_front
 TDA_API
 void tda_list_pop_back(tda_List *self);
+
+/// copies the front elem to 'out', then drops it and releases its node
+/// @param self asserts the list is not empty
+/// @param[out] out may point into this list, at the elem of another node
+/// @bigo{1}
+TDA_API
+void tda_list_pop_front_to(tda_List *self, void *out);
+
+/// copies the back elem to 'out', then drops it and releases its node
+/// @copydetails tda_list_pop_front_to
+TDA_API
+void tda_list_pop_back_to(tda_List *self, void *out);
 
 /// puts a copy of 'val' in a new node before 'at'
 /// @param self the list
@@ -674,6 +696,27 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// @copydetails TDA_LIST_PUSH_FRONT
 #define TDA_LIST_PUSH_BACK(T, self, val) \
     tda_list_push_back(TDA_LIST_TYPED_(T, self), &(T[1]){ (val) }[0])
+
+/// tda_list_extend from the elems written out
+/// @param T the elem type
+/// @param self the list
+/// @param ... the elems, as a T initializer list, not empty
+/// @bigo{n}
+#define TDA_LIST_EXTEND(T, self, ...) \
+    tda_list_extend((self), TDA_SPAN_OF(T, __VA_ARGS__))
+
+/// tda_list_pop_front_to with 'out' typechecked as T *
+/// @param T the elem type
+/// @param self the list
+/// @param[out] out where the elem goes
+/// @bigo{1}
+#define TDA_LIST_POP_FRONT_TO(T, self, out) \
+    tda_list_pop_front_to(TDA_LIST_TYPED_(T, self), (T *){ (out) })
+
+/// tda_list_pop_back_to with 'out' typechecked as T *
+/// @copydetails TDA_LIST_POP_FRONT_TO
+#define TDA_LIST_POP_BACK_TO(T, self, out) \
+    tda_list_pop_back_to(TDA_LIST_TYPED_(T, self), (T *){ (out) })
 
 /// tda_list_insert_before from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too

@@ -3,6 +3,7 @@
 #include "tda/alloc/alloc.h"
 #include "tda/core/check.h"
 #include "tda/core/export.h"
+#include "tda/core/span.h"
 #include "tda/core/status.h"
 #include "tda/core/util.h"
 
@@ -63,6 +64,17 @@ typedef struct tda_BitSet {
 /// @bigo{n/64}
 [[nodiscard]] TDA_API
 tda_Status tda_bitset_init_len(size_t nbits, tda_Al al, tda_BitSet *out);
+
+/// a new bitset over 0 .. nbits - 1 holding the indices 's' lists
+/// @param nbits the size of the universe
+/// @param s a span of size_t, each below nbits; an index may come more than once
+/// @param al used for every later allocation
+/// @param[out] out the new bitset, written only on success
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when the words cannot be allocated
+/// @bigo{n/64 + s.len}
+[[nodiscard]] TDA_API
+tda_Status tda_bitset_from_span(size_t nbits, tda_Span s, tda_Al al, tda_BitSet *out);
 
 /// releases the words and leaves the bitset inert, `= {}`
 /// @param self a bitset, or an inert one, for which this is a no-op
@@ -398,6 +410,15 @@ int tda_bitset_print(const tda_BitSet *self);
 /// @bigo{n/64} over the whole walk
 #define TDA_BITSET_FOR_EACH(idx, self) \
     TDA_BITSET_WALK_(idx, self, TDA_LINE_NAME_(bitset_), TDA_LINE_NAME_(once_), TDA_LINE_NAME_(from_))
+
+/// a new bitset holding the indices written out: TDA_BITSET_OF(64, al, &b, 1, 5, 7)
+/// @param nbits the size of the universe
+/// @param al the allocator
+/// @param[out] out where the new bitset is written
+/// @param ... the indices, each below nbits, not empty
+/// @bigo{n/64 + count}
+#define TDA_BITSET_OF(nbits, al, out, ...) \
+    tda_bitset_from_span((nbits), TDA_SPAN_OF(size_t, __VA_ARGS__), (al), (out))
 
 /// @}
 

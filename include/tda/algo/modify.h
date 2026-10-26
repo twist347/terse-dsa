@@ -93,4 +93,54 @@ void tda_span_replace_if(tda_SpanMut s, const void *val, tda_Pred pred, void *ct
 
 /// @}
 
+/// @name macros
+/// @{
+
+/// tda_span_remove from a value rather than an address
+/// @param K the key's type, which need not be the elem's, so nothing checks it against
+///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param s the span
+/// @param key the value to drop
+/// @param eq the equality
+/// @param ctx passed to every call of 'eq'; may be null
+/// @bigo{n}
+#define TDA_SPAN_REMOVE(K, s, key, eq, ctx) \
+    tda_span_remove((s), &(K[1]){ (key) }[0], (eq), (ctx))
+
+/// tda_span_replace from values rather than addresses
+/// @param K the key's type, which need not be the elem's, so nothing checks it against
+///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
+/// @param s the span
+/// @param key the value to look for
+/// @param val the value to write
+/// @param eq the equality
+/// @param ctx passed to every call of 'eq'; may be null
+/// @bigo{n}
+#define TDA_SPAN_REPLACE(K, T, s, key, val, eq, ctx) \
+    tda_span_replace(                                \
+        tda_span_mut_typed_((s), TDA_LAYOUT_OF(T)),  \
+        &(K[1]){ (key) }[0],                         \
+        &(T[1]){ (val) }[0],                         \
+        (eq),                                        \
+        (ctx)                                        \
+    )
+
+/// tda_span_replace_if from a value rather than an address
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
+/// @param s the span
+/// @param val the value to write
+/// @param pred the test
+/// @param ctx handed to 'pred'
+/// @bigo{n}
+#define TDA_SPAN_REPLACE_IF(T, s, val, pred, ctx)   \
+    tda_span_replace_if(                            \
+        tda_span_mut_typed_((s), TDA_LAYOUT_OF(T)), \
+        &(T[1]){ (val) }[0],                        \
+        (pred),                                     \
+        (ctx)                                       \
+    )
+
+/// @}
+
 /// @}

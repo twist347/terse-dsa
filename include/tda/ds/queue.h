@@ -296,6 +296,16 @@ static inline void *tda_queue_back_mut(tda_Queue *self) {
 [[nodiscard]] TDA_API
 tda_Status tda_queue_push(tda_Queue *self, const void *val);
 
+/// pushes every elem of 'src' at the back in order, so its first comes out first
+/// @param self the queue
+/// @param src must have the same elem layout and must not view this queue: growing may
+///            free what it reads
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow; the queue is left unchanged
+/// @bigo{n}; grows at most once
+[[nodiscard]] TDA_API
+tda_Status tda_queue_extend(tda_Queue *self, tda_Span src);
+
 /// drops the front elem, keeping the capacity
 /// @param self asserts the queue is not empty; tda_queue_pop_to keeps a copy
 /// @bigo{1}
@@ -456,6 +466,14 @@ static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] 
 /// @bigo{1} amortized
 #define TDA_QUEUE_PUSH(T, self, val) \
     tda_queue_push(TDA_QUEUE_TYPED_(T, self), &(T[1]){ (val) }[0])
+
+/// tda_queue_extend from the elems written out
+/// @param T the elem type
+/// @param self the queue
+/// @param ... the elems, as a T initializer list, not empty; the first comes out first
+/// @bigo{n}
+#define TDA_QUEUE_EXTEND(T, self, ...) \
+    tda_queue_extend((self), TDA_SPAN_OF(T, __VA_ARGS__))
 
 /// tda_queue_pop_to with 'out' typechecked as T *
 /// @param T the elem type

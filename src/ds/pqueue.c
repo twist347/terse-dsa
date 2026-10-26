@@ -188,6 +188,33 @@ tda_Status tda_pqueue_push(tda_PQueue *self, const void *val) {
     return TDA_STATUS_OK;
 }
 
+tda_Status tda_pqueue_extend(tda_PQueue *self, tda_Span src) {
+    ASSERT_PQUEUE(self);
+    TDA_SPAN_ASSERT(src);
+    TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), src.elem));
+
+    const size_t old_len = tda_vec_len(&self->vec_);
+    const tda_Status st = tda_vec_extend(&self->vec_, src);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    // an empty queue heapifies in O(n); otherwise each new elem sifts up past the ones
+    // before it, which are a heap already
+    const tda_SpanMut all = tda_vec_to_span_mut(&self->vec_);
+    if (old_len == 0) {
+        tda_span_make_heap(all, self->cmp_, self->ctx_);
+    } else {
+        for (size_t len = old_len + 1; len <= all.len; ++len) {
+            tda_span_push_heap(tda_span_sub_mut(all, 0, len), self->cmp_, self->ctx_);
+        }
+    }
+
+    ASSERT_PQUEUE(self);
+
+    return TDA_STATUS_OK;
+}
+
 void tda_pqueue_pop(tda_PQueue *self) {
     ASSERT_PQUEUE(self);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);

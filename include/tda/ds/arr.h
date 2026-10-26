@@ -105,6 +105,27 @@ tda_Status tda_arr_from_span(tda_Span s, tda_Al al, tda_Arr *out);
 TDA_API
 void tda_arr_deinit(tda_Arr *self);
 
+/// an arr that takes over a block the caller allocated, with no copy: the inverse of
+/// tda_arr_into_raw. To copy elems in instead, and keep the buffer, tda_arr_from_data
+/// @param elems the whole block, exactly elems.len elems; null data exactly when the
+///              length is 0
+/// @param al the allocator the block came from, as elems.len elems of elems.elem: the
+///           arr frees it there, so a block from anywhere else is not one to give
+/// @return the arr, the owner of the block from here on
+/// @note a vec's block after tda_vec_shrink_to_fit and tda_vec_into_raw is such a block,
+///       so a vec becomes an arr with no copy
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Arr tda_arr_init_raw(tda_SpanMut elems, tda_Al al);
+
+/// hands the block over with no copy, leaving the arr inert
+/// @param self the arr; inert afterwards, so take tda_arr_al first: the block goes back
+///             to that allocator, as the span's len elems
+/// @return the whole block; null data when the arr had none
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_SpanMut tda_arr_into_raw(tda_Arr *self);
+
 /// @}
 
 /// @name copy

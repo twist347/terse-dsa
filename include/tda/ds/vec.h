@@ -122,6 +122,30 @@ tda_Status tda_vec_from_span(tda_Span s, tda_Al al, tda_Vec *out);
 TDA_API
 void tda_vec_deinit(tda_Vec *self);
 
+/// a vec that takes over a block the caller allocated, with no copy: the inverse of
+/// tda_vec_into_raw. To copy elems in instead, and keep the buffer, tda_vec_from_data
+/// @param elems the elems the vec starts with, at the start of the block; 'elems.data'
+///              is null exactly when 'cap' is 0
+/// @param cap how many elems the block was allocated for, at least elems.len
+/// @param al the allocator the block came from, as 'cap' elems of elems.elem: the vec
+///           grows and frees it there, so a block from anywhere else is not one to give
+/// @return the vec, the owner of the block from here on
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Vec tda_vec_init_raw(tda_SpanMut elems, size_t cap, tda_Al al);
+
+/// hands the block over with no copy, leaving the vec inert
+/// @param self the vec; inert afterwards, so take tda_vec_al first: the block goes back
+///             to that allocator, as 'out_cap' elems of the elem layout
+/// @param[out] out_elems the elems at the start of the block; null data when the vec had
+///                       no block
+/// @param[out] out_cap how many elems the block was allocated for, which freeing it needs
+/// @note after tda_vec_shrink_to_fit the cap is the length, and the span alone tells the
+///       block's size
+/// @bigo{1}
+TDA_API
+void tda_vec_into_raw(tda_Vec *self, tda_SpanMut *out_elems, size_t *out_cap);
+
 /// @}
 
 /// @name copy

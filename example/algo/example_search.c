@@ -24,7 +24,8 @@ int main() {
         printf("first 1 at %zu\n", idx); // first 1 at 2
     }
 
-    if (tda_span_find_last(nums, &(int32_t){1}, tda_eq_i32, nullptr, &idx)) {
+    // the macro takes the key by value; its first argument is the key's type
+    if (TDA_SPAN_FIND_LAST(int32_t, nums, 1, tda_eq_i32, nullptr, &idx)) {
         printf("last 1 at %zu\n", idx); // last 1 at 4
     }
 
@@ -41,7 +42,7 @@ int main() {
 
     // a miss is not an error: find returns false and leaves 'idx' unchanged, and contains
     // asks the same question without the index
-    printf("%s\n", tda_span_contains(nums, &(int32_t){7}, tda_eq_i32, nullptr) ? "7 is in" : "no 7"); // no 7
+    printf("%s\n", TDA_SPAN_CONTAINS(int32_t, nums, 7, tda_eq_i32, nullptr) ? "7 is in" : "no 7"); // no 7
 
     // starts_with and ends_with take the same equality as a find
     const tda_Span head = TDA_SPAN_OF(int32_t, 5, 3);
@@ -56,12 +57,12 @@ int main() {
     // binary search needs the span sorted by the same cmp
     const tda_Span sorted = TDA_SPAN_OF(int32_t, 1, 2, 2, 2, 5, 9);
 
-    if (tda_span_binary_search(sorted, &(int32_t){5}, tda_cmp_i32, nullptr, &idx)) {
+    if (TDA_SPAN_BINARY_SEARCH(int32_t, sorted, 5, tda_cmp_i32, nullptr, &idx)) {
         printf("5 at %zu\n", idx); // 5 at 4
     }
 
     // with duplicates the answer is a range, not one index
-    const tda_Range r = tda_span_equal_range(sorted, &(int32_t){2}, tda_cmp_i32, nullptr);
+    const tda_Range r = TDA_SPAN_EQUAL_RANGE(int32_t, sorted, 2, tda_cmp_i32, nullptr);
     printf("the 2s are [%zu, %zu)\n", r.lo, r.hi); // the 2s are [1, 4)
 
     const tda_MinMax mm = tda_span_minmax_elem(sorted, tda_cmp_i32, nullptr);

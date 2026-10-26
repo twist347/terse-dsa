@@ -278,6 +278,17 @@ static inline const void *tda_pqueue_top(const tda_PQueue *self) {
 [[nodiscard]] TDA_API
 tda_Status tda_pqueue_push(tda_PQueue *self, const void *val);
 
+/// puts a copy of every elem of 'src' in
+/// @param self the queue
+/// @param src must have the same elem layout and must not view this queue: growing may
+///            free what it reads
+/// @retval TDA_STATUS_OK on success
+/// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow; the queue is left unchanged
+/// @bigo{n} into an empty queue, which heapifies once; k log n for k elems into n,
+///         sifted up one by one. Grows at most once
+[[nodiscard]] TDA_API
+tda_Status tda_pqueue_extend(tda_PQueue *self, tda_Span src);
+
 /// drops the greatest elem: the last one takes its place and is sifted down
 /// @param self asserts the queue is not empty; tda_pqueue_pop_to keeps a copy
 /// @bigo{log n}
@@ -457,6 +468,14 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
 /// @bigo{log n}
 #define TDA_PQUEUE_PUSH(T, self, val) \
     tda_pqueue_push(TDA_PQUEUE_TYPED_(T, self), &(T[1]){ (val) }[0])
+
+/// tda_pqueue_extend from the elems written out
+/// @param T the elem type
+/// @param self the queue
+/// @param ... the elems, as a T initializer list, not empty
+/// @bigo{n} into an empty queue, k log n otherwise
+#define TDA_PQUEUE_EXTEND(T, self, ...) \
+    tda_pqueue_extend((self), TDA_SPAN_OF(T, __VA_ARGS__))
 
 /// tda_pqueue_pop_to with 'out' typechecked as T *
 /// @param T the elem type

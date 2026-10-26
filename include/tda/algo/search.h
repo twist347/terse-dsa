@@ -317,4 +317,89 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
 
 /// @}
 
+/// @name macros
+/// @{
+
+/// tda_span_find from a value rather than an address: TDA_SPAN_FIND(int32_t, s, 7, eq,
+/// nullptr, &idx)
+/// @param K the key's type, which need not be the elem's, so nothing checks it against
+///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param s the span
+/// @param key the value to look for
+/// @param eq the equality
+/// @param ctx passed to every call of 'eq'; may be null
+/// @param[out] out_idx the index, written only on a hit
+/// @bigo{n}
+#define TDA_SPAN_FIND(K, s, key, eq, ctx, out_idx) \
+    tda_span_find((s), &(K[1]){ (key) }[0], (eq), (ctx), (out_idx))
+
+/// tda_span_find_last from a value rather than an address
+/// @copydetails TDA_SPAN_FIND
+#define TDA_SPAN_FIND_LAST(K, s, key, eq, ctx, out_idx) \
+    tda_span_find_last((s), &(K[1]){ (key) }[0], (eq), (ctx), (out_idx))
+
+/// tda_span_find_run from a value rather than an address
+/// @param K the key's type, which need not be the elem's, so nothing checks it against
+///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param s the span
+/// @param key the value to look for
+/// @param count the run length
+/// @param eq the equality
+/// @param ctx passed to every call of 'eq'; may be null
+/// @param[out] out_idx where the run starts, on a hit
+/// @bigo{n}
+#define TDA_SPAN_FIND_RUN(K, s, key, count, eq, ctx, out_idx) \
+    tda_span_find_run((s), &(K[1]){ (key) }[0], (count), (eq), (ctx), (out_idx))
+
+/// tda_span_contains from a value rather than an address
+/// @param K the key's type, which need not be the elem's, so nothing checks it against
+///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param s the span
+/// @param key the value to look for
+/// @param eq the equality
+/// @param ctx passed to every call of 'eq'; may be null
+/// @bigo{n}
+#define TDA_SPAN_CONTAINS(K, s, key, eq, ctx) \
+    tda_span_contains((s), &(K[1]){ (key) }[0], (eq), (ctx))
+
+/// tda_span_count from a value rather than an address
+/// @copydetails TDA_SPAN_CONTAINS
+#define TDA_SPAN_COUNT(K, s, key, eq, ctx) \
+    tda_span_count((s), &(K[1]){ (key) }[0], (eq), (ctx))
+
+/// tda_span_lower_bound from a value rather than an address
+/// @param K the key's type, which need not be the elem's, so nothing checks it against
+///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param s the span, sorted by 'cmp'
+/// @param key the value to look for
+/// @param cmp the order
+/// @param ctx passed to every call of 'cmp'; may be null
+/// @bigo{log n}
+#define TDA_SPAN_LOWER_BOUND(K, s, key, cmp, ctx) \
+    tda_span_lower_bound((s), &(K[1]){ (key) }[0], (cmp), (ctx))
+
+/// tda_span_upper_bound from a value rather than an address
+/// @copydetails TDA_SPAN_LOWER_BOUND
+#define TDA_SPAN_UPPER_BOUND(K, s, key, cmp, ctx) \
+    tda_span_upper_bound((s), &(K[1]){ (key) }[0], (cmp), (ctx))
+
+/// tda_span_equal_range from a value rather than an address
+/// @copydetails TDA_SPAN_LOWER_BOUND
+#define TDA_SPAN_EQUAL_RANGE(K, s, key, cmp, ctx) \
+    tda_span_equal_range((s), &(K[1]){ (key) }[0], (cmp), (ctx))
+
+/// tda_span_binary_search from a value rather than an address
+/// @param K the key's type, which need not be the elem's, so nothing checks it against
+///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param s the span, sorted by 'cmp'
+/// @param key the value to look for
+/// @param cmp the order
+/// @param ctx passed to every call of 'cmp'; may be null
+/// @param[out] out_idx where it is, on a hit
+/// @bigo{log n}
+#define TDA_SPAN_BINARY_SEARCH(K, s, key, cmp, ctx, out_idx) \
+    tda_span_binary_search((s), &(K[1]){ (key) }[0], (cmp), (ctx), (out_idx))
+
+/// @}
+
 /// @}

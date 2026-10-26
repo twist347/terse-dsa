@@ -1055,6 +1055,49 @@ static void test_from_data_reports_a_refused_block() {
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
+static void test_extend_pushes_in_order_the_last_on_top() {
+    tda_Stack s = make_stack((const int32_t[]){1, 2}, 2);
+
+    TDA_TEST_OK(tda_stack_extend(&s, TDA_SPAN_OF(int32_t, 3, 4, 5)));
+    assert_elems(&s, (const int32_t[]){1, 2, 3, 4, 5}, 5);
+
+    TDA_TEST_OK(tda_stack_extend(&s, TDA_SPAN_FROM_DATA(int32_t, nullptr, 0)));
+    assert_drains(&s, (const int32_t[]){1, 2, 3, 4, 5}, 5);
+
+    tda_stack_deinit(&s);
+}
+
+static void test_extend_macro_takes_whole_elems() {
+    tda_Stack s = TDA_STACK_INIT(Pair, tda_al_default());
+
+    TDA_TEST_OK(TDA_STACK_EXTEND(Pair, &s, {1, 2}, {3, 4}));
+
+    const Pair *top = TDA_STACK_TOP_AS(Pair, &s);
+    TEST_ASSERT_EQUAL_INT64(3, top->a);
+    TEST_ASSERT_EQUAL_INT64(4, top->b);
+    TEST_ASSERT_EQUAL_size_t(2, tda_stack_len(&s));
+
+    tda_stack_deinit(&s);
+}
+
+// all or nothing: a refused growth pushes none of the elems
+static void test_extend_reports_a_refused_growth() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Stack x = {};
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, al, &x, 1));
+
+    tda_test_probe_fail_after_next(&probe, 0);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_STACK_EXTEND(int32_t, &x, 2, 3, 4));
+    assert_elems(&x, (const int32_t[]){1}, 1);
+
+    probe.fail_after = SIZE_MAX;
+    tda_stack_deinit(&x);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
 // a refused growth leaves the elems as they were
 static void test_push_reports_a_refused_growth() {
     tda_TestProbe probe;
@@ -1208,6 +1251,9 @@ int main() {
 
     RUN_TEST(test_from_data_reports_a_refused_block);
     RUN_TEST(test_push_reports_a_refused_growth);
+    RUN_TEST(test_extend_pushes_in_order_the_last_on_top);
+    RUN_TEST(test_extend_macro_takes_whole_elems);
+    RUN_TEST(test_extend_reports_a_refused_growth);
     RUN_TEST(test_copy_assign_reports_a_refused_block_and_changes_nothing);
 
     RUN_TEST(test_fprint_hands_on_the_ctx_and_the_first_failure);

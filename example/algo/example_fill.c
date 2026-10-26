@@ -17,7 +17,7 @@ int main() {
     int32_t buf[5];
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
-    tda_span_fill(s, &(int32_t){7});
+    TDA_SPAN_FILL(int32_t, s, 7);
     tda_span_mut_print(s, tda_fprint_i32, nullptr); // [7, 7, 7, 7, 7]
 
     tda_span_fill_zero(s);

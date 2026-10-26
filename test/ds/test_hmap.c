@@ -33,7 +33,7 @@ static tda_Hash hash_all_alike(const void *, void *) {
     return 0;
 }
 
-// at most two keys per bucket at any size: chains, without collapsing the map into one
+// two hashes, so two chains at any size, among buckets that stay empty
 static tda_Hash hash_by_parity(const void *key, void *) {
     return (tda_Hash) (*(const int32_t *) key & 1);
 }
@@ -52,10 +52,17 @@ static bool eq_pair(const void *lhs, const void *rhs, void *) {
     return a->a == b->a && a->b == b->b;
 }
 
-// hashes that differ in the high bits and agree in the low ones: one bucket for every
-// key, yet no two hashes equal
+// hashes that differ in the high bits and agree in the low ones: what a mask over the
+// low bits would put in one chain
 static tda_Hash hash_high_bits_only(const void *key, void *) {
     return ((tda_Hash) *(const int32_t *) key) << 32;
+}
+
+// The inverse of the multiplier hmap.c places hashes by, so the product for key i is i
+// and its top bits are 0: one bucket for every small key, yet no two hashes equal. Tied
+// to the placement on purpose; a change to it shows here first.
+static tda_Hash hash_one_bucket(const void *key, void *) {
+    return (tda_Hash) *(const int32_t *) key * 0xf1de'83e1'9937'733d;
 }
 
 static size_t hash_calls = 0;
@@ -354,7 +361,7 @@ static void test_wide_keys_and_values_travel_whole() {
 // the cached hash at work: in a chain of ten only the node whose hash matches reaches
 // 'eq', and a miss never calls it
 static void test_the_chain_is_walked_by_hash_before_eq() {
-    tda_HMap m = TDA_HMAP_INIT(int32_t, int32_t, hash_high_bits_only, eq_counting_i32, nullptr, tda_al_default());
+    tda_HMap m = TDA_HMAP_INIT(int32_t, int32_t, hash_one_bucket, eq_counting_i32, nullptr, tda_al_default());
 
     for (int32_t i = 0; i < 10; ++i) {
         put(&m, i, i * 10);
@@ -368,6 +375,62 @@ static void test_the_chain_is_walked_by_hash_before_eq() {
     eq_calls = 0;
     assert_missing(&m, 100);
     TEST_ASSERT_EQUAL_size_t(0, eq_calls);
+
+    tda_hmap_deinit(&m);
+}
+
+// keys 0..n-1 under 'hasher' in a map whose buckets are reserved up front, so no rehash
+// reorders a chain
+[[nodiscard]]
+static tda_HMap make_reserved(tda_Hasher hasher, int32_t n) {
+    tda_HMap m = {};
+    TDA_TEST_OK(TDA_HMAP_INIT_CAP(
+        int32_t,
+        int32_t,
+        (size_t) n,
+        hasher,
+        tda_eq_i32,
+        nullptr,
+        tda_al_default(),
+        &m
+    ));
+    for (int32_t i = 0; i < n; ++i) {
+        put(&m, i, i);
+    }
+
+    return m;
+}
+
+// whether the walk over keys 0..n-1 gives them back as one chain would: a node is linked
+// at the head, so a chain holds them newest first
+[[nodiscard]]
+static bool walks_as_one_chain(const tda_HMap *m, int32_t n) {
+    bool newest_first = true;
+    int32_t at = 0;
+    TDA_HMAP_FOR_EACH(node, m) {
+        newest_first = newest_first && *TDA_HMAP_NODE_KEY_AS(int32_t, m, node) == n - 1 - at;
+        ++at;
+    }
+    TEST_ASSERT_EQUAL_INT32(n, at);
+
+    return newest_first;
+}
+
+// the map mixes the hash before it picks a bucket, so hashes alike in every low bit
+// still spread
+static void test_hashes_alike_in_the_low_bits_still_spread() {
+    tda_HMap m = make_reserved(hash_high_bits_only, 64);
+
+    TEST_ASSERT_FALSE(walks_as_one_chain(&m, 64));
+
+    tda_hmap_deinit(&m);
+}
+
+// the check above is not vacuous: keys that do share a bucket walk as one chain
+static void test_hashes_placed_in_one_bucket_walk_as_one_chain() {
+    tda_HMap m = make_reserved(hash_one_bucket, 64);
+
+    TEST_ASSERT_TRUE(walks_as_one_chain(&m, 64));
 
     tda_hmap_deinit(&m);
 }
@@ -2085,6 +2148,8 @@ int main() {
     RUN_TEST(test_a_hash_collision_is_not_an_equality);
     RUN_TEST(test_wide_keys_and_values_travel_whole);
     RUN_TEST(test_the_chain_is_walked_by_hash_before_eq);
+    RUN_TEST(test_hashes_alike_in_the_low_bits_still_spread);
+    RUN_TEST(test_hashes_placed_in_one_bucket_walk_as_one_chain);
 
     RUN_TEST(test_the_buckets_double_as_the_map_fills);
     RUN_TEST(test_every_entry_survives_the_growths);

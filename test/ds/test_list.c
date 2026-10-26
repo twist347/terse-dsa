@@ -698,6 +698,52 @@ static void test_pop_back_drops_the_tail() {
     tda_list_deinit(&l);
 }
 
+static void test_pop_to_hands_each_end_out() {
+    tda_List l = make_list(4);
+
+    int32_t out = -1;
+    tda_list_pop_front_to(&l, &out);
+    TEST_ASSERT_EQUAL_INT32(0, out);
+
+    tda_list_pop_back_to(&l, &out);
+    TEST_ASSERT_EQUAL_INT32(3, out);
+
+    assert_elems(&l, (int32_t[]){1, 2}, 2);
+
+    tda_list_deinit(&l);
+}
+
+// 'out' may be an elem of another node of the same list
+static void test_pop_to_into_the_list_itself() {
+    tda_List l = make_list(4);
+
+    tda_list_pop_back_to(&l, tda_list_front_mut(&l));
+    assert_elems(&l, (int32_t[]){3, 1, 2}, 3);
+
+    tda_list_pop_front_to(&l, tda_list_back_mut(&l));
+    assert_elems(&l, (int32_t[]){1, 3}, 2);
+
+    tda_list_deinit(&l);
+}
+
+static void test_pop_to_macros_move_whole_elems() {
+    tda_List l = {};
+    TDA_TEST_OK(TDA_LIST_OF(Pair, tda_al_default(), &l, {1, 2}, {3, 4}, {5, 6}));
+
+    Pair out = {0, 0};
+    TDA_LIST_POP_FRONT_TO(Pair, &l, &out);
+    TEST_ASSERT_EQUAL_INT64(1, out.a);
+    TEST_ASSERT_EQUAL_INT64(2, out.b);
+
+    TDA_LIST_POP_BACK_TO(Pair, &l, &out);
+    TEST_ASSERT_EQUAL_INT64(5, out.a);
+    TEST_ASSERT_EQUAL_INT64(6, out.b);
+
+    TEST_ASSERT_EQUAL_size_t(1, tda_list_len(&l));
+
+    tda_list_deinit(&l);
+}
+
 static void test_popping_to_empty_resets_both_ends() {
     tda_List l = make_list(2);
 
@@ -1785,6 +1831,62 @@ static void test_insert_reports_an_exhausted_arena() {
     tda_arena_deinit(&arena);
 }
 
+static void test_extend_appends_in_order() {
+    tda_List l = make_list(2);
+
+    TDA_TEST_OK(tda_list_extend(&l, TDA_SPAN_OF(int32_t, 7, 8, 9)));
+    assert_elems(&l, (int32_t[]){0, 1, 7, 8, 9}, 5);
+
+    TDA_TEST_OK(tda_list_extend(&l, TDA_SPAN_FROM_DATA(int32_t, nullptr, 0)));
+    TEST_ASSERT_EQUAL_size_t(5, tda_list_len(&l));
+
+    tda_list_deinit(&l);
+}
+
+static void test_extend_an_empty_list_sets_both_ends() {
+    tda_List l = TDA_LIST_INIT(int32_t, tda_al_default());
+
+    TDA_TEST_OK(TDA_LIST_EXTEND(int32_t, &l, 4, 5));
+    assert_elems(&l, (int32_t[]){4, 5}, 2);
+    TEST_ASSERT_EQUAL_INT32(4, *TDA_LIST_FRONT_AS(int32_t, &l));
+    TEST_ASSERT_EQUAL_INT32(5, *TDA_LIST_BACK_AS(int32_t, &l));
+
+    tda_list_deinit(&l);
+}
+
+static void test_extend_macro_takes_whole_elems() {
+    tda_List l = TDA_LIST_INIT(Pair, tda_al_default());
+
+    TDA_TEST_OK(TDA_LIST_EXTEND(Pair, &l, {1, 2}, {3, 4}));
+
+    const Pair *back = TDA_LIST_BACK_AS(Pair, &l);
+    TEST_ASSERT_EQUAL_INT64(3, back->a);
+    TEST_ASSERT_EQUAL_INT64(4, back->b);
+
+    tda_list_deinit(&l);
+}
+
+// all or nothing: the nodes made before the refusal go back, and the list is as it was
+static void test_extend_rolls_back_the_partial_chain() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_bare(&probe);
+
+    tda_List l = {};
+    TDA_TEST_OK(TDA_LIST_OF(int32_t, al, &l, 1, 2));
+    const size_t live = probe.live;
+
+    tda_test_probe_fail_after_next(&probe, 2); // two nodes, then refuse the third
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_LIST_EXTEND(int32_t, &l, 3, 4, 5));
+
+    assert_elems(&l, (int32_t[]){1, 2}, 2);
+    TEST_ASSERT_EQUAL_size_t(live, probe.live);
+
+    probe.fail_after = SIZE_MAX;
+    tda_list_deinit(&l);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
 // a from_data that fails halfway must not leak the nodes it built; an arena cannot show
 // that (its dealloc is a no-op), a probe can
 static void test_from_data_rolls_back_the_partial_list() {
@@ -2229,6 +2331,9 @@ int main() {
     RUN_TEST(test_push_front_and_back_interleave);
     RUN_TEST(test_pop_front_drops_the_head);
     RUN_TEST(test_pop_back_drops_the_tail);
+    RUN_TEST(test_pop_to_hands_each_end_out);
+    RUN_TEST(test_pop_to_into_the_list_itself);
+    RUN_TEST(test_pop_to_macros_move_whole_elems);
     RUN_TEST(test_popping_to_empty_resets_both_ends);
     RUN_TEST(test_push_after_emptying_works);
 
@@ -2313,6 +2418,10 @@ int main() {
     RUN_TEST(test_push_front_reports_an_exhausted_arena);
     RUN_TEST(test_insert_reports_an_exhausted_arena);
     RUN_TEST(test_from_data_rolls_back_the_partial_list);
+    RUN_TEST(test_extend_appends_in_order);
+    RUN_TEST(test_extend_an_empty_list_sets_both_ends);
+    RUN_TEST(test_extend_macro_takes_whole_elems);
+    RUN_TEST(test_extend_rolls_back_the_partial_chain);
     RUN_TEST(test_copy_rolls_back_the_partial_copy);
     RUN_TEST(test_copy_assign_reports_a_refused_block_and_changes_nothing);
     RUN_TEST(test_splice_across_allocators_reports_a_refused_block);

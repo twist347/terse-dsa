@@ -1,4 +1,5 @@
 #include "tda/ds/arr.h"
+#include "tda/ds/vec.h"
 #include "tda/alloc/arena.h"
 #include "tda/alloc/default.h"
 #include "tda/core/print.h"
@@ -62,6 +63,74 @@ static void test_deinit_of_an_inert_value_is_noop() {
     tda_Arr x = {};
     tda_arr_deinit(&x);
     tda_arr_deinit(&x);
+}
+
+/* ========== raw ========== */
+
+// the block changes hands both ways without a call to the allocator
+static void test_into_raw_then_init_raw_moves_the_block() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Arr a = {};
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &a, 1, 2, 3));
+    const void *block = a.data_;
+    const size_t requests = tda_test_probe_requests(&probe);
+
+    const tda_SpanMut elems = tda_arr_into_raw(&a);
+    TEST_ASSERT_EQUAL_PTR(block, elems.data);
+    TEST_ASSERT_EQUAL_size_t(3, elems.len);
+    TEST_ASSERT_NULL(a.al_.vt);
+    TEST_ASSERT_NULL(a.data_);
+
+    tda_Arr b = tda_arr_init_raw(elems, al);
+    TEST_ASSERT_EQUAL_size_t(3, tda_arr_len(&b));
+    TEST_ASSERT_EQUAL_INT32(3, *TDA_ARR_GET_AS(int32_t, &b, 2));
+    TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
+
+    tda_arr_deinit(&b);
+    tda_arr_deinit(&a); // inert after into_raw, so a no-op
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+static void test_into_raw_of_an_empty_arr_gives_no_block() {
+    tda_Arr a = {};
+    TDA_TEST_OK(TDA_ARR_INIT_LEN(int32_t, 0, tda_al_default(), &a));
+
+    const tda_SpanMut elems = tda_arr_into_raw(&a);
+    TEST_ASSERT_NULL(elems.data);
+    TEST_ASSERT_EQUAL_size_t(0, elems.len);
+
+    tda_Arr b = tda_arr_init_raw(elems, tda_al_default());
+    TEST_ASSERT_EQUAL_size_t(0, tda_arr_len(&b));
+
+    tda_arr_deinit(&b);
+}
+
+// a vec's block, shrunk to its length, is an arr's block: the two convert with no copy
+static void test_a_vec_becomes_an_arr_with_no_copy() {
+    tda_TestProbe probe;
+    tda_test_probe_reset(&probe);
+    tda_Al al = tda_test_probe_full(&probe);
+
+    tda_Vec v = {};
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, al, &v, 4, 5, 6));
+    TDA_TEST_OK(tda_vec_shrink_to_fit(&v));
+    const size_t requests = tda_test_probe_requests(&probe);
+
+    tda_SpanMut elems;
+    size_t cap;
+    tda_vec_into_raw(&v, &elems, &cap);
+    TEST_ASSERT_EQUAL_size_t(elems.len, cap);
+
+    tda_Arr a = tda_arr_init_raw(elems, al);
+    TEST_ASSERT_EQUAL_size_t(3, tda_arr_len(&a));
+    TEST_ASSERT_EQUAL_INT32(4, *TDA_ARR_GET_AS(int32_t, &a, 0));
+    TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
+
+    tda_arr_deinit(&a);
+    TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
 /* ========== from_data ========== */
@@ -1081,6 +1150,10 @@ int main() {
     RUN_TEST(test_init_empty_has_no_buffer);
     RUN_TEST(test_deinit_of_an_inert_value_is_noop);
     RUN_TEST(test_deinit_twice_is_noop);
+
+    RUN_TEST(test_into_raw_then_init_raw_moves_the_block);
+    RUN_TEST(test_into_raw_of_an_empty_arr_gives_no_block);
+    RUN_TEST(test_a_vec_becomes_an_arr_with_no_copy);
 
     RUN_TEST(test_from_data_copies_the_source);
     RUN_TEST(test_from_data_is_detached_from_the_source);

@@ -27,7 +27,8 @@
 /// @snippet core/example_hash.c use
 /// @{
 
-/// What a hasher returns. Wide on purpose: a container takes the low bits it needs.
+/// What a hasher returns. Wide on purpose: a container mixes it and takes the bits it
+/// needs, so a hasher only has to tell keys apart, not spread them.
 typedef uint64_t tda_Hash;
 
 /// Hashes the value at its operand, given the caller's 'ctx': a seed, say, so two maps

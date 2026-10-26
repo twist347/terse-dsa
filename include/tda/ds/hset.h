@@ -23,9 +23,9 @@
 /// with a value of size 0, and a set's node is the map's node header plus the key, padded.
 ///
 /// The hasher, the equality and their ctx are fixed at construction and travel with the
-/// keys through copy and swap, as in ds/hmap. Keys equal under 'eq' must hash alike, a
-/// hasher has to spread over the low bits, and a const char * key keeps the pointer, not
-/// the text, all as in ds/hmap.
+/// keys through copy and swap, as in ds/hmap. Keys equal under 'eq' must hash alike, the
+/// set mixes the hash before it picks a bucket, and a const char * key keeps the pointer,
+/// not the text, all as in ds/hmap.
 ///
 /// The set narrows the map's interface and adds no invariant: there is no value to get,
 /// set or hand out, and a key is either in or out.

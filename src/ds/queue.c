@@ -151,6 +151,18 @@ tda_Status tda_queue_push(tda_Queue *self, const void *val) {
     return st;
 }
 
+tda_Status tda_queue_extend(tda_Queue *self, tda_Span src) {
+    ASSERT_QUEUE(self);
+    TDA_SPAN_ASSERT(src);
+    TDA_EXPECT(tda_layout_eq(tda_deque_elem_layout(&self->deque_), src.elem));
+
+    const tda_Status st = tda_deque_extend(&self->deque_, src);
+
+    ASSERT_QUEUE(self);
+
+    return st;
+}
+
 void tda_queue_pop(tda_Queue *self) {
     ASSERT_QUEUE(self);
     TDA_EXPECT(tda_deque_len(&self->deque_) > 0);

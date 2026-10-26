@@ -415,6 +415,27 @@ tda_Status tda_list_push_back(tda_List *self, const void *val) {
     return insert_between(self, self->tail_, nullptr, val);
 }
 
+tda_Status tda_list_extend(tda_List *self, tda_Span src) {
+    ASSERT_LIST(self);
+    TDA_SPAN_ASSERT(src);
+    TDA_EXPECT(tda_layout_eq(self->elem_, src.elem));
+
+    if (src.len == 0) {
+        return TDA_STATUS_OK;
+    }
+
+    // the nodes are made apart and linked in one go, so a failure leaves 'self' as it was
+    tda_List chain;
+    const tda_Status st = tda_list_from_span(src, self->al_, &chain);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    splice_nodes(self, &chain, false);
+
+    return TDA_STATUS_OK;
+}
+
 void tda_list_pop_front(tda_List *self) {
     ASSERT_LIST(self);
     TDA_EXPECT(self->len_ > 0);
@@ -426,6 +447,26 @@ void tda_list_pop_back(tda_List *self) {
     ASSERT_LIST(self);
     TDA_EXPECT(self->len_ > 0);
 
+    remove_node(self, self->tail_);
+}
+
+void tda_list_pop_front_to(tda_List *self, void *out) {
+    ASSERT_LIST(self);
+    assert(out);
+    TDA_EXPECT(self->len_ > 0);
+
+    // memmove: 'out' may be an elem of this list, the dropped one too
+    memmove(out, elem_of(self, self->head_), self->elem_.size);
+    remove_node(self, self->head_);
+}
+
+void tda_list_pop_back_to(tda_List *self, void *out) {
+    ASSERT_LIST(self);
+    assert(out);
+    TDA_EXPECT(self->len_ > 0);
+
+    // memmove, as in tda_list_pop_front_to
+    memmove(out, elem_of(self, self->tail_), self->elem_.size);
     remove_node(self, self->tail_);
 }
 
