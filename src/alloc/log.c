@@ -153,7 +153,7 @@ static void log_dealloc(void *ctx, void *ptr, tda_Layout layout) {
 }
 
 static void log_line(const tda_Log *self, const char *fmt, ...) {
-    va_list args;
+    va_list args{};
     va_start(args, fmt);
     vfprintf(self->stream_, fmt, args);
     va_end(args);

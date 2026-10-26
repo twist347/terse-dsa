@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.0.0 — unreleased
+## 3.0.0 — 2026-10-26
 
 2.0 made containers and allocators values, but an allocator kept its interface inside
 itself, pointing back at it, so it could never move, and every constructor wrote through
