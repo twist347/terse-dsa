@@ -21,8 +21,7 @@ int main() {
 
     // the typed macros pass that layout, so every elem lands on its boundary, through
     // every growth, on any allocator
-    tda_Vec v;
-    TDA_VEC_INIT(Vec8, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(Vec8, tda_al_default());
     for (int i = 0; i < 100; ++i) {
         if (TDA_STATUS_IS_ERR(tda_vec_push(&v, &(Vec8){{(float) i}}))) {
             tda_vec_deinit(&v);

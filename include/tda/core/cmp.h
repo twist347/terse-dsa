@@ -8,7 +8,7 @@
 /// @ingroup core
 /// @brief tda_Cmp and tda_Eq, and ready-made ones for the built-in types
 ///
-/// Three forms per type: tda_cmp_<T> ascending, tda_cmp_desc_<T> the same with its
+/// For each type: tda_cmp_<T> ascending, tda_cmp_desc_<T> the same with its
 /// operands swapped, tda_eq_<T> only whether the two are equal.
 ///
 /// Operands arrive as const void *, and a third argument carries the caller's context to
@@ -30,11 +30,13 @@
 /// A comparator: negative if lhs < rhs, zero if equal, positive if lhs > rhs; every
 /// ordering algo takes one. 'ctx' is whatever the caller passed beside it, so an order
 /// can depend on more than its two operands: a field picked at run time, a table of keys
-/// to sort indices by.
+/// to sort indices by. An op that takes a key passes the elem as 'lhs' and the key as
+/// 'rhs', so the two may be of different types.
 typedef int (*tda_Cmp)(const void *lhs, const void *rhs, void *ctx);
 
 /// An equality: true when the two are equal, given the caller's 'ctx'. The hash
-/// containers take one.
+/// containers take one. As with tda_Cmp, an op that takes a key passes the elem as 'lhs'
+/// and the key as 'rhs'.
 typedef bool (*tda_Eq)(const void *lhs, const void *rhs, void *ctx);
 
 /// @name comparators
@@ -116,7 +118,8 @@ int tda_cmp_f64(const void *lhs, const void *rhs, void *ctx);
 
 /* ========== char ========== */
 
-/// two char, by whatever signedness char has on the target
+/// two char, as unsigned char whatever the target's signedness: the order strcmp gives
+/// the chars of a string
 /// @copydetails tda_cmp_i8
 [[nodiscard]] TDA_API
 int tda_cmp_char(const void *lhs, const void *rhs, void *ctx);

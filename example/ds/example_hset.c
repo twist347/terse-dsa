@@ -21,10 +21,9 @@ int main() {
     /// [build]
     // the hasher and the equality are fixed here for every key. They must agree: keys
     // equal under 'eq' must hash alike
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
-    tda_HSet s;
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &s);
+    tda_HSet s = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al);
 
     tda_HSet twin = {}, bulk = {}; // used below; declared here so the exit can see them
     int rc = 1;
@@ -84,11 +83,9 @@ int main() {
     /// [walk]
 
     /// [bulk]
-    // from_span collapses repeats, and extend adds a run to an existing set; both insert
-    // one key at a time
-    const tda_Span keys = TDA_SPAN_OF(int32_t, 1, 2, 2, 3, 3, 3);
-
-    if (TDA_STATUS_IS_ERR(tda_hset_from_span(keys, tda_hash_i32, tda_eq_i32, nullptr, al, &bulk))) {
+    // OF collapses repeats, and extend adds a run to an existing set; both insert one key
+    // at a time
+    if (TDA_STATUS_IS_ERR(TDA_HSET_OF(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &bulk, 1, 2, 2, 3, 3, 3))) {
         goto out;
     }
     if (TDA_STATUS_IS_ERR(TDA_HSET_EXTEND(int32_t, &bulk, 3, 4, 5, 6))) {

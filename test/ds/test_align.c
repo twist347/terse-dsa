@@ -70,7 +70,7 @@ static bool eq_wide(const void *lhs, const void *rhs, void *) {
 
 /* ========== one container at a time, over one allocator ========== */
 
-static void check_arr(tda_Al *al) {
+static void check_arr(tda_Al al) {
     tda_Arr a = {};
     TDA_TEST_OK(TDA_ARR_INIT_LEN(Wide, N, al, &a));
     TEST_ASSERT_TRUE(is_wide_aligned(tda_arr_data(&a)));
@@ -78,9 +78,8 @@ static void check_arr(tda_Al *al) {
     tda_arr_deinit(&a);
 }
 
-static void check_vec(tda_Al *al) {
-    tda_Vec v = {};
-    TDA_VEC_INIT(Wide, al, &v);
+static void check_vec(tda_Al al) {
+    tda_Vec v = TDA_VEC_INIT(Wide, al);
     for (int32_t i = 0; i < N; ++i) {
         const Wide w = wide(i);
         TDA_TEST_OK(tda_vec_push(&v, &w));
@@ -94,9 +93,8 @@ static void check_vec(tda_Al *al) {
     tda_vec_deinit(&v);
 }
 
-static void check_deque(tda_Al *al) {
-    tda_Deque d = {};
-    TDA_DEQUE_INIT(Wide, al, &d);
+static void check_deque(tda_Al al) {
+    tda_Deque d = TDA_DEQUE_INIT(Wide, al);
     for (int32_t i = 0; i < N; ++i) {
         const Wide w = wide(i);
         TDA_TEST_OK(i % 2 ? tda_deque_push_back(&d, &w) : tda_deque_push_front(&d, &w));
@@ -108,9 +106,8 @@ static void check_deque(tda_Al *al) {
     tda_deque_deinit(&d);
 }
 
-static void check_list(tda_Al *al) {
-    tda_List l = {};
-    TDA_LIST_INIT(Wide, al, &l);
+static void check_list(tda_Al al) {
+    tda_List l = TDA_LIST_INIT(Wide, al);
     for (int32_t i = 0; i < N; ++i) {
         const Wide w = wide(i);
         TDA_TEST_OK(tda_list_push_back(&l, &w));
@@ -126,9 +123,8 @@ static void check_list(tda_Al *al) {
 }
 
 // a narrow key and a wide value: the value has to skip to its boundary inside the node
-static void check_hmap(tda_Al *al) {
-    tda_HMap m = {};
-    TDA_HMAP_INIT(int32_t, Wide, tda_hash_i32, tda_eq_i32, nullptr, al, &m);
+static void check_hmap(tda_Al al) {
+    tda_HMap m = TDA_HMAP_INIT(int32_t, Wide, tda_hash_i32, tda_eq_i32, nullptr, al);
     for (int32_t i = 0; i < N; ++i) {
         const Wide w = wide(i);
         TDA_TEST_OK(tda_hmap_insert(&m, &i, &w, nullptr));
@@ -143,9 +139,8 @@ static void check_hmap(tda_Al *al) {
     tda_hmap_deinit(&m);
 }
 
-static void check_hset(tda_Al *al) {
-    tda_HSet s = {};
-    TDA_HSET_INIT(Wide, hash_wide, eq_wide, nullptr, al, &s);
+static void check_hset(tda_Al al) {
+    tda_HSet s = TDA_HSET_INIT(Wide, hash_wide, eq_wide, nullptr, al);
     for (int32_t i = 0; i < N; ++i) {
         const Wide w = wide(i);
         TDA_TEST_OK(tda_hset_insert(&s, &w, nullptr));
@@ -157,13 +152,10 @@ static void check_hset(tda_Al *al) {
     tda_hset_deinit(&s);
 }
 
-static void check_adapters(tda_Al *al) {
-    tda_Stack st = {};
-    tda_Queue q = {};
-    tda_PQueue pq = {};
-    TDA_STACK_INIT(Wide, al, &st);
-    TDA_QUEUE_INIT(Wide, al, &q);
-    TDA_PQUEUE_INIT(Wide, cmp_wide, nullptr, al, &pq);
+static void check_adapters(tda_Al al) {
+    tda_Stack st = TDA_STACK_INIT(Wide, al);
+    tda_Queue q = TDA_QUEUE_INIT(Wide, al);
+    tda_PQueue pq = TDA_PQUEUE_INIT(Wide, cmp_wide, nullptr, al);
     for (int32_t i = 0; i < N; ++i) {
         const Wide w = wide(i);
         TDA_TEST_OK(tda_stack_push(&st, &w));
@@ -181,7 +173,7 @@ static void check_adapters(tda_Al *al) {
     tda_pqueue_deinit(&pq);
 }
 
-static void check_all(tda_Al *al) {
+static void check_all(tda_Al al) {
     check_arr(al);
     check_vec(al);
     check_deque(al);
@@ -200,19 +192,18 @@ static void test_every_container_aligns_its_elems_on_default() {
 // the arena packs blocks back to back, so an elem lands aligned only if it is asked for
 static void test_every_container_aligns_its_elems_on_an_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 4 << 20, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(4 << 20, tda_al_default(), &arena));
 
-    check_all(TDA_AL(&arena));
+    check_all(tda_arena_to_al(&arena));
 
     tda_arena_deinit(&arena);
 }
 
 // nodes and small buffers come from classes, large buffers from the parent
 static void test_every_container_aligns_its_elems_on_a_slab() {
-    tda_Slab slab;
-    tda_slab_init(tda_al_default(), &slab);
+    tda_Slab slab = tda_slab_init(tda_al_default());
 
-    check_all(TDA_AL(&slab));
+    check_all(tda_slab_to_al(&slab));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_slab_stats(&slab).small_blocks);
     TEST_ASSERT_EQUAL_size_t(0, tda_slab_stats(&slab).large_blocks);
@@ -222,10 +213,9 @@ static void test_every_container_aligns_its_elems_on_a_slab() {
 // the debug allocator stops on any block given back with another size or alignment than
 // it was made with, so every path that frees, grows or moves an elem block is checked
 static void test_every_container_gives_back_what_it_took_on_debug() {
-    tda_Debug debug;
-    tda_debug_init(tda_al_default(), &debug);
+    tda_Debug debug = tda_debug_init(tda_al_default());
 
-    check_all(TDA_AL(&debug));
+    check_all(tda_debug_to_al(&debug));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_debug_stats(&debug).live_blocks);
     tda_debug_deinit(&debug);
@@ -235,10 +225,9 @@ static void test_every_container_gives_back_what_it_took_on_debug() {
 static void test_a_list_of_wide_elems_runs_on_a_pool_of_its_node_layout() {
     constexpr size_t count = 16;
     tda_Pool pool;
-    TDA_TEST_OK(tda_pool_init(tda_al_default(), tda_list_node_layout(TDA_LAYOUT_OF(Wide)), count, &pool));
+    TDA_TEST_OK(tda_pool_init_cap(count, tda_list_node_layout(TDA_LAYOUT_OF(Wide)), tda_al_default(), &pool));
 
-    tda_List l = {};
-    TDA_LIST_INIT(Wide, TDA_AL(&pool), &l);
+    tda_List l = TDA_LIST_INIT(Wide, tda_pool_to_al(&pool));
     for (int32_t i = 0; i + 1 < (int32_t) count; ++i) {
         const Wide w = wide(i);
         TDA_TEST_OK(tda_list_push_back(&l, &w));
@@ -275,23 +264,24 @@ static void test_algo_scratch_buffers_take_the_elems_layout() {
     tda_Al probe_al = tda_test_probe_bare(&probe);
 
     for (int round = 0; round < 2; ++round) {
-        tda_Al *al = &probe_al;
+        const bool on_arena = round == 1;
+        tda_Al al = probe_al;
         tda_Arena arena_v = {};
-        tda_Al *arena = nullptr;
-        if (round == 1) {
-            TDA_TEST_OK(tda_arena_init(tda_al_default(), 1 << 20, &arena_v));
-            arena = TDA_AL(&arena_v);
+        tda_Al arena = {};
+        if (on_arena) {
+            TDA_TEST_OK(tda_arena_init_cap(1 << 20, tda_al_default(), &arena_v));
+            arena = tda_arena_to_al(&arena_v);
             al = arena;
         }
 
         for (int32_t i = 0; i < 64; ++i) {
             buf[i] = wide((i * 37) % 64);
         }
-        if (arena) {
+        if (on_arena) {
             TEST_ASSERT_NOT_NULL(tda_alloc(arena, (tda_Layout){.size = 1, .align = 1}));
         }
         TDA_TEST_OK(tda_span_sort_stable(s, cmp_wide_aligned, nullptr, al));
-        if (!arena) {
+        if (!on_arena) {
             TEST_ASSERT_EQUAL_size_t(alignof(Wide), probe.last_alloc.align);
         }
         for (int32_t i = 0; i < 64; ++i) {
@@ -302,23 +292,23 @@ static void test_algo_scratch_buffers_take_the_elems_layout() {
             buf[i] = wide(2 * i);
             buf[32 + i] = wide(2 * i + 1);
         }
-        if (arena) {
+        if (on_arena) {
             TEST_ASSERT_NOT_NULL(tda_alloc(arena, (tda_Layout){.size = 1, .align = 1}));
         }
         tda_span_inplace_merge(s, 32, cmp_wide_aligned, nullptr, al);
-        if (!arena) {
+        if (!on_arena) {
             TEST_ASSERT_EQUAL_size_t(alignof(Wide), probe.last_alloc.align);
         }
         for (int32_t i = 0; i < 64; ++i) {
             TEST_ASSERT_EQUAL_INT32(i, buf[i].id);
         }
 
-        if (arena) {
+        if (on_arena) {
             TEST_ASSERT_NOT_NULL(tda_alloc(arena, (tda_Layout){.size = 1, .align = 1}));
         }
         size_t boundary;
         TDA_TEST_OK(tda_span_partition_stable(s, is_even_wide, nullptr, al, &boundary));
-        if (!arena) {
+        if (!on_arena) {
             TEST_ASSERT_EQUAL_size_t(alignof(Wide), probe.last_alloc.align);
         }
         TEST_ASSERT_EQUAL_size_t(32, boundary);
@@ -339,13 +329,13 @@ static void test_a_pool_of_narrow_blocks_serves_a_stable_sort() {
     static_assert(alignof(Quad) == 4 && sizeof(Quad) == 16);
 
     tda_Pool pool;
-    TDA_TEST_OK(tda_pool_init(tda_al_default(), (tda_Layout){.size = 1024, .align = 4}, 2, &pool));
+    TDA_TEST_OK(tda_pool_init_cap(2, (tda_Layout){.size = 1024, .align = 4}, tda_al_default(), &pool));
 
     Quad buf[8];
     for (int32_t i = 0; i < 8; ++i) {
         buf[i] = (Quad){.key = 7 - i};
     }
-    TDA_TEST_OK(tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(Quad, buf, 8), tda_cmp_i32, nullptr, TDA_AL(&pool)));
+    TDA_TEST_OK(tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(Quad, buf, 8), tda_cmp_i32, nullptr, tda_pool_to_al(&pool)));
     TEST_ASSERT_EQUAL_INT32(0, buf[0].key);
 
     tda_pool_deinit(&pool);

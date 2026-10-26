@@ -26,14 +26,14 @@ int main() {
 
     // only the lengths have to match; the elem sizes are 4 and 8
     tda_span_transform(dst, src, widen_and_square, nullptr);
-    tda_span_mut_print(dst, tda_fprint_i64); // [1, 4, 9, 16]
+    tda_span_mut_print(dst, tda_fprint_i64, nullptr); // [1, 4, 9, 16]
 
     // two sources in step
     const tda_Span other = TDA_SPAN_OF(int32_t, 10, 20, 30, 40);
     const tda_SpanMut sums = TDA_SPAN_OF_MUT(int32_t, 0, 0, 0, 0);
 
     tda_span_zip_with(sums, src, other, add, nullptr);
-    tda_span_mut_print(sums, tda_fprint_i32); // [11, 22, 33, 44]
+    tda_span_mut_print(sums, tda_fprint_i32, nullptr); // [11, 22, 33, 44]
     /// [map]
 
     return 0;

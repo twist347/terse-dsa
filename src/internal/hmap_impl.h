@@ -29,6 +29,6 @@ tda_Status tda_hmap_init_raw_(
     size_t cap,
     tda_Layout key, tda_Layout val,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     tda_HMap *out
 );

@@ -8,6 +8,8 @@
 #include "support/probe.h"
 #include "support/status.h"
 
+#include "support/print.h"
+
 #include <unity.h>
 
 #include <stdint.h>
@@ -38,7 +40,7 @@ static void test_init_sets_shape_and_zeroes() {
 
     TEST_ASSERT_EQUAL_size_t(4, tda_arr_len(&a));
     TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_arr_elem_layout(&a).size);
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_arr_al(&a));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_arr_al(&a)));
 
     constexpr int32_t zeroes[4] = {0, 0, 0, 0};
     TEST_ASSERT_EQUAL_INT32_ARRAY(zeroes, tda_arr_data(&a), 4);
@@ -445,15 +447,15 @@ static void test_to_span_of_empty_keeps_the_elem_layout() {
 
 static void test_copy_inherits_the_source_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Arr src = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, TDA_AL(&arena), &src, 1, 2, 3));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, tda_arena_to_al(&arena), &src, 1, 2, 3));
 
     tda_Arr dst = {};
     TDA_TEST_OK(tda_arr_copy(&src, &dst));
 
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_arr_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_arr_al(&dst)));
     TEST_ASSERT_EQUAL_INT32_ARRAY(tda_arr_data(&src), tda_arr_data(&dst), 3);
 
     tda_arr_deinit(&dst);
@@ -463,15 +465,15 @@ static void test_copy_inherits_the_source_allocator() {
 
 static void test_copy_with_builds_on_the_given_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Arr src = make_arr(4);
 
     tda_Arr dst = {};
-    TDA_TEST_OK(tda_arr_copy_with(&src, TDA_AL(&arena), &dst));
+    TDA_TEST_OK(tda_arr_copy_with(&src, tda_arena_to_al(&arena), &dst));
 
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_arr_al(&dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_arr_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_arr_al(&dst)));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_arr_al(&src)));
     TEST_ASSERT_TRUE(tda_arr_eq(&src, &dst));
 
     // the copy outlives the source, so it owns its elems
@@ -485,14 +487,15 @@ static void test_copy_with_builds_on_the_given_allocator() {
 // the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
     tda_test_arena_leave(&arena, 0);
 
     tda_Arr src = make_arr(4);
 
-    tda_Arr dst = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_copy_with(&src, TDA_AL(&arena), &dst));
-    TEST_ASSERT_NULL(dst.al_);
+    tda_Arr dst;
+    TDA_TEST_POISON(dst);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_copy_with(&src, tda_arena_to_al(&arena), &dst));
+    TDA_TEST_ASSERT_POISONED(dst);
     TEST_ASSERT_EQUAL_size_t(4, tda_arr_len(&src));
 
     tda_arr_deinit(&src);
@@ -505,10 +508,10 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Arr src = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, &al, &src, 1, 2, 3));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &src, 1, 2, 3));
 
     tda_Arr dst = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, &al, &dst, 9));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
     tda_arr_move_assign(&dst, &src);
@@ -532,21 +535,21 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
 // from
 static void test_move_assign_across_allocators_hands_the_allocator_over() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Arr src = make_arr(4);
 
     tda_Arr dst = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, TDA_AL(&arena), &dst, 9));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, tda_arena_to_al(&arena), &dst, 9));
 
     tda_arr_move_assign(&dst, &src);
 
     TEST_ASSERT_EQUAL_size_t(4, tda_arr_len(&dst));
     TEST_ASSERT_EQUAL_INT32(3, *TDA_ARR_GET_AS(int32_t, &dst, 3));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_arr_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_arr_al(&dst)));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_arr_len(&src));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_arr_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_arr_al(&src)));
 
     tda_arr_deinit(&src);
     tda_arr_deinit(&dst);
@@ -556,10 +559,10 @@ static void test_move_assign_across_allocators_hands_the_allocator_over() {
 // nothing is allocated, so an exhausted allocator on either side cannot stop it
 static void test_move_assign_needs_no_memory() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Arr dst = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, TDA_AL(&arena), &dst, 9));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, tda_arena_to_al(&arena), &dst, 9));
     tda_test_arena_leave(&arena, 0);
 
     tda_Arr src = make_arr(4);
@@ -588,17 +591,17 @@ static void test_move_assign_of_itself_changes_nothing() {
 // assignment resizes through the target's allocator, not the source's
 static void test_copy_assign_keeps_the_target_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Arr src = make_arr(4);
 
     tda_Arr dst = {};
-    TDA_TEST_OK(TDA_ARR_INIT_LEN(int32_t, 1, TDA_AL(&arena), &dst));
+    TDA_TEST_OK(TDA_ARR_INIT_LEN(int32_t, 1, tda_arena_to_al(&arena), &dst));
 
     TDA_TEST_OK(tda_arr_copy_assign(&dst, &src));
 
     TEST_ASSERT_EQUAL_size_t(4, tda_arr_len(&dst));
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_arr_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_arr_al(&dst)));
     TEST_ASSERT_EQUAL_INT32_ARRAY(tda_arr_data(&src), tda_arr_data(&dst), 4);
 
     tda_arr_deinit(&dst);
@@ -617,7 +620,7 @@ static void test_init_len_reports_size_overflow() {
 
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_init_len(SIZE_MAX, TWO_BYTES, tda_al_default(), &a));
 
-    TEST_ASSERT_NULL(a.al_); // out is untouched on failure
+    TEST_ASSERT_NULL(a.al_.vt); // out is untouched on failure
 }
 
 static void test_from_data_reports_size_overflow() {
@@ -626,32 +629,34 @@ static void test_from_data_reports_size_overflow() {
 
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_from_data(src, SIZE_MAX, TWO_BYTES, tda_al_default(), &a));
 
-    TEST_ASSERT_NULL(a.al_);
+    TEST_ASSERT_NULL(a.al_.vt);
 }
 
 static void test_init_len_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 64, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(64, tda_al_default(), &arena));
 
-    tda_Arr a = {};
+    tda_Arr a;
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_ARR_INIT_LEN(int32_t, 1000, TDA_AL(&arena), &a));
+    TDA_TEST_POISON(a);
 
-    TEST_ASSERT_NULL(a.al_);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_ARR_INIT_LEN(int32_t, 1000, tda_arena_to_al(&arena), &a));
+
+    TDA_TEST_ASSERT_POISONED(a);
 
     tda_arena_deinit(&arena);
 }
 
 static void test_from_data_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 128, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(128, tda_al_default(), &arena));
 
     constexpr int32_t src[4] = {1, 2, 3, 4};
     tda_Arr a = {};
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_from_data(src, 1000, TDA_LAYOUT_OF(int32_t), TDA_AL(&arena), &a));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_from_data(src, 1000, TDA_LAYOUT_OF(int32_t), tda_arena_to_al(&arena), &a));
 
-    TEST_ASSERT_NULL(a.al_);
+    TEST_ASSERT_NULL(a.al_.vt);
 
     tda_arena_deinit(&arena);
 }
@@ -659,16 +664,17 @@ static void test_from_data_reports_an_exhausted_arena() {
 // a copy takes both blocks from the SOURCE's allocator, so exhausting that arena fails it
 static void test_copy_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(256, tda_al_default(), &arena));
 
     tda_Arr src = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, TDA_AL(&arena), &src, 1, 2, 3));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, tda_arena_to_al(&arena), &src, 1, 2, 3));
     tda_test_arena_leave(&arena, 0);
 
-    tda_Arr dst = {};
+    tda_Arr dst;
+    TDA_TEST_POISON(dst);
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_arr_copy(&src, &dst));
 
-    TEST_ASSERT_NULL(dst.al_);
+    TDA_TEST_ASSERT_POISONED(dst);
     TEST_ASSERT_EQUAL_size_t(3, tda_arr_len(&src)); // the source is only read
 
     tda_arena_deinit(&arena);
@@ -677,10 +683,10 @@ static void test_copy_reports_an_exhausted_arena() {
 // an empty arr owns no block, so even an exhausted allocator copies it
 static void test_copy_of_empty_allocates_nothing() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 128, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(128, tda_al_default(), &arena));
 
     tda_Arr src = {};
-    TDA_TEST_OK(TDA_ARR_INIT_LEN(int32_t, 0, TDA_AL(&arena), &src));
+    TDA_TEST_OK(TDA_ARR_INIT_LEN(int32_t, 0, tda_arena_to_al(&arena), &src));
     tda_test_arena_leave(&arena, 0);
 
     tda_Arr dst = {};
@@ -697,10 +703,10 @@ static void test_copy_of_empty_allocates_nothing() {
 // When that is refused the target keeps its old length, block and elems.
 static void test_copy_assign_reports_a_refused_block_and_changes_nothing() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(256, tda_al_default(), &arena));
 
     tda_Arr other = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, TDA_AL(&arena), &other, 7, 8));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, tda_arena_to_al(&arena), &other, 7, 8));
 
     tda_Arr self = make_arr(8); // default allocator, 0 .. 7
 
@@ -726,8 +732,8 @@ static void test_copy_assign_of_the_same_length_never_allocates() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Arr self = {}, other = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, &al, &self, 1, 2, 3));
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, &al, &other, 9, 9, 9));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &self, 1, 2, 3));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &other, 9, 9, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
     const void *before = tda_arr_data(&other);
@@ -751,10 +757,11 @@ static void test_a_refused_buffer_leaves_nothing_behind() {
 
     tda_test_probe_fail_after_next(&probe, 0);
 
-    tda_Arr a = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_ARR_INIT_LEN(int32_t, 4, &al, &a));
+    tda_Arr a;
+    TDA_TEST_POISON(a);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_ARR_INIT_LEN(int32_t, 4, al, &a));
 
-    TEST_ASSERT_NULL(a.al_);
+    TDA_TEST_ASSERT_POISONED(a);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
@@ -766,9 +773,9 @@ static void test_a_refused_buffer_of_from_data_leaves_nothing_behind() {
     tda_test_probe_fail_after_next(&probe, 0);
 
     tda_Arr a = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_ARR_OF(int32_t, &al, &a, 1, 2, 3));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_ARR_OF(int32_t, al, &a, 1, 2, 3));
 
-    TEST_ASSERT_NULL(a.al_);
+    TEST_ASSERT_NULL(a.al_.vt);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
@@ -780,7 +787,7 @@ static void test_deinit_hands_back_everything() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Arr a = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, &al, &a, 1, 2, 3, 4));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &a, 1, 2, 3, 4));
     TEST_ASSERT_EQUAL_size_t(1, probe.live);
 
     tda_arr_deinit(&a);
@@ -795,7 +802,7 @@ static void test_an_empty_arr_owns_nothing() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Arr a = {};
-    TDA_TEST_OK(TDA_ARR_INIT_LEN(int32_t, 0, &al, &a));
+    TDA_TEST_OK(TDA_ARR_INIT_LEN(int32_t, 0, al, &a));
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 
     tda_arr_deinit(&a);
@@ -960,7 +967,7 @@ static void assert_prints(const char *expected, const tda_Arr *a) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    tda_arr_fprint(a, stream, tda_fprint_i32);
+    tda_arr_fprint(a, stream, tda_fprint_i32, nullptr);
     rewind(stream);
 
     char buf[128];
@@ -975,7 +982,7 @@ static void test_fprint_writes_the_elems() {
     tda_Arr a = {};
     TDA_TEST_OK(TDA_ARR_OF(int32_t, tda_al_default(), &a, 5, 3, 1));
 
-    assert_prints("[5, 3, 1]\n", &a);
+    assert_prints("[5, 3, 1]", &a);
 
     tda_arr_deinit(&a);
 }
@@ -984,7 +991,7 @@ static void test_fprint_of_a_single_elem_has_no_separator() {
     tda_Arr a = {};
     TDA_TEST_OK(TDA_ARR_OF(int32_t, tda_al_default(), &a, 7));
 
-    assert_prints("[7]\n", &a);
+    assert_prints("[7]", &a);
 
     tda_arr_deinit(&a);
 }
@@ -992,7 +999,7 @@ static void test_fprint_of_a_single_elem_has_no_separator() {
 static void test_fprint_of_an_empty_arr() {
     tda_Arr a = make_arr(0);
 
-    assert_prints("[]\n", &a);
+    assert_prints("[]", &a);
 
     tda_arr_deinit(&a);
 }
@@ -1001,7 +1008,7 @@ static void test_fprint_of_an_empty_arr() {
 static void test_print_writes_to_stdout() {
     tda_Arr a = make_arr(3);
 
-    tda_arr_print(&a, tda_fprint_i32);
+    tda_arr_print(&a, tda_fprint_i32, nullptr);
 
     tda_arr_deinit(&a);
 }
@@ -1014,13 +1021,13 @@ static void test_swap_across_allocators_carries_each_allocator() {
     tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
     tda_Arr a = {}, b = {};
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, &al_a, &a, 1, 2));
-    TDA_TEST_OK(TDA_ARR_OF(int32_t, &al_b, &b, 3, 4, 5));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, al_a, &a, 1, 2));
+    TDA_TEST_OK(TDA_ARR_OF(int32_t, al_b, &b, 3, 4, 5));
 
     tda_arr_swap(&a, &b);
 
-    TEST_ASSERT_EQUAL_PTR(&al_b, tda_arr_al(&a));
-    TEST_ASSERT_EQUAL_PTR(&al_a, tda_arr_al(&b));
+    TEST_ASSERT_TRUE(tda_al_eq(al_b, tda_arr_al(&a)));
+    TEST_ASSERT_TRUE(tda_al_eq(al_a, tda_arr_al(&b)));
     TEST_ASSERT_EQUAL_size_t(3, tda_arr_len(&a));
 
     tda_arr_deinit(&a);
@@ -1035,9 +1042,36 @@ static void test_deinit_twice_is_noop() {
     TDA_TEST_OK(TDA_ARR_OF(int32_t, tda_al_default(), &x, 1, 2));
 
     tda_arr_deinit(&x);
-    TEST_ASSERT_NULL(x.al_);
+    TEST_ASSERT_NULL(x.al_.vt);
 
     tda_arr_deinit(&x);
+}
+
+
+/* ========== print errors ========== */
+
+// the ctx reaches every call, every elem is still asked after a failure, and the first
+// failure is what comes back; print adds only its newline
+static void test_fprint_hands_on_the_ctx_and_the_first_failure() {
+    tda_Arr a = make_arr(3);
+    tda_TestPrint pr = {.fail_from = 2};
+    FILE *stream = tmpfile();
+    TEST_ASSERT_NOT_NULL(stream);
+
+    TEST_ASSERT_EQUAL_INT(-2, tda_arr_fprint(&a, stream, tda_test_fprint_i32_failing, &pr));
+    TEST_ASSERT_EQUAL_size_t(3, pr.calls);
+    fclose(stream);
+
+    pr = (tda_TestPrint){.fail_from = 0};
+    TEST_ASSERT_EQUAL_INT(0, tda_arr_print(&a, tda_test_fprint_i32_failing, &pr));
+    pr = (tda_TestPrint){.fail_from = 2};
+    TEST_ASSERT_EQUAL_INT(-2, tda_arr_print(&a, tda_test_fprint_i32_failing, &pr));
+
+    FILE *ro = tda_test_unwritable_stream();
+    TEST_ASSERT_LESS_THAN_INT(0, tda_arr_fprint(&a, ro, tda_fprint_i32, nullptr));
+    fclose(ro);
+
+    tda_arr_deinit(&a);
 }
 
 int main() {
@@ -1129,6 +1163,8 @@ int main() {
     RUN_TEST(test_print_writes_to_stdout);
 
     RUN_TEST(test_swap_across_allocators_carries_each_allocator);
+
+    RUN_TEST(test_fprint_hands_on_the_ctx_and_the_first_failure);
 
     return UNITY_END();
 }

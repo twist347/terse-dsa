@@ -11,6 +11,8 @@
 #include "support/probe.h"
 #include "support/status.h"
 
+#include "support/print.h"
+
 #include <unity.h>
 
 #include <stddef.h>
@@ -21,6 +23,10 @@ void setUp() {
 
 void tearDown() {
 }
+
+// a set node is its own type: neither it nor a map node converts to the other
+static_assert(_Generic((tda_HSetNode *) nullptr, tda_HMapNode *: false, default: true));
+static_assert(_Generic((const tda_HSetNode *) nullptr, const tda_HMapNode *: false, default: true));
 
 /* ========== helpers ========== */
 
@@ -43,8 +49,7 @@ static bool eq_pair(const void *lhs, const void *rhs, void *) {
 
 [[nodiscard]]
 static tda_HSet make_set(tda_Hasher hasher, void *ctx) {
-    tda_HSet s = {};
-    TDA_HSET_INIT(int32_t, hasher, tda_eq_i32, ctx, tda_al_default(), &s);
+    tda_HSet s = TDA_HSET_INIT(int32_t, hasher, tda_eq_i32, ctx, tda_al_default());
 
     return s;
 }
@@ -105,13 +110,11 @@ static void test_a_set_node_is_a_map_node_without_the_value() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_HSet s = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al, &s);
+    tda_HSet s = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al);
     TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &s, 1, nullptr));
     const tda_Layout set_node = probe.last_alloc; // a first insert ends with the node
 
-    tda_HMap m = {};
-    TDA_HMAP_INIT(int32_t, int64_t, tda_hash_i32, tda_eq_i32, nullptr, &al, &m);
+    tda_HMap m = TDA_HMAP_INIT(int32_t, int64_t, tda_hash_i32, tda_eq_i32, nullptr, al);
     TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int64_t, &m, 1, 10, nullptr));
     const tda_Layout map_node = probe.last_alloc;
 
@@ -134,7 +137,7 @@ static void test_init_starts_empty() {
     TEST_ASSERT_EQUAL_size_t(0, tda_hset_len(&s));
     TEST_ASSERT_EQUAL_size_t(0, tda_hset_bucket_count(&s));
     TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_hset_key_layout(&s).size);
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_hset_al(&s));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_hset_al(&s)));
     TEST_ASSERT_EQUAL_PTR(tda_hash_i32, tda_hset_hasher(&s));
     TEST_ASSERT_EQUAL_PTR(tda_eq_i32, tda_hset_key_eq(&s));
     TEST_ASSERT_NULL(tda_hset_first_node(&s));
@@ -165,8 +168,7 @@ static void test_deinit_hands_back_everything() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_HSet s = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al, &s);
+    tda_HSet s = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al);
     for (int32_t i = 0; i < 20; ++i) {
         put(&s, i);
     }
@@ -253,8 +255,7 @@ static void test_a_set_whose_keys_all_collide_still_finds_them() {
 }
 
 static void test_wide_keys_travel_whole() {
-    tda_HSet s = {};
-    TDA_HSET_INIT(Pair, hash_pair, eq_pair, nullptr, tda_al_default(), &s);
+    tda_HSet s = TDA_HSET_INIT(Pair, hash_pair, eq_pair, nullptr, tda_al_default());
 
     constexpr Pair a = {1, 2};
     constexpr Pair b = {1, 3};
@@ -434,8 +435,7 @@ static bool eq_mod_100(const void *lhs, const void *rhs, void *) {
 }
 
 static void test_take_hands_out_the_stored_key_over_the_probe() {
-    tda_HSet s = {};
-    TDA_HSET_INIT(int32_t, hash_mod_100, eq_mod_100, nullptr, tda_al_default(), &s);
+    tda_HSet s = TDA_HSET_INIT(int32_t, hash_mod_100, eq_mod_100, nullptr, tda_al_default());
     put(&s, 105);
 
     int32_t key = 5;
@@ -541,8 +541,7 @@ static void test_shrink_to_fit_of_an_empty_set_owns_nothing() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_HSet s = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al, &s);
+    tda_HSet s = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al);
     for (int32_t i = 0; i < 50; ++i) {
         put(&s, i);
     }
@@ -600,17 +599,16 @@ static void test_copy_is_independent() {
 
 static void test_copy_carries_the_hasher_and_the_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 4096, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(4096, tda_al_default(), &arena));
 
-    tda_HSet src = {};
-    TDA_HSET_INIT(int32_t, hash_all_alike, tda_eq_i32, nullptr, TDA_AL(&arena), &src);
+    tda_HSet src = TDA_HSET_INIT(int32_t, hash_all_alike, tda_eq_i32, nullptr, tda_arena_to_al(&arena));
     put(&src, 1);
 
     tda_HSet dst = {};
     TDA_TEST_OK(tda_hset_copy(&src, &dst));
 
     TEST_ASSERT_EQUAL_PTR(hash_all_alike, tda_hset_hasher(&dst));
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_hset_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_hset_al(&dst)));
     assert_has(&dst, 1);
 
     tda_hset_deinit(&src);
@@ -626,8 +624,7 @@ static void test_a_copy_keeps_the_smaller_node() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_HSet src = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al, &src);
+    tda_HSet src = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al);
     TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &src, 1, nullptr));
     const size_t node = probe.last_alloc.size;
 
@@ -645,15 +642,15 @@ static void test_a_copy_keeps_the_smaller_node() {
 
 static void test_copy_with_builds_on_the_given_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 4096, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(4096, tda_al_default(), &arena));
 
     tda_HSet src = make_filled(tda_hash_i32, nullptr, 8);
 
     tda_HSet dst = {};
-    TDA_TEST_OK(tda_hset_copy_with(&src, TDA_AL(&arena), &dst));
+    TDA_TEST_OK(tda_hset_copy_with(&src, tda_arena_to_al(&arena), &dst));
 
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_hset_al(&dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_hset_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_hset_al(&dst)));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_hset_al(&src)));
     TEST_ASSERT_EQUAL_PTR(tda_hash_i32, tda_hset_hasher(&dst));
     TEST_ASSERT_EQUAL_PTR(tda_eq_i32, tda_hset_key_eq(&dst));
     TEST_ASSERT_TRUE(tda_hset_eq(&src, &dst));
@@ -669,14 +666,15 @@ static void test_copy_with_builds_on_the_given_allocator() {
 // the buckets and nodes come from the copy's allocator
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 4096, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(4096, tda_al_default(), &arena));
     tda_test_arena_leave(&arena, 0);
 
     tda_HSet src = make_filled(tda_hash_i32, nullptr, 8);
 
-    tda_HSet dst = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_copy_with(&src, TDA_AL(&arena), &dst));
-    TEST_ASSERT_NULL(dst.map_.al_);
+    tda_HSet dst;
+    TDA_TEST_POISON(dst);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_copy_with(&src, tda_arena_to_al(&arena), &dst));
+    TDA_TEST_ASSERT_POISONED(dst);
     TEST_ASSERT_EQUAL_size_t(8, tda_hset_len(&src));
 
     tda_hset_deinit(&src);
@@ -688,13 +686,11 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_HSet src = {};
-    TDA_HSET_INIT(int32_t, hash_all_alike, tda_eq_i32, nullptr, &al, &src);
+    tda_HSet src = TDA_HSET_INIT(int32_t, hash_all_alike, tda_eq_i32, nullptr, al);
     put(&src, 1);
     put(&src, 2);
 
-    tda_HSet dst = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al, &dst);
+    tda_HSet dst = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al);
     put(&dst, 9);
 
     const size_t requests = tda_test_probe_requests(&probe);
@@ -724,12 +720,11 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
 // from
 static void test_move_assign_across_allocators_hands_the_allocator_over() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 4096, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(4096, tda_al_default(), &arena));
 
     tda_HSet src = make_filled(tda_hash_i32, nullptr, 8);
 
-    tda_HSet dst = {};
-    TDA_HSET_INIT(int32_t, hash_all_alike, tda_eq_i32, nullptr, TDA_AL(&arena), &dst);
+    tda_HSet dst = TDA_HSET_INIT(int32_t, hash_all_alike, tda_eq_i32, nullptr, tda_arena_to_al(&arena));
     put(&dst, 9);
 
     tda_hset_move_assign(&dst, &src);
@@ -738,11 +733,11 @@ static void test_move_assign_across_allocators_hands_the_allocator_over() {
     assert_has(&dst, 3);
     assert_missing(&dst, 9);
     TEST_ASSERT_EQUAL_PTR(tda_hash_i32, tda_hset_hasher(&dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_hset_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_hset_al(&dst)));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_hset_len(&src));
     TEST_ASSERT_EQUAL_size_t(0, tda_hset_bucket_count(&src));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_hset_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_hset_al(&src)));
 
     tda_hset_deinit(&src);
     tda_hset_deinit(&dst);
@@ -752,10 +747,9 @@ static void test_move_assign_across_allocators_hands_the_allocator_over() {
 // nothing is allocated, so an exhausted allocator on either side cannot stop it
 static void test_move_assign_needs_no_memory() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 4096, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(4096, tda_al_default(), &arena));
 
-    tda_HSet dst = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, TDA_AL(&arena), &dst);
+    tda_HSet dst = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_arena_to_al(&arena));
     put(&dst, 9);
     tda_test_arena_leave(&arena, 0);
 
@@ -923,6 +917,18 @@ static void test_retain_asks_once_per_key() {
 
 /* ========== from_span / extend ========== */
 
+// the keys written out, a repeat among them, as tda_hset_from_span takes them
+static void test_of_builds_from_the_keys_written_out() {
+    tda_HSet s;
+    TDA_TEST_OK(TDA_HSET_OF(int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &s, 5, 3, 5));
+
+    TEST_ASSERT_EQUAL_size_t(2, tda_hset_len(&s));
+    assert_has(&s, 3);
+    assert_has(&s, 5);
+
+    tda_hset_deinit(&s);
+}
+
 static void test_from_span_collapses_repeats() {
     tda_HSet s = {};
     TDA_TEST_OK(
@@ -990,7 +996,7 @@ static void test_from_span_fails_at_every_step_without_a_leak() {
         tda_test_probe_fail_after_next(&probe, n);
 
         tda_HSet s = {};
-        const tda_Status st = tda_hset_from_span(keys, tda_hash_i32, tda_eq_i32, nullptr, &al, &s);
+        const tda_Status st = tda_hset_from_span(keys, tda_hash_i32, tda_eq_i32, nullptr, al, &s);
         if (TDA_STATUS_IS_OK(st)) {
             TEST_ASSERT_EQUAL_size_t(9, tda_hset_len(&s));
             tda_hset_deinit(&s);
@@ -999,7 +1005,7 @@ static void test_from_span_fails_at_every_step_without_a_leak() {
         }
 
         TEST_ASSERT_EQUAL(TDA_STATUS_ERR_NO_MEM, st);
-        TEST_ASSERT_NULL(s.map_.al_);
+        TEST_ASSERT_NULL(s.map_.al_.vt);
         TEST_ASSERT_EQUAL_size_t(0, probe.live);
     }
 }
@@ -1013,8 +1019,7 @@ static void test_extend_that_fails_keeps_a_prefix_of_the_run() {
         tda_test_probe_reset(&probe);
         tda_Al al = tda_test_probe_full(&probe);
 
-        tda_HSet s = {};
-        TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al, &s);
+        tda_HSet s = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al);
         tda_test_probe_fail_after_next(&probe, n);
 
         const tda_Status st = tda_hset_extend(&s, TDA_SPAN_FROM_DATA(int32_t, keys, 8));
@@ -1033,10 +1038,9 @@ static void test_extend_that_fails_keeps_a_prefix_of_the_run() {
 
 static void test_insert_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 512, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(512, tda_al_default(), &arena));
 
-    tda_HSet s = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, TDA_AL(&arena), &s);
+    tda_HSet s = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_arena_to_al(&arena));
     put(&s, 1);
     tda_test_arena_leave(&arena, 0);
 
@@ -1052,10 +1056,9 @@ static void test_insert_reports_an_exhausted_arena_and_changes_nothing() {
 // putting a key already there needs no memory, so an exhausted arena does not stop it
 static void test_a_repeat_insert_needs_no_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 512, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(512, tda_al_default(), &arena));
 
-    tda_HSet s = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, TDA_AL(&arena), &s);
+    tda_HSet s = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_arena_to_al(&arena));
     put(&s, 1);
     tda_test_arena_leave(&arena, 0);
 
@@ -1068,10 +1071,9 @@ static void test_a_repeat_insert_needs_no_allocator() {
 
 static void test_reserve_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 512, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(512, tda_al_default(), &arena));
 
-    tda_HSet s = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, TDA_AL(&arena), &s);
+    tda_HSet s = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_arena_to_al(&arena));
     put(&s, 1);
     tda_test_arena_leave(&arena, 0);
 
@@ -1085,28 +1087,27 @@ static void test_reserve_reports_an_exhausted_arena() {
 
 static void test_copy_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 512, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(512, tda_al_default(), &arena));
 
-    tda_HSet src = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, TDA_AL(&arena), &src);
+    tda_HSet src = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_arena_to_al(&arena));
     put(&src, 1);
     tda_test_arena_leave(&arena, 0);
 
-    tda_HSet dst = {};
+    tda_HSet dst;
+    TDA_TEST_POISON(dst);
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_hset_copy(&src, &dst));
-    TEST_ASSERT_NULL(dst.map_.al_);
+    TDA_TEST_ASSERT_POISONED(dst);
 
     tda_arena_deinit(&arena);
 }
 
 static void test_copy_assign_reports_a_refused_block_and_changes_nothing() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 512, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(512, tda_al_default(), &arena));
 
     tda_HSet src = make_filled(tda_hash_i32, nullptr, 50);
 
-    tda_HSet dst = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, TDA_AL(&arena), &dst);
+    tda_HSet dst = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_arena_to_al(&arena));
     put(&dst, 7);
     tda_test_arena_leave(&arena, 0);
 
@@ -1367,7 +1368,7 @@ static void test_a_refused_union_leaves_a_set() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_HSet self = {};
-    TDA_TEST_OK(TDA_HSET_INIT_CAP(int32_t, 64, tda_hash_i32, tda_eq_i32, nullptr, &al, &self));
+    TDA_TEST_OK(TDA_HSET_INIT_CAP(int32_t, 64, tda_hash_i32, tda_eq_i32, nullptr, al, &self));
     put(&self, 0);
     put(&self, 1);
     tda_HSet other = make_filled(tda_hash_i32, nullptr, 8);
@@ -1392,7 +1393,7 @@ static void test_a_refused_symmetric_difference_leaves_a_set() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_HSet self = {};
-    TDA_TEST_OK(TDA_HSET_INIT_CAP(int32_t, 64, tda_hash_i32, tda_eq_i32, nullptr, &al, &self));
+    TDA_TEST_OK(TDA_HSET_INIT_CAP(int32_t, 64, tda_hash_i32, tda_eq_i32, nullptr, al, &self));
     tda_HSet other = make_filled(tda_hash_i32, nullptr, 8);
 
     tda_test_probe_fail_after_next(&probe, 3);
@@ -1414,7 +1415,7 @@ static void assert_prints(const char *expected, const tda_HSet *s) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    tda_hset_fprint(s, stream, tda_fprint_i32);
+    tda_hset_fprint(s, stream, tda_fprint_i32, nullptr);
     rewind(stream);
 
     char buf[128];
@@ -1429,7 +1430,7 @@ static void test_fprint_writes_the_key() {
     tda_HSet s = make_set(tda_hash_i32, nullptr);
     put(&s, 1);
 
-    assert_prints("{1}\n", &s);
+    assert_prints("{1}", &s);
 
     tda_hset_deinit(&s);
 }
@@ -1439,7 +1440,7 @@ static void test_fprint_writes_the_key() {
 static void test_fprint_of_an_empty_set() {
     tda_HSet s = make_set(tda_hash_i32, nullptr);
 
-    assert_prints("{}\n", &s);
+    assert_prints("{}", &s);
 
     tda_hset_deinit(&s);
 }
@@ -1451,7 +1452,7 @@ static void test_print_writes_to_stdout() {
     put(&s, 1);
     put(&s, 2);
 
-    tda_hset_print(&s, tda_fprint_i32);
+    tda_hset_print(&s, tda_fprint_i32, nullptr);
 
     tda_hset_deinit(&s);
 }
@@ -1463,20 +1464,19 @@ static void test_swap_across_allocators_carries_each_allocator() {
     tda_test_probe_reset(&pb);
     tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
-    tda_HSet a = {}, b = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al_a, &a);
+    tda_HSet a = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al_a);
     for (int32_t i = 0; i < 2; ++i) {
         TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &a, i, nullptr));
     }
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, &al_b, &b);
+    tda_HSet b = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al_b);
     for (int32_t i = 0; i < 3; ++i) {
         TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &b, i, nullptr));
     }
 
     tda_hset_swap(&a, &b);
 
-    TEST_ASSERT_EQUAL_PTR(&al_b, tda_hset_al(&a));
-    TEST_ASSERT_EQUAL_PTR(&al_a, tda_hset_al(&b));
+    TEST_ASSERT_TRUE(tda_al_eq(al_b, tda_hset_al(&a)));
+    TEST_ASSERT_TRUE(tda_al_eq(al_a, tda_hset_al(&b)));
     TEST_ASSERT_EQUAL_size_t(3, tda_hset_len(&a));
 
     tda_hset_deinit(&a);
@@ -1487,14 +1487,43 @@ static void test_swap_across_allocators_carries_each_allocator() {
 
 // deinit leaves the inert state, so a second one is safe
 static void test_deinit_twice_is_noop() {
-    tda_HSet x = {};
-    TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &x);
+    tda_HSet x = TDA_HSET_INIT(int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default());
     TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &x, 1, nullptr));
 
     tda_hset_deinit(&x);
-    TEST_ASSERT_NULL(x.map_.al_);
+    TEST_ASSERT_NULL(x.map_.al_.vt);
 
     tda_hset_deinit(&x);
+}
+
+
+/* ========== print errors ========== */
+
+// the ctx reaches every call, every elem is still asked after a failure, and the first
+// failure is what comes back; print adds only its newline
+static void test_fprint_hands_on_the_ctx_and_the_first_failure() {
+    tda_HSet s = make_set(tda_hash_i32, nullptr);
+    put(&s, 1);
+    put(&s, 2);
+    put(&s, 3);
+    tda_TestPrint pr = {.fail_from = 2};
+    FILE *stream = tmpfile();
+    TEST_ASSERT_NOT_NULL(stream);
+
+    TEST_ASSERT_EQUAL_INT(-2, tda_hset_fprint(&s, stream, tda_test_fprint_i32_failing, &pr));
+    TEST_ASSERT_EQUAL_size_t(3, pr.calls);
+    fclose(stream);
+
+    pr = (tda_TestPrint){.fail_from = 0};
+    TEST_ASSERT_EQUAL_INT(0, tda_hset_print(&s, tda_test_fprint_i32_failing, &pr));
+    pr = (tda_TestPrint){.fail_from = 2};
+    TEST_ASSERT_EQUAL_INT(-2, tda_hset_print(&s, tda_test_fprint_i32_failing, &pr));
+
+    FILE *ro = tda_test_unwritable_stream();
+    TEST_ASSERT_LESS_THAN_INT(0, tda_hset_fprint(&s, ro, tda_fprint_i32, nullptr));
+    fclose(ro);
+
+    tda_hset_deinit(&s);
 }
 
 int main() {
@@ -1559,6 +1588,7 @@ int main() {
     RUN_TEST(test_retain_keeps_exactly_the_passing_keys);
     RUN_TEST(test_retain_asks_once_per_key);
 
+    RUN_TEST(test_of_builds_from_the_keys_written_out);
     RUN_TEST(test_from_span_collapses_repeats);
     RUN_TEST(test_from_an_empty_span_is_an_empty_set);
     RUN_TEST(test_extend_adds_to_the_keys_already_there);
@@ -1593,6 +1623,8 @@ int main() {
     RUN_TEST(test_print_writes_to_stdout);
 
     RUN_TEST(test_swap_across_allocators_carries_each_allocator);
+
+    RUN_TEST(test_fprint_hands_on_the_ctx_and_the_first_failure);
 
     return UNITY_END();
 }

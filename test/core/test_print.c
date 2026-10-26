@@ -1,4 +1,5 @@
 #include "tda/core/print.h"
+#include "tda/core/span.h"
 
 #include <unity.h>
 
@@ -18,7 +19,7 @@ static void capture(char *buf, size_t cap, tda_FPrint fprint, const void *val) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    fprint(stream, val);
+    TEST_ASSERT_TRUE(fprint(stream, val, nullptr) >= 0);
     rewind(stream);
 
     const size_t n = fread(buf, 1, cap - 1, stream);
@@ -155,6 +156,89 @@ static void test_cstr_prints_null_unquoted() {
     assert_prints("null", tda_fprint_cstr, &(const char *){nullptr});
 }
 
+/* ========== span ========== */
+
+static void capture_span(char *buf, size_t cap, tda_Span s, tda_FPrint fprint, void *ctx, int *out_rc) {
+    FILE *stream = tmpfile();
+    TEST_ASSERT_NOT_NULL(stream);
+
+    *out_rc = tda_span_fprint(s, stream, fprint, ctx);
+    rewind(stream);
+
+    const size_t n = fread(buf, 1, cap - 1, stream);
+    buf[n] = '\0';
+    fclose(stream);
+}
+
+// the brackets and no newline, so the output can sit inside another container's
+static void test_span_fprint_writes_no_newline() {
+    char buf[64];
+    int rc;
+    capture_span(buf, sizeof(buf), TDA_SPAN_OF(int32_t, 1, 2), tda_fprint_i32, nullptr, &rc);
+
+    TEST_ASSERT_EQUAL_STRING("[1, 2]", buf);
+    TEST_ASSERT_EQUAL_INT(0, rc);
+}
+
+static int fprint_scaled(FILE *stream, const void *val, void *ctx) {
+    return fprintf(stream, "%d", *(const int32_t *) val * *(const int *) ctx);
+}
+
+static void test_span_fprint_hands_the_ctx_to_every_call() {
+    char buf[64];
+    int rc;
+    capture_span(buf, sizeof(buf), TDA_SPAN_OF(int32_t, 1, 2, 3), fprint_scaled, &(int){10}, &rc);
+
+    TEST_ASSERT_EQUAL_STRING("[10, 20, 30]", buf);
+}
+
+static int fprint_inner(FILE *stream, const void *val, void *) {
+    return tda_span_fprint(*(const tda_Span *) val, stream, tda_fprint_i32, nullptr);
+}
+
+static void test_span_fprint_nests() {
+    const tda_Span rows = TDA_SPAN_OF(tda_Span, TDA_SPAN_OF(int32_t, 1, 2), TDA_SPAN_OF(int32_t, 3));
+    char buf[64];
+    int rc;
+    capture_span(buf, sizeof(buf), rows, fprint_inner, nullptr, &rc);
+
+    TEST_ASSERT_EQUAL_STRING("[[1, 2], [3]]", buf);
+}
+
+// a printer that fails on its second elem
+static int fprint_fails_on_two(FILE *stream, const void *val, void *) {
+    const int32_t v = *(const int32_t *) val;
+
+    return v == 2 ? -1 : fprintf(stream, "%d", v);
+}
+
+// a failed write is reported, and the rest is still written, as a run of fprintf would be
+static void test_span_fprint_reports_a_failed_write() {
+    char buf[64];
+    int rc;
+    capture_span(buf, sizeof(buf), TDA_SPAN_OF(int32_t, 1, 2, 3), fprint_fails_on_two, nullptr, &rc);
+
+    TEST_ASSERT_EQUAL_INT(-1, rc);
+    TEST_ASSERT_EQUAL_STRING("[1, , 3]", buf);
+}
+
+// a stream that takes no write: every printer must say so, the spelled-out specials too
+static void test_every_printer_reports_a_failed_write() {
+    FILE *ro = fopen(__FILE__, "r");
+    TEST_ASSERT_NOT_NULL(ro);
+
+    TEST_ASSERT_LESS_THAN_INT(0, tda_fprint_i32(ro, &(int32_t){1}, nullptr));
+    TEST_ASSERT_LESS_THAN_INT(0, tda_fprint_f64(ro, &(double){NAN}, nullptr));
+    TEST_ASSERT_LESS_THAN_INT(0, tda_fprint_f64(ro, &(double){-INFINITY}, nullptr));
+    TEST_ASSERT_LESS_THAN_INT(0, tda_fprint_bool(ro, &(bool){true}, nullptr));
+    TEST_ASSERT_LESS_THAN_INT(0, tda_fprint_char(ro, &(char){'a'}, nullptr));
+    TEST_ASSERT_LESS_THAN_INT(0, tda_fprint_char(ro, &(char){'\n'}, nullptr));
+    TEST_ASSERT_LESS_THAN_INT(0, tda_fprint_cstr(ro, &(const char *){nullptr}, nullptr));
+    TEST_ASSERT_LESS_THAN_INT(0, tda_fprint_cstr(ro, &(const char *){"x"}, nullptr));
+
+    fclose(ro);
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -181,6 +265,13 @@ int main() {
     RUN_TEST(test_cstr_prints_quoted);
     RUN_TEST(test_cstr_quotes_keep_a_comma_inside);
     RUN_TEST(test_cstr_prints_null_unquoted);
+
+    RUN_TEST(test_span_fprint_writes_no_newline);
+    RUN_TEST(test_span_fprint_hands_the_ctx_to_every_call);
+    RUN_TEST(test_span_fprint_nests);
+    RUN_TEST(test_span_fprint_reports_a_failed_write);
+
+    RUN_TEST(test_every_printer_reports_a_failed_write);
 
     return UNITY_END();
 }

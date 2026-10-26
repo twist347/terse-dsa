@@ -85,9 +85,19 @@ DEFINE_INT_ALL(u64, uint64_t)
 DEFINE_INT_ALL(size, size_t)
 DEFINE_INT_ALL(ptrdiff, ptrdiff_t)
 
-// char is a third type, distinct from signed and unsigned char, and its signedness is
-// up to the target; (a > b) - (a < b) is right either way
-DEFINE_INT_ALL(char, char)
+// char is a third type, distinct from signed and unsigned char, and its signedness is up
+// to the target. It is ordered as unsigned char on every target: the order strcmp gives
+// the chars of a string, and how tda_hash_char reads them
+static int cmp_char(char a, char b) {
+    const unsigned char ua = (unsigned char) a, ub = (unsigned char) b;
+
+    return (ua > ub) - (ua < ub);
+}
+
+DEFINE_EQ(char, char)
+DEFINE_CMP(char, char)
+DEFINE_CMP_DESC(char)
+DEFINE_EQ_FORM(char, char)
 
 DEFINE_FLOAT_ALL(f32, float)
 DEFINE_FLOAT_ALL(f64, double)
@@ -107,7 +117,7 @@ static int cmp_cstr(const char *lhs, const char *rhs) {
 
     const int c = strcmp(lhs, rhs);
 
-    return (c > 0) - (c < 0); // strcmp only promises lhs sign, so narrow it to -1/0/+1
+    return (c > 0) - (c < 0); // strcmp only promises a sign, so narrow it to -1/0/+1
 }
 
 DEFINE_EQ(cstr, const char *)

@@ -15,7 +15,7 @@
 /// @{
 
 /// bumped by a breaking change
-#define TDA_VERSION_MAJOR 2
+#define TDA_VERSION_MAJOR 3
 
 /// bumped by an addition
 #define TDA_VERSION_MINOR 0
@@ -38,7 +38,7 @@
 /// @param patch the patch part
 #define TDA_VERSION_AT_LEAST(major, minor, patch) (TDA_VERSION >= TDA_VERSION_NUM(major, minor, patch))
 
-/// the version as a string literal, "1.0.0"
+/// the version as a string literal, major.minor.patch
 #define TDA_VERSION_STRING                  \
     TDA_STRINGIFY(TDA_VERSION_MAJOR) "."    \
     TDA_STRINGIFY(TDA_VERSION_MINOR) "."    \

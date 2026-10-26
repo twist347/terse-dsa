@@ -10,7 +10,7 @@
 // the vec asserts the rest of its invariants on every call
 #define ASSERT_STACK(s) \
     (assert(s),         \
-     assert((s)->vec_.al_))
+     assert((s)->vec_.al_.vt))
 
 // two stacks whose elems can pass between them or be compared: one elem layout
 #define EXPECT_SAME_STACK(a, b) \
@@ -20,35 +20,34 @@
 
 /* ========== lifetime ========== */
 
-void tda_stack_init(tda_Layout elem, tda_Al *al, tda_Stack *out) {
+tda_Stack tda_stack_init(tda_Layout elem, tda_Al al) {
     assert(tda_layout_is_type(elem));
-    assert(al);
-    assert(out);
+    assert(al.vt);
 
-    tda_vec_init(elem, al, &out->vec_);
+    return (tda_Stack){.vec_ = tda_vec_init(elem, al)};
 }
 
-tda_Status tda_stack_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Stack *out) {
+tda_Status tda_stack_init_cap(size_t cap, tda_Layout elem, tda_Al al, tda_Stack *out) {
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_vec_init_cap(cap, elem, al, &out->vec_);
 }
 
-tda_Status tda_stack_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Stack *out) {
+tda_Status tda_stack_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_Stack *out) {
     assert(data || len == 0);
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     // the vec keeps the order, so the last elem is the top
     return tda_vec_from_data(data, len, elem, al, &out->vec_);
 }
 
-tda_Status tda_stack_from_span(tda_Span s, tda_Al *al, tda_Stack *out) {
+tda_Status tda_stack_from_span(tda_Span s, tda_Al al, tda_Stack *out) {
     TDA_SPAN_ASSERT(s);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_stack_from_data(s.data, s.len, s.elem, al, out);
@@ -60,12 +59,13 @@ void tda_stack_deinit(tda_Stack *self) {
     tda_vec_deinit(&self->vec_);
 }
 
-void tda_stack_into_vec(tda_Stack *self, tda_Vec *out) {
+tda_Vec tda_stack_into_vec(tda_Stack *self) {
     ASSERT_STACK(self);
-    assert(out);
 
-    *out = self->vec_;
+    const tda_Vec inner = self->vec_;
     self->vec_ = (tda_Vec){};
+
+    return inner;
 }
 
 /* ========== copy ========== */
@@ -77,9 +77,9 @@ tda_Status tda_stack_copy(const tda_Stack *self, tda_Stack *out) {
     return tda_stack_copy_with(self, tda_vec_al(&self->vec_), out);
 }
 
-tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al *al, tda_Stack *out) {
+tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al al, tda_Stack *out) {
     ASSERT_STACK(self);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_vec_copy_with(&self->vec_, al, &out->vec_);
@@ -186,17 +186,17 @@ void tda_stack_swap(tda_Stack *self, tda_Stack *other) {
 
 /* ========== print ========== */
 
-void tda_stack_fprint(const tda_Stack *self, FILE *stream, tda_FPrint fprint) {
+int tda_stack_fprint(const tda_Stack *self, FILE *stream, tda_FPrint fprint, void *ctx) {
     ASSERT_STACK(self);
     assert(stream);
     assert(fprint);
 
-    tda_vec_fprint(&self->vec_, stream, fprint);
+    return tda_vec_fprint(&self->vec_, stream, fprint, ctx);
 }
 
-void tda_stack_print(const tda_Stack *self, tda_FPrint fprint) {
+int tda_stack_print(const tda_Stack *self, tda_FPrint fprint, void *ctx) {
     ASSERT_STACK(self);
     assert(fprint);
 
-    tda_vec_print(&self->vec_, fprint);
+    return tda_vec_print(&self->vec_, fprint, ctx);
 }

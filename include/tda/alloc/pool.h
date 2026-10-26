@@ -37,22 +37,18 @@
 /// @snippet alloc/example_pool.c limits
 /// @{
 
-/// A pool. A value the caller holds, on the stack or inside a struct: tda_pool_init or
-/// tda_pool_init_buf fills it in, TDA_AL hands out the allocator over it, and
+/// A pool. A value the caller holds, on the stack or inside a struct: tda_pool_init_cap
+/// or tda_pool_init_buf fills it in, tda_pool_to_al hands out views of it, and
 /// tda_pool_deinit gives the blocks back. `= {}` is the inert state.
 ///
 /// The fields belong to the pool: read and change them only through the functions here.
 ///
-/// @warning the pool must not move, nor be copied, once it is filled in: the allocator
-///          TDA_AL gives points into it, and so does every container built on
-///          that allocator.
-///          A moved or copied one is caught by the first of its own functions
-///          called on it, deinit included, under assert or TDA_HARDENED; a request
-///          made through its tda_Al is not checked.
+/// @warning once a view from tda_pool_to_al is out, the pool must not move nor be copied:
+///          the view points at it, and so does every container built on it. While no view
+///          is out, a copy is a second owner of the blocks, as a copy of a container is.
 typedef struct tda_Pool {
-    tda_Al al_;                       ///< the interface; its ctx is the pool itself
-    tda_Al *parent_;                  ///< where the blocks came from; null for a buffer
-    unsigned char *data_;             ///< the first block
+    tda_Al parent_;                   ///< where the blocks came from; `= {}` for a buffer
+    unsigned char *data_;             ///< the first block; null only in the inert state
     struct tda_PoolFree_ *free_head_; ///< the first free block
     size_t block_size_;               ///< the size of one block, rounded up
     size_t block_align_;              ///< its alignment
@@ -64,24 +60,24 @@ typedef struct tda_Pool {
 /// @{
 
 /// a pool of 'block_count' blocks of 'block', taken from 'parent'
-/// @param parent where the blocks come from; borrowed, and must outlive the pool
+/// @param block_count how many blocks, greater than 0
 /// @param block a floor, its size greater than 0: raised to what the free list needs,
 ///              its size then rounded up to its alignment; tda_pool_stats reports
 ///              the result
-/// @param block_count how many blocks, greater than 0
+/// @param parent where the blocks come from; borrowed, and must outlive the pool
 /// @param[out] out the pool, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the product overflows or 'parent' cannot give
 ///         the blocks
 /// @bigo{n} — the free list is threaded through every block
 [[nodiscard]] TDA_API
-tda_Status tda_pool_init(tda_Al *parent, tda_Layout block, size_t block_count, tda_Pool *out);
+tda_Status tda_pool_init_cap(size_t block_count, tda_Layout block, tda_Al parent, tda_Pool *out);
 
 /// a pool over 'buf', with no parent: as many blocks as fit once the start is aligned
 /// @param buf the memory, borrowed: a static or stack array, or a block from anywhere;
 ///            any alignment
 /// @param cap its bytes, greater than 0
-/// @param block a floor, raised as in tda_pool_init; tda_pool_stats reports it and
+/// @param block a floor, raised as in tda_pool_init_cap; tda_pool_stats reports it and
 ///              the block count
 /// @param[out] out the pool, written only on success
 /// @retval TDA_STATUS_OK on success
@@ -97,6 +93,18 @@ tda_Status tda_pool_init_buf(void *buf, size_t cap, tda_Layout block, tda_Pool *
 /// @bigo{1}
 TDA_API
 void tda_pool_deinit(tda_Pool *self);
+
+/// @}
+
+/// @name view
+/// @{
+
+/// a view of the pool, to hand to a container or a wrapper
+/// @param self the pool; from now on it must stay where it is
+/// @return the view, valid while the pool stays where it is and until its deinit
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Al tda_pool_to_al(tda_Pool *self);
 
 /// @}
 
@@ -126,7 +134,7 @@ typedef struct {
 
 /// what the pool is holding
 /// @param self the pool
-/// @return the five numbers
+/// @return what it holds
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_PoolStats tda_pool_stats(const tda_Pool *self);

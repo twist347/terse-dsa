@@ -15,7 +15,7 @@ int main() {
     /// [build]
     // the elems arrive in any order and are heapified in one pass, cheaper than pushing
     // them one at a time
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_PQueue q;
     if (TDA_STATUS_IS_ERR(TDA_PQUEUE_OF(int32_t, tda_cmp_i32, nullptr, al, &q, 3, 1, 4, 1, 5))) {
@@ -23,7 +23,7 @@ int main() {
     }
 
     // a print shows heap order, not sorted order: only the front is in its final place
-    tda_pqueue_print(&q, tda_fprint_i32); // [5, 3, 4, 1, 1]
+    tda_pqueue_print(&q, tda_fprint_i32, nullptr); // [5, 3, 4, 1, 1]
     printf("%" PRId32 "\n", *TDA_PQUEUE_TOP_AS(int32_t, &q)); // 5
     /// [build]
 
@@ -69,12 +69,12 @@ int main() {
     // the vec was under the queue all along, so taking it is free and leaves the queue
     // inert. The elems come out in heap order, and sort_heap finishes the heapsort in
     // place, with no allocation and no draining loop
-    tda_pqueue_into_vec(&least, &v);
+    v = tda_pqueue_into_vec(&least);
 
     // the comparator does not travel with the elems, so name it again. The heap was built
     // descending, so sorting under the same order puts the greatest first
     tda_span_sort_heap(tda_vec_to_span_mut(&v), tda_cmp_desc_i32, nullptr);
-    tda_vec_print(&v, tda_fprint_i32); // [4, 3, 1]
+    tda_vec_print(&v, tda_fprint_i32, nullptr); // [4, 3, 1]
 
     rc = 0;
 out:

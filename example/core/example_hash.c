@@ -32,8 +32,7 @@ static bool eq_point(const void *lhs, const void *rhs, void *) {
 
 int main() {
     /// [use]
-    tda_HSet seen;
-    TDA_HSET_INIT(Point, hash_point, eq_point, nullptr, tda_al_default(), &seen);
+    tda_HSet seen = TDA_HSET_INIT(Point, hash_point, eq_point, nullptr, tda_al_default());
 
     bool is_new = false;
     tda_Status st = tda_hset_insert(&seen, &(Point){ 1, 2 }, &is_new);

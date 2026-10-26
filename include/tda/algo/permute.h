@@ -80,7 +80,7 @@ bool tda_span_prev_permutation(tda_SpanMut s, tda_Cmp cmp, void *ctx);
 
 /// rearranges into an order drawn from 'rng'
 /// @param s the span
-/// @param rng the source of randomness; the same seed gives the same shuffle
+/// @param rng the source of randomness; the same seed gives the same shuffle within a minor
 /// @bigo{n}. Fisher-Yates: each position draws from the elems not placed yet, so all
 ///          n! orders are equally likely
 TDA_API
@@ -122,7 +122,7 @@ size_t tda_span_partition(tda_SpanMut s, tda_Pred pred, void *ctx);
 tda_Status tda_span_partition_stable(
     tda_SpanMut s,
     tda_Pred pred, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     size_t *out_boundary
 );
 

@@ -15,11 +15,11 @@
 ///
 /// An interface to dispatch through, so the ops are named for the verb and take the
 /// allocator first, as fprintf takes its FILE: tda_alloc(al, layout). Only ops on the
-/// allocator itself carry a slug, as tda_al_default does.
+/// allocator itself carry a slug, as tda_al_default and tda_al_eq do.
 ///
 /// The hooks are Zig's: alloc, resize in place, remap that may move, dealloc. To them
 /// Rust's alloc_zeroed adds a way to skip the memset where the memory comes zeroed
-/// anyway, as calloc's large blocks do. alloc and dealloc are required, the other three
+/// anyway, as calloc's large blocks do. alloc and dealloc are required, the rest
 /// optional: a null hook means "never", and the wrappers fall back to the required two.
 ///
 /// Every call carries the layout the block was made with, size and alignment both. So
@@ -36,8 +36,17 @@
 /// fallible op returns no tda_Status; [[nodiscard]] on the pointer catches the same
 /// dropped check. A request for 0 bytes gives null and is not an error.
 ///
+/// An allocator is two things: its state, a value the caller holds, and a view of it to
+/// hand around, the tda_Al. The view points at the state and at the hooks, one static
+/// table of them for each kind of allocator, and each kind gives its view through
+/// tda_<slug>_to_al. So the state can be copied and moved as any value can until a view
+/// is out, and must stay where it is while one is: the view points at it, and so does
+/// every container built on it. Nothing checks this, as nothing checks a span.
+///
 /// An allocator over another borrows it: the parent outlives the child, and they are
 /// released in reverse order of building.
+///
+/// `= {}` is no allocator. An op that takes one optionally says so; every other asserts.
 ///
 /// @par Example
 /// @snippet alloc/example_alloc.c use
@@ -45,10 +54,10 @@
 /// @snippet alloc/example_alloc.c wrap
 /// @{
 
-/// The operations and the state they run on, passed around by pointer.
+/// The hooks of one kind of allocator: one static table per kind, never one per
+/// allocator. A table may grow in a minor, by optional hooks at the end only, so build
+/// one with designated initializers.
 typedef struct {
-    void *ctx; ///< implementation state, passed to every callback
-
     /// 'layout.size' bytes, uninitialized, aligned to 'layout.align', or null when the
     /// request cannot be met. The size is never 0. Required.
     void *(*alloc)(void *ctx, tda_Layout layout);
@@ -68,6 +77,13 @@ typedef struct {
 
     /// gives back the block at 'ptr', made with 'layout'. Never null. Required.
     void (*dealloc)(void *ctx, void *ptr, tda_Layout layout);
+} tda_AlVtable;
+
+/// A view of an allocator: its state and its hooks. Small, and passed by value; valid
+/// while the state stays where it is. `= {}` is no allocator.
+typedef struct {
+    void *ctx;              ///< the allocator's state, passed to every hook as is
+    const tda_AlVtable *vt; ///< its hooks; null only in `= {}`
 } tda_Al;
 
 /// @name wrappers
@@ -77,18 +93,18 @@ typedef struct {
 /// @param al the allocator
 /// @param layout its size, of which 0 gives null and is not an error, and its alignment
 /// @return the block, or null; for a non-zero size, null means the request cannot be met
-/// @bigo{1} on top of al->alloc
+/// @bigo{1} on top of the alloc hook
 [[nodiscard]] TDA_API
-void *tda_alloc(tda_Al *al, tda_Layout layout);
+void *tda_alloc(tda_Al al, tda_Layout layout);
 
 /// a block of 'layout', zeroed
 /// @param al the allocator
 /// @param layout as for tda_alloc
 /// @return the block, or null as for tda_alloc
 /// @bigo{n} without an alloc_zeroed hook, for zeroing the block; otherwise that of
-///       al->alloc_zeroed
+///       the alloc_zeroed hook
 [[nodiscard]] TDA_API
-void *tda_alloc_zeroed(tda_Al *al, tda_Layout layout);
+void *tda_alloc_zeroed(tda_Al al, tda_Layout layout);
 
 /// whether the block at 'ptr' now holds 'new_size' bytes, in place
 /// @param al the allocator
@@ -96,9 +112,9 @@ void *tda_alloc_zeroed(tda_Al *al, tda_Layout layout);
 /// @param old what 'ptr' was made with; its size not 0
 /// @param new_size what it should hold, not 0
 /// @return true when the block was resized; on false it is untouched
-/// @bigo{1} on top of al->resize
+/// @bigo{1} on top of the resize hook
 [[nodiscard]] TDA_API
-bool tda_resize(tda_Al *al, void *ptr, tda_Layout old, size_t new_size);
+bool tda_resize(tda_Al al, void *ptr, tda_Layout old, size_t new_size);
 
 /// the block at 'ptr' resized by the allocator's own move, or null when it has none
 /// @param al the allocator
@@ -108,9 +124,9 @@ bool tda_resize(tda_Al *al, void *ptr, tda_Layout old, size_t new_size);
 /// @return the block, which may have moved, or null with 'ptr' untouched
 /// @note what an allocator over another calls to pass a remap on; a caller that just
 ///       wants the block resized calls tda_realloc
-/// @bigo{1} on top of al->remap
+/// @bigo{1} on top of the remap hook
 [[nodiscard]] TDA_API
-void *tda_remap(tda_Al *al, void *ptr, tda_Layout old, size_t new_size);
+void *tda_remap(tda_Al al, void *ptr, tda_Layout old, size_t new_size);
 
 /// the block at 'ptr', resized to 'new_size' bytes: in place, else by the allocator's
 /// remap, else by alloc, copy and dealloc
@@ -121,17 +137,33 @@ void *tda_remap(tda_Al *al, void *ptr, tda_Layout old, size_t new_size);
 /// @return the block, which may have moved, or null on failure with 'ptr' untouched
 /// @warning assign to a temporary, not over 'ptr': on failure the old block is still
 ///          yours, and overwriting its only pointer leaks it
-/// @bigo{n} when the block moves by a copy; otherwise that of al->resize or al->remap
+/// @bigo{n} when the block moves by a copy; otherwise that of the resize or the remap
+///       hook
 [[nodiscard]] TDA_API
-void *tda_realloc(tda_Al *al, void *ptr, tda_Layout old, size_t new_size);
+void *tda_realloc(tda_Al al, void *ptr, tda_Layout old, size_t new_size);
 
 /// gives the block back
 /// @param al the allocator; must be the one 'ptr' came from
 /// @param ptr the block; null is a no-op
 /// @param layout what 'ptr' was made with, size and alignment; must match
-/// @bigo{1} on top of al->dealloc
+/// @bigo{1} on top of the dealloc hook
 TDA_API
-void tda_dealloc(tda_Al *al, void *ptr, tda_Layout layout);
+void tda_dealloc(tda_Al al, void *ptr, tda_Layout layout);
+
+/// @}
+
+/// @name compare
+/// @{
+
+/// whether two views are of one allocator, so a block from either goes back through the
+/// other: the same state and the same hooks. An allocator over another is not that
+/// other, even when it passes every request on
+/// @param a one view
+/// @param b the other
+/// @return whether both the state and the hooks match
+/// @bigo{1}
+[[nodiscard]] TDA_API
+bool tda_al_eq(tda_Al a, tda_Al b);
 
 /// @}
 
@@ -139,33 +171,11 @@ void tda_dealloc(tda_Al *al, void *ptr, tda_Layout layout);
 /// @{
 
 /// @cond
-// the five allocators TDA_AL knows, declared here so the macro needs none of their headers
-struct tda_Arena;
-struct tda_Pool;
-struct tda_Slab;
-struct tda_Debug;
-struct tda_Log;
-/// @endcond
-
-/// the allocator interface of a tda_Arena, tda_Pool, tda_Slab, tda_Debug or tda_Log, to
-/// hand to a container or a wrapper: `TDA_ALLOC(int32_t, TDA_AL(&arena), 4)`
-/// @param al a pointer to one of the five; any other type does not compile
-/// @return a tda_Al * into '*a', valid while it stays where it is
-/// @bigo{1}
-#define TDA_AL(al)                      \
-    _Generic((al),                      \
-        struct tda_Arena *: &(al)->al_, \
-        struct tda_Pool *: &(al)->al_,  \
-        struct tda_Slab *: &(al)->al_,  \
-        struct tda_Debug *: &(al)->al_, \
-        struct tda_Log *: &(al)->al_)
-
-/// @cond
 // what the macros expand to; a function evaluates each argument once, while a macro
 // checking the product would evaluate the count twice
 
 [[nodiscard]]
-static inline void *tda_alloc_n_(tda_Al *al, tda_Layout elem, size_t count, bool zeroed) {
+static inline void *tda_alloc_n_(tda_Al al, tda_Layout elem, size_t count, bool zeroed) {
     tda_Layout layout;
     if (tda_layout_ckd_array(&layout, elem, count)) {
         return nullptr;
@@ -175,7 +185,7 @@ static inline void *tda_alloc_n_(tda_Al *al, tda_Layout elem, size_t count, bool
 }
 
 [[nodiscard]]
-static inline void *tda_realloc_n_(tda_Al *al, void *ptr, tda_Layout elem, size_t old_count, size_t new_count) {
+static inline void *tda_realloc_n_(tda_Al al, void *ptr, tda_Layout elem, size_t old_count, size_t new_count) {
     tda_Layout new_layout;
     if (tda_layout_ckd_array(&new_layout, elem, new_count)) {
         return nullptr;
@@ -187,7 +197,7 @@ static inline void *tda_realloc_n_(tda_Al *al, void *ptr, tda_Layout elem, size_
     return tda_realloc(al, ptr, old, new_layout.size);
 }
 
-static inline void tda_dealloc_n_(tda_Al *al, void *ptr, tda_Layout elem, size_t count) {
+static inline void tda_dealloc_n_(tda_Al al, void *ptr, tda_Layout elem, size_t count) {
     // 'ptr' was made as count elems, so the product fits; the call checks the elem layout
     tda_Layout layout;
     [[maybe_unused]] const bool overflow = tda_layout_ckd_array(&layout, elem, count);

@@ -37,14 +37,14 @@ int main() {
     const tda_SpanMut running = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4);
 
     tda_span_partial_sum(running, s, add, nullptr);
-    tda_span_mut_print(running, tda_fprint_i32); // [1, 3, 6, 10]
+    tda_span_mut_print(running, tda_fprint_i32, nullptr); // [1, 3, 6, 10]
 
     // and undoes it, given the inverse op
     int32_t back[4];
     const tda_SpanMut steps = TDA_SPAN_FROM_DATA_MUT(int32_t, back, 4);
 
     tda_span_adjacent_difference(steps, tda_span_mut_to_span(running), sub, nullptr);
-    tda_span_mut_print(steps, tda_fprint_i32); // [1, 2, 3, 4] — back to where it started
+    tda_span_mut_print(steps, tda_fprint_i32, nullptr); // [1, 2, 3, 4] — back to where it started
     /// [fold]
 
     return 0;

@@ -10,9 +10,8 @@
 
 /* ========== internals ========== */
 
-/// whether v[i] comes strictly before v[j] in the walk order. Only "less than" is
-/// asked, with the operands swapped for a descending walk, so a comparator that never
-/// answers "greater" (a < b ? -1 : 0) still works
+/// whether v[i] comes strictly before v[j] in the walk order; a descending walk swaps
+/// the operands, so both directions share one test
 [[nodiscard]]
 static bool goes_before(tda_Span s, tda_Cmp cmp, void *ctx, bool asc, size_t i, size_t j);
 
@@ -106,12 +105,12 @@ size_t tda_span_partition(tda_SpanMut s, tda_Pred pred, void *ctx) {
 tda_Status tda_span_partition_stable(
     tda_SpanMut s,
     tda_Pred pred, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     size_t *out_boundary
 ) {
     TDA_SPAN_ASSERT(s);
     assert(pred);
-    assert(al);
+    assert(al.vt);
     assert(out_boundary);
 
     // nothing to allocate for an empty span, so it works even on an exhausted

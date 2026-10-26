@@ -354,13 +354,13 @@ static void test_sort_stable_stays_within_the_subspan() {
 
 static void test_sort_stable_works_through_an_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     int32_t buf[5] = {5, 4, 3, 2, 1};
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32, nullptr, TDA_AL(&arena))
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_cmp_i32, nullptr, tda_arena_to_al(&arena))
     );
 
     constexpr int32_t want[5] = {1, 2, 3, 4, 5};
@@ -372,13 +372,13 @@ static void test_sort_stable_works_through_an_arena() {
 // the scratch buffer cannot be had: the error is reported and the span left alone
 static void test_sort_stable_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 16, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(16, tda_al_default(), &arena));
 
     int32_t buf[8] = {8, 7, 6, 5, 4, 3, 2, 1};
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_ERR_NO_MEM,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), tda_cmp_i32, nullptr, TDA_AL(&arena))
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), tda_cmp_i32, nullptr, tda_arena_to_al(&arena))
     );
 
     constexpr int32_t want[8] = {8, 7, 6, 5, 4, 3, 2, 1};
@@ -390,17 +390,17 @@ static void test_sort_stable_reports_an_exhausted_arena() {
 // nothing to merge means nothing to allocate, so an allocator with no room must do
 static void test_sort_stable_of_empty_and_single_needs_no_scratch() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 16, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(16, tda_al_default(), &arena));
 
     int32_t buf[1] = {42};
 
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, nullptr, TDA_AL(&arena))
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0), tda_cmp_i32, nullptr, tda_arena_to_al(&arena))
     );
     TEST_ASSERT_EQUAL_INT(
         TDA_STATUS_OK,
-        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, nullptr, TDA_AL(&arena))
+        tda_span_sort_stable(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 1), tda_cmp_i32, nullptr, tda_arena_to_al(&arena))
     );
 
     TEST_ASSERT_EQUAL_INT32(42, buf[0]);

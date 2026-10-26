@@ -55,9 +55,9 @@
 typedef struct tda_HMapNode tda_HMapNode;
 
 /// Owning hash map from type-erased keys to type-erased values. A value the caller holds
-/// wherever it likes: an init or a from_ fills it in, tda_hmap_deinit releases its
-/// entries. `= {}` is the inert state, which tda_hmap_deinit accepts and every other op
-/// asserts.
+/// wherever it likes: an init returns it, a from_ fills it in, tda_hmap_deinit releases
+/// its entries. `= {}` is the inert state, which tda_hmap_deinit accepts and every other
+/// op asserts.
 ///
 /// The fields belong to the map: read and change them only through the functions here.
 /// No entry points back at the struct, so it can be moved as bytes.
@@ -77,7 +77,7 @@ typedef struct tda_HMap {
     tda_Hasher hasher_;      ///< the hash the keys are placed by
     tda_Eq eq_;              ///< the equality the keys are matched by
     void *ctx_;              ///< passed to both: they agree on what a key is
-    tda_Al *al_;             ///< where the entries come from; moves along with the map
+    tda_Al al_;              ///< where the entries come from; moves along with the map
 } tda_HMap;
 
 /// A test of one entry, key and value together; the map's tda_Pred
@@ -93,14 +93,13 @@ typedef bool (*tda_EntryPred)(const void *key, const void *val, void *ctx);
 /// @param eq the equality the keys are matched by; must agree with 'hasher'
 /// @param ctx passed to every call of 'hasher' and 'eq'; may be null
 /// @param al used for every later allocation
-/// @param[out] out the new map
+/// @return the new map
 /// @bigo{1}
-TDA_API
-void tda_hmap_init(
+[[nodiscard]] TDA_API
+tda_HMap tda_hmap_init(
     tda_Layout key, tda_Layout val,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
-    tda_Al *al,
-    tda_HMap *out
+    tda_Al al
 );
 
 /// an empty map with room for 'cap' entries before the first growth
@@ -120,7 +119,7 @@ tda_Status tda_hmap_init_cap(
     size_t cap,
     tda_Layout key, tda_Layout val,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     tda_HMap *out
 );
 
@@ -133,13 +132,13 @@ tda_Status tda_hmap_init_cap(
 /// @param al the allocator
 /// @param[out] out the new map, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the map, its buckets or a node cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when the buckets or a node cannot be allocated
 /// @bigo{n} expected
 [[nodiscard]] TDA_API
 tda_Status tda_hmap_from_spans(
     tda_Span keys, tda_Span vals,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     tda_HMap *out
 );
 
@@ -171,7 +170,7 @@ tda_Status tda_hmap_copy(const tda_HMap *self, tda_HMap *out);
 /// @retval TDA_STATUS_ERR_NO_MEM when the buckets or any node cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al *al, tda_HMap *out);
+tda_Status tda_hmap_copy_with(const tda_HMap *self, tda_Al al, tda_HMap *out);
 
 /// overwrites the entries, hasher, equality and ctx of 'self' with those of 'other'
 /// @param[in,out] self must have the same key and value layouts; keeps its allocator
@@ -202,7 +201,7 @@ void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other);
 [[nodiscard]]
 static inline size_t tda_hmap_len(const tda_HMap *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->len_;
 }
@@ -214,7 +213,7 @@ static inline size_t tda_hmap_len(const tda_HMap *self) {
 [[nodiscard]]
 static inline size_t tda_hmap_bucket_count(const tda_HMap *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->bucket_count_;
 }
@@ -226,7 +225,7 @@ static inline size_t tda_hmap_bucket_count(const tda_HMap *self) {
 [[nodiscard]]
 static inline tda_Layout tda_hmap_key_layout(const tda_HMap *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->key_;
 }
@@ -238,19 +237,19 @@ static inline tda_Layout tda_hmap_key_layout(const tda_HMap *self) {
 [[nodiscard]]
 static inline tda_Layout tda_hmap_val_layout(const tda_HMap *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->val_;
 }
 
 /// the allocator the map was built with
 /// @param self the map
-/// @return the allocator, borrowed
+/// @return the view it was built with
 /// @bigo{1}
 [[nodiscard]]
-static inline tda_Al *tda_hmap_al(const tda_HMap *self) {
+static inline tda_Al tda_hmap_al(const tda_HMap *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->al_;
 }
@@ -262,7 +261,7 @@ static inline tda_Al *tda_hmap_al(const tda_HMap *self) {
 [[nodiscard]]
 static inline tda_Hasher tda_hmap_hasher(const tda_HMap *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->hasher_;
 }
@@ -275,7 +274,7 @@ static inline tda_Hasher tda_hmap_hasher(const tda_HMap *self) {
 [[nodiscard]]
 static inline tda_Eq tda_hmap_key_eq(const tda_HMap *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->eq_;
 }
@@ -287,7 +286,7 @@ static inline tda_Eq tda_hmap_key_eq(const tda_HMap *self) {
 [[nodiscard]]
 static inline void *tda_hmap_key_ctx(const tda_HMap *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->ctx_;
 }
@@ -532,22 +531,36 @@ void tda_hmap_swap(tda_HMap *self, tda_HMap *other);
 /// @name print
 /// @{
 
-/// writes the entries as {a: 1, b: 2} and a newline, in walk order
+/// writes the entries as {a: 1, b: 2}, with no newline, in walk order
 /// @param self the map
 /// @param stream where to write
 /// @param key_fprint the printer for a key
+/// @param key_ctx passed to every call of 'key_fprint'; may be null
 /// @param val_fprint the printer for a value
+/// @param val_ctx passed to every call of 'val_fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_hmap_fprint(const tda_HMap *self, FILE *stream, tda_FPrint key_fprint, tda_FPrint val_fprint);
+int tda_hmap_fprint(
+    const tda_HMap *self, FILE *stream,
+    tda_FPrint key_fprint, void *key_ctx,
+    tda_FPrint val_fprint, void *val_ctx
+);
 
-/// tda_hmap_fprint to stdout
+/// tda_hmap_fprint to stdout, and a newline
 /// @param self the map
 /// @param key_fprint the printer for a key
+/// @param key_ctx passed to every call of 'key_fprint'; may be null
 /// @param val_fprint the printer for a value
+/// @param val_ctx passed to every call of 'val_fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_hmap_print(const tda_HMap *self, tda_FPrint key_fprint, tda_FPrint val_fprint);
+int tda_hmap_print(
+    const tda_HMap *self,
+    tda_FPrint key_fprint, void *key_ctx,
+    tda_FPrint val_fprint, void *val_ctx
+);
 
 /// @}
 
@@ -599,10 +612,9 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param eq the equality the keys are matched by
 /// @param ctx passed to every call of 'hasher' and 'eq'; may be null
 /// @param al the allocator
-/// @param[out] out where the new map is written
 /// @bigo{1}
-#define TDA_HMAP_INIT(K, V, hasher, eq, ctx, al, out) \
-    tda_hmap_init(TDA_LAYOUT_OF(K), TDA_LAYOUT_OF(V), (hasher), (eq), (ctx), (al), (out))
+#define TDA_HMAP_INIT(K, V, hasher, eq, ctx, al) \
+    tda_hmap_init(TDA_LAYOUT_OF(K), TDA_LAYOUT_OF(V), (hasher), (eq), (ctx), (al))
 
 /// tda_hmap_init_cap with TDA_LAYOUT_OF(K) and TDA_LAYOUT_OF(V)
 /// @param K the key type
@@ -618,67 +630,67 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
     tda_hmap_init_cap((cap), TDA_LAYOUT_OF(K), TDA_LAYOUT_OF(V), (hasher), (eq), (ctx), (al), (out))
 
 /// tda_hmap_get as a const V *, from a key value rather than an address
-/// @param K the key type; scalars only, as 'key' becomes a compound literal
+/// @param K the key type; 'key' may be any K, a struct literal in parentheses too
 /// @param V the value type
 /// @param self the map
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HMAP_GET_AS(K, V, self, key) \
-    ((const V *) tda_hmap_get(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }))
+    ((const V *) tda_hmap_get(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0]))
 
 /// tda_hmap_get_mut as a V *
 /// @copydetails TDA_HMAP_GET_AS
 #define TDA_HMAP_GET_MUT_AS(K, V, self, key) \
-    ((V *) tda_hmap_get_mut(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }))
+    ((V *) tda_hmap_get_mut(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0]))
 
 /// tda_hmap_contains from a key value rather than an address
-/// @param K the key type; scalars only, as 'key' becomes a compound literal
+/// @param K the key type; 'key' may be any K, a struct literal in parentheses too
 /// @param self the map
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HMAP_CONTAINS(K, self, key) \
-    tda_hmap_contains(TDA_HMAP_KEY_TYPED_(K, self), &(K){ (key) })
+    tda_hmap_contains(TDA_HMAP_KEY_TYPED_(K, self), &(K[1]){ (key) }[0])
 
 /// tda_hmap_find from a key value rather than an address
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_FIND(K, self, key) \
-    tda_hmap_find(TDA_HMAP_KEY_TYPED_(K, self), &(K){ (key) })
+    tda_hmap_find(TDA_HMAP_KEY_TYPED_(K, self), &(K[1]){ (key) }[0])
 
 /// tda_hmap_find_mut from a key value rather than an address
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_FIND_MUT(K, self, key) \
-    tda_hmap_find_mut(TDA_HMAP_KEY_TYPED_(K, self), &(K){ (key) })
+    tda_hmap_find_mut(TDA_HMAP_KEY_TYPED_(K, self), &(K[1]){ (key) }[0])
 
 /// tda_hmap_insert from values rather than addresses
-/// @param K the key type; scalars only, as 'key' becomes a compound literal
-/// @param V the value type; scalars only, for the same reason
+/// @param K the key type; 'key' may be any K, a struct literal in parentheses too
+/// @param V the value type; 'val' may be any V, a struct literal in parentheses too
 /// @param self the map
 /// @param key the key value to copy in
 /// @param val the value to copy in
 /// @param[out] out_is_new whether the key was absent; may be null
 /// @bigo{1} expected
 #define TDA_HMAP_INSERT(K, V, self, key, val, out_is_new) \
-    tda_hmap_insert(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }, &(V){ (val) }, (out_is_new))
+    tda_hmap_insert(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0], &(V[1]){ (val) }[0], (out_is_new))
 
 /// tda_hmap_get_or_insert from values rather than addresses
-/// @param K the key type; scalars only, as 'key' becomes a compound literal
-/// @param V the value type; scalars only, for the same reason
+/// @param K the key type; 'key' may be any K, a struct literal in parentheses too
+/// @param V the value type; 'val' may be any V, a struct literal in parentheses too
 /// @param self the map
 /// @param key the key value to look for or copy in
 /// @param val the value to start from when the key is absent
 /// @param[out] out_node the entry either way
 /// @bigo{1} expected
 #define TDA_HMAP_GET_OR_INSERT(K, V, self, key, val, out_node) \
-    tda_hmap_get_or_insert(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }, &(V){ (val) }, (out_node))
+    tda_hmap_get_or_insert(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0], &(V[1]){ (val) }[0], (out_node))
 
 /// tda_hmap_remove from a key value rather than an address
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_REMOVE(K, self, key) \
-    tda_hmap_remove(TDA_HMAP_KEY_TYPED_(K, self), &(K){ (key) })
+    tda_hmap_remove(TDA_HMAP_KEY_TYPED_(K, self), &(K[1]){ (key) }[0])
 
 /// tda_hmap_take from a key value rather than an address, with 'out_key' and 'out_val'
 /// typechecked as K * and V *
-/// @param K the key type; scalars only, as 'key' becomes a compound literal
+/// @param K the key type; 'key' may be any K, a struct literal in parentheses too
 /// @param V the value type
 /// @param self the map
 /// @param key the key to drop
@@ -686,7 +698,7 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param[out] out_val the stored value, or nullptr
 /// @bigo{1} expected
 #define TDA_HMAP_TAKE(K, V, self, key, out_key, out_val) \
-    tda_hmap_take(TDA_HMAP_TYPED_(K, V, self), &(K){ (key) }, (K *){ (out_key) }, (V *){ (out_val) })
+    tda_hmap_take(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0], (K *){ (out_key) }, (V *){ (out_val) })
 
 /// @cond
 // the body of both walks; the hidden names come in already unique, and 'self' is

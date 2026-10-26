@@ -47,10 +47,9 @@ static void default_dealloc(void *ctx, void *ptr, tda_Layout layout);
 
 /* ========== lifetime ========== */
 
-tda_Al *tda_al_default() {
+tda_Al tda_al_default() {
     // no resize: libc has no call that grows a block only where it lies
-    static tda_Al static_al = {
-        .ctx = nullptr,
+    static const tda_AlVtable vtable = {
         .alloc = default_alloc,
         .alloc_zeroed = default_alloc_zeroed,
         .resize = nullptr,
@@ -58,7 +57,7 @@ tda_Al *tda_al_default() {
         .dealloc = default_dealloc,
     };
 
-    return &static_al;
+    return (tda_Al){.ctx = nullptr, .vt = &vtable};
 }
 
 /* ========== internals ========== */

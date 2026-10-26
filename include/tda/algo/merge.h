@@ -37,13 +37,13 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *
 /// @param mid where the second run starts
 /// @param cmp the order both are in
 /// @param ctx passed to every call of 'cmp'; may be null
-/// @param al for a buffer, or null. With one, the shorter run (at most half) is copied
-///           aside and merged back; without one, or if allocation fails, a slower
-///           path that needs no memory is used
+/// @param al for a buffer, or `= {}` for none. With one, the shorter run (at most
+///           half) is copied aside and merged back; without one, or if allocation
+///           fails, a slower path that needs no memory is used
 /// @bigo{n} with a buffer, n log n without. A failed allocation only costs time, so
 ///        nothing is returned
 TDA_API
-void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, tda_Al *al);
+void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, tda_Al al);
 
 /// @}
 

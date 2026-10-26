@@ -47,9 +47,9 @@
 /// released with the list
 typedef struct tda_ListNode tda_ListNode;
 
-/// Owning list whose positions never move. A value the caller holds wherever it likes:
-/// an init or a from_ fills it in, tda_list_deinit releases its nodes. `= {}` is the
-/// inert state, which tda_list_deinit accepts and every other op asserts.
+/// Owning list whose positions never move. A value the caller holds wherever it likes: an
+/// init returns it, a from_ fills it in, tda_list_deinit releases its nodes. `= {}` is
+/// the inert state, which tda_list_deinit accepts and every other op asserts.
 ///
 /// The fields belong to the list: read and change them only through the functions here.
 /// No node points back at the struct, so it can be moved as bytes.
@@ -62,7 +62,7 @@ typedef struct tda_List {
     tda_ListNode *tail_; ///< the back node; null while the list is empty
     size_t len_;         ///< how many elems it holds
     tda_Layout elem_;    ///< the layout of one elem
-    tda_Al *al_;         ///< where the nodes come from; moves along with the list
+    tda_Al al_;          ///< where the nodes come from; moves along with the list
 } tda_List;
 
 /// @name lifetime
@@ -71,10 +71,10 @@ typedef struct tda_List {
 /// an empty list; allocates nothing, so it cannot fail
 /// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
-/// @param[out] out the new list
+/// @return the new list
 /// @bigo{1}
-TDA_API
-void tda_list_init(tda_Layout elem, tda_Al *al, tda_List *out);
+[[nodiscard]] TDA_API
+tda_List tda_list_init(tda_Layout elem, tda_Al al);
 
 /// a list holding a copy of 'len' elems read from 'data', front to back
 /// @param data the elems to copy in; may be null only when len is 0
@@ -87,7 +87,7 @@ void tda_list_init(tda_Layout elem, tda_Al *al, tda_List *out);
 ///         nothing is leaked
 /// @bigo{n}, one allocation per elem
 [[nodiscard]] TDA_API
-tda_Status tda_list_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_List *out);
+tda_Status tda_list_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_List *out);
 
 /// a list holding a copy of the elems 's' views
 /// @param s the view to copy; the elem layout is the span's
@@ -97,7 +97,7 @@ tda_Status tda_list_from_data(const void *data, size_t len, tda_Layout elem, tda
 /// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_list_from_span(tda_Span s, tda_Al *al, tda_List *out);
+tda_Status tda_list_from_span(tda_Span s, tda_Al al, tda_List *out);
 
 /// releases what the list holds and leaves it inert, `= {}`
 /// @param self a list, or an inert one, for which this is a no-op
@@ -127,7 +127,7 @@ tda_Status tda_list_copy(const tda_List *self, tda_List *out);
 /// @retval TDA_STATUS_ERR_NO_MEM when a node cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List *out);
+tda_Status tda_list_copy_with(const tda_List *self, tda_Al al, tda_List *out);
 
 /// overwrites the elems of 'self' with those of 'other', reusing its nodes and allocating
 /// or releasing the difference
@@ -182,7 +182,7 @@ bool tda_list_eq_by(const tda_List *a, const tda_List *b, tda_Eq eq, void *ctx);
 [[nodiscard]]
 static inline size_t tda_list_len(const tda_List *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->len_;
 }
@@ -194,19 +194,19 @@ static inline size_t tda_list_len(const tda_List *self) {
 [[nodiscard]]
 static inline tda_Layout tda_list_elem_layout(const tda_List *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->elem_;
 }
 
 /// the allocator the list was built with
 /// @param self the list
-/// @return the allocator, borrowed
+/// @return the view it was built with
 /// @bigo{1}
 [[nodiscard]]
-static inline tda_Al *tda_list_al(const tda_List *self) {
+static inline tda_Al tda_list_al(const tda_List *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->al_;
 }
@@ -258,7 +258,7 @@ void *tda_list_back_mut(tda_List *self);
 [[nodiscard]]
 static inline const tda_ListNode *tda_list_front_node(const tda_List *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->head_;
 }
@@ -268,7 +268,7 @@ static inline const tda_ListNode *tda_list_front_node(const tda_List *self) {
 [[nodiscard]]
 static inline tda_ListNode *tda_list_front_node_mut(tda_List *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->head_;
 }
@@ -278,7 +278,7 @@ static inline tda_ListNode *tda_list_front_node_mut(tda_List *self) {
 [[nodiscard]]
 static inline const tda_ListNode *tda_list_back_node(const tda_List *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->tail_;
 }
@@ -288,14 +288,15 @@ static inline const tda_ListNode *tda_list_back_node(const tda_List *self) {
 [[nodiscard]]
 static inline tda_ListNode *tda_list_back_node_mut(tda_List *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->tail_;
 }
 
 /// the first node from the front whose elem is equal to 'key'
 /// @param self the list
-/// @param key the address of the value looked for
+/// @param key the address of the value looked for, passed to 'eq' as its right operand,
+///            so it need not be an elem
 /// @param eq the equality; passed per call, since a list is never told how its elems
 ///           compare
 /// @param ctx passed to every call of 'eq'; may be null
@@ -514,20 +515,24 @@ void tda_list_copy_from_span(tda_List *self, tda_Span src);
 /// @name print
 /// @{
 
-/// writes the elems front to back as [a, b, c] and a newline
+/// writes the elems front to back as [a, b, c], with no newline
 /// @param self the list
 /// @param stream where to write
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_list_fprint(const tda_List *self, FILE *stream, tda_FPrint fprint);
+int tda_list_fprint(const tda_List *self, FILE *stream, tda_FPrint fprint, void *ctx);
 
-/// tda_list_fprint to stdout
+/// tda_list_fprint to stdout, and a newline
 /// @param self the list
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_list_print(const tda_List *self, tda_FPrint fprint);
+int tda_list_print(const tda_List *self, tda_FPrint fprint, void *ctx);
 
 /// @}
 
@@ -556,10 +561,9 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// tda_list_init with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param al the allocator
-/// @param[out] out where the new list is written
 /// @bigo{1}
-#define TDA_LIST_INIT(T, al, out) \
-    tda_list_init(TDA_LAYOUT_OF(T), (al), (out))
+#define TDA_LIST_INIT(T, al) \
+    tda_list_init(TDA_LAYOUT_OF(T), (al))
 
 /// tda_list_from_data with TDA_LAYOUT_OF(T)
 /// @param T the elem type
@@ -631,19 +635,19 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
          node = tda_list_node_next_mut(node))
 
 /// tda_list_find from a value rather than an address
-/// @param T the elem type; scalars only, as 'key' becomes a compound literal
+/// @param T the elem type; 'key' may be any T, a struct literal in parentheses too
 /// @param self the list
 /// @param key the value looked for
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null
 /// @bigo{n}
 #define TDA_LIST_FIND(T, self, key, eq, ctx) \
-    tda_list_find(TDA_LIST_TYPED_(T, self), &(T){ (key) }, (eq), (ctx))
+    tda_list_find(TDA_LIST_TYPED_(T, self), &(T[1]){ (key) }[0], (eq), (ctx))
 
 /// tda_list_find_mut from a value rather than an address
 /// @copydetails TDA_LIST_FIND
 #define TDA_LIST_FIND_MUT(T, self, key, eq, ctx) \
-    tda_list_find_mut(TDA_LIST_TYPED_(T, self), &(T){ (key) }, (eq), (ctx))
+    tda_list_find_mut(TDA_LIST_TYPED_(T, self), &(T[1]){ (key) }[0], (eq), (ctx))
 
 /// tda_list_node_elem as a const T *
 /// @param T the elem type
@@ -659,31 +663,31 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
     ((T *) tda_list_node_elem_mut(TDA_LIST_TYPED_(T, self), (node)))
 
 /// tda_list_push_front from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the list
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_LIST_PUSH_FRONT(T, self, val) \
-    tda_list_push_front(TDA_LIST_TYPED_(T, self), &(T){ (val) })
+    tda_list_push_front(TDA_LIST_TYPED_(T, self), &(T[1]){ (val) }[0])
 
 /// tda_list_push_back from a value rather than an address
 /// @copydetails TDA_LIST_PUSH_FRONT
 #define TDA_LIST_PUSH_BACK(T, self, val) \
-    tda_list_push_back(TDA_LIST_TYPED_(T, self), &(T){ (val) })
+    tda_list_push_back(TDA_LIST_TYPED_(T, self), &(T[1]){ (val) }[0])
 
 /// tda_list_insert_before from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the list
 /// @param at the position to insert at
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_LIST_INSERT_BEFORE(T, self, at, val) \
-    tda_list_insert_before(TDA_LIST_TYPED_(T, self), (at), &(T){ (val) })
+    tda_list_insert_before(TDA_LIST_TYPED_(T, self), (at), &(T[1]){ (val) }[0])
 
 /// tda_list_insert_after from a value rather than an address
 /// @copydetails TDA_LIST_INSERT_BEFORE
 #define TDA_LIST_INSERT_AFTER(T, self, at, val) \
-    tda_list_insert_after(TDA_LIST_TYPED_(T, self), (at), &(T){ (val) })
+    tda_list_insert_after(TDA_LIST_TYPED_(T, self), (at), &(T[1]){ (val) }[0])
 
 /// @}
 

@@ -1,6 +1,7 @@
 #include "tda/ds/bitset.h"
 
 #include "tda/core/check.h"
+#include "tda/core/print.h"
 #include "tda/core/util.h"
 
 #include "internal/bits.h"
@@ -33,7 +34,7 @@ static constexpr uint64_t WORD_ONES = ~UINT64_C(0);
     assert((b)->nwords_ > 0 || !(b)->words_),                                                    \
     assert((b)->nwords_ == 0 || (b)->words_),                                                    \
     assert((b)->nwords_ == 0 || ((b)->words_[(b)->nwords_ - 1] & ~tail_mask((b)->nbits_)) == 0), \
-    assert((b)->al_))
+    assert((b)->al_.vt))
 
 // two bitsets a pairwise op can combine: one universe, so one word count
 #define EXPECT_SAME_BITSET(a, b) \
@@ -93,8 +94,8 @@ static bool find_prev_impl(const tda_BitSet *self, bool clear, size_t from, size
 
 /* ========== lifetime ========== */
 
-tda_Status tda_bitset_init_len(size_t nbits, tda_Al *al, tda_BitSet *out) {
-    assert(al);
+tda_Status tda_bitset_init_len(size_t nbits, tda_Al al, tda_BitSet *out) {
+    assert(al.vt);
     assert(out);
 
     tda_BitSet obj = {.nbits_ = nbits, .nwords_ = words_for(nbits), .al_ = al};
@@ -116,7 +117,7 @@ void tda_bitset_deinit(tda_BitSet *self) {
     assert(self);
 
     // the inert state, never initialized or already released
-    if (!self->al_) {
+    if (!self->al_.vt) {
         assert(!self->words_);
         return;
     }
@@ -136,9 +137,9 @@ tda_Status tda_bitset_copy(const tda_BitSet *self, tda_BitSet *out) {
     return tda_bitset_copy_with(self, self->al_, out);
 }
 
-tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al *al, tda_BitSet *out) {
+tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al al, tda_BitSet *out) {
     ASSERT_BITSET(self);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_BitSet copy;
@@ -428,29 +429,29 @@ bool tda_bitset_intersects(const tda_BitSet *self, const tda_BitSet *other) {
 
 /* ========== print ========== */
 
-void tda_bitset_fprint(const tda_BitSet *self, FILE *stream) {
+int tda_bitset_fprint(const tda_BitSet *self, FILE *stream) {
     ASSERT_BITSET(self);
     assert(stream);
 
-    fputc('{', stream);
+    int rc = fputc('{', stream);
 
     bool first = true;
     size_t idx;
     for (size_t from = 0; tda_bitset_find_next(self, from, &idx); from = idx + 1) {
         if (!first) {
-            fputs(", ", stream);
+            rc = tda_fprint_join_(rc, fputs(", ", stream));
         }
         first = false;
-        fprintf(stream, "%zu", idx);
+        rc = tda_fprint_join_(rc, fprintf(stream, "%zu", idx));
     }
 
-    fputs("}\n", stream);
+    return tda_fprint_join_(rc, fputc('}', stream));
 }
 
-void tda_bitset_print(const tda_BitSet *self) {
+int tda_bitset_print(const tda_BitSet *self) {
     ASSERT_BITSET(self);
 
-    tda_bitset_fprint(self, stdout);
+    return tda_fprint_join_(tda_bitset_fprint(self, stdout), fputc('\n', stdout));
 }
 
 /* ========== internals ========== */

@@ -1,7 +1,6 @@
 #include "tda/alloc/log.h"
 
 #include "tda/alloc/alloc.h"
-#include "tda/core/check.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -31,49 +30,51 @@ static void log_dealloc(void *ctx, void *ptr, tda_Layout layout);
 /// writes one line and flushes it, so a crash right after still leaves it in the log
 static void log_line(const tda_Log *self, const char *fmt, ...);
 
-// the ctx check is how a moved or copied allocator gets caught, so it stays under
-// TDA_HARDENED
-#define ASSERT_LOG(l)                     \
-    (assert(l),                           \
-     assert((l)->al_.alloc == log_alloc), \
-     TDA_EXPECT((l)->al_.ctx == (l)))
+// the log is live while it has a parent: deinit and '= {}' leave none
+#define ASSERT_LOG(l) \
+    (assert(l), assert((l)->parent_.vt), assert((l)->stream_))
 
 /* ========== lifetime ========== */
 
-void tda_log_init(tda_Al *parent, FILE *stream, tda_Log *out) {
-    assert(parent);
+tda_Log tda_log_init(FILE *stream, tda_Al parent) {
     assert(stream);
-    assert(out);
+    assert(parent.vt);
 
-    *out = (tda_Log){
-        .al_ = {
-            .ctx = out,
-            .alloc = log_alloc,
-            .alloc_zeroed = log_alloc_zeroed,
-            .resize = log_resize,
-            .remap = log_remap,
-            .dealloc = log_dealloc,
-        },
-        .parent_ = parent,
-        .stream_ = stream,
-    };
+    const tda_Log obj = {.parent_ = parent, .stream_ = stream};
+    log_line(&obj, "[TDA] log allocator created\n");
 
-    log_line(out, "[TDA] log allocator created (wrapping %p)\n", (void *) parent);
+    return obj;
 }
 
 void tda_log_deinit(tda_Log *self) {
     assert(self);
 
-    // the inert state, never filled in or already released
-    if (!self->al_.alloc) {
+    // the inert state, never made or already released
+    if (!self->parent_.vt) {
         return;
     }
 
     ASSERT_LOG(self);
 
-    log_line(self, "[TDA] log allocator destroyed (wrapping %p)\n", (void *) self->parent_);
+    log_line(self, "[TDA] log allocator destroyed\n");
 
     *self = (tda_Log){};
+}
+
+/* ========== view ========== */
+
+tda_Al tda_log_to_al(tda_Log *self) {
+    ASSERT_LOG(self);
+
+    static const tda_AlVtable vtable = {
+        .alloc = log_alloc,
+        .alloc_zeroed = log_alloc_zeroed,
+        .resize = log_resize,
+        .remap = log_remap,
+        .dealloc = log_dealloc,
+    };
+
+    return (tda_Al){.ctx = self, .vt = &vtable};
 }
 
 /* ========== internals ========== */

@@ -59,7 +59,7 @@ void tda_span_sort(tda_SpanMut s, tda_Cmp cmp, void *ctx);
 /// @retval TDA_STATUS_ERR_NO_MEM when the buffer cannot be allocated; 's' is unchanged
 /// @bigo{n log n}
 [[nodiscard]] TDA_API
-tda_Status tda_span_sort_stable(tda_SpanMut s, tda_Cmp cmp, void *ctx, tda_Al *al);
+tda_Status tda_span_sort_stable(tda_SpanMut s, tda_Cmp cmp, void *ctx, tda_Al al);
 
 /// puts the smallest 'count' elems, sorted, at the front
 /// @param s the span

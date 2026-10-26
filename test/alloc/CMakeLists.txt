@@ -32,15 +32,18 @@ foreach(entry IN LISTS debug_misuse_cases)
         PASS_REGULAR_EXPRESSION "tda debug: .*${report}")
 endforeach()
 
-# a copied allocator caught by the first of its own functions; skipped where the check
-# is compiled out, under NDEBUG without TDA_HARDENED
-add_executable(test_alloc_moved test_moved.c)
-target_link_libraries(test_alloc_moved PRIVATE tda::tda)
-target_compile_options(test_alloc_moved PRIVATE ${TDA_WARNINGS})
+# a view used after its allocator was released, caught by the hook's liveness check;
+# skipped under NDEBUG, where the check is compiled out
+add_executable(test_alloc_stale test_stale.c)
+target_link_libraries(test_alloc_stale PRIVATE tda::tda)
+target_compile_options(test_alloc_stale PRIVATE ${TDA_WARNINGS})
 
-foreach(name IN ITEMS arena pool slab debug log)
-    add_test(NAME test_alloc_moved_${name} COMMAND test_alloc_moved ${name})
-    set_tests_properties(test_alloc_moved_${name} PROPERTIES
-        PASS_REGULAR_EXPRESSION "al_\\.ctx == "
+foreach(entry IN ITEMS "arena|data_" "pool|data_" "slab|parent_\\.vt" "debug|parent_\\.vt" "log|parent_\\.vt")
+    string(REPLACE "|" ";" parts "${entry}")
+    list(GET parts 0 name)
+    list(GET parts 1 check)
+    add_test(NAME test_alloc_stale_${name} COMMAND test_alloc_stale ${name})
+    set_tests_properties(test_alloc_stale_${name} PROPERTIES
+        PASS_REGULAR_EXPRESSION "${check}"
         SKIP_RETURN_CODE 77)
 endforeach()

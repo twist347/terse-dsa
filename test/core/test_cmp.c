@@ -122,17 +122,20 @@ static void test_cmp_ptrdiff_orders_and_survives_the_extremes() {
 /* ========== char ========== */
 
 // char is neither signed char nor unsigned char, and which one it behaves like depends on
-// the target. So the expected result is not a literal: the comparator must agree with the
-// platform's own operators. (char) 200 is negative on x86 and 200 under -funsigned-char;
-// tda_cmp_i8 or tda_cmp_u8 in its place is wrong on exactly one of the two.
-static void test_cmp_char_follows_the_signedness_of_the_target() {
+// the target: (char) 200 is negative on x86 and 200 on ARM. The comparator orders it as
+// unsigned char on both, as strcmp orders the same byte inside a string, so a byte past
+// 0x7f sorts after ASCII everywhere; the platform's own operators would not.
+static void test_cmp_char_orders_as_unsigned_char_on_every_target() {
     constexpr char high = (char) 200;
     constexpr char low = 100;
-    constexpr int want = (high > low) - (high < low);
 
-    TEST_ASSERT_EQUAL_INT(want, cmp_char(high, low));
-    TEST_ASSERT_EQUAL_INT(-want, cmp_char(low, high));
+    TEST_ASSERT_EQUAL_INT(1, cmp_char(high, low));
+    TEST_ASSERT_EQUAL_INT(-1, cmp_char(low, high));
     TEST_ASSERT_EQUAL_INT(0, cmp_char(high, high));
+
+    // the same two bytes as one-char strings
+    const char hs[2] = {high, '\0'}, ls[2] = {low, '\0'};
+    TEST_ASSERT_EQUAL_INT(cmp_char(high, low), tda_cmp_cstr(&(const char *){hs}, &(const char *){ls}, nullptr));
 
     TEST_ASSERT_TRUE(eq_char('a', 'a'));
     TEST_ASSERT_FALSE(eq_char('a', 'b'));
@@ -330,7 +333,7 @@ int main() {
 
     RUN_TEST(test_cmp_ptrdiff_orders_and_survives_the_extremes);
 
-    RUN_TEST(test_cmp_char_follows_the_signedness_of_the_target);
+    RUN_TEST(test_cmp_char_orders_as_unsigned_char_on_every_target);
     RUN_TEST(test_cmp_char_sorts_letters);
 
     RUN_TEST(test_cmp_float_orders_ordinary_values);

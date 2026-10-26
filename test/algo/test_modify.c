@@ -226,7 +226,7 @@ static void test_replace_if_overwrites_matching_elems() {
     int32_t buf[6] = {1, 2, 3, 4, 5, 6};
     constexpr int32_t val = 0;
 
-    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), tda_test_i32_is_even, nullptr, &val);
+    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), &val, tda_test_i32_is_even, nullptr);
 
     constexpr int32_t want[6] = {1, 0, 3, 0, 5, 0};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 6);
@@ -237,7 +237,7 @@ static void test_replace_if_passes_the_ctx_through() {
     int32_t bound = 3;
     constexpr int32_t val = 0;
 
-    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), tda_test_i32_greater_than, &bound, &val);
+    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5), &val, tda_test_i32_greater_than, &bound);
 
     constexpr int32_t want[5] = {1, 0, 2, 0, 3};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 5);
@@ -247,7 +247,7 @@ static void test_replace_writes_whole_elems() {
     Pair buf[3] = {{1, 10}, {-1, 20}, {2, 30}};
     constexpr Pair val = {7, 70};
 
-    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(Pair, buf, 3), tda_test_pair_a_is_negative, nullptr, &val);
+    tda_span_replace_if(TDA_SPAN_FROM_DATA_MUT(Pair, buf, 3), &val, tda_test_pair_a_is_negative, nullptr);
 
     TEST_ASSERT_EQUAL_INT64(7, buf[1].a);
     TEST_ASSERT_EQUAL_INT64(70, buf[1].b);
@@ -260,6 +260,30 @@ static void test_replace_of_an_empty_span_is_a_noop() {
     constexpr int32_t val = 0;
 
     tda_span_replace(TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0), &key, &val, tda_eq_i32, nullptr);
+}
+
+
+// 'ctx' is the key the op was given: it must arrive on the right, never as an elem
+static bool eq_pair_by_a(const void *elem, const void *key, void *ctx) {
+    TEST_ASSERT_EQUAL_PTR(ctx, key);
+
+    return ((const Pair *) elem)->a == *(const int64_t *) key;
+}
+
+// remove and replace match by a key that need not be an elem, as the finds do
+static void test_remove_and_replace_take_a_key_of_another_type() {
+    Pair buf[4] = {{1, 10}, {2, 20}, {1, 30}, {3, 40}};
+    const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(Pair, buf, 4);
+    int64_t one = 1, nine = 9;
+    constexpr Pair val = {9, 90};
+
+    tda_span_replace(s, &one, &val, eq_pair_by_a, &one);
+    TEST_ASSERT_EQUAL_INT64(9, buf[0].a);
+    TEST_ASSERT_EQUAL_INT64(90, buf[2].b);
+
+    TEST_ASSERT_EQUAL_size_t(2, tda_span_remove(s, &nine, eq_pair_by_a, &nine));
+    TEST_ASSERT_EQUAL_INT64(2, buf[0].a);
+    TEST_ASSERT_EQUAL_INT64(3, buf[1].a);
 }
 
 int main() {
@@ -290,6 +314,8 @@ int main() {
     RUN_TEST(test_replace_if_passes_the_ctx_through);
     RUN_TEST(test_replace_writes_whole_elems);
     RUN_TEST(test_replace_of_an_empty_span_is_a_noop);
+
+    RUN_TEST(test_remove_and_replace_take_a_key_of_another_type);
 
     return UNITY_END();
 }

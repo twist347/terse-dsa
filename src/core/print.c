@@ -11,11 +11,11 @@
 
 // One body per type, differing only in the cast and the conversion. The format stays a
 // literal at the call site so the compiler still checks it against the argument.
-#define DEFINE_FPRINT(name, T, fmt)                         \
-    void tda_fprint_##name(FILE *stream, const void *val) { \
-        assert(stream);                                     \
-        assert(val);                                        \
-        fprintf(stream, fmt, *(const T *) val);             \
+#define DEFINE_FPRINT(name, T, fmt)                                \
+    int tda_fprint_##name(FILE *stream, const void *val, void *) { \
+        assert(stream);                                            \
+        assert(val);                                               \
+        return fprintf(stream, fmt, *(const T *) val);             \
     }
 
 /* ========== instantiation ========== */
@@ -39,45 +39,46 @@ DEFINE_FPRINT(ptrdiff, ptrdiff_t, "%td")
 // "infinity", a NaN with a sign and a tail ("-nan(ind)" in the UCRT). They are spelled
 // out here instead, and a NaN without its sign, which means nothing: 0.0 / 0.0 sets it
 // on x86 and not on ARM.
-static void fprint_double(FILE *stream, double val) {
+static int fprint_double(FILE *stream, double val) {
     if (isnan(val)) {
-        fputs("nan", stream);
-    } else if (isinf(val)) {
-        fputs(val < 0 ? "-inf" : "inf", stream);
-    } else {
-        fprintf(stream, "%g", val);
+        return fputs("nan", stream);
     }
+    if (isinf(val)) {
+        return fputs(val < 0 ? "-inf" : "inf", stream);
+    }
+
+    return fprintf(stream, "%g", val);
 }
 
 // a float widens to a double exactly, the specials included
-void tda_fprint_f32(FILE *stream, const void *val) {
+int tda_fprint_f32(FILE *stream, const void *val, void *) {
     assert(stream);
     assert(val);
 
-    fprint_double(stream, *(const float *) val);
+    return fprint_double(stream, *(const float *) val);
 }
 
-void tda_fprint_f64(FILE *stream, const void *val) {
+int tda_fprint_f64(FILE *stream, const void *val, void *) {
     assert(stream);
     assert(val);
 
-    fprint_double(stream, *(const double *) val);
+    return fprint_double(stream, *(const double *) val);
 }
 
 /* ========== bool ========== */
 
 // the one entry core/cmp and core/hash lack: for them u8 covers a bool, but a bool reads
 // better as a word than as a digit
-void tda_fprint_bool(FILE *stream, const void *val) {
+int tda_fprint_bool(FILE *stream, const void *val, void *) {
     assert(stream);
     assert(val);
 
-    fputs(*(const bool *) val ? "true" : "false", stream);
+    return fputs(*(const bool *) val ? "true" : "false", stream);
 }
 
 /* ========== char ========== */
 
-void tda_fprint_char(FILE *stream, const void *val) {
+int tda_fprint_char(FILE *stream, const void *val, void *) {
     assert(stream);
     assert(val);
 
@@ -86,15 +87,15 @@ void tda_fprint_char(FILE *stream, const void *val) {
     // isprint takes an int that must be representable as unsigned char, and char may be
     // signed: the cast keeps a negative char out of undefined behaviour
     if (isprint((unsigned char) c)) {
-        fputc(c, stream);
-    } else {
-        fprintf(stream, "\\x%02x", (unsigned) (unsigned char) c);
+        return fputc(c, stream);
     }
+
+    return fprintf(stream, "\\x%02x", (unsigned) (unsigned char) c);
 }
 
 /* ========== cstr ========== */
 
-void tda_fprint_cstr(FILE *stream, const void *val) {
+int tda_fprint_cstr(FILE *stream, const void *val, void *) {
     assert(stream);
     assert(val);
 
@@ -102,11 +103,10 @@ void tda_fprint_cstr(FILE *stream, const void *val) {
     const char *str = *(const char *const *) val;
 
     if (!str) {
-        fputs("null", stream);
-        return;
+        return fputs("null", stream);
     }
 
-    fprintf(stream, "\"%s\"", str);
+    return fprintf(stream, "\"%s\"", str);
 }
 
 #undef DEFINE_FPRINT

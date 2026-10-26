@@ -11,7 +11,7 @@
 // the map asserts the rest of its invariants on every call
 #define ASSERT_HSET(s)                                     \
     (assert(s),                                            \
-     assert((s)->map_.al_),                                \
+     assert((s)->map_.al_.vt),                             \
      assert(tda_hmap_val_layout(&(s)->map_).size == 0))
 
 // two sets whose keys can pass between them: one key layout. The ops whose answer also
@@ -25,6 +25,21 @@
 //
 // The map is built through internal/hmap_impl.h with a value of size 0, so nothing follows the
 // key in a node and nothing pads it.
+
+// struct tda_HSetNode is never defined: a set node is a map node's address under another
+// type, so neither reaches the other's functions
+[[nodiscard]]
+static const tda_HMapNode *map_node(const tda_HSetNode *node);
+
+[[nodiscard]]
+static tda_HMapNode *map_node_mut(tda_HSetNode *node);
+
+[[nodiscard]]
+static const tda_HSetNode *set_node(const tda_HMapNode *node);
+
+[[nodiscard]]
+static tda_HSetNode *set_node_mut(tda_HMapNode *node);
+
 /// a tda_Pred on keys, carried through tda_hmap_retain
 typedef struct {
     tda_Pred pred;
@@ -49,29 +64,31 @@ static bool keys_all_in(const tda_HMap *a, const tda_HMap *b);
 
 /* ========== lifetime ========== */
 
-void tda_hset_init(tda_Layout key, tda_Hasher hasher, tda_Eq eq, void *ctx, tda_Al *al, tda_HSet *out) {
+tda_HSet tda_hset_init(tda_Layout key, tda_Hasher hasher, tda_Eq eq, void *ctx, tda_Al al) {
     assert(tda_layout_is_type(key));
     assert(hasher);
     assert(eq);
-    assert(al);
-    assert(out);
+    assert(al.vt);
 
     // with no room asked for nothing is allocated, so this cannot fail
-    [[maybe_unused]] const tda_Status st = tda_hset_init_cap(0, key, hasher, eq, ctx, al, out);
+    tda_HSet obj;
+    [[maybe_unused]] const tda_Status st = tda_hset_init_cap(0, key, hasher, eq, ctx, al, &obj);
     assert(TDA_STATUS_IS_OK(st));
+
+    return obj;
 }
 
 tda_Status tda_hset_init_cap(
     size_t cap,
     tda_Layout key,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     tda_HSet *out
 ) {
     assert(tda_layout_is_type(key));
     assert(hasher);
     assert(eq);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     // no value, so nothing to lay out after the key
@@ -81,13 +98,13 @@ tda_Status tda_hset_init_cap(
 tda_Status tda_hset_from_span(
     tda_Span s,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     tda_HSet *out
 ) {
     TDA_SPAN_ASSERT(s);
     assert(hasher);
     assert(eq);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_HSet obj;
@@ -122,9 +139,9 @@ tda_Status tda_hset_copy(const tda_HSet *self, tda_HSet *out) {
     return tda_hset_copy_with(self, tda_hmap_al(&self->map_), out);
 }
 
-tda_Status tda_hset_copy_with(const tda_HSet *self, tda_Al *al, tda_HSet *out) {
+tda_Status tda_hset_copy_with(const tda_HSet *self, tda_Al al, tda_HSet *out) {
     ASSERT_HSET(self);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_hmap_copy_with(&self->map_, al, &out->map_);
@@ -188,14 +205,14 @@ const tda_HSetNode *tda_hset_find(const tda_HSet *self, const void *key) {
     ASSERT_HSET(self);
     assert(key);
 
-    return tda_hmap_find(&self->map_, key);
+    return set_node(tda_hmap_find(&self->map_, key));
 }
 
 tda_HSetNode *tda_hset_find_mut(tda_HSet *self, const void *key) {
     ASSERT_HSET(self);
     assert(key);
 
-    return tda_hmap_find_mut(&self->map_, key);
+    return set_node_mut(tda_hmap_find_mut(&self->map_, key));
 }
 
 /* ========== nodes ========== */
@@ -203,34 +220,34 @@ tda_HSetNode *tda_hset_find_mut(tda_HSet *self, const void *key) {
 const tda_HSetNode *tda_hset_first_node(const tda_HSet *self) {
     ASSERT_HSET(self);
 
-    return tda_hmap_first_node(&self->map_);
+    return set_node(tda_hmap_first_node(&self->map_));
 }
 
 tda_HSetNode *tda_hset_first_node_mut(tda_HSet *self) {
     ASSERT_HSET(self);
 
-    return tda_hmap_first_node_mut(&self->map_);
+    return set_node_mut(tda_hmap_first_node_mut(&self->map_));
 }
 
 const tda_HSetNode *tda_hset_node_next(const tda_HSet *self, const tda_HSetNode *node) {
     ASSERT_HSET(self);
     assert(node);
 
-    return tda_hmap_node_next(&self->map_, node);
+    return set_node(tda_hmap_node_next(&self->map_, map_node(node)));
 }
 
 tda_HSetNode *tda_hset_node_next_mut(tda_HSet *self, tda_HSetNode *node) {
     ASSERT_HSET(self);
     assert(node);
 
-    return tda_hmap_node_next_mut(&self->map_, node);
+    return set_node_mut(tda_hmap_node_next_mut(&self->map_, map_node_mut(node)));
 }
 
 const void *tda_hset_node_key(const tda_HSet *self, const tda_HSetNode *node) {
     ASSERT_HSET(self);
     assert(node);
 
-    return tda_hmap_node_key(&self->map_, node);
+    return tda_hmap_node_key(&self->map_, map_node(node));
 }
 
 /* ========== mods ========== */
@@ -280,7 +297,7 @@ void tda_hset_remove_node(tda_HSet *self, tda_HSetNode *node) {
     ASSERT_HSET(self);
     assert(node);
 
-    tda_hmap_remove_node(&self->map_, node);
+    tda_hmap_remove_node(&self->map_, map_node_mut(node));
 
     ASSERT_HSET(self);
 }
@@ -489,31 +506,48 @@ bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other) {
 
 /* ========== print ========== */
 
-void tda_hset_fprint(const tda_HSet *self, FILE *stream, tda_FPrint fprint) {
+int tda_hset_fprint(const tda_HSet *self, FILE *stream, tda_FPrint fprint, void *ctx) {
     ASSERT_HSET(self);
     assert(stream);
     assert(fprint);
 
-    fputc('{', stream);
+    int rc = fputc('{', stream);
     bool first = true;
     TDA_HSET_FOR_EACH(node, self) {
         if (!first) {
-            fputs(", ", stream);
+            rc = tda_fprint_join_(rc, fputs(", ", stream));
         }
         first = false;
-        fprint(stream, tda_hset_node_key(self, node));
+        rc = tda_fprint_join_(rc, fprint(stream, tda_hset_node_key(self, node), ctx));
     }
-    fputs("}\n", stream);
+
+    return tda_fprint_join_(rc, fputc('}', stream));
 }
 
-void tda_hset_print(const tda_HSet *self, tda_FPrint fprint) {
+int tda_hset_print(const tda_HSet *self, tda_FPrint fprint, void *ctx) {
     ASSERT_HSET(self);
     assert(fprint);
 
-    tda_hset_fprint(self, stdout, fprint);
+    return tda_fprint_join_(tda_hset_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
 }
 
 /* ========== internals ========== */
+
+static const tda_HMapNode *map_node(const tda_HSetNode *node) {
+    return (const tda_HMapNode *) node;
+}
+
+static tda_HMapNode *map_node_mut(tda_HSetNode *node) {
+    return (tda_HMapNode *) node;
+}
+
+static const tda_HSetNode *set_node(const tda_HMapNode *node) {
+    return (const tda_HSetNode *) node;
+}
+
+static tda_HSetNode *set_node_mut(tda_HMapNode *node) {
+    return (tda_HSetNode *) node;
+}
 
 static bool key_passes(const void *key, const void *, void *ctx) {
     const KeyPred *key_pred = ctx;

@@ -39,9 +39,9 @@
 // one size class, carved from the slab's chunks; the slab's own, here only so the struct
 // below has a size
 typedef struct {
-    struct tda_SlabFree_ *free_head_; // freed blocks, taken first
-    unsigned char *carve_;            // the uncarved rest of the newest chunk
-    unsigned char *carve_end_;
+    struct tda_SlabFree_ *free_head; // freed blocks, taken first
+    unsigned char *carve;            // the uncarved rest of the newest chunk
+    unsigned char *carve_end;
 } tda_SlabClass_;
 
 // how many classes there are; the source checks it against its table
@@ -49,20 +49,16 @@ enum { TDA_SLAB_CLASSES_ = 10 };
 /// @endcond
 
 /// A slab. A value the caller holds, on the stack or inside a struct: tda_slab_init
-/// fills it in, TDA_AL hands out the allocator over it, and tda_slab_deinit
-/// gives its chunks back. `= {}` is the inert state.
+/// makes it, tda_slab_to_al hands out views of it, and tda_slab_deinit gives its chunks
+/// back. `= {}` is the inert state.
 ///
 /// The fields belong to the slab: read and change them only through the functions here.
 ///
-/// @warning the slab must not move, nor be copied, once it is filled in: the allocator
-///          TDA_AL gives points into it, and so does every container built on
-///          that allocator.
-///          A moved or copied one is caught by the first of its own functions
-///          called on it, deinit included, under assert or TDA_HARDENED; a request
-///          made through its tda_Al is not checked.
+/// @warning once a view from tda_slab_to_al is out, the slab must not move nor be copied:
+///          the view points at it, and so does every container built on it. While no view
+///          is out, a copy is a second owner of the chunks, as a copy of a container is.
 typedef struct tda_Slab {
-    tda_Al al_;                                 ///< the interface; its ctx is the slab
-    tda_Al *parent_;                            ///< where chunks and large blocks come from
+    tda_Al parent_;                             ///< where chunks and large blocks come from
     struct tda_SlabChunk_ *chunks_;             ///< every chunk taken, newest first
     size_t chunk_count_;                        ///< how many
     size_t small_blocks_;                       ///< small blocks out
@@ -76,10 +72,10 @@ typedef struct tda_Slab {
 /// a slab over 'parent'; takes nothing until the first request, so it cannot fail
 /// @param parent where the chunks and the large blocks come from; borrowed, and must
 ///               outlive the slab
-/// @param[out] out the slab
+/// @return the slab
 /// @bigo{1}
-TDA_API
-void tda_slab_init(tda_Al *parent, tda_Slab *out);
+[[nodiscard]] TDA_API
+tda_Slab tda_slab_init(tda_Al parent);
 
 /// gives every chunk back to the parent, and with them every small block, and leaves
 /// the slab inert
@@ -89,6 +85,18 @@ void tda_slab_init(tda_Al *parent, tda_Slab *out);
 /// @bigo{n} in the chunks held
 TDA_API
 void tda_slab_deinit(tda_Slab *self);
+
+/// @}
+
+/// @name view
+/// @{
+
+/// a view of the slab, to hand to a container or a wrapper
+/// @param self the slab; from now on it must stay where it is
+/// @return the view, valid while the slab stays where it is and until its deinit
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Al tda_slab_to_al(tda_Slab *self);
 
 /// @}
 
@@ -105,7 +113,7 @@ typedef struct {
 
 /// what the slab is holding
 /// @param self the slab
-/// @return the four numbers
+/// @return what it holds
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_SlabStats tda_slab_stats(const tda_Slab *self);

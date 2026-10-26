@@ -15,14 +15,14 @@
 int main() {
     /// [build]
     // the elems land front to back, in a ring that starts out unwrapped
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_Deque d;
     if (TDA_STATUS_IS_ERR(TDA_DEQUE_OF(int32_t, al, &d, 3, 4, 5))) {
         return 1;
     }
 
-    tda_deque_print(&d, tda_fprint_i32); // [3, 4, 5]
+    tda_deque_print(&d, tda_fprint_i32, nullptr); // [3, 4, 5]
     /// [build]
 
     /// [ends]
@@ -36,7 +36,7 @@ int main() {
     if (TDA_STATUS_IS_ERR(TDA_DEQUE_PUSH_BACK(int32_t, &d, 6))) {
         goto out;
     }
-    tda_deque_print(&d, tda_fprint_i32); // [2, 3, 4, 5, 6]
+    tda_deque_print(&d, tda_fprint_i32, nullptr); // [2, 3, 4, 5, 6]
 
     printf(
         "%" PRId32 " .. %" PRId32 "\n",
@@ -47,7 +47,7 @@ int main() {
     // pops take from either end and leave the capacity alone
     tda_deque_pop_front(&d);
     tda_deque_pop_back(&d);
-    tda_deque_print(&d, tda_fprint_i32); // [3, 4, 5]
+    tda_deque_print(&d, tda_fprint_i32, nullptr); // [3, 4, 5]
     /// [ends]
 
     /// [index]
@@ -61,17 +61,17 @@ int main() {
     ); // 3 of 3 in room for 6
 
     TDA_DEQUE_SET(int32_t, &d, 1, 9);
-    tda_deque_print(&d, tda_fprint_i32); // [3, 9, 5]
+    tda_deque_print(&d, tda_fprint_i32, nullptr); // [3, 9, 5]
 
     // insert and remove are not what this type is for: they shift the shorter side, half
     // a vec's cost but still O(n)
     if (TDA_STATUS_IS_ERR(TDA_DEQUE_INSERT(int32_t, &d, 1, 7))) {
         goto out;
     }
-    tda_deque_print(&d, tda_fprint_i32); // [3, 7, 9, 5]
+    tda_deque_print(&d, tda_fprint_i32, nullptr); // [3, 7, 9, 5]
 
     tda_deque_remove(&d, 1);
-    tda_deque_print(&d, tda_fprint_i32); // [3, 9, 5]
+    tda_deque_print(&d, tda_fprint_i32, nullptr); // [3, 9, 5]
 
     // the walk goes by index, so the seam never shows; a to_span would have had to copy
     TDA_DEQUE_FOR_EACH_AS (int32_t, elem, &d) {
@@ -100,7 +100,7 @@ int main() {
     tda_span_sort(s, tda_cmp_i32, nullptr);
     tda_deque_copy_from_span(&d, tda_span_mut_to_span(s));
 
-    tda_deque_print(&d, tda_fprint_i32); // [3, 5, 9]
+    tda_deque_print(&d, tda_fprint_i32, nullptr); // [3, 5, 9]
 
     rc = 0;
 out:

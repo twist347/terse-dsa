@@ -18,9 +18,9 @@
 /// The bound ops also bisect but answer where, not whether. A find writes 'out_idx' and
 /// returns whether it hit; a miss is not an error and leaves 'out_idx' unchanged.
 ///
-/// The bisecting ops ask 'cmp' only whether one value is less than another, so a
-/// comparator that never answers "greater", such as one carried over from a C++
-/// less-than, gives the same answers as a full one.
+/// An op that takes a key calls 'eq' or 'cmp' with the elem on the left and the key on
+/// the right, never the other way, so the key need not be an elem: a span of users
+/// sorted by id can be searched with the id alone.
 ///
 /// @par Example
 /// @snippet algo/example_search.c pred

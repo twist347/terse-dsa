@@ -23,8 +23,8 @@
 /// is its own key. Compared with ds/hset, a word holds 64 members, and the union of two
 /// sets is a loop over words rather than over members.
 ///
-/// Only the constructors and the two assigns allocate, so nothing else can fail, and an
-/// index out of range asserts. The bits above nbits are kept clear, so count, all and
+/// Only the constructors, the copies and copy_assign allocate, so nothing else can fail,
+/// and an index out of range asserts. The bits above nbits are kept clear, so count, all and
 /// the scans never see them.
 ///
 /// @par Example
@@ -48,7 +48,7 @@ typedef struct tda_BitSet {
     uint64_t *words_; ///< the bits, 64 to a word; null while nwords_ is 0
     size_t nbits_;    ///< the size of the universe
     size_t nwords_;   ///< how many words hold it
-    tda_Al *al_;      ///< where the words come from; moves along with the bitset
+    tda_Al al_;       ///< where the words come from; moves along with the bitset
 } tda_BitSet;
 
 /// @name lifetime
@@ -62,7 +62,7 @@ typedef struct tda_BitSet {
 /// @retval TDA_STATUS_ERR_NO_MEM when the words cannot be allocated
 /// @bigo{n/64}
 [[nodiscard]] TDA_API
-tda_Status tda_bitset_init_len(size_t nbits, tda_Al *al, tda_BitSet *out);
+tda_Status tda_bitset_init_len(size_t nbits, tda_Al al, tda_BitSet *out);
 
 /// releases the words and leaves the bitset inert, `= {}`
 /// @param self a bitset, or an inert one, for which this is a no-op
@@ -92,7 +92,7 @@ tda_Status tda_bitset_copy(const tda_BitSet *self, tda_BitSet *out);
 /// @retval TDA_STATUS_ERR_NO_MEM when the words cannot be allocated
 /// @bigo{n/64}
 [[nodiscard]] TDA_API
-tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al *al, tda_BitSet *out);
+tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al al, tda_BitSet *out);
 
 /// overwrites 'self' with 'other', resizing its words when the universes differ
 /// @param[in,out] self keeps its allocator
@@ -132,7 +132,7 @@ void tda_bitset_swap(tda_BitSet *self, tda_BitSet *other);
 [[nodiscard]]
 static inline bool tda_bitset_test(const tda_BitSet *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->nbits_);
 
     return (self->words_[idx / 64] & (UINT64_C(1) << idx % 64)) != 0;
@@ -144,7 +144,7 @@ static inline bool tda_bitset_test(const tda_BitSet *self, size_t idx) {
 /// @bigo{1}
 static inline void tda_bitset_set(tda_BitSet *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->nbits_);
 
     self->words_[idx / 64] |= (UINT64_C(1) << idx % 64);
@@ -154,7 +154,7 @@ static inline void tda_bitset_set(tda_BitSet *self, size_t idx) {
 /// @copydetails tda_bitset_set
 static inline void tda_bitset_reset(tda_BitSet *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->nbits_);
 
     self->words_[idx / 64] &= ~(UINT64_C(1) << idx % 64);
@@ -164,7 +164,7 @@ static inline void tda_bitset_reset(tda_BitSet *self, size_t idx) {
 /// @copydetails tda_bitset_set
 static inline void tda_bitset_flip(tda_BitSet *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->nbits_);
 
     self->words_[idx / 64] ^= (UINT64_C(1) << idx % 64);
@@ -241,19 +241,19 @@ bool tda_bitset_none(const tda_BitSet *self);
 [[nodiscard]]
 static inline size_t tda_bitset_len(const tda_BitSet *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->nbits_;
 }
 
 /// the allocator the bitset was built with
 /// @param self the bitset
-/// @return the allocator, borrowed
+/// @return the view it was built with
 /// @bigo{1}
 [[nodiscard]]
-static inline tda_Al *tda_bitset_al(const tda_BitSet *self) {
+static inline tda_Al tda_bitset_al(const tda_BitSet *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->al_;
 }
@@ -361,18 +361,20 @@ bool tda_bitset_intersects(const tda_BitSet *self, const tda_BitSet *other);
 /// @name print
 /// @{
 
-/// writes the members as {0, 3, 7} and a newline: the indices, not a row of bits
+/// writes the members as {0, 3, 7}, with no newline: the indices, not a row of bits
 /// @param self the bitset
 /// @param stream where to write
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_bitset_fprint(const tda_BitSet *self, FILE *stream);
+int tda_bitset_fprint(const tda_BitSet *self, FILE *stream);
 
-/// tda_bitset_fprint to stdout
+/// tda_bitset_fprint to stdout, and a newline
 /// @param self the bitset
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_bitset_print(const tda_BitSet *self);
+int tda_bitset_print(const tda_BitSet *self);
 
 /// @}
 

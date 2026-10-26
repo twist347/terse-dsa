@@ -15,9 +15,8 @@ static constexpr size_t PUSHES = 100'000;
 static constexpr size_t ARENA_CAP = 4 * 1024 * 1024;
 
 /// pushes PUSHES elems into a fresh vec on 'al'. A non-zero 'reserve' is reserved up front
-static void push_all(tda_Al *al, size_t reserve) {
-    tda_Vec v;
-    TDA_VEC_INIT(int32_t, al, &v);
+static void push_all(tda_Al al, size_t reserve) {
+    tda_Vec v = TDA_VEC_INIT(int32_t, al);
 
     if (reserve > 0 && TDA_STATUS_IS_ERR(tda_vec_reserve(&v, reserve))) {
         tda_vec_deinit(&v);
@@ -46,21 +45,21 @@ UBENCH(push, default_reserved) {
 // for growth; the pair is the baseline for the default allocator above
 UBENCH(push, arena_grows) {
     tda_Arena arena;
-    if (TDA_STATUS_IS_ERR(tda_arena_init(tda_al_default(), ARENA_CAP, &arena))) {
+    if (TDA_STATUS_IS_ERR(tda_arena_init_cap(ARENA_CAP, tda_al_default(), &arena))) {
         return;
     }
 
-    push_all(TDA_AL(&arena), 0);
+    push_all(tda_arena_to_al(&arena), 0);
     tda_arena_deinit(&arena);
 }
 
 UBENCH(push, arena_reserved) {
     tda_Arena arena;
-    if (TDA_STATUS_IS_ERR(tda_arena_init(tda_al_default(), ARENA_CAP, &arena))) {
+    if (TDA_STATUS_IS_ERR(tda_arena_init_cap(ARENA_CAP, tda_al_default(), &arena))) {
         return;
     }
 
-    push_all(TDA_AL(&arena), PUSHES);
+    push_all(tda_arena_to_al(&arena), PUSHES);
     tda_arena_deinit(&arena);
 }
 

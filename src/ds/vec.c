@@ -17,7 +17,7 @@
      assert((v)->len_ <= (v)->cap_),         \
      assert((v)->cap_ == 0 || (v)->data_),   \
      assert(!(v)->data_ || (v)->cap_ > 0),   \
-     assert((v)->al_))
+     assert((v)->al_.vt))
 
 #define EXPECT_SAME_VEC(a, b) \
     (TDA_EXPECT(tda_layout_eq((a)->elem_, (b)->elem_)))
@@ -26,7 +26,7 @@ static constexpr size_t VEC_GROWTH_BASE = 1;
 static constexpr size_t VEC_GROWTH_FACTOR = 2;
 
 [[nodiscard]]
-static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al *al, tda_Vec *out);
+static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al al, tda_Vec *out);
 
 /// frees the block, leaving an empty vec on the same allocator
 static void release_data(tda_Vec *self);
@@ -71,34 +71,33 @@ static unsigned char *elem_at_mut(tda_Vec *self, size_t idx);
 
 /* ========== lifetime ========== */
 
-void tda_vec_init(tda_Layout elem, tda_Al *al, tda_Vec *out) {
+tda_Vec tda_vec_init(tda_Layout elem, tda_Al al) {
     assert(tda_layout_is_type(elem));
-    assert(al);
-    assert(out);
+    assert(al.vt);
 
-    *out = (tda_Vec){.elem_ = elem, .al_ = al};
+    return (tda_Vec){.elem_ = elem, .al_ = al};
 }
 
-tda_Status tda_vec_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Vec *out) {
+tda_Status tda_vec_init_len(size_t len, tda_Layout elem, tda_Al al, tda_Vec *out) {
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return init_impl(true, len, len, elem, al, out);
 }
 
-tda_Status tda_vec_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Vec *out) {
+tda_Status tda_vec_init_cap(size_t cap, tda_Layout elem, tda_Al al, tda_Vec *out) {
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return init_impl(false, 0, cap, elem, al, out);
 }
 
-tda_Status tda_vec_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Vec *out) {
+tda_Status tda_vec_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_Vec *out) {
     assert(data || len == 0);
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_Vec obj;
@@ -116,9 +115,9 @@ tda_Status tda_vec_from_data(const void *data, size_t len, tda_Layout elem, tda_
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_vec_from_span(tda_Span s, tda_Al *al, tda_Vec *out) {
+tda_Status tda_vec_from_span(tda_Span s, tda_Al al, tda_Vec *out) {
     TDA_SPAN_ASSERT(s);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_vec_from_data(s.data, s.len, s.elem, al, out);
@@ -128,7 +127,7 @@ void tda_vec_deinit(tda_Vec *self) {
     assert(self);
 
     // the inert state, never initialized or already released
-    if (!self->al_) {
+    if (!self->al_.vt) {
         assert(!self->data_);
         return;
     }
@@ -148,9 +147,9 @@ tda_Status tda_vec_copy(const tda_Vec *self, tda_Vec *out) {
     return tda_vec_copy_with(self, self->al_, out);
 }
 
-tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al *al, tda_Vec *out) {
+tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al al, tda_Vec *out) {
     ASSERT_VEC(self);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_vec_from_span(tda_vec_to_span(self), al, out);
@@ -193,7 +192,7 @@ void tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
     // the allocator goes along with the block, and 'other' stays usable on it
     tda_vec_deinit(self);
     *self = *other;
-    tda_vec_init(self->elem_, self->al_, other);
+    *other = tda_vec_init(self->elem_, self->al_);
 
     ASSERT_VEC(self);
     ASSERT_VEC(other);
@@ -358,7 +357,7 @@ tda_Status tda_vec_resize(tda_Vec *self, size_t new_len) {
         return st;
     }
 
-    // zero init tail
+    // resize promises zeroed elems; reserve_for leaves the new room unspecified
     const size_t add_bytes = (new_len - self->len_) * self->elem_.size;
     memset(elem_at_mut(self, self->len_), 0, add_bytes);
     self->len_ = new_len;
@@ -465,19 +464,19 @@ void tda_vec_retain(tda_Vec *self, tda_Pred pred, void *ctx) {
 
 /* ========== print ========== */
 
-void tda_vec_fprint(const tda_Vec *self, FILE *stream, tda_FPrint fprint) {
+int tda_vec_fprint(const tda_Vec *self, FILE *stream, tda_FPrint fprint, void *ctx) {
     ASSERT_VEC(self);
     assert(stream);
     assert(fprint);
 
-    tda_span_fprint(tda_vec_to_span(self), stream, fprint);
+    return tda_span_fprint(tda_vec_to_span(self), stream, fprint, ctx);
 }
 
-void tda_vec_print(const tda_Vec *self, tda_FPrint fprint) {
+int tda_vec_print(const tda_Vec *self, tda_FPrint fprint, void *ctx) {
     ASSERT_VEC(self);
     assert(fprint);
 
-    tda_vec_fprint(self, stdout, fprint);
+    return tda_fprint_join_(tda_vec_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
 }
 
 /* ========== internals ========== */
@@ -512,11 +511,10 @@ static tda_Status insert_raw(tda_Vec *self, size_t idx, const void *src, size_t 
 }
 
 [[nodiscard]]
-static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al *al, tda_Vec *out) {
+static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al al, tda_Vec *out) {
     assert(len <= cap);
 
-    tda_Vec obj;
-    tda_vec_init(elem, al, &obj);
+    tda_Vec obj = tda_vec_init(elem, al);
     if (cap > 0) {
         tda_Layout block;
         if (tda_layout_ckd_array(&block, elem, cap)) {

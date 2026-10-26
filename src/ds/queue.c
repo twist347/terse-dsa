@@ -10,7 +10,7 @@
 // the deque asserts the rest of its invariants on every call
 #define ASSERT_QUEUE(q) \
     (assert(q),         \
-     assert((q)->deque_.al_))
+     assert((q)->deque_.al_.vt))
 
 // two queues whose elems can pass between them or be compared: one elem layout
 #define EXPECT_SAME_QUEUE(a, b) \
@@ -20,35 +20,34 @@
 
 /* ========== lifetime ========== */
 
-void tda_queue_init(tda_Layout elem, tda_Al *al, tda_Queue *out) {
+tda_Queue tda_queue_init(tda_Layout elem, tda_Al al) {
     assert(tda_layout_is_type(elem));
-    assert(al);
-    assert(out);
+    assert(al.vt);
 
-    tda_deque_init(elem, al, &out->deque_);
+    return (tda_Queue){.deque_ = tda_deque_init(elem, al)};
 }
 
-tda_Status tda_queue_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Queue *out) {
+tda_Status tda_queue_init_cap(size_t cap, tda_Layout elem, tda_Al al, tda_Queue *out) {
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_deque_init_cap(cap, elem, al, &out->deque_);
 }
 
-tda_Status tda_queue_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Queue *out) {
+tda_Status tda_queue_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_Queue *out) {
     assert(data || len == 0);
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     // the deque keeps the order, so data[0] is the front
     return tda_deque_from_data(data, len, elem, al, &out->deque_);
 }
 
-tda_Status tda_queue_from_span(tda_Span s, tda_Al *al, tda_Queue *out) {
+tda_Status tda_queue_from_span(tda_Span s, tda_Al al, tda_Queue *out) {
     TDA_SPAN_ASSERT(s);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_queue_from_data(s.data, s.len, s.elem, al, out);
@@ -60,12 +59,13 @@ void tda_queue_deinit(tda_Queue *self) {
     tda_deque_deinit(&self->deque_);
 }
 
-void tda_queue_into_deque(tda_Queue *self, tda_Deque *out) {
+tda_Deque tda_queue_into_deque(tda_Queue *self) {
     ASSERT_QUEUE(self);
-    assert(out);
 
-    *out = self->deque_;
+    const tda_Deque inner = self->deque_;
     self->deque_ = (tda_Deque){};
+
+    return inner;
 }
 
 /* ========== copy ========== */
@@ -77,9 +77,9 @@ tda_Status tda_queue_copy(const tda_Queue *self, tda_Queue *out) {
     return tda_queue_copy_with(self, tda_deque_al(&self->deque_), out);
 }
 
-tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al *al, tda_Queue *out) {
+tda_Status tda_queue_copy_with(const tda_Queue *self, tda_Al al, tda_Queue *out) {
     ASSERT_QUEUE(self);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_deque_copy_with(&self->deque_, al, &out->deque_);
@@ -212,17 +212,17 @@ void tda_queue_swap(tda_Queue *self, tda_Queue *other) {
 
 /* ========== print ========== */
 
-void tda_queue_fprint(const tda_Queue *self, FILE *stream, tda_FPrint fprint) {
+int tda_queue_fprint(const tda_Queue *self, FILE *stream, tda_FPrint fprint, void *ctx) {
     ASSERT_QUEUE(self);
     assert(stream);
     assert(fprint);
 
-    tda_deque_fprint(&self->deque_, stream, fprint);
+    return tda_deque_fprint(&self->deque_, stream, fprint, ctx);
 }
 
-void tda_queue_print(const tda_Queue *self, tda_FPrint fprint) {
+int tda_queue_print(const tda_Queue *self, tda_FPrint fprint, void *ctx) {
     ASSERT_QUEUE(self);
     assert(fprint);
 
-    tda_deque_print(&self->deque_, fprint);
+    return tda_deque_print(&self->deque_, fprint, ctx);
 }

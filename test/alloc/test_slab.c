@@ -51,10 +51,9 @@ void tearDown() {
 
 // the slab is a value the caller holds, so it takes nothing of its own from the parent
 static void test_init_takes_nothing() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
+    tda_Slab slab = tda_slab_init(parent);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
-    TEST_ASSERT_NOT_NULL(TDA_AL(&slab));
+    TEST_ASSERT_NOT_NULL(tda_slab_to_al(&slab).vt);
 
     tda_slab_deinit(&slab);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
@@ -68,9 +67,8 @@ static void test_deinit_of_an_inert_slab_is_noop() {
 
 // small blocks die with their chunks, so a drop with some still out leaks nothing
 static void test_deinit_gives_back_every_chunk() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     for (size_t i = 0; i < 500; ++i) {
         TEST_ASSERT_NOT_NULL(tda_alloc(al, bytes(1 + i % SMALL_MAX)));
@@ -84,9 +82,8 @@ static void test_deinit_gives_back_every_chunk() {
 /* ========== small blocks ========== */
 
 static void test_a_small_block_takes_a_chunk_once() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     void *a = tda_alloc(al, bytes(20));
     TEST_ASSERT_NOT_NULL(a);
@@ -106,9 +103,8 @@ static void test_a_small_block_takes_a_chunk_once() {
 }
 
 static void test_a_freed_block_is_handed_out_again() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     void *a = tda_alloc(al, bytes(40));
     tda_dealloc(al, a, bytes(40));
@@ -122,9 +118,8 @@ static void test_a_freed_block_is_handed_out_again() {
 }
 
 static void test_classes_do_not_share_blocks() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     void *small = tda_alloc(al, bytes(16));
     tda_dealloc(al, small, bytes(16));
@@ -137,9 +132,8 @@ static void test_classes_do_not_share_blocks() {
 }
 
 static void test_every_block_is_aligned() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     for (size_t size = 1; size <= SMALL_MAX; size += 7) {
         void *p = tda_alloc(al, bytes(size));
@@ -152,9 +146,8 @@ static void test_every_block_is_aligned() {
 }
 
 static void test_a_refused_chunk_gives_null_and_keeps_the_count() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
     tda_test_probe_fail_after_next(&probe, 0);
 
     TEST_ASSERT_NULL(tda_alloc(al, bytes(16)));
@@ -168,9 +161,8 @@ static void test_a_refused_chunk_gives_null_and_keeps_the_count() {
 // a class serves the alignments that divide its size: 20 bytes at 64 take the 64-byte
 // class, at 32 the 32-byte one, and every block of either lands on its boundary
 static void test_an_over_aligned_small_block_takes_a_class_it_divides() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     for (size_t align = 32; align <= SMALL_MAX; align *= 2) {
         const unsigned char *a = tda_alloc(al, tda_test_layout(20, align));
@@ -186,9 +178,8 @@ static void test_an_over_aligned_small_block_takes_a_class_it_divides() {
 
 // a class of 48 is aligned to 16 only, so a request at 32 skips it for 64
 static void test_a_class_too_loosely_aligned_is_skipped() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     unsigned char *a = tda_alloc(al, tda_test_layout(40, 32));
     unsigned char *b = tda_alloc(al, tda_test_layout(40, 32));
@@ -202,9 +193,8 @@ static void test_a_class_too_loosely_aligned_is_skipped() {
 /* ========== large blocks ========== */
 
 static void test_a_large_block_goes_to_the_parent_as_it_is() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     void *p = tda_alloc(al, bytes(SMALL_MAX + 1));
     TEST_ASSERT_NOT_NULL(p);
@@ -220,9 +210,8 @@ static void test_a_large_block_goes_to_the_parent_as_it_is() {
 
 // an alignment past every class goes to the parent with the block, small or not
 static void test_an_alignment_past_every_class_goes_to_the_parent() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     void *p = tda_alloc(al, tda_test_layout(16, 1024));
     TEST_ASSERT_NOT_NULL(p);
@@ -239,9 +228,8 @@ static void test_an_alignment_past_every_class_goes_to_the_parent() {
 /* ========== realloc ========== */
 
 static void test_resize_answers_by_the_class() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     void *p = tda_alloc(al, bytes(33)); // the 48-byte class
     TEST_ASSERT_TRUE(tda_resize(al, p, bytes(33), 48));
@@ -254,9 +242,8 @@ static void test_resize_answers_by_the_class() {
 }
 
 static void test_realloc_within_a_class_stays_in_place() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     void *p = tda_alloc(al, bytes(33)); // the 48-byte class
     void *q = tda_realloc(al, p, bytes(33), 48);
@@ -268,9 +255,8 @@ static void test_realloc_within_a_class_stays_in_place() {
 }
 
 static void test_realloc_across_classes_moves_and_keeps_the_bytes() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     unsigned char *p = tda_alloc(al, bytes(8));
     memcpy(p, "abcdefgh", 8);
@@ -294,9 +280,8 @@ static void test_realloc_across_classes_moves_and_keeps_the_bytes() {
 }
 
 static void test_realloc_between_large_blocks_uses_the_parents() {
-    tda_Slab slab;
-    tda_slab_init(&parent, &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
 
     void *p = tda_alloc(al, bytes(1000));
     const size_t before = probe.remap_calls;
@@ -315,25 +300,17 @@ static void test_realloc_between_large_blocks_uses_the_parents() {
 // every container on one slab, with the debug allocator below it checking each size the
 // slab hands to its parent; the walk ends with nothing leaked
 static void test_every_container_runs_on_it() {
-    tda_Debug dbg;
-    tda_debug_init(tda_al_default(), &dbg);
-    tda_Slab slab;
-    tda_slab_init(TDA_AL(&dbg), &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Debug dbg = tda_debug_init(tda_al_default());
+    tda_Slab slab = tda_slab_init(tda_debug_to_al(&dbg));
+    tda_Al al = tda_slab_to_al(&slab);
 
-    tda_Vec vec = {};
-    tda_Deque deque = {};
-    tda_List list = {};
-    tda_HMap map = {};
-    tda_HSet set = {};
-    tda_PQueue pq = {};
+    tda_Vec vec = tda_vec_init(TDA_LAYOUT_OF(int32_t), al);
+    tda_Deque deque = tda_deque_init(TDA_LAYOUT_OF(int32_t), al);
+    tda_List list = tda_list_init(TDA_LAYOUT_OF(int32_t), al);
+    tda_HMap map = tda_hmap_init(TDA_LAYOUT_OF(int32_t), TDA_LAYOUT_OF(int64_t), tda_hash_i32, tda_eq_i32, nullptr, al);
+    tda_HSet set = tda_hset_init(TDA_LAYOUT_OF(int32_t), tda_hash_i32, tda_eq_i32, nullptr, al);
+    tda_PQueue pq = tda_pqueue_init(TDA_LAYOUT_OF(int32_t), tda_cmp_i32, nullptr, al);
     tda_BitSet bits = {};
-    tda_vec_init(TDA_LAYOUT_OF(int32_t), al, &vec);
-    tda_deque_init(TDA_LAYOUT_OF(int32_t), al, &deque);
-    tda_list_init(TDA_LAYOUT_OF(int32_t), al, &list);
-    tda_hmap_init(TDA_LAYOUT_OF(int32_t), TDA_LAYOUT_OF(int64_t), tda_hash_i32, tda_eq_i32, nullptr, al, &map);
-    tda_hset_init(TDA_LAYOUT_OF(int32_t), tda_hash_i32, tda_eq_i32, nullptr, al, &set);
-    tda_pqueue_init(TDA_LAYOUT_OF(int32_t), tda_cmp_i32, nullptr, al, &pq);
     TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_bitset_init_len(5000, al, &bits));
 
     for (int32_t i = 0; i < 3000; ++i) {
@@ -379,11 +356,9 @@ static void test_every_container_runs_on_it() {
 // with its own byte
 // and checked when given back, so two live blocks that overlap cannot go unseen
 static void test_random_blocks_never_overlap() {
-    tda_Debug dbg;
-    tda_debug_init(tda_al_default(), &dbg);
-    tda_Slab slab;
-    tda_slab_init(TDA_AL(&dbg), &slab);
-    tda_Al *al = TDA_AL(&slab);
+    tda_Debug dbg = tda_debug_init(tda_al_default());
+    tda_Slab slab = tda_slab_init(tda_debug_to_al(&dbg));
+    tda_Al al = tda_slab_to_al(&slab);
 
     enum { N = 400 };
     static unsigned char *ptrs[N];
@@ -420,14 +395,13 @@ static void test_random_blocks_never_overlap() {
 
 // deinit leaves the inert state, so a second one is safe
 static void test_deinit_twice_is_noop() {
-    tda_Slab x = {};
-    tda_slab_init(tda_al_default(), &x);
-    void *p = tda_alloc(TDA_AL(&x), (tda_Layout){.size = 16, .align = 8});
+    tda_Slab x = tda_slab_init(tda_al_default());
+    void *p = tda_alloc(tda_slab_to_al(&x), (tda_Layout){.size = 16, .align = 8});
     TEST_ASSERT_NOT_NULL(p);
-    tda_dealloc(TDA_AL(&x), p, (tda_Layout){.size = 16, .align = 8});
+    tda_dealloc(tda_slab_to_al(&x), p, (tda_Layout){.size = 16, .align = 8});
 
     tda_slab_deinit(&x);
-    TEST_ASSERT_NULL(x.al_.alloc);
+    TEST_ASSERT_NULL(x.parent_.vt);
 
     tda_slab_deinit(&x);
 }

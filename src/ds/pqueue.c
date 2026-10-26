@@ -14,7 +14,7 @@
 // the vec asserts the rest of its invariants on every call
 #define ASSERT_PQUEUE(q)       \
     (assert(q),                \
-     assert((q)->vec_.al_),    \
+     assert((q)->vec_.al_.vt), \
      assert((q)->cmp_))
 
 // two queues whose elems can pass between them: one elem layout
@@ -26,21 +26,18 @@
 
 /* ========== lifetime ========== */
 
-void tda_pqueue_init(tda_Layout elem, tda_Cmp cmp, void *ctx, tda_Al *al, tda_PQueue *out) {
+tda_PQueue tda_pqueue_init(tda_Layout elem, tda_Cmp cmp, void *ctx, tda_Al al) {
     assert(tda_layout_is_type(elem));
     assert(cmp);
-    assert(al);
-    assert(out);
+    assert(al.vt);
 
-    tda_vec_init(elem, al, &out->vec_);
-    out->cmp_ = cmp;
-    out->ctx_ = ctx;
+    return (tda_PQueue){.vec_ = tda_vec_init(elem, al), .cmp_ = cmp, .ctx_ = ctx};
 }
 
-tda_Status tda_pqueue_init_cap(size_t cap, tda_Layout elem, tda_Cmp cmp, void *ctx, tda_Al *al, tda_PQueue *out) {
+tda_Status tda_pqueue_init_cap(size_t cap, tda_Layout elem, tda_Cmp cmp, void *ctx, tda_Al al, tda_PQueue *out) {
     assert(tda_layout_is_type(elem));
     assert(cmp);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_Vec vec;
@@ -57,13 +54,13 @@ tda_Status tda_pqueue_init_cap(size_t cap, tda_Layout elem, tda_Cmp cmp, void *c
 tda_Status tda_pqueue_from_data(
     const void *data, size_t len, tda_Layout elem,
     tda_Cmp cmp, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     tda_PQueue *out
 ) {
     assert(data || len == 0);
     assert(tda_layout_is_type(elem));
     assert(cmp);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_Vec vec;
@@ -79,10 +76,10 @@ tda_Status tda_pqueue_from_data(
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_pqueue_from_span(tda_Span s, tda_Cmp cmp, void *ctx, tda_Al *al, tda_PQueue *out) {
+tda_Status tda_pqueue_from_span(tda_Span s, tda_Cmp cmp, void *ctx, tda_Al al, tda_PQueue *out) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_pqueue_from_data(s.data, s.len, s.elem, cmp, ctx, al, out);
@@ -95,12 +92,13 @@ void tda_pqueue_deinit(tda_PQueue *self) {
     *self = (tda_PQueue){};
 }
 
-void tda_pqueue_into_vec(tda_PQueue *self, tda_Vec *out) {
+tda_Vec tda_pqueue_into_vec(tda_PQueue *self) {
     ASSERT_PQUEUE(self);
-    assert(out);
 
-    *out = self->vec_;
+    const tda_Vec inner = self->vec_;
     *self = (tda_PQueue){};
+
+    return inner;
 }
 
 /* ========== copy ========== */
@@ -112,9 +110,9 @@ tda_Status tda_pqueue_copy(const tda_PQueue *self, tda_PQueue *out) {
     return tda_pqueue_copy_with(self, tda_vec_al(&self->vec_), out);
 }
 
-tda_Status tda_pqueue_copy_with(const tda_PQueue *self, tda_Al *al, tda_PQueue *out) {
+tda_Status tda_pqueue_copy_with(const tda_PQueue *self, tda_Al al, tda_PQueue *out) {
     ASSERT_PQUEUE(self);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_Vec vec;
@@ -272,17 +270,17 @@ void tda_pqueue_swap(tda_PQueue *self, tda_PQueue *other) {
 
 /* ========== print ========== */
 
-void tda_pqueue_fprint(const tda_PQueue *self, FILE *stream, tda_FPrint fprint) {
+int tda_pqueue_fprint(const tda_PQueue *self, FILE *stream, tda_FPrint fprint, void *ctx) {
     ASSERT_PQUEUE(self);
     assert(stream);
     assert(fprint);
 
-    tda_vec_fprint(&self->vec_, stream, fprint);
+    return tda_vec_fprint(&self->vec_, stream, fprint, ctx);
 }
 
-void tda_pqueue_print(const tda_PQueue *self, tda_FPrint fprint) {
+int tda_pqueue_print(const tda_PQueue *self, tda_FPrint fprint, void *ctx) {
     ASSERT_PQUEUE(self);
     assert(fprint);
 
-    tda_vec_print(&self->vec_, fprint);
+    return tda_vec_print(&self->vec_, fprint, ctx);
 }

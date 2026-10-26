@@ -39,7 +39,7 @@ int main() {
 
     // heapsort is just sort_heap on a heap
     tda_span_sort_heap(s, tda_cmp_i32, nullptr);
-    tda_span_mut_print(s, tda_fprint_i32); // [1, 2, 3, 4, 5]
+    tda_span_mut_print(s, tda_fprint_i32, nullptr); // [1, 2, 3, 4, 5]
     /// [push]
 
     return 0;

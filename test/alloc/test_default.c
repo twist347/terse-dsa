@@ -32,29 +32,29 @@ static void assert_ramp(const unsigned char *p, size_t n) {
 
 /* ========== identity ========== */
 
-// the default allocator is a static singleton: every call returns the same object
-static void test_default_is_a_singleton() {
-    const tda_Al *a = tda_al_default(), *b = tda_al_default();
+// the default allocator has no state: every call gives the same view of it
+static void test_default_is_one_allocator() {
+    const tda_Al a = tda_al_default(), b = tda_al_default();
 
-    TEST_ASSERT_NOT_NULL(a);
-    TEST_ASSERT_EQUAL_PTR(a, b);
+    TEST_ASSERT_NOT_NULL(a.vt);
+    TEST_ASSERT_TRUE(tda_al_eq(a, b));
 }
 
 // libc has calloc and realloc but no call that grows a block only in place
 static void test_default_has_every_hook_but_resize() {
-    const tda_Al *al = tda_al_default();
+    const tda_Al al = tda_al_default();
 
-    TEST_ASSERT_NOT_NULL(al->alloc);
-    TEST_ASSERT_NOT_NULL(al->alloc_zeroed);
-    TEST_ASSERT_NULL(al->resize);
-    TEST_ASSERT_NOT_NULL(al->remap);
-    TEST_ASSERT_NOT_NULL(al->dealloc);
+    TEST_ASSERT_NOT_NULL(al.vt->alloc);
+    TEST_ASSERT_NOT_NULL(al.vt->alloc_zeroed);
+    TEST_ASSERT_NULL(al.vt->resize);
+    TEST_ASSERT_NOT_NULL(al.vt->remap);
+    TEST_ASSERT_NOT_NULL(al.vt->dealloc);
 }
 
 /* ========== alloc ========== */
 
 static void test_alloc_returns_usable_memory() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     unsigned char *p = tda_alloc(al, bytes(64));
     TEST_ASSERT_NOT_NULL(p);
@@ -73,7 +73,7 @@ static void test_alloc_zero_is_null() {
 // every alignment, the plain ones from malloc and the larger ones past it, for sizes
 // both under and over the alignment
 static void test_alloc_gives_the_alignment_asked_for() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     for (size_t align = 1; align <= 4096; align *= 2) {
         for (size_t size = 1; size <= 2 * align; size *= 2) {
@@ -88,7 +88,7 @@ static void test_alloc_gives_the_alignment_asked_for() {
 
 // two live allocations are distinct regions: writing one must not touch the other
 static void test_allocations_are_independent() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     unsigned char *a = tda_alloc(al, bytes(16)), *b = tda_alloc(al, bytes(16));
     TEST_ASSERT_NOT_NULL(a);
@@ -107,7 +107,7 @@ static void test_allocations_are_independent() {
 /* ========== alloc_zeroed ========== */
 
 static void test_alloc_zeroed_zeroes_the_block() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     unsigned char *p = tda_alloc_zeroed(al, bytes(32));
     TEST_ASSERT_NOT_NULL(p);
@@ -121,7 +121,7 @@ static void test_alloc_zeroed_zeroes_the_block() {
 
 // past malloc's alignment there is no calloc, so it is aligned_alloc and a memset
 static void test_alloc_zeroed_zeroes_an_over_aligned_block() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     unsigned char *p = tda_alloc_zeroed(al, tda_test_layout(300, 256));
     TEST_ASSERT_NOT_NULL(p);
@@ -141,7 +141,7 @@ static void test_alloc_zeroed_zero_is_null() {
 /* ========== realloc ========== */
 
 static void test_realloc_grows_and_keeps_the_contents() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     unsigned char *p = tda_alloc(al, bytes(8));
     TEST_ASSERT_NOT_NULL(p);
@@ -155,7 +155,7 @@ static void test_realloc_grows_and_keeps_the_contents() {
 }
 
 static void test_realloc_shrinks_and_keeps_the_prefix() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     unsigned char *p = tda_alloc(al, bytes(32));
     TEST_ASSERT_NOT_NULL(p);
@@ -171,7 +171,7 @@ static void test_realloc_shrinks_and_keeps_the_prefix() {
 // realloc keeps only malloc's alignment, so remap declines an over-aligned block and the
 // wrapper moves it by a copy that keeps the alignment
 static void test_realloc_keeps_an_over_aligned_block_aligned() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     unsigned char *p = tda_alloc(al, tda_test_layout(256, 256));
     TEST_ASSERT_NOT_NULL(p);
@@ -189,7 +189,7 @@ static void test_realloc_keeps_an_over_aligned_block_aligned() {
 // C23 owes malloc(n) the alignment of types of size n or less, so a block shorter than
 // its alignment still comes back aligned, however it was made or resized
 static void test_a_block_shorter_than_its_alignment_is_aligned_anyway() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
     constexpr size_t max = alignof(max_align_t);
 
     // the small ones too: some aligned_alloc refuse an alignment under a pointer's
@@ -219,7 +219,7 @@ static void test_a_block_shorter_than_its_alignment_is_aligned_anyway() {
 }
 
 static void test_realloc_to_zero_releases() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     void *p = tda_alloc(al, bytes(16));
     TEST_ASSERT_NOT_NULL(p);
@@ -228,7 +228,7 @@ static void test_realloc_to_zero_releases() {
 }
 
 static void test_realloc_from_null_is_an_alloc() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     void *p = tda_realloc(al, nullptr, tda_test_layout(0, 128), 16);
     TEST_ASSERT_NOT_NULL(p);
@@ -246,7 +246,7 @@ static void test_dealloc_null_is_noop() {
 int main() {
     UNITY_BEGIN();
 
-    RUN_TEST(test_default_is_a_singleton);
+    RUN_TEST(test_default_is_one_allocator);
     RUN_TEST(test_default_has_every_hook_but_resize);
 
     RUN_TEST(test_alloc_returns_usable_memory);

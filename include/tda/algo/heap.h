@@ -37,7 +37,7 @@ void tda_span_make_heap(tda_SpanMut s, tda_Cmp cmp, void *ctx);
 /// @{
 
 /// sifts the last elem up into place
-/// @param s the span; all but its last elem must be a heap by 'cmp'
+/// @param s the span, not empty; all but its last elem must be a heap by 'cmp'
 /// @param cmp the order the heap is by
 /// @param ctx passed to every call of 'cmp'; may be null
 /// @bigo{log n}. With a vec: tda_vec_push, then this
@@ -45,7 +45,7 @@ TDA_API
 void tda_span_push_heap(tda_SpanMut s, tda_Cmp cmp, void *ctx);
 
 /// moves the largest to the end and restores the heap over the elems before it
-/// @param s the span; must be a heap by 'cmp'
+/// @param s the span, not empty; must be a heap by 'cmp'
 /// @param cmp the order the heap is by
 /// @param ctx passed to every call of 'cmp'; may be null
 /// @bigo{log n}. With a vec: this, then tda_vec_pop

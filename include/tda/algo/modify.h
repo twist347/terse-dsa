@@ -22,6 +22,9 @@
 ///
 /// [[nodiscard]] makes ignoring that length a warning (an error under -Werror).
 ///
+/// The ops that take a key pass it to 'eq' on the right, the elem on the left, so the
+/// key need not be an elem.
+///
 /// @par Example
 /// @snippet algo/example_modify.c modify
 /// @{
@@ -81,12 +84,12 @@ void tda_span_replace(tda_SpanMut s, const void *key, const void *val, tda_Eq eq
 
 /// overwrites every elem satisfying 'pred' with 'val'
 /// @param s the span
+/// @param val the value to write
 /// @param pred the test
 /// @param ctx handed to 'pred'
-/// @param val the value to write
 /// @bigo{n}
 TDA_API
-void tda_span_replace_if(tda_SpanMut s, tda_Pred pred, void *ctx, const void *val);
+void tda_span_replace_if(tda_SpanMut s, const void *val, tda_Pred pred, void *ctx);
 
 /// @}
 

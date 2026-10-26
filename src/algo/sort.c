@@ -102,10 +102,10 @@ void tda_span_sort(tda_SpanMut s, tda_Cmp cmp, void *ctx) {
     quicksort(s, 0, s.len - 1, depth_limit(s.len), cmp, ctx);
 }
 
-tda_Status tda_span_sort_stable(tda_SpanMut s, tda_Cmp cmp, void *ctx, tda_Al *al) {
+tda_Status tda_span_sort_stable(tda_SpanMut s, tda_Cmp cmp, void *ctx, tda_Al al) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
-    assert(al);
+    assert(al.vt);
 
     if (s.len < 2) {
         return TDA_STATUS_OK;
@@ -138,7 +138,7 @@ tda_Status tda_span_sort_stable(tda_SpanMut s, tda_Cmp cmp, void *ctx, tda_Al *a
         TDA_SWAP(src, dst);
     }
 
-    // if result ended up in buf, copy back to original
+    // an odd number of passes leaves the result in the buffer
     if (src.data != s.data) {
         tda_span_copy(s, tda_span_mut_to_span(src));
     }

@@ -18,13 +18,13 @@
      assert((a)->len_ == 0 || (a)->data_),                                 \
      assert(!(a)->data_ || (a)->len_ > 0),                                 \
      assert(!(a)->data_ || tda_align_meets((a)->data_, (a)->elem_.align)), \
-     assert((a)->al_))
+     assert((a)->al_.vt))
 
 #define EXPECT_SAME_ARR(a, b) \
     (TDA_EXPECT(tda_layout_eq((a)->elem_, (b)->elem_)))
 
 [[nodiscard]]
-static tda_Status init_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out);
+static tda_Status init_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al al, tda_Arr *out);
 
 /// the block as it was allocated: len elems at the elem's alignment
 [[nodiscard]]
@@ -38,18 +38,18 @@ static unsigned char *elem_at_mut(tda_Arr *self, size_t idx);
 
 /* ========== lifetime ========== */
 
-tda_Status tda_arr_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out) {
+tda_Status tda_arr_init_len(size_t len, tda_Layout elem, tda_Al al, tda_Arr *out) {
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return init_impl(true, len, elem, al, out);
 }
 
-tda_Status tda_arr_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out) {
+tda_Status tda_arr_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_Arr *out) {
     assert(data || len == 0);
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_Arr obj;
@@ -67,9 +67,9 @@ tda_Status tda_arr_from_data(const void *data, size_t len, tda_Layout elem, tda_
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_arr_from_span(tda_Span s, tda_Al *al, tda_Arr *out) {
+tda_Status tda_arr_from_span(tda_Span s, tda_Al al, tda_Arr *out) {
     TDA_SPAN_ASSERT(s);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_arr_from_data(s.data, s.len, s.elem, al, out);
@@ -79,7 +79,7 @@ void tda_arr_deinit(tda_Arr *self) {
     assert(self);
 
     // the inert state, never initialized or already released
-    if (!self->al_) {
+    if (!self->al_.vt) {
         assert(!self->data_);
         return;
     }
@@ -99,9 +99,9 @@ tda_Status tda_arr_copy(const tda_Arr *self, tda_Arr *out) {
     return tda_arr_copy_with(self, self->al_, out);
 }
 
-tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr *out) {
+tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al al, tda_Arr *out) {
     ASSERT_ARR(self);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_arr_from_span(tda_arr_to_span(self), al, out);
@@ -211,26 +211,26 @@ void tda_arr_swap_elems(tda_Arr *self, size_t i, size_t j) {
 
 /* ========== print ========== */
 
-void tda_arr_fprint(const tda_Arr *self, FILE *stream, tda_FPrint fprint) {
+int tda_arr_fprint(const tda_Arr *self, FILE *stream, tda_FPrint fprint, void *ctx) {
     ASSERT_ARR(self);
     assert(stream);
     assert(fprint);
 
-    tda_span_fprint(tda_arr_to_span(self), stream, fprint);
+    return tda_span_fprint(tda_arr_to_span(self), stream, fprint, ctx);
 }
 
-void tda_arr_print(const tda_Arr *self, tda_FPrint fprint) {
+int tda_arr_print(const tda_Arr *self, tda_FPrint fprint, void *ctx) {
     ASSERT_ARR(self);
     assert(fprint);
 
-    tda_arr_fprint(self, stdout, fprint);
+    return tda_fprint_join_(tda_arr_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
 }
 
 /* ========== internals ========== */
 
-static tda_Status init_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out) {
+static tda_Status init_impl(bool zeroed, size_t len, tda_Layout elem, tda_Al al, tda_Arr *out) {
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_Arr obj = {.len_ = len, .elem_ = elem, .al_ = al};

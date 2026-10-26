@@ -2,13 +2,11 @@
 
 #include "tda/core/check.h"
 #include "tda/core/layout.h"
-#include "tda/core/print.h"
 #include "tda/core/util.h"
 
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 
 /// @file
@@ -336,66 +334,6 @@ static inline void tda_span_swap_elems(tda_SpanMut self, size_t i, size_t j) {
 
 /// @}
 
-/// @name print
-/// @{
-
-/// writes the elems to a stream as [a, b, c], followed by a newline
-/// @param self the view
-/// @param stream where to write
-/// @param fprint the printer, one call per elem
-/// @bigo{n}
-static inline void tda_span_fprint(tda_Span self, FILE *stream, tda_FPrint fprint) {
-    TDA_SPAN_ASSERT(self);
-    assert(stream);
-    assert(fprint);
-
-    fputc('[', stream);
-    for (size_t i = 0; i < self.len; ++i) {
-        if (i > 0) {
-            fputs(", ", stream);
-        }
-        fprint(stream, tda_span_get(self, i));
-    }
-    fputs("]\n", stream);
-}
-
-/// tda_span_fprint, over a writable view
-/// @param self the view
-/// @param stream where to write
-/// @param fprint the printer, one call per elem
-/// @bigo{n}
-static inline void tda_span_mut_fprint(tda_SpanMut self, FILE *stream, tda_FPrint fprint) {
-    TDA_SPAN_ASSERT(self);
-    assert(stream);
-    assert(fprint);
-
-    tda_span_fprint(tda_span_mut_to_span(self), stream, fprint);
-}
-
-/// tda_span_fprint to stdout: [a, b, c] and a newline
-/// @param self the view
-/// @param fprint the printer, one call per elem
-/// @bigo{n}
-static inline void tda_span_print(tda_Span self, tda_FPrint fprint) {
-    TDA_SPAN_ASSERT(self);
-    assert(fprint);
-
-    tda_span_fprint(self, stdout, fprint);
-}
-
-/// tda_span_print, over a writable view
-/// @param self the view
-/// @param fprint the printer, one call per elem
-/// @bigo{n}
-static inline void tda_span_mut_print(tda_SpanMut self, tda_FPrint fprint) {
-    TDA_SPAN_ASSERT(self);
-    assert(fprint);
-
-    tda_span_fprint(tda_span_mut_to_span(self), stdout, fprint);
-}
-
-/// @}
-
 /// @name macros
 /// @{
 
@@ -516,13 +454,13 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
     )
 
 /// tda_span_set from a value rather than its address
-/// @param T the elem type; scalars only, since (T){ val } takes nothing else
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the view
 /// @param idx the index
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_SPAN_SET(T, self, idx, val) \
-    tda_span_set(tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)), (idx), &(T){ (val) })
+    tda_span_set(tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)), (idx), &(T[1]){ (val) }[0])
 
 /// @}
 

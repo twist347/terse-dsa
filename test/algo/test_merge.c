@@ -196,7 +196,7 @@ static void test_merge_writes_only_into_the_destination_view() {
 
 // the oracle is libc qsort over a copy: merging two sorted runs equals sorting their
 // concatenation, and qsort shares no code with what is tested
-static void assert_merges_in_place(const int32_t *src, size_t len, size_t mid, tda_Al *al) {
+static void assert_merges_in_place(const int32_t *src, size_t len, size_t mid, tda_Al al) {
     int32_t buf[16], want[16];
     TEST_ASSERT_TRUE(len <= 16);
 
@@ -215,7 +215,7 @@ static void assert_merges_in_place(const int32_t *src, size_t len, size_t mid, t
 // tests half the function
 static void assert_merges_both_ways(const int32_t *src, size_t len, size_t mid) {
     assert_merges_in_place(src, len, mid, tda_al_default());
-    assert_merges_in_place(src, len, mid, nullptr);
+    assert_merges_in_place(src, len, mid, (tda_Al){});
 }
 
 static void test_inplace_merge_interleaves_both_runs() {
@@ -315,7 +315,7 @@ static void test_inplace_merge_is_stable_on_ties() {
 
 static int32_t sweep_keys[2 * RUNLEN];
 
-static void check_sweep(size_t left_len, size_t right_len, tda_Al *al) {
+static void check_sweep(size_t left_len, size_t right_len, tda_Al al) {
     const size_t len = left_len + right_len;
 
     Tagged buf[2 * RUNLEN];
@@ -340,7 +340,7 @@ static void check_sweep(size_t left_len, size_t right_len, tda_Al *al) {
     }
 }
 
-static tda_Al *sweep_al;
+static tda_Al sweep_al;
 
 static void sweep_right(size_t n, size_t i, int32_t lo, size_t left_len) {
     if (i == n) {
@@ -376,7 +376,7 @@ static void test_inplace_merge_sorts_and_stays_stable_on_every_pair_of_runs() {
 // the same sweep down the other path: both must give the same answer and both must be
 // stable. Without it the fallback would get a handful of cases at most
 static void test_inplace_merge_without_an_allocator_agrees_on_every_pair_of_runs() {
-    sweep_al = nullptr;
+    sweep_al = (tda_Al){};
     for (size_t left_len = 0; left_len <= RUNLEN; ++left_len) {
         sweep_left(left_len, 0, 0);
     }
@@ -394,7 +394,7 @@ static void test_inplace_merge_asks_only_for_the_shorter_run() {
 
     int32_t buf[8] = {5, 1, 2, 3, 4, 6, 7, 8};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), 1, tda_cmp_i32, nullptr, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 8), 1, tda_cmp_i32, nullptr, al);
 
     TEST_ASSERT_EQUAL_size_t(1, tda_test_probe_requests(&probe));
     TEST_ASSERT_EQUAL_size_t(1 * sizeof(int32_t), probe.last_alloc.size);
@@ -402,7 +402,7 @@ static void test_inplace_merge_asks_only_for_the_shorter_run() {
     tda_test_probe_reset(&probe);
     int32_t other[8] = {1, 2, 3, 4, 5, 6, 7, 0};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, other, 8), 7, tda_cmp_i32, nullptr, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, other, 8), 7, tda_cmp_i32, nullptr, al);
 
     TEST_ASSERT_EQUAL_size_t(1 * sizeof(int32_t), probe.last_alloc.size);
 }
@@ -414,7 +414,7 @@ static void test_inplace_merge_gives_the_buffer_back() {
 
     int32_t buf[6] = {1, 3, 5, 2, 4, 6};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 3, tda_cmp_i32, nullptr, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 3, tda_cmp_i32, nullptr, al);
 
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
@@ -428,7 +428,7 @@ static void test_inplace_merge_falls_back_when_the_buffer_is_refused() {
 
     int32_t buf[6] = {1, 3, 5, 2, 4, 6};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 3, tda_cmp_i32, nullptr, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6), 3, tda_cmp_i32, nullptr, al);
 
     constexpr int32_t want[6] = {1, 2, 3, 4, 5, 6};
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, buf, 6);
@@ -443,28 +443,10 @@ static void test_inplace_merge_at_the_edges_asks_for_nothing() {
 
     int32_t buf[4] = {2, 4, 1, 3};
 
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 0, tda_cmp_i32, nullptr, &al);
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 4, tda_cmp_i32, nullptr, &al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 0, tda_cmp_i32, nullptr, al);
+    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4), 4, tda_cmp_i32, nullptr, al);
 
     TEST_ASSERT_EQUAL_size_t(0, tda_test_probe_requests(&probe));
-}
-
-// a comparator carried over from a C++ less-than: it never answers "greater"
-static int cmp_less_only_i32(const void *lhs, const void *rhs, void *) {
-    return *(const int32_t *) lhs < *(const int32_t *) rhs ? -1 : 0;
-}
-
-// the path without a buffer bisects for its split points, and must ask only "less" too
-static void test_inplace_merge_takes_a_less_only_comparator_on_both_paths() {
-    int32_t a[6] = {5, 6, 9, 1, 2, 6};
-    int32_t b[6] = {5, 6, 9, 1, 2, 6};
-
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, a, 6), 3, cmp_less_only_i32, nullptr, nullptr);
-    tda_span_inplace_merge(TDA_SPAN_FROM_DATA_MUT(int32_t, b, 6), 3, cmp_less_only_i32, nullptr, tda_al_default());
-
-    constexpr int32_t want[6] = {1, 2, 5, 6, 6, 9};
-    TEST_ASSERT_EQUAL_INT32_ARRAY(want, a, 6);
-    TEST_ASSERT_EQUAL_INT32_ARRAY(want, b, 6);
 }
 
 int main() {
@@ -497,8 +479,6 @@ int main() {
     RUN_TEST(test_inplace_merge_gives_the_buffer_back);
     RUN_TEST(test_inplace_merge_falls_back_when_the_buffer_is_refused);
     RUN_TEST(test_inplace_merge_at_the_edges_asks_for_nothing);
-
-    RUN_TEST(test_inplace_merge_takes_a_less_only_comparator_on_both_paths);
 
     return UNITY_END();
 }

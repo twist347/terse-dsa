@@ -11,6 +11,8 @@
 #include "support/probe.h"
 #include "support/status.h"
 
+#include "support/print.h"
+
 #include <unity.h>
 
 #include <stddef.h>
@@ -34,8 +36,7 @@ static void push_int(tda_Stack *s, int32_t val) {
 // int32_t stack over the default allocator, filled one push at a time
 [[nodiscard]]
 static tda_Stack make_stack(const int32_t *src, size_t n) {
-    tda_Stack s = {};
-    TDA_STACK_INIT(int32_t, tda_al_default(), &s);
+    tda_Stack s = TDA_STACK_INIT(int32_t, tda_al_default());
 
     for (size_t i = 0; i < n; ++i) {
         push_int(&s, src[i]);
@@ -83,12 +84,11 @@ static void assert_drains(tda_Stack *s, const int32_t *want, size_t n) {
 /* ========== lifetime ========== */
 
 static void test_init_starts_empty() {
-    tda_Stack s = {};
-    TDA_STACK_INIT(int32_t, tda_al_default(), &s);
+    tda_Stack s = TDA_STACK_INIT(int32_t, tda_al_default());
 
     TEST_ASSERT_EQUAL_size_t(0, tda_stack_len(&s));
     TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_stack_elem_layout(&s).size);
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_stack_al(&s));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_stack_al(&s)));
 
     tda_stack_deinit(&s);
 }
@@ -173,7 +173,7 @@ static void test_deinit_hands_back_everything() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Stack s = {};
-    TDA_TEST_OK(TDA_STACK_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, &al, &s));
+    TDA_TEST_OK(TDA_STACK_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, al, &s));
     TEST_ASSERT_EQUAL_size_t(1, probe.live);
 
     tda_stack_deinit(&s);
@@ -210,8 +210,7 @@ static void test_order_survives_growth() {
 
 // pushing and popping in step keeps the stack short while many more elems pass through
 static void test_pushing_and_popping_in_step_stays_in_order() {
-    tda_Stack s = {};
-    TDA_STACK_INIT(int32_t, tda_al_default(), &s);
+    tda_Stack s = TDA_STACK_INIT(int32_t, tda_al_default());
 
     push_int(&s, 0);
 
@@ -283,8 +282,7 @@ static void test_pop_to_hands_the_top_out() {
 }
 
 static void test_pop_to_macro_moves_whole_elems() {
-    tda_Stack s = {};
-    TDA_STACK_INIT(Pair, tda_al_default(), &s);
+    tda_Stack s = TDA_STACK_INIT(Pair, tda_al_default());
     TDA_TEST_OK(tda_stack_push(&s, &(Pair){1, 2}));
     TDA_TEST_OK(tda_stack_push(&s, &(Pair){3, 4}));
 
@@ -311,8 +309,7 @@ static void test_top_reads_without_removing() {
 }
 
 static void test_top_follows_the_last_push() {
-    tda_Stack s = {};
-    TDA_STACK_INIT(int32_t, tda_al_default(), &s);
+    tda_Stack s = TDA_STACK_INIT(int32_t, tda_al_default());
 
     for (int32_t i = 0; i < 8; ++i) {
         push_int(&s, i);
@@ -349,8 +346,7 @@ static void test_the_top_of_a_single_elem_stack_is_where_the_span_starts() {
 /* ========== info ========== */
 
 static void test_len_follows_push_and_pop() {
-    tda_Stack s = {};
-    TDA_STACK_INIT(int32_t, tda_al_default(), &s);
+    tda_Stack s = TDA_STACK_INIT(int32_t, tda_al_default());
 
     for (size_t i = 0; i < 5; ++i) {
         TEST_ASSERT_EQUAL_size_t(i, tda_stack_len(&s));
@@ -462,15 +458,15 @@ static void test_copy_is_independent() {
 
 static void test_copy_inherits_the_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Stack src = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, TDA_AL(&arena), &src, 5, 1, 3));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_arena_to_al(&arena), &src, 5, 1, 3));
 
     tda_Stack dst = {};
     TDA_TEST_OK(tda_stack_copy(&src, &dst));
 
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_stack_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_stack_al(&dst)));
     TEST_ASSERT_EQUAL_INT32(3, *TDA_STACK_TOP_AS(int32_t, &dst));
 
     tda_stack_deinit(&src);
@@ -480,15 +476,15 @@ static void test_copy_inherits_the_allocator() {
 
 static void test_copy_with_builds_on_the_given_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Stack src = make_stack_from(SPREAD, SPREAD_LEN);
 
     tda_Stack dst = {};
-    TDA_TEST_OK(tda_stack_copy_with(&src, TDA_AL(&arena), &dst));
+    TDA_TEST_OK(tda_stack_copy_with(&src, tda_arena_to_al(&arena), &dst));
 
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_stack_al(&dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_stack_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_stack_al(&dst)));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_stack_al(&src)));
     TEST_ASSERT_TRUE(tda_stack_eq(&src, &dst));
 
     // the copy owns its own block on its own allocator, so it outlives the source
@@ -502,14 +498,15 @@ static void test_copy_with_builds_on_the_given_allocator() {
 // the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
     tda_test_arena_leave(&arena, 0);
 
     tda_Stack src = make_stack_from(SPREAD, SPREAD_LEN);
 
-    tda_Stack dst = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_stack_copy_with(&src, TDA_AL(&arena), &dst));
-    TEST_ASSERT_NULL(dst.vec_.al_);
+    tda_Stack dst;
+    TDA_TEST_POISON(dst);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_stack_copy_with(&src, tda_arena_to_al(&arena), &dst));
+    TDA_TEST_ASSERT_POISONED(dst);
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_stack_len(&src));
 
     tda_stack_deinit(&src);
@@ -522,10 +519,10 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Stack src = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, &al, &src, 1, 2, 3));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, al, &src, 1, 2, 3));
 
     tda_Stack dst = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, &al, &dst, 9));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
     tda_stack_move_assign(&dst, &src);
@@ -546,21 +543,21 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
 // from
 static void test_move_assign_across_allocators_hands_the_allocator_over() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Stack src = make_stack_from(SPREAD, SPREAD_LEN);
 
     tda_Stack dst = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, TDA_AL(&arena), &dst, 9));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_arena_to_al(&arena), &dst, 9));
 
     tda_stack_move_assign(&dst, &src);
 
     TEST_ASSERT_EQUAL_size_t(SPREAD_LEN, tda_stack_len(&dst));
     TEST_ASSERT_EQUAL_INT32(SPREAD[SPREAD_LEN - 1], *TDA_STACK_TOP_AS(int32_t, &dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_stack_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_stack_al(&dst)));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_stack_len(&src));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_stack_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_stack_al(&src)));
 
     tda_stack_deinit(&src);
     tda_stack_deinit(&dst);
@@ -570,10 +567,10 @@ static void test_move_assign_across_allocators_hands_the_allocator_over() {
 // nothing is allocated, so an exhausted allocator on either side cannot stop it
 static void test_move_assign_needs_no_memory() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Stack dst = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, TDA_AL(&arena), &dst, 9));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_arena_to_al(&arena), &dst, 9));
     tda_test_arena_leave(&arena, 0);
 
     tda_Stack src = make_stack_from(SPREAD, SPREAD_LEN);
@@ -612,8 +609,7 @@ static void test_copy_drains_the_same_as_its_source() {
 }
 
 static void test_copy_of_empty_stays_empty() {
-    tda_Stack src = {};
-    TDA_STACK_INIT(int32_t, tda_al_default(), &src);
+    tda_Stack src = TDA_STACK_INIT(int32_t, tda_al_default());
 
     tda_Stack dst = {};
     TDA_TEST_OK(tda_stack_copy(&src, &dst));
@@ -685,8 +681,7 @@ static void test_to_span_follows_a_pop() {
 }
 
 static void test_to_span_of_empty_has_no_elems() {
-    tda_Stack s = {};
-    TDA_STACK_INIT(int32_t, tda_al_default(), &s);
+    tda_Stack s = TDA_STACK_INIT(int32_t, tda_al_default());
 
     const tda_Span sp = tda_stack_to_span(&s);
 
@@ -744,11 +739,12 @@ static void test_swap_of_itself_changes_nothing() {
 
 static void test_from_data_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 128, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(128, tda_al_default(), &arena));
 
-    tda_Stack s = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_STACK_FROM_DATA(int32_t, SPREAD, 1000, TDA_AL(&arena), &s));
-    TEST_ASSERT_NULL(s.vec_.al_);
+    tda_Stack s;
+    TDA_TEST_POISON(s);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_STACK_FROM_DATA(int32_t, SPREAD, 1000, tda_arena_to_al(&arena), &s));
+    TDA_TEST_ASSERT_POISONED(s);
 
     tda_arena_deinit(&arena);
 }
@@ -756,10 +752,10 @@ static void test_from_data_reports_an_exhausted_arena() {
 // a refused push must leave the stack as it was, not one elem taller with a hole on top
 static void test_push_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(256, tda_al_default(), &arena));
 
     tda_Stack s = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, TDA_AL(&arena), &s, 5, 1, 3));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_arena_to_al(&arena), &s, 5, 1, 3));
     tda_test_arena_leave(&arena, 0);
 
     constexpr int32_t val = 100;
@@ -775,15 +771,16 @@ static void test_push_reports_an_exhausted_arena_and_changes_nothing() {
 
 static void test_copy_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(256, tda_al_default(), &arena));
 
     tda_Stack src = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, TDA_AL(&arena), &src, 5, 1, 3));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_arena_to_al(&arena), &src, 5, 1, 3));
     tda_test_arena_leave(&arena, 0);
 
-    tda_Stack dst = {};
+    tda_Stack dst;
+    TDA_TEST_POISON(dst);
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_stack_copy(&src, &dst));
-    TEST_ASSERT_NULL(dst.vec_.al_);
+    TDA_TEST_ASSERT_POISONED(dst);
 
     tda_stack_deinit(&src);
     tda_arena_deinit(&arena);
@@ -791,10 +788,10 @@ static void test_copy_reports_an_exhausted_arena() {
 
 static void test_reserve_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 256, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(256, tda_al_default(), &arena));
 
     tda_Stack s = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, TDA_AL(&arena), &s, 5, 1, 3));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_arena_to_al(&arena), &s, 5, 1, 3));
     tda_test_arena_leave(&arena, 0);
 
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_stack_reserve(&s, 1000));
@@ -905,14 +902,12 @@ static void test_into_vec_hands_the_elems_over() {
     const void *before = tda_stack_to_span(&s).data;
     const size_t cap = tda_stack_cap(&s);
 
-    tda_Vec v;
-
-    tda_stack_into_vec(&s, &v);
+    tda_Vec v = tda_stack_into_vec(&s);
 
     TEST_ASSERT_EQUAL_PTR(before, tda_vec_data(&v));
     TEST_ASSERT_EQUAL_size_t(3, tda_vec_len(&v));
     TEST_ASSERT_EQUAL_size_t(cap, tda_vec_cap(&v));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_vec_al(&v));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_vec_al(&v)));
 
     for (size_t i = 0; i < 3; ++i) {
         TEST_ASSERT_EQUAL_INT32(src[i], *TDA_VEC_GET_AS(int32_t, &v, i));
@@ -925,9 +920,7 @@ static void test_into_vec_of_an_empty_stack() {
     constexpr int32_t src[1] = {7};
     tda_Stack s = make_stack(src, 0);
 
-    tda_Vec v;
-
-    tda_stack_into_vec(&s, &v);
+    tda_Vec v = tda_stack_into_vec(&s);
 
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(&v));
 
@@ -941,19 +934,17 @@ static void test_into_vec_allocates_nothing() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Stack s;
-    TDA_STACK_INIT(int32_t, &al, &s);
+    tda_Stack s = TDA_STACK_INIT(int32_t, al);
     TDA_TEST_OK(TDA_STACK_PUSH(int32_t, &s, 1));
     const size_t requests = tda_test_probe_requests(&probe);
     const size_t live = probe.live;
 
-    tda_Vec inner;
-    tda_stack_into_vec(&s, &inner);
+    tda_Vec inner = tda_stack_into_vec(&s);
 
     TEST_ASSERT_EQUAL_size_t(requests, tda_test_probe_requests(&probe));
     TEST_ASSERT_EQUAL_size_t(live, probe.live);
     TEST_ASSERT_EQUAL_size_t(1, tda_vec_len(&inner));
-    TEST_ASSERT_NULL(s.vec_.al_);
+    TEST_ASSERT_NULL(s.vec_.al_.vt);
 
     tda_stack_deinit(&s);
     tda_vec_deinit(&inner);
@@ -967,7 +958,7 @@ static void assert_prints(const char *expected, const tda_Stack *s) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    tda_stack_fprint(s, stream, tda_fprint_i32);
+    tda_stack_fprint(s, stream, tda_fprint_i32, nullptr);
     rewind(stream);
 
     char buf[128];
@@ -982,7 +973,7 @@ static void test_fprint_writes_the_elems() {
     tda_Stack s = {};
     TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_al_default(), &s, 5, 3, 1));
 
-    assert_prints("[5, 3, 1]\n", &s);
+    assert_prints("[5, 3, 1]", &s);
 
     tda_stack_deinit(&s);
 }
@@ -991,7 +982,7 @@ static void test_fprint_of_a_single_elem_has_no_separator() {
     tda_Stack s = {};
     TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_al_default(), &s, 7));
 
-    assert_prints("[7]\n", &s);
+    assert_prints("[7]", &s);
 
     tda_stack_deinit(&s);
 }
@@ -999,7 +990,7 @@ static void test_fprint_of_a_single_elem_has_no_separator() {
 static void test_fprint_of_an_empty_stack() {
     tda_Stack s = make_stack(nullptr, 0);
 
-    assert_prints("[]\n", &s);
+    assert_prints("[]", &s);
 
     tda_stack_deinit(&s);
 }
@@ -1010,7 +1001,7 @@ static void test_print_writes_to_stdout() {
     constexpr int32_t src[3] = {1, 2, 3};
     tda_Stack s = make_stack(src, 3);
 
-    tda_stack_print(&s, tda_fprint_i32);
+    tda_stack_print(&s, tda_fprint_i32, nullptr);
 
     tda_stack_deinit(&s);
 }
@@ -1023,13 +1014,13 @@ static void test_swap_across_allocators_carries_each_allocator() {
     tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
     tda_Stack a = {}, b = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, &al_a, &a, 1, 2));
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, &al_b, &b, 3, 4, 5));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, al_a, &a, 1, 2));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, al_b, &b, 3, 4, 5));
 
     tda_stack_swap(&a, &b);
 
-    TEST_ASSERT_EQUAL_PTR(&al_b, tda_stack_al(&a));
-    TEST_ASSERT_EQUAL_PTR(&al_a, tda_stack_al(&b));
+    TEST_ASSERT_TRUE(tda_al_eq(al_b, tda_stack_al(&a)));
+    TEST_ASSERT_TRUE(tda_al_eq(al_a, tda_stack_al(&b)));
     TEST_ASSERT_EQUAL_size_t(3, tda_stack_len(&a));
 
     tda_stack_deinit(&a);
@@ -1044,7 +1035,7 @@ static void test_deinit_twice_is_noop() {
     TDA_TEST_OK(TDA_STACK_OF(int32_t, tda_al_default(), &x, 1, 2));
 
     tda_stack_deinit(&x);
-    TEST_ASSERT_NULL(x.vec_.al_);
+    TEST_ASSERT_NULL(x.vec_.al_.vt);
 
     tda_stack_deinit(&x);
 }
@@ -1056,10 +1047,11 @@ static void test_from_data_reports_a_refused_block() {
     tda_Al al = tda_test_probe_full(&probe);
     tda_test_probe_fail_after_next(&probe, 0);
 
-    tda_Stack x = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_STACK_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, &al, &x));
+    tda_Stack x;
+    TDA_TEST_POISON(x);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_STACK_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, al, &x));
 
-    TEST_ASSERT_NULL(x.vec_.al_);
+    TDA_TEST_ASSERT_POISONED(x);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
@@ -1070,7 +1062,7 @@ static void test_push_reports_a_refused_growth() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Stack x = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, &al, &x, 1));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, al, &x, 1));
 
     tda_test_probe_fail_after_next(&probe, 0);
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_STACK_PUSH(int32_t, &x, 9));
@@ -1088,7 +1080,7 @@ static void test_copy_assign_reports_a_refused_block_and_changes_nothing() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Stack small = {};
-    TDA_TEST_OK(TDA_STACK_OF(int32_t, &al, &small, 1));
+    TDA_TEST_OK(TDA_STACK_OF(int32_t, al, &small, 1));
     tda_Stack big = {};
     TDA_TEST_OK(TDA_STACK_FROM_DATA(int32_t, SPREAD, SPREAD_LEN, tda_al_default(), &big));
 
@@ -1101,6 +1093,34 @@ static void test_copy_assign_reports_a_refused_block_and_changes_nothing() {
     tda_stack_deinit(&small);
     tda_stack_deinit(&big);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+
+/* ========== print errors ========== */
+
+// the ctx reaches every call, every elem is still asked after a failure, and the first
+// failure is what comes back; print adds only its newline
+static void test_fprint_hands_on_the_ctx_and_the_first_failure() {
+    constexpr int32_t src[3] = {1, 2, 3};
+    tda_Stack s = make_stack(src, 3);
+    tda_TestPrint pr = {.fail_from = 2};
+    FILE *stream = tmpfile();
+    TEST_ASSERT_NOT_NULL(stream);
+
+    TEST_ASSERT_EQUAL_INT(-2, tda_stack_fprint(&s, stream, tda_test_fprint_i32_failing, &pr));
+    TEST_ASSERT_EQUAL_size_t(3, pr.calls);
+    fclose(stream);
+
+    pr = (tda_TestPrint){.fail_from = 0};
+    TEST_ASSERT_EQUAL_INT(0, tda_stack_print(&s, tda_test_fprint_i32_failing, &pr));
+    pr = (tda_TestPrint){.fail_from = 2};
+    TEST_ASSERT_EQUAL_INT(-2, tda_stack_print(&s, tda_test_fprint_i32_failing, &pr));
+
+    FILE *ro = tda_test_unwritable_stream();
+    TEST_ASSERT_LESS_THAN_INT(0, tda_stack_fprint(&s, ro, tda_fprint_i32, nullptr));
+    fclose(ro);
+
+    tda_stack_deinit(&s);
 }
 
 int main() {
@@ -1189,6 +1209,8 @@ int main() {
     RUN_TEST(test_from_data_reports_a_refused_block);
     RUN_TEST(test_push_reports_a_refused_growth);
     RUN_TEST(test_copy_assign_reports_a_refused_block_and_changes_nothing);
+
+    RUN_TEST(test_fprint_hands_on_the_ctx_and_the_first_failure);
 
     return UNITY_END();
 }

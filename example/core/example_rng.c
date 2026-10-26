@@ -49,7 +49,7 @@ int main() {
 
     // dealing three: only the front is settled, a uniform sample of all twelve
     tda_span_shuffle_prefix(all, 3, &rng);
-    tda_span_fprint(tda_span_sub(tda_span_mut_to_span(all), 0, 3), stdout, tda_fprint_i32); // [2, 6, 6]
+    tda_span_print(tda_span_sub(tda_span_mut_to_span(all), 0, 3), tda_fprint_i32, nullptr); // [2, 6, 6]
 
     // a random elem is just a random index and a get
     const tda_Span rolled = tda_span_mut_to_span(all);

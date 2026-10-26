@@ -3,31 +3,35 @@
 #include <assert.h>
 #include <string.h>
 
+/* ========== internals ========== */
+
+// a view with both required hooks; '= {}', no allocator, is not one
+#define ASSERT_AL(al) \
+    (assert((al).vt), assert((al).vt->alloc), assert((al).vt->dealloc))
+
 /* ========== wrappers ========== */
 
-void *tda_alloc(tda_Al *al, tda_Layout layout) {
-    assert(al);
-    assert(al->alloc);
+void *tda_alloc(tda_Al al, tda_Layout layout) {
+    ASSERT_AL(al);
     assert(tda_layout_is_align(layout.align));
 
     if (layout.size == 0) {
         return nullptr;
     }
 
-    return al->alloc(al->ctx, layout);
+    return al.vt->alloc(al.ctx, layout);
 }
 
-void *tda_alloc_zeroed(tda_Al *al, tda_Layout layout) {
-    assert(al);
-    assert(al->alloc);
+void *tda_alloc_zeroed(tda_Al al, tda_Layout layout) {
+    ASSERT_AL(al);
     assert(tda_layout_is_align(layout.align));
 
     if (layout.size == 0) {
         return nullptr;
     }
 
-    if (al->alloc_zeroed) {
-        return al->alloc_zeroed(al->ctx, layout);
+    if (al.vt->alloc_zeroed) {
+        return al.vt->alloc_zeroed(al.ctx, layout);
     }
 
     void *ptr = tda_alloc(al, layout);
@@ -38,26 +42,26 @@ void *tda_alloc_zeroed(tda_Al *al, tda_Layout layout) {
     return ptr;
 }
 
-bool tda_resize(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
-    assert(al);
+bool tda_resize(tda_Al al, void *ptr, tda_Layout old, size_t new_size) {
+    ASSERT_AL(al);
     assert(ptr);
     assert(old.size > 0 && new_size > 0);
     assert(tda_layout_is_align(old.align));
 
-    return al->resize && al->resize(al->ctx, ptr, old, new_size);
+    return al.vt->resize && al.vt->resize(al.ctx, ptr, old, new_size);
 }
 
-void *tda_remap(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
-    assert(al);
+void *tda_remap(tda_Al al, void *ptr, tda_Layout old, size_t new_size) {
+    ASSERT_AL(al);
     assert(ptr);
     assert(old.size > 0 && new_size > 0);
     assert(tda_layout_is_align(old.align));
 
-    return al->remap ? al->remap(al->ctx, ptr, old, new_size) : nullptr;
+    return al.vt->remap ? al.vt->remap(al.ctx, ptr, old, new_size) : nullptr;
 }
 
-void *tda_realloc(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
-    assert(al);
+void *tda_realloc(tda_Al al, void *ptr, tda_Layout old, size_t new_size) {
+    ASSERT_AL(al);
     assert((ptr == nullptr) == (old.size == 0)); // no block has size 0
     assert(tda_layout_is_align(old.align));
 
@@ -91,9 +95,8 @@ void *tda_realloc(tda_Al *al, void *ptr, tda_Layout old, size_t new_size) {
     return new_ptr;
 }
 
-void tda_dealloc(tda_Al *al, void *ptr, tda_Layout layout) {
-    assert(al);
-    assert(al->dealloc);
+void tda_dealloc(tda_Al al, void *ptr, tda_Layout layout) {
+    ASSERT_AL(al);
     assert(!ptr || layout.size > 0);
     assert(tda_layout_is_align(layout.align));
 
@@ -101,5 +104,11 @@ void tda_dealloc(tda_Al *al, void *ptr, tda_Layout layout) {
         return;
     }
 
-    al->dealloc(al->ctx, ptr, layout);
+    al.vt->dealloc(al.ctx, ptr, layout);
+}
+
+/* ========== compare ========== */
+
+bool tda_al_eq(tda_Al a, tda_Al b) {
+    return a.ctx == b.ctx && a.vt == b.vt;
 }

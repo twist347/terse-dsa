@@ -20,39 +20,47 @@
 /// @snippet alloc/example_log.c wrap
 /// @{
 
-/// A log. A value the caller holds, on the stack or inside a struct: tda_log_init
-/// fills it in, TDA_AL hands out the allocator over it, and tda_log_deinit
-/// writes its last line. `= {}` is the inert state.
+/// A log. A value the caller holds, on the stack or inside a struct: tda_log_init makes
+/// it, tda_log_to_al hands out views of it, and tda_log_deinit writes its last line.
+/// `= {}` is the inert state.
 ///
 /// The fields belong to the log: read and change them only through the functions here.
 ///
-/// @warning the log must not move, nor be copied, once it is filled in: the allocator
-///          TDA_AL gives points into it.
-///          A moved or copied one is caught by the first of its own functions
-///          called on it, deinit included, under assert or TDA_HARDENED; a request
-///          made through its tda_Al is not checked.
+/// @warning once a view from tda_log_to_al is out, the log must not move nor be copied:
+///          the view points at it, and so does every container built on it.
 typedef struct tda_Log {
-    tda_Al al_;      ///< the interface; its ctx is the log itself
-    tda_Al *parent_; ///< the allocator every call goes on to
-    FILE *stream_;   ///< where the lines go
+    tda_Al parent_; ///< the allocator every call goes on to
+    FILE *stream_;  ///< where the lines go
 } tda_Log;
 
 /// @name lifetime
 /// @{
 
 /// a log over 'parent', writing to 'stream'; takes no memory, so it cannot fail
-/// @param parent the allocator to pass every call to; borrowed
 /// @param stream where the lines go; borrowed, must outlive the log
-/// @param[out] out the log
+/// @param parent the allocator to pass every call to; borrowed
+/// @return the log
 /// @bigo{1}
-TDA_API
-void tda_log_init(tda_Al *parent, FILE *stream, tda_Log *out);
+[[nodiscard]] TDA_API
+tda_Log tda_log_init(FILE *stream, tda_Al parent);
 
 /// writes the last line and leaves the log inert
 /// @param self a log, or an inert one, for which this is a no-op
 /// @bigo{1}
 TDA_API
 void tda_log_deinit(tda_Log *self);
+
+/// @}
+
+/// @name view
+/// @{
+
+/// a view of the log, to hand to a container or a wrapper
+/// @param self the log; from now on it must stay where it is
+/// @return the view, valid while the log stays where it is and until its deinit
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Al tda_log_to_al(tda_Log *self);
 
 /// @}
 

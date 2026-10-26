@@ -6,7 +6,7 @@
 
 /* ========== internals ========== */
 
-/// whether 'sub' occurs in 's' at 'at'; the caller guarantees it fits
+/// whether 'sub' occurs in 's' at 'idx'; the caller guarantees it fits
 static bool matches_at(tda_Span s, tda_Span sub, size_t idx, tda_Eq eq, void *ctx);
 
 /// the first index whose elem orders after 'key' ('upper') or not before it (otherwise)
@@ -274,9 +274,9 @@ bool tda_span_binary_search(tda_Span s, const void *key, tda_Cmp cmp, void *ctx,
         return false;
     }
 
-    // the elem at pos is not less than 'key'; it is equal unless 'key' is less than it
+    // the elem at pos is not less than 'key', so it is either equal or greater
     const void *elem = tda_span_get(s, pos);
-    if (!(cmp(key, elem, ctx) < 0)) {
+    if (cmp(elem, key, ctx) == 0) {
         *out_idx = pos;
         return true;
     }
@@ -414,13 +414,13 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx) {
 static size_t bound(tda_Span s, const void *key, tda_Cmp cmp, void *ctx, bool upper) {
     size_t lo = 0, hi = s.len;
 
-    // asked only as "less", one way round for each bound, so a comparator that never
-    // answers "greater" works too: the lower bound passes every elem less than 'key',
-    // the upper every elem 'key' is not less than
+    // the elem always on the left, so the key need not be one: the lower bound passes
+    // every elem less than 'key', the upper every elem not greater than it
     while (lo < hi) {
         const size_t mid = lo + (hi - lo) / 2;
         const void *elem = tda_span_get(s, mid);
-        const bool before = upper ? !(cmp(key, elem, ctx) < 0) : cmp(elem, key, ctx) < 0;
+        const int order = cmp(elem, key, ctx);
+        const bool before = upper ? order <= 0 : order < 0;
 
         if (before) {
             lo = mid + 1;
@@ -433,7 +433,7 @@ static size_t bound(tda_Span s, const void *key, tda_Cmp cmp, void *ctx, bool up
 }
 
 static bool beats(tda_Cmp cmp, void *ctx, const void *cur, const void *best, bool max) {
-    // asked as "less" both ways round, so the max needs no "greater" from 'cmp'
+    // the max swaps the operands, so a tie keeps the first either way
     return max ? cmp(best, cur, ctx) < 0 : cmp(cur, best, ctx) < 0;
 }
 

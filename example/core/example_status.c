@@ -11,7 +11,7 @@
 // a fallible op returns the status and writes its results through trailing outs, only
 // on success: either both are built or neither is
 [[nodiscard]]
-static tda_Status arr_and_copy(tda_Al *al, tda_Arr *out_arr, tda_Arr *out_copy) {
+static tda_Status arr_and_copy(tda_Al al, tda_Arr *out_arr, tda_Arr *out_copy) {
     tda_Arr arr;
     tda_Status st = TDA_ARR_OF(int32_t, al, &arr, 5, 3, 1);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -45,7 +45,7 @@ int main() {
         return 1;
     }
 
-    tda_arr_print(&copy, tda_fprint_i32); // [5, 3, 1]
+    tda_arr_print(&copy, tda_fprint_i32, nullptr); // [5, 3, 1]
     tda_arr_deinit(&copy);
     tda_arr_deinit(&arr);
     /// [report]

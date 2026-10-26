@@ -15,7 +15,7 @@
 #define ASSERT_LIST(l)                                   \
     (assert(l),                                          \
      assert(tda_layout_is_type((l)->elem_)),             \
-     assert((l)->al_),                                   \
+     assert((l)->al_.vt),                                \
      assert(((l)->len_ > 0) == ((l)->head_ != nullptr)), \
      assert(((l)->head_ != nullptr) == ((l)->tail_ != nullptr)))
 
@@ -142,10 +142,9 @@ static void merge_into(tda_List *self, tda_List *src, tda_Cmp cmp, void *ctx);
 
 /* ========== lifetime ========== */
 
-void tda_list_init(tda_Layout elem, tda_Al *al, tda_List *out) {
+tda_List tda_list_init(tda_Layout elem, tda_Al al) {
     assert(tda_layout_is_type(elem));
-    assert(al);
-    assert(out);
+    assert(al.vt);
 
     // checked once here, so node_layout needs no check of its own. No real type comes
     // near; a layout built by hand might, and its nodes would be too short for the elem
@@ -153,17 +152,16 @@ void tda_list_init(tda_Layout elem, tda_Al *al, tda_List *out) {
     [[maybe_unused]] const bool overflow = ckd_node_layout(&node, elem);
     TDA_EXPECT(!overflow);
 
-    *out = (tda_List){.elem_ = elem, .al_ = al};
+    return (tda_List){.elem_ = elem, .al_ = al};
 }
 
-tda_Status tda_list_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_List *out) {
+tda_Status tda_list_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_List *out) {
     assert(data || len == 0);
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
-    tda_List obj;
-    tda_list_init(elem, al, &obj);
+    tda_List obj = tda_list_init(elem, al);
 
     for (size_t i = 0; i < len; ++i) {
         const tda_Status st = tda_list_push_back(&obj, tda_byte_offset(data, elem.size, i));
@@ -178,9 +176,9 @@ tda_Status tda_list_from_data(const void *data, size_t len, tda_Layout elem, tda
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_list_from_span(tda_Span s, tda_Al *al, tda_List *out) {
+tda_Status tda_list_from_span(tda_Span s, tda_Al al, tda_List *out) {
     TDA_SPAN_ASSERT(s);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_list_from_data(s.data, s.len, s.elem, al, out);
@@ -190,7 +188,7 @@ void tda_list_deinit(tda_List *self) {
     assert(self);
 
     // the inert state, never initialized or already released
-    if (!self->al_) {
+    if (!self->al_.vt) {
         assert(!self->head_);
         return;
     }
@@ -210,13 +208,12 @@ tda_Status tda_list_copy(const tda_List *self, tda_List *out) {
     return tda_list_copy_with(self, self->al_, out);
 }
 
-tda_Status tda_list_copy_with(const tda_List *self, tda_Al *al, tda_List *out) {
+tda_Status tda_list_copy_with(const tda_List *self, tda_Al al, tda_List *out) {
     ASSERT_LIST(self);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
-    tda_List obj;
-    tda_list_init(self->elem_, al, &obj);
+    tda_List obj = tda_list_init(self->elem_, al);
 
     const tda_Status st = push_copies(&obj, self, self->head_);
     if (TDA_STATUS_IS_ERR(st)) {
@@ -239,8 +236,7 @@ tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other) {
 
     // the elems past the target's length have no node in it; those nodes are allocated
     // up front, so a failure happens before any mutation
-    tda_List spare;
-    tda_list_init(self->elem_, self->al_, &spare);
+    tda_List spare = tda_list_init(self->elem_, self->al_);
 
     const tda_Status st = push_copies(&spare, other, skip(other->head_, self->len_));
     if (TDA_STATUS_IS_ERR(st)) {
@@ -278,7 +274,7 @@ void tda_list_move_assign(tda_List *self, tda_List *other) {
     // the allocator goes along with the nodes, and 'other' stays usable on it
     tda_list_deinit(self);
     *self = *other;
-    tda_list_init(self->elem_, self->al_, other);
+    *other = tda_list_init(self->elem_, self->al_);
 
     ASSERT_LIST(self);
     ASSERT_LIST(other);
@@ -525,7 +521,7 @@ tda_Status tda_list_splice_node(tda_List *self, tda_ListNode *at, tda_List *src,
     assert(!at || owns_node(self, at));
     assert(owns_node(src, node));
 
-    if (self->al_ != src->al_) {
+    if (!tda_al_eq(self->al_, src->al_)) {
         // a node belongs to the allocator that made it, so copy the elem into a new node
         // of 'self' and release the old one
         const tda_Status st = insert_between(self, prev_of(self, at), at, elem_of(src, node));
@@ -639,26 +635,27 @@ void tda_list_copy_from_span(tda_List *self, tda_Span src) {
 
 /* ========== print ========== */
 
-void tda_list_fprint(const tda_List *self, FILE *stream, tda_FPrint fprint) {
+int tda_list_fprint(const tda_List *self, FILE *stream, tda_FPrint fprint, void *ctx) {
     ASSERT_LIST(self);
     assert(stream);
     assert(fprint);
 
-    fputc('[', stream);
+    int rc = fputc('[', stream);
     for (const tda_ListNode *node = self->head_; node; node = node->next) {
         if (node != self->head_) {
-            fputs(", ", stream);
+            rc = tda_fprint_join_(rc, fputs(", ", stream));
         }
-        fprint(stream, elem_of(self, node));
+        rc = tda_fprint_join_(rc, fprint(stream, elem_of(self, node), ctx));
     }
-    fputs("]\n", stream);
+
+    return tda_fprint_join_(rc, fputc(']', stream));
 }
 
-void tda_list_print(const tda_List *self, tda_FPrint fprint) {
+int tda_list_print(const tda_List *self, tda_FPrint fprint, void *ctx) {
     ASSERT_LIST(self);
     assert(fprint);
 
-    tda_list_fprint(self, stdout, fprint);
+    return tda_fprint_join_(tda_list_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
 }
 
 /* ========== internals ========== */
@@ -783,7 +780,7 @@ static void remove_node(tda_List *self, tda_ListNode *node) {
 }
 
 static void splice_nodes(tda_List *self, tda_List *src, bool front) {
-    assert(self->al_ == src->al_);
+    assert(tda_al_eq(self->al_, src->al_));
     assert(tda_layout_eq(self->elem_, src->elem_));
     assert(src->len_ > 0);
 
@@ -796,7 +793,7 @@ static void splice_nodes(tda_List *self, tda_List *src, bool front) {
 }
 
 static tda_Status nodes_for(tda_List *self, tda_List *src, tda_List *spare, tda_List **out) {
-    if (self->al_ == src->al_) {
+    if (tda_al_eq(self->al_, src->al_)) {
         *out = src;
         return TDA_STATUS_OK;
     }
@@ -965,7 +962,7 @@ static void relink_prev(tda_List *self) {
 }
 
 static void merge_into(tda_List *self, tda_List *src, tda_Cmp cmp, void *ctx) {
-    assert(self->al_ == src->al_);
+    assert(tda_al_eq(self->al_, src->al_));
     assert(tda_layout_eq(self->elem_, src->elem_));
     assert(src->len_ > 0);
 

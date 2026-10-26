@@ -15,14 +15,14 @@
 int main() {
     /// [build]
     // elems join in the order given, so the first in is the first served
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_Queue q;
     if (TDA_STATUS_IS_ERR(TDA_QUEUE_OF(int32_t, al, &q, 1, 2, 3))) {
         return 1;
     }
 
-    tda_queue_print(&q, tda_fprint_i32); // [1, 2, 3]
+    tda_queue_print(&q, tda_fprint_i32, nullptr); // [1, 2, 3]
     printf(
         "%" PRId32 " .. %" PRId32 "\n",
         *TDA_QUEUE_FRONT_AS(int32_t, &q),
@@ -40,7 +40,7 @@ int main() {
     if (TDA_STATUS_IS_ERR(TDA_QUEUE_PUSH(int32_t, &q, 4))) {
         goto out;
     }
-    tda_queue_print(&q, tda_fprint_i32); // [1, 2, 3, 4]
+    tda_queue_print(&q, tda_fprint_i32, nullptr); // [1, 2, 3, 4]
 
     // both ends are writable; a queue limits where elems go in and out, not their values
     *TDA_QUEUE_FRONT_MUT_AS(int32_t, &q) = 9;
@@ -69,19 +69,19 @@ int main() {
 
     // and it is one way: sorting the copy says nothing about the queue, so there is no
     // copy_from_span to write it back
-    tda_queue_print(&q, tda_fprint_i32); // [2, 3, 4]
+    tda_queue_print(&q, tda_fprint_i32, nullptr); // [2, 3, 4]
     /// [read]
 
     /// [into]
     // the deque was under the queue all along, so taking it is free, and the queue is
     // left inert
-    tda_queue_into_deque(&q, &d);
+    d = tda_queue_into_deque(&q);
 
     // the narrow interface is gone too: the deque allows the front push a queue refused
     if (TDA_STATUS_IS_ERR(TDA_DEQUE_PUSH_FRONT(int32_t, &d, 1))) {
         goto out;
     }
-    tda_deque_print(&d, tda_fprint_i32); // [1, 2, 3, 4]
+    tda_deque_print(&d, tda_fprint_i32, nullptr); // [1, 2, 3, 4]
 
     rc = 0;
 out:

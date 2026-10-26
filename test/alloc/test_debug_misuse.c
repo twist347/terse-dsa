@@ -23,52 +23,52 @@ static tda_Layout bytes(size_t size) {
 // the allocator every case runs on; a case that needs its own ops reaches it here
 static tda_Debug debug;
 
-static void wrong_size(tda_Al *al) {
+static void wrong_size(tda_Al al) {
     void *p = tda_alloc(al, bytes(32));
     tda_dealloc(al, p, bytes(24));
 }
 
-static void wrong_align(tda_Al *al) {
+static void wrong_align(tda_Al al) {
     void *p = tda_alloc(al, (tda_Layout){.size = 32, .align = 64});
     tda_dealloc(al, p, bytes(32));
 }
 
 // the old size is what the copy reads, so it is checked before the copy
-static void realloc_wrong_size(tda_Al *al) {
+static void realloc_wrong_size(tda_Al al) {
     void *p = tda_alloc(al, bytes(8));
     TDA_UNUSED(tda_realloc(al, p, bytes(64), 128));
 }
 
-static void realloc_wrong_align(tda_Al *al) {
+static void realloc_wrong_align(tda_Al al) {
     void *p = tda_alloc(al, (tda_Layout){.size = 64, .align = 64});
     TDA_UNUSED(tda_realloc(al, p, bytes(64), 128));
 }
 
-static void double_free(tda_Al *al) {
+static void double_free(tda_Al al) {
     void *p = tda_alloc(al, bytes(32));
     tda_dealloc(al, p, bytes(32));
     tda_dealloc(al, p, bytes(32));
 }
 
-static void foreign_pointer(tda_Al *al) {
+static void foreign_pointer(tda_Al al) {
     static unsigned char not_ours[32];
     tda_dealloc(al, not_ours, bytes(sizeof(not_ours)));
 }
 
-static void write_past_end(tda_Al *al) {
+static void write_past_end(tda_Al al) {
     unsigned char *p = tda_alloc(al, bytes(32));
     p[32] = 0; // the first guard byte, still the parent's memory
     tda_dealloc(al, p, bytes(32));
 }
 
-static void write_after_free(tda_Al *al) {
+static void write_after_free(tda_Al al) {
     unsigned char *p = tda_alloc(al, bytes(32));
     tda_dealloc(al, p, bytes(32));
     p[5] = 0; // quarantined, so the parent has not got it back yet
     tda_debug_deinit(&debug);
 }
 
-static void stale_realloc(tda_Al *al) {
+static void stale_realloc(tda_Al al) {
     unsigned char *p = tda_alloc(al, bytes(8));
     unsigned char *q = tda_realloc(al, p, bytes(8), 16);
     p[0] = 1; // the old block, kept across a growth
@@ -76,7 +76,7 @@ static void stale_realloc(tda_Al *al) {
     tda_debug_deinit(&debug);
 }
 
-static void break_at(tda_Al *al) {
+static void break_at(tda_Al al) {
     tda_debug_break_at(&debug, 2);
     TDA_UNUSED(tda_alloc(al, bytes(8)));
     TDA_UNUSED(tda_alloc(al, bytes(8)));
@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
 
     static const struct {
         const char *name;
-        void (*run)(tda_Al *);
+        void (*run)(tda_Al);
     } cases[] = {
         {"wrong_size", wrong_size},
         {"wrong_align", wrong_align},
@@ -103,8 +103,8 @@ int main(int argc, char **argv) {
         {"break_at", break_at},
     };
 
-    tda_debug_init(tda_al_default(), &debug);
-    tda_Al *al = TDA_AL(&debug);
+    debug = tda_debug_init(tda_al_default());
+    tda_Al al = tda_debug_to_al(&debug);
 
     signal(SIGABRT, on_abort);
 

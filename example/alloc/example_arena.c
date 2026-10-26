@@ -12,10 +12,9 @@ int main() {
     // no parent and no heap: the arena is a value on the stack, and the whole array is
     // its block
     unsigned char mem[256];
-    tda_Arena local;
-    tda_arena_init_buf(mem, sizeof(mem), &local);
+    tda_Arena local = tda_arena_init_buf(mem, sizeof(mem));
 
-    int32_t *c = TDA_ALLOC(int32_t, TDA_AL(&local), 8);
+    int32_t *c = TDA_ALLOC(int32_t, tda_arena_to_al(&local), 8);
     printf(
         "%s, %zu left\n",
         c ? "taken from the array" : "no room",
@@ -28,12 +27,12 @@ int main() {
     /// [build]
     // the block comes from the parent once and is handed out in pieces
     tda_Arena arena;
-    if (TDA_STATUS_IS_ERR(tda_arena_init(tda_al_default(), 1024, &arena))) {
+    if (TDA_STATUS_IS_ERR(tda_arena_init_cap(1024, tda_al_default(), &arena))) {
         return 1;
     }
 
     int rc = 1;
-    int32_t *a = TDA_ALLOC(int32_t, TDA_AL(&arena), 4), *b = TDA_ALLOC(int32_t, TDA_AL(&arena), 4);
+    int32_t *a = TDA_ALLOC(int32_t, tda_arena_to_al(&arena), 4), *b = TDA_ALLOC(int32_t, tda_arena_to_al(&arena), 4);
     if (!a || !b) {
         goto out;
     }
@@ -53,7 +52,7 @@ int main() {
 
     /// [reset]
     // a dealloc does nothing: an arena has no per-block free
-    TDA_DEALLOC(int32_t, TDA_AL(&arena), a, 4);
+    TDA_DEALLOC(int32_t, tda_arena_to_al(&arena), a, 4);
     printf("%zu used after a dealloc\n", tda_arena_stats(&arena).used); // 32
 
     // this is how memory comes back: all at once, and 'a' and 'b' are now dead
@@ -64,10 +63,10 @@ int main() {
     /// [mark]
     // scratch inside a phase: allocate what the phase keeps, then take a mark; the rewind
     // frees only the scratch
-    int32_t *kept = TDA_ALLOC(int32_t, TDA_AL(&arena), 4);
+    int32_t *kept = TDA_ALLOC(int32_t, tda_arena_to_al(&arena), 4);
     const tda_ArenaMark mark = tda_arena_mark(&arena);
 
-    int32_t *scratch = TDA_ALLOC(int32_t, TDA_AL(&arena), 64);
+    int32_t *scratch = TDA_ALLOC(int32_t, tda_arena_to_al(&arena), 64);
     if (!kept || !scratch) {
         goto out;
     }

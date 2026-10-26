@@ -8,7 +8,7 @@
 int main() {
     /// [build]
     // the universe is fixed at construction: this set holds a subset of 0 .. 11
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_BitSet a;
     if (TDA_STATUS_IS_ERR(tda_bitset_init_len(12, al, &a))) {

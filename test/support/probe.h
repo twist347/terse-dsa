@@ -9,8 +9,8 @@
 /* ========== type ========== */
 
 /// counting allocator over tda_al_default that can be told to fail on demand.
-/// Each instance carries its own state; pass it as the al's ctx, so two
-/// probes in one test never share counters.
+/// Each instance carries its own state, and tda_test_probe_bare and tda_test_probe_full
+/// make a view of one, so two probes in one test never share counters.
 typedef struct {
     size_t alloc_calls;
     size_t zeroed_calls;
@@ -131,24 +131,29 @@ static inline void tda_test_probe_dealloc_(void *ctx, void *ptr, tda_Layout layo
 static inline tda_Al tda_test_probe_bare(tda_TestProbe *self) {
     assert(self);
 
-    return (tda_Al){
-        .ctx = self,
+    static const tda_AlVtable vtable = {
         .alloc = tda_test_probe_alloc_,
+        .alloc_zeroed = nullptr,
+        .resize = nullptr,
+        .remap = nullptr,
         .dealloc = tda_test_probe_dealloc_,
     };
+
+    return (tda_Al){.ctx = self, .vt = &vtable};
 }
 
-/// all five hooks: the wrappers must prefer these over their fallbacks
+/// every hook: the wrappers must prefer these over their fallbacks
 [[nodiscard]]
 static inline tda_Al tda_test_probe_full(tda_TestProbe *self) {
     assert(self);
 
-    return (tda_Al){
-        .ctx = self,
+    static const tda_AlVtable vtable = {
         .alloc = tda_test_probe_alloc_,
         .alloc_zeroed = tda_test_probe_alloc_zeroed_,
         .resize = tda_test_probe_resize_,
         .remap = tda_test_probe_remap_,
         .dealloc = tda_test_probe_dealloc_,
     };
+
+    return (tda_Al){.ctx = self, .vt = &vtable};
 }

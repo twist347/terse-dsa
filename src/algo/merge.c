@@ -63,7 +63,7 @@ void tda_span_merge(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, void *
 
 /* ========== inplace merge ========== */
 
-void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, tda_Al *al) {
+void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, tda_Al al) {
     TDA_SPAN_ASSERT(s);
     assert(cmp);
     TDA_EXPECT(mid <= s.len);
@@ -77,7 +77,7 @@ void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, t
     // the buffer holds the shorter run, so at most half the span
     const size_t buf_len = left_len < right_len ? left_len : right_len;
     const tda_Layout buf_layout = tda_elems_layout(s.elem, buf_len);
-    void *buf = al ? tda_alloc(al, buf_layout) : nullptr;
+    void *buf = al.vt ? tda_alloc(al, buf_layout) : nullptr;
 
     if (!buf) {
         merge_in_place(s, mid, cmp, ctx);

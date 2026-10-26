@@ -19,7 +19,7 @@
      assert(!(d)->data_ || (d)->cap_ > 0),             \
      assert((d)->cap_ == 0 || (d)->head_ < (d)->cap_), \
      assert((d)->cap_ > 0 || (d)->head_ == 0),         \
-     assert((d)->al_))
+     assert((d)->al_.vt))
 
 #define EXPECT_SAME_DEQUE(a, b) \
     (TDA_EXPECT(tda_layout_eq((a)->elem_, (b)->elem_)))
@@ -28,7 +28,7 @@ static constexpr size_t DEQUE_GROWTH_BASE = 1;
 static constexpr size_t DEQUE_GROWTH_FACTOR = 2;
 
 [[nodiscard]]
-static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al *al, tda_Deque *out);
+static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al al, tda_Deque *out);
 
 /// frees the block, leaving an empty deque on the same allocator
 static void release_data(tda_Deque *self);
@@ -123,34 +123,33 @@ static void move_elems(tda_Deque *self, size_t to, size_t from, size_t count);
 
 /* ========== lifetime ========== */
 
-void tda_deque_init(tda_Layout elem, tda_Al *al, tda_Deque *out) {
+tda_Deque tda_deque_init(tda_Layout elem, tda_Al al) {
     assert(tda_layout_is_type(elem));
-    assert(al);
-    assert(out);
+    assert(al.vt);
 
-    *out = (tda_Deque){.elem_ = elem, .al_ = al};
+    return (tda_Deque){.elem_ = elem, .al_ = al};
 }
 
-tda_Status tda_deque_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Deque *out) {
+tda_Status tda_deque_init_len(size_t len, tda_Layout elem, tda_Al al, tda_Deque *out) {
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return init_impl(true, len, len, elem, al, out);
 }
 
-tda_Status tda_deque_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Deque *out) {
+tda_Status tda_deque_init_cap(size_t cap, tda_Layout elem, tda_Al al, tda_Deque *out) {
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return init_impl(false, 0, cap, elem, al, out);
 }
 
-tda_Status tda_deque_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Deque *out) {
+tda_Status tda_deque_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_Deque *out) {
     assert(data || len == 0);
     assert(tda_layout_is_type(elem));
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_Deque obj;
@@ -169,9 +168,9 @@ tda_Status tda_deque_from_data(const void *data, size_t len, tda_Layout elem, td
     return TDA_STATUS_OK;
 }
 
-tda_Status tda_deque_from_span(tda_Span s, tda_Al *al, tda_Deque *out) {
+tda_Status tda_deque_from_span(tda_Span s, tda_Al al, tda_Deque *out) {
     TDA_SPAN_ASSERT(s);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     return tda_deque_from_data(s.data, s.len, s.elem, al, out);
@@ -181,7 +180,7 @@ void tda_deque_deinit(tda_Deque *self) {
     assert(self);
 
     // the inert state, never initialized or already released
-    if (!self->al_) {
+    if (!self->al_.vt) {
         assert(!self->data_);
         return;
     }
@@ -201,9 +200,9 @@ tda_Status tda_deque_copy(const tda_Deque *self, tda_Deque *out) {
     return tda_deque_copy_with(self, self->al_, out);
 }
 
-tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque *out) {
+tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al al, tda_Deque *out) {
     ASSERT_DEQUE(self);
-    assert(al);
+    assert(al.vt);
     assert(out);
 
     tda_Deque copy;
@@ -264,7 +263,7 @@ void tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
     // the allocator goes along with the block, and 'other' stays usable on it
     tda_deque_deinit(self);
     *self = *other;
-    tda_deque_init(self->elem_, self->al_, other);
+    *other = tda_deque_init(self->elem_, self->al_);
 
     ASSERT_DEQUE(self);
     ASSERT_DEQUE(other);
@@ -611,28 +610,29 @@ void tda_deque_retain(tda_Deque *self, tda_Pred pred, void *ctx) {
 
 /* ========== print ========== */
 
-void tda_deque_fprint(const tda_Deque *self, FILE *stream, tda_FPrint fprint) {
+int tda_deque_fprint(const tda_Deque *self, FILE *stream, tda_FPrint fprint, void *ctx) {
     ASSERT_DEQUE(self);
     assert(stream);
     assert(fprint);
 
     // not delegated to tda_span_fprint: the ring is up to two spans, and one bracket must
     // hold both. The format matches it on purpose
-    fputc('[', stream);
+    int rc = fputc('[', stream);
     for (size_t i = 0; i < self->len_; ++i) {
         if (i > 0) {
-            fputs(", ", stream);
+            rc = tda_fprint_join_(rc, fputs(", ", stream));
         }
-        fprint(stream, elem_at(self, i));
+        rc = tda_fprint_join_(rc, fprint(stream, elem_at(self, i), ctx));
     }
-    fputs("]\n", stream);
+
+    return tda_fprint_join_(rc, fputc(']', stream));
 }
 
-void tda_deque_print(const tda_Deque *self, tda_FPrint fprint) {
+int tda_deque_print(const tda_Deque *self, tda_FPrint fprint, void *ctx) {
     ASSERT_DEQUE(self);
     assert(fprint);
 
-    tda_deque_fprint(self, stdout, fprint);
+    return tda_fprint_join_(tda_deque_fprint(self, stdout, fprint, ctx), fputc('\n', stdout));
 }
 
 /* ========== internals ========== */
@@ -672,11 +672,10 @@ static tda_Status insert_raw(tda_Deque *self, size_t idx, const void *src, size_
     return TDA_STATUS_OK;
 }
 
-static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al *al, tda_Deque *out) {
+static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al al, tda_Deque *out) {
     assert(len <= cap);
 
-    tda_Deque obj;
-    tda_deque_init(elem, al, &obj);
+    tda_Deque obj = tda_deque_init(elem, al);
     if (cap > 0) {
         tda_Layout block;
         if (tda_layout_ckd_array(&block, elem, cap)) {

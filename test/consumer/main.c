@@ -4,13 +4,13 @@
 
 int main() {
     tda_Arena arena; // alloc
-    if (TDA_STATUS_IS_ERR(tda_arena_init(tda_al_default(), 1024, &arena))) {
+    if (TDA_STATUS_IS_ERR(tda_arena_init_cap(1024, tda_al_default(), &arena))) {
         return 1;
     }
 
     int rc = 1;
     tda_Vec vec = {}; // ds
-    if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, TDA_AL(&arena), &vec, 5, 3, 1, 4, 2))) {
+    if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, tda_arena_to_al(&arena), &vec, 5, 3, 1, 4, 2))) {
         goto out;
     }
 

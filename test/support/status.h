@@ -5,6 +5,7 @@
 #include <unity.h>
 
 #include <stdio.h>
+#include <string.h>
 
 /* ========== macros ========== */
 
@@ -13,6 +14,14 @@
 
 #define TDA_TEST_OK(expr) \
     TDA_TEST_STATUS_(TDA_STATUS_OK, (expr), #expr)
+
+// fills 'obj' with a byte no constructor writes, so a failed call that resets its 'out'
+// to '= {}' is told apart from one that leaves it alone
+#define TDA_TEST_POISON(obj) \
+    memset(&(obj), 0xA5, sizeof(obj))
+
+#define TDA_TEST_ASSERT_POISONED(obj) \
+    TEST_ASSERT_EACH_EQUAL_HEX8(0xA5, &(obj), sizeof(obj))
 
 /* ========== internals ========== */
 

@@ -42,7 +42,7 @@ int main() {
     /// [sub]
     // a subspan views the same memory, offset and shortened; nothing is copied
     const tda_SpanMut tail = tda_span_sub_mut(s, 1, 4);
-    tda_span_mut_print(tail, tda_fprint_i32); // [3, 1, 4, 9]
+    tda_span_mut_print(tail, tda_fprint_i32, nullptr); // [3, 1, 4, 9]
     /// [sub]
 
     /// [overlap]
@@ -60,7 +60,7 @@ int main() {
     /// [bridge]
     // ds hands out a view and algo works in place through it
     tda_span_sort(s, tda_cmp_i32, nullptr);
-    tda_span_print(tda_span_mut_to_span(s), tda_fprint_i32); // [1, 2, 3, 4, 9]
+    tda_span_print(tda_span_mut_to_span(s), tda_fprint_i32, nullptr); // [1, 2, 3, 4, 9]
     /// [bridge]
 
     return 0;

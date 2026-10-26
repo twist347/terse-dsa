@@ -5,6 +5,7 @@
 #include "tda/core/check.h"
 #include "tda/core/cmp.h"
 #include "tda/core/export.h"
+#include "tda/core/print.h"
 #include "tda/core/span.h"
 #include "tda/core/status.h"
 
@@ -40,8 +41,9 @@
 /// @{
 
 /// Owning array that grows. A value the caller holds wherever it likes, on the stack or
-/// inside a struct: an init or a from_ fills it in, tda_vec_deinit releases its block.
-/// `= {}` is the inert state, which tda_vec_deinit accepts and every other op asserts.
+/// inside a struct: an init returns it, a from_ fills it in, tda_vec_deinit releases its
+/// block. `= {}` is the inert state, which tda_vec_deinit accepts and every other op
+/// asserts.
 ///
 /// The fields belong to the vec: read and change them only through the functions here.
 ///
@@ -53,7 +55,7 @@ typedef struct tda_Vec {
     size_t len_;      ///< how many elems it holds
     size_t cap_;      ///< how many fit before the block grows
     tda_Layout elem_; ///< the layout of one elem
-    tda_Al *al_;      ///< where the block comes from; moves along with the vec
+    tda_Al al_;       ///< where the block comes from; moves along with the vec
 } tda_Vec;
 
 /// @name lifetime
@@ -62,10 +64,10 @@ typedef struct tda_Vec {
 /// an empty vec that owns no block yet; allocates nothing, so it cannot fail
 /// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
-/// @param[out] out the new vec
+/// @return the new vec
 /// @bigo{1}
-TDA_API
-void tda_vec_init(tda_Layout elem, tda_Al *al, tda_Vec *out);
+[[nodiscard]] TDA_API
+tda_Vec tda_vec_init(tda_Layout elem, tda_Al al);
 
 /// a vec of 'len' zeroed elems, with the capacity to match
 /// @param len how many elems
@@ -77,7 +79,7 @@ void tda_vec_init(tda_Layout elem, tda_Al *al, tda_Vec *out);
 ///         overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Vec *out);
+tda_Status tda_vec_init_len(size_t len, tda_Layout elem, tda_Al al, tda_Vec *out);
 
 /// an empty vec with room for 'cap' elems before the first growth
 /// @param cap how many elems to make room for
@@ -89,7 +91,7 @@ tda_Status tda_vec_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Vec *ou
 ///         overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Vec *out);
+tda_Status tda_vec_init_cap(size_t cap, tda_Layout elem, tda_Al al, tda_Vec *out);
 
 /// a vec holding a copy of 'len' elems read from 'data'
 /// @param data the elems to copy in; may be null only when len is 0
@@ -102,7 +104,7 @@ tda_Status tda_vec_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Vec *ou
 ///         overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Vec *out);
+tda_Status tda_vec_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_Vec *out);
 
 /// a vec holding a copy of the elems 's' views
 /// @param s the view to copy; the elem layout is the span's
@@ -112,7 +114,7 @@ tda_Status tda_vec_from_data(const void *data, size_t len, tda_Layout elem, tda_
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_from_span(tda_Span s, tda_Al *al, tda_Vec *out);
+tda_Status tda_vec_from_span(tda_Span s, tda_Al al, tda_Vec *out);
 
 /// releases the block and leaves the vec inert, `= {}`
 /// @param self a vec, or an inert one, for which this is a no-op
@@ -142,7 +144,7 @@ tda_Status tda_vec_copy(const tda_Vec *self, tda_Vec *out);
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al *al, tda_Vec *out);
+tda_Status tda_vec_copy_with(const tda_Vec *self, tda_Al al, tda_Vec *out);
 
 /// overwrites the elems of 'self' with those of 'other', growing the block if needed
 /// @param[in,out] self must have the same elem layout; keeps its allocator
@@ -196,7 +198,7 @@ bool tda_vec_eq_by(const tda_Vec *a, const tda_Vec *b, tda_Eq eq, void *ctx);
 [[nodiscard]]
 static inline size_t tda_vec_len(const tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->len_;
 }
@@ -208,7 +210,7 @@ static inline size_t tda_vec_len(const tda_Vec *self) {
 [[nodiscard]]
 static inline size_t tda_vec_cap(const tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->cap_;
 }
@@ -220,7 +222,7 @@ static inline size_t tda_vec_cap(const tda_Vec *self) {
 [[nodiscard]]
 static inline tda_Layout tda_vec_elem_layout(const tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->elem_;
 }
@@ -232,19 +234,19 @@ static inline tda_Layout tda_vec_elem_layout(const tda_Vec *self) {
 [[nodiscard]]
 static inline size_t tda_vec_bytes(const tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->len_ * self->elem_.size;
 }
 
 /// the allocator the vec was built with
 /// @param self the vec
-/// @return the allocator, borrowed
+/// @return the view it was built with
 /// @bigo{1}
 [[nodiscard]]
-static inline tda_Al *tda_vec_al(const tda_Vec *self) {
+static inline tda_Al tda_vec_al(const tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->al_;
 }
@@ -261,7 +263,7 @@ static inline tda_Al *tda_vec_al(const tda_Vec *self) {
 [[nodiscard]]
 static inline const void *tda_vec_front(const tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return self->data_;
@@ -272,7 +274,7 @@ static inline const void *tda_vec_front(const tda_Vec *self) {
 [[nodiscard]]
 static inline void *tda_vec_front_mut(tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return self->data_;
@@ -283,7 +285,7 @@ static inline void *tda_vec_front_mut(tda_Vec *self) {
 [[nodiscard]]
 static inline const void *tda_vec_back(const tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return (const unsigned char *) self->data_ + (self->len_ - 1) * self->elem_.size;
@@ -294,7 +296,7 @@ static inline const void *tda_vec_back(const tda_Vec *self) {
 [[nodiscard]]
 static inline void *tda_vec_back_mut(tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return (unsigned char *) self->data_ + (self->len_ - 1) * self->elem_.size;
@@ -308,7 +310,7 @@ static inline void *tda_vec_back_mut(tda_Vec *self) {
 [[nodiscard]]
 static inline const void *tda_vec_get(const tda_Vec *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->len_);
 
     return (const unsigned char *) self->data_ + idx * self->elem_.size;
@@ -319,7 +321,7 @@ static inline const void *tda_vec_get(const tda_Vec *self, size_t idx) {
 [[nodiscard]]
 static inline void *tda_vec_get_mut(tda_Vec *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->len_);
 
     return (unsigned char *) self->data_ + idx * self->elem_.size;
@@ -341,7 +343,7 @@ void tda_vec_set(tda_Vec *self, size_t idx, const void *val);
 [[nodiscard]]
 static inline const void *tda_vec_data(const tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->data_;
 }
@@ -351,7 +353,7 @@ static inline const void *tda_vec_data(const tda_Vec *self) {
 [[nodiscard]]
 static inline void *tda_vec_data_mut(tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->data_;
 }
@@ -377,7 +379,7 @@ tda_Status tda_vec_push(tda_Vec *self, const void *val);
 /// @bigo{1}
 static inline void tda_vec_push_assume_cap(tda_Vec *self, const void *val) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     assert(val);
     TDA_EXPECT(self->len_ < self->cap_);
 
@@ -406,7 +408,7 @@ tda_Status tda_vec_add_one(tda_Vec *self, void **out);
 [[nodiscard]]
 static inline void *tda_vec_add_one_assume_cap(tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ < self->cap_);
 
     return (unsigned char *) self->data_ + self->len_++ * self->elem_.size;
@@ -417,7 +419,7 @@ static inline void *tda_vec_add_one_assume_cap(tda_Vec *self) {
 /// @bigo{1}
 static inline void tda_vec_pop(tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     --self->len_;
@@ -459,7 +461,7 @@ void tda_vec_swap_remove(tda_Vec *self, size_t idx);
 /// @bigo{1}
 static inline void tda_vec_clear(tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     self->len_ = 0;
 }
@@ -568,7 +570,7 @@ void tda_vec_retain(tda_Vec *self, tda_Pred pred, void *ctx);
 [[nodiscard]]
 static inline tda_SpanMut tda_vec_to_span_mut(tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return tda_span_from_data_mut(self->data_, self->len_, self->elem_);
 }
@@ -578,7 +580,7 @@ static inline tda_SpanMut tda_vec_to_span_mut(tda_Vec *self) {
 [[nodiscard]]
 static inline tda_Span tda_vec_to_span(const tda_Vec *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return tda_span_from_data(self->data_, self->len_, self->elem_);
 }
@@ -588,20 +590,24 @@ static inline tda_Span tda_vec_to_span(const tda_Vec *self) {
 /// @name print
 /// @{
 
-/// writes the elems as [a, b, c] and a newline
+/// writes the elems as [a, b, c], with no newline
 /// @param self the vec
 /// @param stream where to write
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_vec_fprint(const tda_Vec *self, FILE *stream, tda_FPrint fprint);
+int tda_vec_fprint(const tda_Vec *self, FILE *stream, tda_FPrint fprint, void *ctx);
 
-/// tda_vec_fprint to stdout
+/// tda_vec_fprint to stdout, and a newline
 /// @param self the vec
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_vec_print(const tda_Vec *self, tda_FPrint fprint);
+int tda_vec_print(const tda_Vec *self, tda_FPrint fprint, void *ctx);
 
 /// @}
 
@@ -630,10 +636,9 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// tda_vec_init with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param al the allocator
-/// @param[out] out where the new vec is written
 /// @bigo{1}
-#define TDA_VEC_INIT(T, al, out) \
-    tda_vec_init(TDA_LAYOUT_OF(T), (al), (out))
+#define TDA_VEC_INIT(T, al) \
+    tda_vec_init(TDA_LAYOUT_OF(T), (al))
 
 /// tda_vec_init_len with TDA_LAYOUT_OF(T)
 /// @param T the elem type
@@ -711,29 +716,29 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
     ((T *) tda_vec_get_mut(TDA_VEC_TYPED_(T, self), (idx)))
 
 /// tda_vec_set from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the vec
 /// @param idx the index
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_VEC_SET(T, self, idx, val) \
-    tda_vec_set(TDA_VEC_TYPED_(T, self), (idx), &(T){ (val) })
+    tda_vec_set(TDA_VEC_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
 
 /// tda_vec_push from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the vec
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_VEC_PUSH(T, self, val) \
-    tda_vec_push(TDA_VEC_TYPED_(T, self), &(T){ (val) })
+    tda_vec_push(TDA_VEC_TYPED_(T, self), &(T[1]){ (val) }[0])
 
 /// tda_vec_push_assume_cap from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the vec
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_VEC_PUSH_ASSUME_CAP(T, self, val) \
-    tda_vec_push_assume_cap(TDA_VEC_TYPED_(T, self), &(T){ (val) })
+    tda_vec_push_assume_cap(TDA_VEC_TYPED_(T, self), &(T[1]){ (val) }[0])
 
 /// tda_vec_add_one_assume_cap as a T *
 /// @param T the elem type
@@ -751,13 +756,13 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
     tda_vec_pop_to(TDA_VEC_TYPED_(T, self), (T *){ (out) })
 
 /// tda_vec_insert from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the vec
 /// @param idx the index
 /// @param val the value to copy in
 /// @bigo{n}
 #define TDA_VEC_INSERT(T, self, idx, val) \
-    tda_vec_insert(TDA_VEC_TYPED_(T, self), (idx), &(T){ (val) })
+    tda_vec_insert(TDA_VEC_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
 
 /// tda_vec_extend from the elems written out
 /// @param T the elem type

@@ -16,8 +16,9 @@
 ///
 /// A generator is a plain value, transparent like tda_Span: it takes no tda_Al, returns
 /// no tda_Status and has nothing to drop. Copying one forks the sequence. The same seed
-/// replays the same numbers, so a bug on the 4000th draw is reproducible. Nothing here
-/// is thread-safe, and every draw mutates.
+/// replays the same numbers, so a bug on the 4000th draw is reproducible: tda_rng_u64
+/// within a major, the draws built on it within a minor. Nothing here is thread-safe,
+/// and every draw mutates.
 ///
 /// Every draw is uniform over its range, with no modulo bias; see tda_rng_u32_max.
 ///

@@ -42,22 +42,19 @@
 /// @snippet alloc/example_arena.c buf
 /// @{
 
-/// An arena. A value the caller holds, on the stack or inside a struct: tda_arena_init
-/// or tda_arena_init_buf fills it in, TDA_AL hands out the allocator over
+/// An arena. A value the caller holds, on the stack or inside a struct:
+/// tda_arena_init_cap or tda_arena_init_buf makes it, tda_arena_to_al hands out views of
 /// it, and tda_arena_deinit gives the block back. `= {}` is the inert state.
 ///
 /// The fields belong to the arena: read and change them only through the functions here.
 ///
-/// @warning the arena must not move, nor be copied, once it is filled in: the allocator
-///          TDA_AL gives points into it, and so does every container built on
-///          that allocator.
-///          A moved or copied one is caught by the first of its own functions
-///          called on it, deinit included, under assert or TDA_HARDENED; a request
-///          made through its tda_Al is not checked.
+/// @warning once a view from tda_arena_to_al is out, the arena must not move nor be
+///          copied: the view points at it, and so does every container built on it. While
+///          no view is out, a copy is a second owner of the block, as a copy of a
+///          container is.
 typedef struct tda_Arena {
-    tda_Al al_;           ///< the interface; its ctx is the arena itself
-    tda_Al *parent_;      ///< where the block came from; null when it is a caller's buffer
-    unsigned char *data_; ///< the block
+    tda_Al parent_;       ///< where the block came from; `= {}` for a caller's buffer
+    unsigned char *data_; ///< the block; null only in the inert state
     size_t cap_;          ///< its bytes
     size_t offset_;       ///< how far the pointer is bumped
     /// the offset of the latest live mark. A last block starting below it moves to grow,
@@ -69,24 +66,24 @@ typedef struct tda_Arena {
 /// @{
 
 /// an arena over 'cap' bytes taken from 'parent'
-/// @param parent where the block comes from; borrowed, and must outlive the arena
 /// @param cap the most bytes it will hand out, padding included, greater than 0
+/// @param parent where the block comes from; borrowed, and must outlive the arena
 /// @param[out] out the arena, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when 'parent' cannot give the block
 /// @bigo{1}
 [[nodiscard]] TDA_API
-tda_Status tda_arena_init(tda_Al *parent, size_t cap, tda_Arena *out);
+tda_Status tda_arena_init_cap(size_t cap, tda_Al parent, tda_Arena *out);
 
 /// an arena over 'buf', with no parent: all of it is the block
 /// @param buf the memory, borrowed: a static or stack array, or a block from anywhere;
 ///            any alignment
 /// @param cap its bytes, greater than 0
-/// @param[out] out the arena
+/// @return the arena
 /// @warning 'buf' has to outlive the arena and everything built on it
 /// @bigo{1}
-TDA_API
-void tda_arena_init_buf(void *buf, size_t cap, tda_Arena *out);
+[[nodiscard]] TDA_API
+tda_Arena tda_arena_init_buf(void *buf, size_t cap);
 
 /// gives the block back to the parent, a no-op for tda_arena_init_buf, and leaves the
 /// arena inert
@@ -94,6 +91,18 @@ void tda_arena_init_buf(void *buf, size_t cap, tda_Arena *out);
 /// @bigo{1}
 TDA_API
 void tda_arena_deinit(tda_Arena *self);
+
+/// @}
+
+/// @name view
+/// @{
+
+/// a view of the arena, to hand to a container or a wrapper
+/// @param self the arena; from now on it must stay where it is
+/// @return the view, valid while the arena stays where it is and until its deinit
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Al tda_arena_to_al(tda_Arena *self);
 
 /// @}
 
@@ -110,9 +119,8 @@ void tda_arena_reset(tda_Arena *self);
 /// A saved arena position, to rewind to.
 /// Pass it back to tda_arena_rewind; the fields are internal
 typedef struct {
-    const void *arena_; ///< the arena it was taken on
-    size_t offset_;     ///< how far the pointer was bumped
-    size_t floor_;      ///< the floor before this mark, which the rewind puts back
+    size_t offset_; ///< how far the pointer was bumped
+    size_t floor_;  ///< the floor before this mark, which the rewind puts back
 } tda_ArenaMark;
 
 /// saves the arena position and raises the floor to it: a block handed out before the
@@ -127,8 +135,9 @@ tda_ArenaMark tda_arena_mark(tda_Arena *self);
 /// takes back everything handed out since 'mark' and restores the floor
 /// @param self the arena
 /// @param mark taken on this arena and not since passed by a rewind to an earlier mark
-///             or a reset; asserted where possible, but a mark the arena has since been
-///             refilled past cannot be told from a live one
+///             or a reset. A mark already rewound past is caught; one from another
+///             arena, or one the arena has since been refilled past, cannot be told
+///             from a live one
 /// @warning invalidates every pointer handed out since the mark and every later mark
 /// @bigo{1}
 TDA_API
@@ -148,7 +157,7 @@ typedef struct {
 
 /// what the arena is holding
 /// @param self the arena
-/// @return the three numbers
+/// @return what it holds
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_ArenaStats tda_arena_stats(const tda_Arena *self);

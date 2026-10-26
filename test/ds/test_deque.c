@@ -12,6 +12,8 @@
 #include "support/probe.h"
 #include "support/status.h"
 
+#include "support/print.h"
+
 #include <unity.h>
 
 #include <stddef.h>
@@ -52,8 +54,7 @@ static void push_front_int(tda_Deque *d, int32_t val) {
 // int32_t deque holding 0, 1, ... len-1, filled from the back
 [[nodiscard]]
 static tda_Deque make_deque(size_t len) {
-    tda_Deque d = {};
-    TDA_DEQUE_INIT(int32_t, tda_al_default(), &d);
+    tda_Deque d = TDA_DEQUE_INIT(int32_t, tda_al_default());
 
     for (size_t i = 0; i < len; ++i) {
         push_back_int(&d, (int32_t) i);
@@ -111,14 +112,13 @@ static tda_Deque make_at(size_t cap, size_t head, size_t len) {
 /* ========== lifetime ========== */
 
 static void test_init_starts_empty_and_unallocated() {
-    tda_Deque d = {};
-    TDA_DEQUE_INIT(int32_t, tda_al_default(), &d);
+    tda_Deque d = TDA_DEQUE_INIT(int32_t, tda_al_default());
 
     TEST_ASSERT_EQUAL_size_t(0, tda_deque_len(&d));
     TEST_ASSERT_EQUAL_size_t(0, tda_deque_cap(&d));
     TEST_ASSERT_EQUAL_size_t(0, tda_deque_bytes(&d));
     TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_deque_elem_layout(&d).size);
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_deque_al(&d));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_deque_al(&d)));
 
     tda_deque_deinit(&d);
 }
@@ -420,15 +420,15 @@ static void test_copy_is_independent_of_a_wrapped_source() {
 
 static void test_copy_with_builds_on_the_given_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Deque src = make_wrapped();
 
     tda_Deque dst = {};
-    TDA_TEST_OK(tda_deque_copy_with(&src, TDA_AL(&arena), &dst));
+    TDA_TEST_OK(tda_deque_copy_with(&src, tda_arena_to_al(&arena), &dst));
 
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_deque_al(&dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_deque_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_deque_al(&dst)));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_deque_al(&src)));
     TEST_ASSERT_TRUE(tda_deque_eq(&src, &dst));
 
     // the copy outlives the source, so it owns its elems
@@ -442,14 +442,15 @@ static void test_copy_with_builds_on_the_given_allocator() {
 // the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
     tda_test_arena_leave(&arena, 0);
 
     tda_Deque src = make_deque(4);
 
-    tda_Deque dst = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_deque_copy_with(&src, TDA_AL(&arena), &dst));
-    TEST_ASSERT_NULL(dst.al_);
+    tda_Deque dst;
+    TDA_TEST_POISON(dst);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_deque_copy_with(&src, tda_arena_to_al(&arena), &dst));
+    TDA_TEST_ASSERT_POISONED(dst);
     TEST_ASSERT_EQUAL_size_t(4, tda_deque_len(&src));
 
     tda_deque_deinit(&src);
@@ -600,10 +601,10 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Deque src = {};
-    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al, &src, 1, 2, 3));
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al, &src, 1, 2, 3));
 
     tda_Deque dst = {};
-    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al, &dst, 9));
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
     tda_deque_move_assign(&dst, &src);
@@ -623,21 +624,21 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
 // from
 static void test_move_assign_across_allocators_hands_the_allocator_over() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     // a split ring must arrive in deque order, exactly as in copy
     tda_Deque src = make_wrapped();
 
     tda_Deque dst = {};
-    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, TDA_AL(&arena), &dst, 9));
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, tda_arena_to_al(&arena), &dst, 9));
 
     tda_deque_move_assign(&dst, &src);
 
     assert_elems(&dst, (int32_t[]){10, 20, 30, 40}, 4);
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_deque_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_deque_al(&dst)));
 
     TEST_ASSERT_EQUAL_size_t(0, tda_deque_len(&src));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_deque_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_deque_al(&src)));
 
     tda_deque_deinit(&src);
     tda_deque_deinit(&dst);
@@ -647,10 +648,10 @@ static void test_move_assign_across_allocators_hands_the_allocator_over() {
 // nothing is allocated, so an exhausted allocator on either side cannot stop it
 static void test_move_assign_needs_no_memory() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Deque dst = {};
-    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, TDA_AL(&arena), &dst, 9));
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, tda_arena_to_al(&arena), &dst, 9));
     tda_test_arena_leave(&arena, 0);
 
     tda_Deque src = make_deque(4);
@@ -810,8 +811,7 @@ static void test_to_spans_are_the_ring_order_split_at_the_seam() {
 }
 
 static void test_to_spans_of_a_fresh_deque_are_empty() {
-    tda_Deque d = {};
-    TDA_DEQUE_INIT(int32_t, tda_al_default(), &d);
+    tda_Deque d = TDA_DEQUE_INIT(int32_t, tda_al_default());
 
     tda_Span front, back;
     tda_deque_to_spans(&d, &front, &back);
@@ -1040,8 +1040,7 @@ static void test_a_run_of_extends_stays_amortized() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Deque d = {};
-    TDA_DEQUE_INIT(int32_t, &al, &d);
+    tda_Deque d = TDA_DEQUE_INIT(int32_t, al);
 
     for (int32_t i = 0; i < 64; ++i) {
         TDA_TEST_OK(TDA_DEQUE_EXTEND(int32_t, &d, i));
@@ -1112,7 +1111,7 @@ static void test_insert_span_reports_a_refused_growth() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Deque d = {};
-    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 2, &al, &d));
+    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 2, al, &d));
     TDA_TEST_OK(TDA_DEQUE_PUSH_BACK(int32_t, &d, 1));
     TDA_TEST_OK(TDA_DEQUE_PUSH_BACK(int32_t, &d, 2));
 
@@ -1311,7 +1310,7 @@ static void test_shrink_to_fit_of_an_empty_deque_frees_the_block() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Deque d = {};
-    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 8, &al, &d));
+    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 8, al, &d));
 
     TDA_TEST_OK(tda_deque_shrink_to_fit(&d));
 
@@ -1405,8 +1404,7 @@ static void test_a_run_of_resizes_stays_amortized() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Deque d = {};
-    TDA_DEQUE_INIT(int32_t, &al, &d);
+    tda_Deque d = TDA_DEQUE_INIT(int32_t, al);
 
     for (size_t len = 1; len <= 64; ++len) {
         TDA_TEST_OK(tda_deque_resize(&d, len));
@@ -1467,7 +1465,7 @@ static void test_copy_assign_that_cannot_grow_leaves_the_target() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Deque dst = {};
-    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al, &dst, 7, 8));
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al, &dst, 7, 8));
     tda_Deque src = make_wrapped();
 
     tda_test_probe_fail_after_next(&probe, 0);
@@ -1488,7 +1486,7 @@ static void test_init_cap_reports_a_refused_buffer() {
     tda_test_probe_fail_after_next(&probe, 0);
 
     tda_Deque d = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_DEQUE_INIT_CAP(int32_t, 4, &al, &d));
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_DEQUE_INIT_CAP(int32_t, 4, al, &d));
 
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
@@ -1499,7 +1497,7 @@ static void test_the_pushes_report_a_refused_growth() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Deque back = {};
-    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 1, &al, &back));
+    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 1, al, &back));
     TDA_TEST_OK(TDA_DEQUE_PUSH_BACK(int32_t, &back, 1));
 
     tda_test_probe_fail_after_next(&probe, 0);
@@ -1520,7 +1518,7 @@ static void test_insert_reports_a_refused_growth() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Deque d = {};
-    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 2, &al, &d));
+    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 2, al, &d));
     TDA_TEST_OK(TDA_DEQUE_PUSH_BACK(int32_t, &d, 1));
     TDA_TEST_OK(TDA_DEQUE_PUSH_BACK(int32_t, &d, 2));
 
@@ -1538,8 +1536,7 @@ static void test_reserve_reports_a_refused_growth() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Deque d = {};
-    TDA_DEQUE_INIT(int32_t, &al, &d);
+    tda_Deque d = TDA_DEQUE_INIT(int32_t, al);
 
     tda_test_probe_fail_after_next(&probe, 0);
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_deque_reserve(&d, 8));
@@ -1557,7 +1554,7 @@ static void test_the_ends_do_not_allocate_while_the_capacity_holds() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Deque d = {};
-    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 4, &al, &d));
+    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 4, al, &d));
 
     const size_t before = tda_test_probe_requests(&probe);
 
@@ -1682,7 +1679,7 @@ static void assert_prints(const char *expected, const tda_Deque *d) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    tda_deque_fprint(d, stream, tda_fprint_i32);
+    tda_deque_fprint(d, stream, tda_fprint_i32, nullptr);
     rewind(stream);
 
     char buf[128];
@@ -1697,7 +1694,7 @@ static void test_fprint_writes_the_elems() {
     tda_Deque d = {};
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, tda_al_default(), &d, 5, 3, 1));
 
-    assert_prints("[5, 3, 1]\n", &d);
+    assert_prints("[5, 3, 1]", &d);
 
     tda_deque_deinit(&d);
 }
@@ -1706,7 +1703,7 @@ static void test_fprint_of_a_single_elem_has_no_separator() {
     tda_Deque d = {};
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, tda_al_default(), &d, 7));
 
-    assert_prints("[7]\n", &d);
+    assert_prints("[7]", &d);
 
     tda_deque_deinit(&d);
 }
@@ -1714,7 +1711,7 @@ static void test_fprint_of_a_single_elem_has_no_separator() {
 static void test_fprint_of_an_empty_deque() {
     tda_Deque d = make_deque(0);
 
-    assert_prints("[]\n", &d);
+    assert_prints("[]", &d);
 
     tda_deque_deinit(&d);
 }
@@ -1723,7 +1720,7 @@ static void test_fprint_of_an_empty_deque() {
 static void test_print_writes_to_stdout() {
     tda_Deque d = make_deque(3);
 
-    tda_deque_print(&d, tda_fprint_i32);
+    tda_deque_print(&d, tda_fprint_i32, nullptr);
 
     tda_deque_deinit(&d);
 }
@@ -1736,13 +1733,13 @@ static void test_swap_across_allocators_carries_each_allocator() {
     tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
     tda_Deque a = {}, b = {};
-    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al_a, &a, 1, 2));
-    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al_b, &b, 3, 4, 5));
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al_a, &a, 1, 2));
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al_b, &b, 3, 4, 5));
 
     tda_deque_swap(&a, &b);
 
-    TEST_ASSERT_EQUAL_PTR(&al_b, tda_deque_al(&a));
-    TEST_ASSERT_EQUAL_PTR(&al_a, tda_deque_al(&b));
+    TEST_ASSERT_TRUE(tda_al_eq(al_b, tda_deque_al(&a)));
+    TEST_ASSERT_TRUE(tda_al_eq(al_a, tda_deque_al(&b)));
     TEST_ASSERT_EQUAL_size_t(3, tda_deque_len(&a));
 
     tda_deque_deinit(&a);
@@ -1757,7 +1754,7 @@ static void test_deinit_twice_is_noop() {
     TDA_TEST_OK(TDA_DEQUE_OF(int32_t, tda_al_default(), &x, 1, 2));
 
     tda_deque_deinit(&x);
-    TEST_ASSERT_NULL(x.al_);
+    TEST_ASSERT_NULL(x.al_.vt);
 
     tda_deque_deinit(&x);
 }
@@ -1769,8 +1766,7 @@ static void test_insert_takes_an_unaligned_val() {
     constexpr int32_t val = 42;
     memcpy(raw + 1, &val, sizeof(val));
 
-    tda_Deque x;
-    TDA_DEQUE_INIT(int32_t, tda_al_default(), &x);
+    tda_Deque x = TDA_DEQUE_INIT(int32_t, tda_al_default());
     TDA_TEST_OK(tda_deque_insert(&x, 0, raw + 1));
 
     TEST_ASSERT_EQUAL_INT32(42, *TDA_DEQUE_GET_AS(int32_t, &x, 0));
@@ -1790,7 +1786,7 @@ static void test_init_len_and_init_cap_report_size_overflow() {
     constexpr int32_t src[1] = {1};
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_deque_from_data(src, SIZE_MAX, TWO_BYTES, tda_al_default(), &d));
 
-    TEST_ASSERT_NULL(d.al_);
+    TEST_ASSERT_NULL(d.al_.vt);
 }
 
 // a growth past size_t is refused, and the deque is left as it was
@@ -1820,7 +1816,7 @@ static void test_shrink_to_fit_reports_a_refused_block() {
     tda_Al al = tda_test_probe_bare(&probe);
 
     tda_Deque d = {};
-    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 8, &al, &d));
+    TDA_TEST_OK(TDA_DEQUE_INIT_CAP(int32_t, 8, al, &d));
     TDA_TEST_OK(TDA_DEQUE_PUSH_BACK(int32_t, &d, 1));
     TDA_TEST_OK(TDA_DEQUE_PUSH_BACK(int32_t, &d, 2));
 
@@ -1843,7 +1839,7 @@ static void test_resize_reports_a_refused_growth() {
     tda_Al al = tda_test_probe_bare(&probe);
 
     tda_Deque d = {};
-    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, &al, &d, 1, 2));
+    TDA_TEST_OK(TDA_DEQUE_OF(int32_t, al, &d, 1, 2));
 
     tda_test_probe_fail_after_next(&probe, 0);
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_deque_resize(&d, 10));
@@ -1854,6 +1850,33 @@ static void test_resize_reports_a_refused_growth() {
     probe.fail_after = SIZE_MAX;
     tda_deque_deinit(&d);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+
+/* ========== print errors ========== */
+
+// the ctx reaches every call, every elem is still asked after a failure, and the first
+// failure is what comes back; print adds only its newline
+static void test_fprint_hands_on_the_ctx_and_the_first_failure() {
+    tda_Deque d = make_deque(3);
+    tda_TestPrint pr = {.fail_from = 2};
+    FILE *stream = tmpfile();
+    TEST_ASSERT_NOT_NULL(stream);
+
+    TEST_ASSERT_EQUAL_INT(-2, tda_deque_fprint(&d, stream, tda_test_fprint_i32_failing, &pr));
+    TEST_ASSERT_EQUAL_size_t(3, pr.calls);
+    fclose(stream);
+
+    pr = (tda_TestPrint){.fail_from = 0};
+    TEST_ASSERT_EQUAL_INT(0, tda_deque_print(&d, tda_test_fprint_i32_failing, &pr));
+    pr = (tda_TestPrint){.fail_from = 2};
+    TEST_ASSERT_EQUAL_INT(-2, tda_deque_print(&d, tda_test_fprint_i32_failing, &pr));
+
+    FILE *ro = tda_test_unwritable_stream();
+    TEST_ASSERT_LESS_THAN_INT(0, tda_deque_fprint(&d, ro, tda_fprint_i32, nullptr));
+    fclose(ro);
+
+    tda_deque_deinit(&d);
 }
 
 int main() {
@@ -1984,6 +2007,8 @@ int main() {
     RUN_TEST(test_the_growths_report_size_overflow_and_change_nothing);
     RUN_TEST(test_shrink_to_fit_reports_a_refused_block);
     RUN_TEST(test_resize_reports_a_refused_growth);
+
+    RUN_TEST(test_fprint_hands_on_the_ctx_and_the_first_failure);
 
     return UNITY_END();
 }

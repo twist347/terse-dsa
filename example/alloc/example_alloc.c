@@ -9,15 +9,15 @@
 
 /// [custom]
 // a table must fill in alloc and dealloc; alloc_zeroed, resize and remap may be null, and
-// the wrappers then make do with the other two. ctx is the implementation's state,
-// passed to every callback, and every callback gets the layout the block was made with
+// the wrappers then make do with the other two. ctx is the allocator's state, passed to
+// every hook, and every hook gets the layout the block was made with
 typedef struct {
-    tda_Al *parent;
+    tda_Al parent;
     size_t live;
-} CountingCtx;
+} Counting;
 
 static void *counting_alloc(void *ctx, tda_Layout layout) {
-    CountingCtx *self = ctx;
+    Counting *self = ctx;
 
     void *ptr = tda_alloc(self->parent, layout);
     if (ptr) {
@@ -28,16 +28,26 @@ static void *counting_alloc(void *ctx, tda_Layout layout) {
 }
 
 static void counting_dealloc(void *ctx, void *ptr, tda_Layout layout) {
-    CountingCtx *self = ctx;
+    Counting *self = ctx;
 
     tda_dealloc(self->parent, ptr, layout);
     self->live -= layout.size;
+}
+
+// one table for every Counting; a view pairs it with one of them
+static const tda_AlVtable COUNTING_VTABLE = {
+    .alloc = counting_alloc,
+    .dealloc = counting_dealloc,
+};
+
+static tda_Al counting_al(Counting *self) {
+    return (tda_Al){.ctx = self, .vt = &COUNTING_VTABLE};
 }
 /// [custom]
 
 int main() {
     /// [use]
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     // the macros take the layout from T, sizeof and alignof, and check the multiplication,
     // so a count that would overflow gives null instead of a wrapped size
@@ -55,22 +65,18 @@ int main() {
     /// [wrap]
     // an allocator built over another borrows it: the default one outlives this and
     // nothing here owns it
-    CountingCtx ctx = {.parent = tda_al_default(), .live = 0};
-    tda_Al counting = {
-        .ctx = &ctx,
-        .alloc = counting_alloc,
-        .dealloc = counting_dealloc,
-    };
+    Counting state = {.parent = tda_al_default(), .live = 0};
+    tda_Al counting = counting_al(&state);
 
     // alloc_zeroed is null in that table, so the wrapper does alloc plus memset
-    int32_t *zeros = TDA_ALLOC_ZEROED(int32_t, &counting, 4);
+    int32_t *zeros = TDA_ALLOC_ZEROED(int32_t, counting, 4);
     if (!zeros) {
         return 1;
     }
-    printf("%" PRId32 ", %zu bytes live\n", zeros[0], ctx.live); // 0, 16 bytes live
+    printf("%" PRId32 ", %zu bytes live\n", zeros[0], state.live); // 0, 16 bytes live
 
-    TDA_DEALLOC(int32_t, &counting, zeros, 4);
-    printf("%zu bytes live\n", ctx.live); // 0 bytes live
+    TDA_DEALLOC(int32_t, counting, zeros, 4);
+    printf("%zu bytes live\n", state.live); // 0 bytes live
     /// [wrap]
 
     return 0;

@@ -37,9 +37,9 @@
 /// @snippet ds/example_stack.c into
 /// @{
 
-/// Owning last in first out stack. A value the caller holds, like tda_Vec, whose rules
-/// it follows: an init or a from_ fills it in, tda_stack_deinit releases it, `= {}` is
-/// inert, and a copy of the struct is a second owner of the same block.
+/// Owning last in first out stack. A value the caller holds, like tda_Vec, whose rules it
+/// follows: an init returns it, a from_ fills it in, tda_stack_deinit releases it, `= {}`
+/// is inert, and a copy of the struct is a second owner of the same block.
 typedef struct tda_Stack {
     tda_Vec vec_; ///< holds the elems, bottom first
 } tda_Stack;
@@ -50,10 +50,10 @@ typedef struct tda_Stack {
 /// an empty stack that owns no block yet; allocates nothing, so it cannot fail
 /// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
-/// @param[out] out the new stack
+/// @return the new stack
 /// @bigo{1}
-TDA_API
-void tda_stack_init(tda_Layout elem, tda_Al *al, tda_Stack *out);
+[[nodiscard]] TDA_API
+tda_Stack tda_stack_init(tda_Layout elem, tda_Al al);
 
 /// an empty stack with room for 'cap' elems before the first growth
 /// @param cap how many elems to make room for
@@ -65,7 +65,7 @@ void tda_stack_init(tda_Layout elem, tda_Al *al, tda_Stack *out);
 ///         cap * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_stack_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Stack *out);
+tda_Status tda_stack_init_cap(size_t cap, tda_Layout elem, tda_Al al, tda_Stack *out);
 
 /// a stack holding a copy of 'len' elems read from 'data', pushed in order
 /// @param data the elems to copy in; 'data[0]' is the bottom and the last one the top.
@@ -79,7 +79,7 @@ tda_Status tda_stack_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Stack
 ///         len * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_stack_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Stack *out);
+tda_Status tda_stack_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_Stack *out);
 
 /// a stack holding a copy of the elems 's' views
 /// @param s the view to copy; its last elem is the top; the elem layout is the span's
@@ -89,7 +89,7 @@ tda_Status tda_stack_from_data(const void *data, size_t len, tda_Layout elem, td
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_stack_from_span(tda_Span s, tda_Al *al, tda_Stack *out);
+tda_Status tda_stack_from_span(tda_Span s, tda_Al al, tda_Stack *out);
 
 /// releases what the stack holds and leaves it inert, `= {}`
 /// @param self a stack, or an inert one, for which this is a no-op
@@ -99,11 +99,11 @@ void tda_stack_deinit(tda_Stack *self);
 
 /// hands over the vec that holds the elems, leaving the stack inert
 /// @param self the stack; inert afterwards
-/// @param[out] out the vec, elems bottom to top, with the same capacity and allocator;
-///                 nothing is copied, so this cannot fail
+/// @return the vec, elems bottom to top, with the same capacity and allocator;
+///         nothing is copied, so this cannot fail
 /// @bigo{1}
-TDA_API
-void tda_stack_into_vec(tda_Stack *self, tda_Vec *out);
+[[nodiscard]] TDA_API
+tda_Vec tda_stack_into_vec(tda_Stack *self);
 
 /// @}
 
@@ -127,7 +127,7 @@ tda_Status tda_stack_copy(const tda_Stack *self, tda_Stack *out);
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al *al, tda_Stack *out);
+tda_Status tda_stack_copy_with(const tda_Stack *self, tda_Al al, tda_Stack *out);
 
 /// overwrites the elems of 'self' with those of 'other', growing the block if needed
 /// @param[in,out] self must have the same elem layout; keeps its allocator
@@ -181,7 +181,7 @@ bool tda_stack_eq_by(const tda_Stack *a, const tda_Stack *b, tda_Eq eq, void *ct
 [[nodiscard]]
 static inline size_t tda_stack_len(const tda_Stack *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_len(&self->vec_);
 }
@@ -193,7 +193,7 @@ static inline size_t tda_stack_len(const tda_Stack *self) {
 [[nodiscard]]
 static inline size_t tda_stack_cap(const tda_Stack *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_cap(&self->vec_);
 }
@@ -205,19 +205,19 @@ static inline size_t tda_stack_cap(const tda_Stack *self) {
 [[nodiscard]]
 static inline tda_Layout tda_stack_elem_layout(const tda_Stack *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_elem_layout(&self->vec_);
 }
 
 /// the allocator the stack was built with
 /// @param self the stack
-/// @return the allocator, borrowed
+/// @return the view it was built with
 /// @bigo{1}
 [[nodiscard]]
-static inline tda_Al *tda_stack_al(const tda_Stack *self) {
+static inline tda_Al tda_stack_al(const tda_Stack *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_al(&self->vec_);
 }
@@ -234,7 +234,7 @@ static inline tda_Al *tda_stack_al(const tda_Stack *self) {
 [[nodiscard]]
 static inline const void *tda_stack_top(const tda_Stack *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);
 
     return tda_vec_back(&self->vec_);
@@ -245,7 +245,7 @@ static inline const void *tda_stack_top(const tda_Stack *self) {
 [[nodiscard]]
 static inline void *tda_stack_top_mut(tda_Stack *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);
 
     return tda_vec_back_mut(&self->vec_);
@@ -270,7 +270,7 @@ tda_Status tda_stack_push(tda_Stack *self, const void *val);
 /// @bigo{1}
 static inline void tda_stack_pop(tda_Stack *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);
 
     tda_vec_pop(&self->vec_);
@@ -288,7 +288,7 @@ void tda_stack_pop_to(tda_Stack *self, void *out);
 /// @bigo{1}
 static inline void tda_stack_clear(tda_Stack *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     tda_vec_clear(&self->vec_);
 }
@@ -331,7 +331,7 @@ void tda_stack_swap(tda_Stack *self, tda_Stack *other);
 [[nodiscard]]
 static inline tda_Span tda_stack_to_span(const tda_Stack *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_to_span(&self->vec_);
 }
@@ -341,20 +341,24 @@ static inline tda_Span tda_stack_to_span(const tda_Stack *self) {
 /// @name print
 /// @{
 
-/// writes the elems bottom to top as [a, b, c] and a newline
+/// writes the elems bottom to top as [a, b, c], with no newline
 /// @param self the stack
 /// @param stream where to write
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_stack_fprint(const tda_Stack *self, FILE *stream, tda_FPrint fprint);
+int tda_stack_fprint(const tda_Stack *self, FILE *stream, tda_FPrint fprint, void *ctx);
 
-/// tda_stack_fprint to stdout
+/// tda_stack_fprint to stdout, and a newline
 /// @param self the stack
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_stack_print(const tda_Stack *self, tda_FPrint fprint);
+int tda_stack_print(const tda_Stack *self, tda_FPrint fprint, void *ctx);
 
 /// @}
 
@@ -383,10 +387,9 @@ static inline tda_Stack *tda_stack_typed_mut_(tda_Stack *self, [[maybe_unused]] 
 /// tda_stack_init with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param al the allocator
-/// @param[out] out where the new stack is written
 /// @bigo{1}
-#define TDA_STACK_INIT(T, al, out) \
-    tda_stack_init(TDA_LAYOUT_OF(T), (al), (out))
+#define TDA_STACK_INIT(T, al) \
+    tda_stack_init(TDA_LAYOUT_OF(T), (al))
 
 /// tda_stack_init_cap with TDA_LAYOUT_OF(T)
 /// @param T the elem type
@@ -432,12 +435,12 @@ static inline tda_Stack *tda_stack_typed_mut_(tda_Stack *self, [[maybe_unused]] 
     ((T *) tda_stack_top_mut(TDA_STACK_TYPED_(T, self)))
 
 /// tda_stack_push from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the stack
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_STACK_PUSH(T, self, val) \
-    tda_stack_push(TDA_STACK_TYPED_(T, self), &(T){ (val) })
+    tda_stack_push(TDA_STACK_TYPED_(T, self), &(T[1]){ (val) }[0])
 
 /// tda_stack_pop_to with 'out' typechecked as T *
 /// @param T the elem type

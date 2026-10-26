@@ -13,19 +13,17 @@
 
 // one vec on the default allocator, one in an arena
 static int show_allocators() {
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_Arena arena;
-    if (TDA_STATUS_IS_ERR(tda_arena_init(al, 1024, &arena))) {
+    if (TDA_STATUS_IS_ERR(tda_arena_init_cap(1024, al, &arena))) {
         return 1;
     }
 
     /// [allocators]
     // a vec carries its allocator, so two on different allocators swap in O(1) and each
     // block still goes back to the allocator that made it
-    tda_Vec a, b;
-    TDA_VEC_INIT(int32_t, al, &a);
-    TDA_VEC_INIT(int32_t, TDA_AL(&arena), &b);
+    tda_Vec a = TDA_VEC_INIT(int32_t, al), b = TDA_VEC_INIT(int32_t, tda_arena_to_al(&arena));
     int rc = 1;
 
     if (TDA_STATUS_IS_ERR(TDA_VEC_EXTEND(int32_t, &a, 1, 2, 3))) {
@@ -36,8 +34,8 @@ static int show_allocators() {
     }
 
     tda_vec_swap(&a, &b);
-    tda_vec_print(&a, tda_fprint_i32); // [7, 8]
-    tda_vec_print(&b, tda_fprint_i32); // [1, 2, 3]
+    tda_vec_print(&a, tda_fprint_i32, nullptr); // [7, 8]
+    tda_vec_print(&b, tda_fprint_i32, nullptr); // [1, 2, 3]
 
     rc = 0;
 out:
@@ -54,8 +52,7 @@ static int show_reserved() {
     /// [reserved]
     // a loop that knows its size reserves once; the pushes inside then cannot fail, so
     // they need no status, and add_one hands out a slot to fill in place
-    tda_Vec v;
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
     if (TDA_STATUS_IS_ERR(tda_vec_reserve(&v, 4))) {
         return 1;
     }
@@ -65,7 +62,7 @@ static int show_reserved() {
     }
     *TDA_VEC_ADD_ONE_ASSUME_CAP_AS(int32_t, &v) = 16;
 
-    tda_vec_print(&v, tda_fprint_i32); // [1, 4, 9, 16]
+    tda_vec_print(&v, tda_fprint_i32, nullptr); // [1, 4, 9, 16]
     tda_vec_deinit(&v);
     /// [reserved]
 
@@ -80,7 +77,7 @@ int main() {
     /// [build]
     // the vec is a value the caller holds; one built with elems comes back through
     // 'out', and the status must be checked
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_Vec v;
     if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, al, &v, 5, 3, 1))) {
@@ -118,29 +115,29 @@ int main() {
     if (TDA_STATUS_IS_ERR(TDA_VEC_EXTEND(int32_t, &v, 4, 2))) {
         goto out;
     }
-    tda_vec_print(&v, tda_fprint_i32); // [5, 3, 1, 4, 2]
+    tda_vec_print(&v, tda_fprint_i32, nullptr); // [5, 3, 1, 4, 2]
 
     if (TDA_STATUS_IS_ERR(TDA_VEC_INSERT_SPAN(int32_t, &v, 1, 9, 9))) {
         goto out;
     }
-    tda_vec_print(&v, tda_fprint_i32); // [5, 9, 9, 3, 1, 4, 2]
+    tda_vec_print(&v, tda_fprint_i32, nullptr); // [5, 9, 9, 3, 1, 4, 2]
 
     // and the way back out, which allocates nothing and so cannot fail
     tda_vec_remove_range(&v, 1, 2);
-    tda_vec_print(&v, tda_fprint_i32); // [5, 3, 1, 4, 2]
+    tda_vec_print(&v, tda_fprint_i32, nullptr); // [5, 3, 1, 4, 2]
     /// [bulk]
 
     /// [algo]
     // the bridge to algo works both ways. Out: a writable view; algo rearranges the elems
     // in place, since a vec has no order to protect
     tda_span_sort(tda_vec_to_span_mut(&v), tda_cmp_i32, nullptr);
-    tda_vec_print(&v, tda_fprint_i32); // [1, 2, 3, 4, 5]
+    tda_vec_print(&v, tda_fprint_i32, nullptr); // [1, 2, 3, 4, 5]
 
     // back: an algorithm that drops elems packs the kept ones to the front and returns
     // the count, and the vec adopts that length
     const size_t kept = tda_span_remove(tda_vec_to_span_mut(&v), &(int32_t){3}, tda_eq_i32, nullptr);
     tda_vec_truncate(&v, kept);
-    tda_vec_print(&v, tda_fprint_i32); // [1, 2, 4, 5]
+    tda_vec_print(&v, tda_fprint_i32, nullptr); // [1, 2, 4, 5]
 
     printf(
         "%" PRId32 " .. %" PRId32 "\n",

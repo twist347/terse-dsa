@@ -21,7 +21,7 @@ static bool eq_abs_i32(const void *lhs, const void *rhs, void *) {
 int main() {
     /// [build]
     // the arr is filled in through 'out', and the status must be checked
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_Arr a;
     if (TDA_STATUS_IS_ERR(TDA_ARR_OF(int32_t, al, &a, 5, 3, 1, 4, 2))) {
@@ -76,30 +76,30 @@ int main() {
     if (TDA_STATUS_IS_ERR(tda_arr_copy(&a, &copy))) {
         goto out;
     }
-    tda_arr_print(&copy, tda_fprint_i32); // [0, 2, 3, 4, 5]
+    tda_arr_print(&copy, tda_fprint_i32, nullptr); // [0, 2, 3, 4, 5]
 
     // the other: an existing arr is overwritten and its block resized to fit the source,
     // here from two elems to five
     if (TDA_STATUS_IS_ERR(TDA_ARR_INIT_LEN(int32_t, 2, al, &shorter))) {
         goto out;
     }
-    tda_arr_print(&shorter, tda_fprint_i32); // [0, 0] — init_len zeroes the block
+    tda_arr_print(&shorter, tda_fprint_i32, nullptr); // [0, 0] — init_len zeroes the block
 
     if (TDA_STATUS_IS_ERR(tda_arr_copy_assign(&shorter, &a))) {
         goto out;
     }
-    tda_arr_print(&shorter, tda_fprint_i32); // [0, 2, 3, 4, 5]
+    tda_arr_print(&shorter, tda_fprint_i32, nullptr); // [0, 2, 3, 4, 5]
 
     // a copy uses its source's allocator; copy_with takes another one. The arena bumps a
     // pointer and frees everything at once, so what it holds must not outlive it
-    if (TDA_STATUS_IS_ERR(tda_arena_init(al, 1024, &arena))) {
+    if (TDA_STATUS_IS_ERR(tda_arena_init_cap(1024, al, &arena))) {
         goto out;
     }
 
-    if (TDA_STATUS_IS_ERR(tda_arr_copy_with(&a, TDA_AL(&arena), &in_arena))) {
+    if (TDA_STATUS_IS_ERR(tda_arr_copy_with(&a, tda_arena_to_al(&arena), &in_arena))) {
         goto out;
     }
-    tda_arr_print(&in_arena, tda_fprint_i32); // [0, 2, 3, 4, 5]
+    tda_arr_print(&in_arena, tda_fprint_i32, nullptr); // [0, 2, 3, 4, 5]
 
     // a move hands the elems over with the allocator they came from and empties the
     // source; nothing is copied, so it cannot fail, whatever the two allocators are
@@ -110,8 +110,8 @@ int main() {
     // 'shorter' holds the arena's block, after it 'a' does. Each block goes along with its
     // allocator, nothing is copied, and there is nothing to report
     tda_arr_swap(&a, &shorter);
-    tda_arr_print(&a, tda_fprint_i32);       // [0, 2, 3, 4, 5], in the arena
-    tda_arr_print(&shorter, tda_fprint_i32); // [0, 2, 3, 4, 5], on the default allocator
+    tda_arr_print(&a, tda_fprint_i32, nullptr);       // [0, 2, 3, 4, 5], in the arena
+    tda_arr_print(&shorter, tda_fprint_i32, nullptr); // [0, 2, 3, 4, 5], on the default allocator
 
     rc = 0;
 out:

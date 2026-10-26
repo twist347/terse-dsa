@@ -23,8 +23,9 @@ static bool arena_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size);
 
 static void arena_dealloc(void *ctx, void *ptr, tda_Layout layout);
 
-/// fills in an arena over 'data', its interface pointing back at it
-static void fill(tda_Arena *obj, tda_Al *parent, void *data, size_t cap);
+/// an arena over 'data'
+[[nodiscard]]
+static tda_Arena fill(tda_Al parent, void *data, size_t cap);
 
 /// whether the block at 'ptr', handed out as 'size' bytes, is the last one, with only
 /// the free tail after it
@@ -48,18 +49,19 @@ static bool block_end(const tda_Arena *self, size_t start, size_t size, size_t *
 [[nodiscard]]
 static tda_Layout block_layout(size_t cap);
 
-// the ctx check is how a moved or copied allocator gets caught, so it stays under
-// TDA_HARDENED
-#define ASSERT_ARENA(a)                     \
-    (assert(a),                             \
-     assert((a)->al_.alloc == arena_alloc), \
-     TDA_EXPECT((a)->al_.ctx == (a)))
+// the arena is live while it has a block: deinit and '= {}' leave none
+#define ASSERT_ARENA(a)                   \
+    (assert(a),                           \
+     assert((a)->data_),                  \
+     assert((a)->cap_ > 0),               \
+     assert((a)->floor_ <= (a)->offset_), \
+     assert((a)->offset_ <= (a)->cap_))
 
 /* ========== lifetime ========== */
 
-tda_Status tda_arena_init(tda_Al *parent, size_t cap, tda_Arena *out) {
-    assert(parent);
+tda_Status tda_arena_init_cap(size_t cap, tda_Al parent, tda_Arena *out) {
     assert(cap > 0);
+    assert(parent.vt);
     assert(out);
 
     // each block is aligned by its own address, so the whole asks for none: any parent
@@ -69,35 +71,50 @@ tda_Status tda_arena_init(tda_Al *parent, size_t cap, tda_Arena *out) {
         return TDA_STATUS_ERR_NO_MEM;
     }
 
-    fill(out, parent, data, cap);
+    *out = fill(parent, data, cap);
 
     return TDA_STATUS_OK;
 }
 
-void tda_arena_init_buf(void *buf, size_t cap, tda_Arena *out) {
+tda_Arena tda_arena_init_buf(void *buf, size_t cap) {
     assert(buf);
     assert(cap > 0);
-    assert(out);
 
-    fill(out, nullptr, buf, cap);
+    return fill((tda_Al){}, buf, cap);
 }
 
 void tda_arena_deinit(tda_Arena *self) {
     assert(self);
 
-    // the inert state, never filled in or already released
-    if (!self->al_.alloc) {
+    // the inert state, never made or already released
+    if (!self->data_) {
         return;
     }
 
     ASSERT_ARENA(self);
 
     // init_buf: the block is the caller's
-    if (self->parent_) {
+    if (self->parent_.vt) {
         tda_dealloc(self->parent_, self->data_, block_layout(self->cap_));
     }
 
     *self = (tda_Arena){};
+}
+
+/* ========== view ========== */
+
+tda_Al tda_arena_to_al(tda_Arena *self) {
+    ASSERT_ARENA(self);
+
+    static const tda_AlVtable vtable = {
+        .alloc = arena_alloc,
+        .alloc_zeroed = nullptr,
+        .resize = arena_resize,
+        .remap = nullptr,
+        .dealloc = arena_dealloc,
+    };
+
+    return (tda_Al){.ctx = self, .vt = &vtable};
 }
 
 /* ========== mods ========== */
@@ -111,10 +128,8 @@ void tda_arena_reset(tda_Arena *self) {
 
 tda_ArenaMark tda_arena_mark(tda_Arena *self) {
     ASSERT_ARENA(self);
-    assert(self->floor_ <= self->offset_);
 
     const tda_ArenaMark mark = {
-        .arena_ = self,
         .offset_ = self->offset_,
         .floor_ = self->floor_,
     };
@@ -125,7 +140,6 @@ tda_ArenaMark tda_arena_mark(tda_Arena *self) {
 
 void tda_arena_rewind(tda_Arena *self, tda_ArenaMark mark) {
     ASSERT_ARENA(self);
-    TDA_EXPECT(mark.arena_ == self);
     // only a rewind or a reset moves the offset below a live mark: a block from under
     // the floor never shrinks it, and one from above stays above. So a mark past the
     // offset has already been rewound past
@@ -197,21 +211,11 @@ static bool arena_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) 
     return new_size <= old.size;
 }
 
-static void fill(tda_Arena *obj, tda_Al *parent, void *data, size_t cap) {
+static tda_Arena fill(tda_Al parent, void *data, size_t cap) {
     assert(data);
     assert(cap > 0);
 
-    *obj = (tda_Arena){
-        .al_ = {
-            .ctx = obj,
-            .alloc = arena_alloc,
-            .resize = arena_resize,
-            .dealloc = arena_dealloc,
-        },
-        .parent_ = parent,
-        .data_ = data,
-        .cap_ = cap,
-    };
+    return (tda_Arena){.parent_ = parent, .data_ = data, .cap_ = cap};
 }
 
 static bool is_last_block(const tda_Arena *self, const void *ptr, size_t size) {

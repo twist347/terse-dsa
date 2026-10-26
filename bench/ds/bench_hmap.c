@@ -42,7 +42,7 @@ static int32_t *shuffled_keys(int32_t first, uint64_t seed) {
 
 /// a map on 'al' holding every key in 'keys'; 'cap' as in tda_hmap_init_cap, 0 for none
 [[nodiscard]]
-static tda_Status fill_map(tda_Al *al, size_t cap, const int32_t *keys, tda_HMap *out) {
+static tda_Status fill_map(tda_Al al, size_t cap, const int32_t *keys, tda_HMap *out) {
     tda_HMap m;
     tda_Status st = TDA_HMAP_INIT_CAP(
         int32_t,
@@ -71,31 +71,31 @@ static tda_Status fill_map(tda_Al *al, size_t cap, const int32_t *keys, tda_HMap
     return TDA_STATUS_OK;
 }
 
-#define BENCH_INSERT(NAME, ON_ARENA, RESERVE)                                   \
-    UBENCH_EX(insert, NAME) {                                                   \
-        int32_t *keys = shuffled_keys(0, INSERT_SEED);                          \
-        if (!keys) {                                                            \
-            return;                                                             \
-        }                                                                       \
-                                                                                \
-        UBENCH_DO_BENCHMARK() {                                                 \
-            tda_Arena arena = {};                                               \
-            tda_Al *al = tda_al_default();                                      \
-            if (ON_ARENA) {                                                     \
-                if (TDA_STATUS_IS_ERR(tda_arena_init(al, ARENA_CAP, &arena))) { \
-                    break;                                                      \
-                }                                                               \
-                al = TDA_AL(&arena);                                            \
-            }                                                                   \
-            tda_HMap m;                                                         \
-            if (TDA_STATUS_IS_OK(fill_map(al, RESERVE, keys, &m))) {            \
-                UBENCH_DO_NOTHING(&m);                                          \
-                tda_hmap_deinit(&m);                                            \
-            }                                                                   \
-            tda_arena_deinit(&arena);                                           \
-        }                                                                       \
-                                                                                \
-        free(keys);                                                             \
+#define BENCH_INSERT(NAME, ON_ARENA, RESERVE)                                       \
+    UBENCH_EX(insert, NAME) {                                                       \
+        int32_t *keys = shuffled_keys(0, INSERT_SEED);                              \
+        if (!keys) {                                                                \
+            return;                                                                 \
+        }                                                                           \
+                                                                                    \
+        UBENCH_DO_BENCHMARK() {                                                     \
+            tda_Arena arena = {};                                                   \
+            tda_Al al = tda_al_default();                                           \
+            if (ON_ARENA) {                                                         \
+                if (TDA_STATUS_IS_ERR(tda_arena_init_cap(ARENA_CAP, al, &arena))) { \
+                    break;                                                          \
+                }                                                                   \
+                al = tda_arena_to_al(&arena);                                       \
+            }                                                                       \
+            tda_HMap m;                                                             \
+            if (TDA_STATUS_IS_OK(fill_map(al, RESERVE, keys, &m))) {                \
+                UBENCH_DO_NOTHING(&m);                                              \
+                tda_hmap_deinit(&m);                                                \
+            }                                                                       \
+            tda_arena_deinit(&arena);                                               \
+        }                                                                           \
+                                                                                    \
+        free(keys);                                                                 \
     }
 
 BENCH_INSERT(default_grows, false, 0)

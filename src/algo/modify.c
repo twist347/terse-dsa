@@ -87,13 +87,13 @@ void tda_span_replace(tda_SpanMut s, const void *key, const void *val, tda_Eq eq
 
     KeyMatch match = {.key = key, .eq = eq, .ctx = ctx};
 
-    tda_span_replace_if(s, key_matches, &match, val);
+    tda_span_replace_if(s, val, key_matches, &match);
 }
 
-void tda_span_replace_if(tda_SpanMut s, tda_Pred pred, void *ctx, const void *val) {
+void tda_span_replace_if(tda_SpanMut s, const void *val, tda_Pred pred, void *ctx) {
     TDA_SPAN_ASSERT(s);
-    assert(pred);
     assert(val);
+    assert(pred);
 
     const tda_Span view = tda_span_mut_to_span(s);
 

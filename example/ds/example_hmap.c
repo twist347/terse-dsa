@@ -21,10 +21,9 @@ int main() {
     /// [build]
     // the hasher and the equality are fixed here for every entry. They must agree: keys
     // equal under 'eq' must hash alike
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
-    tda_HMap m;
-    TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &m);
+    tda_HMap m = TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, al);
 
     int rc = 1;
     bool is_new;

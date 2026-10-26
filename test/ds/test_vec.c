@@ -9,6 +9,8 @@
 #include "support/probe.h"
 #include "support/status.h"
 
+#include "support/print.h"
+
 #include <unity.h>
 
 #include <stddef.h>
@@ -55,13 +57,12 @@ static void assert_elems(const tda_Vec *v, const int32_t *want, size_t n) {
 /* ========== lifetime ========== */
 
 static void test_init_starts_empty_and_unallocated() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
 
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(&v));
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_cap(&v));
     TEST_ASSERT_EQUAL_size_t(sizeof(int32_t), tda_vec_elem_layout(&v).size);
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_vec_al(&v));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_vec_al(&v)));
     TEST_ASSERT_NULL(tda_vec_data(&v));
 
     tda_vec_deinit(&v);
@@ -171,7 +172,7 @@ static void test_deinit_twice_is_noop() {
 
     tda_vec_deinit(&v);
     TEST_ASSERT_NULL(v.data_);
-    TEST_ASSERT_NULL(v.al_);
+    TEST_ASSERT_NULL(v.al_.vt);
 
     tda_vec_deinit(&v);
 }
@@ -181,11 +182,10 @@ static void test_init_allocates_nothing() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Vec v;
-    TDA_VEC_INIT(int32_t, &al, &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, al);
 
     TEST_ASSERT_EQUAL_size_t(0, tda_test_probe_requests(&probe));
-    TEST_ASSERT_EQUAL_PTR(&al, tda_vec_al(&v));
+    TEST_ASSERT_TRUE(tda_al_eq(al, tda_vec_al(&v)));
 
     tda_vec_deinit(&v);
     TEST_ASSERT_EQUAL_size_t(0, tda_test_probe_requests(&probe));
@@ -197,7 +197,7 @@ static void test_a_vec_lives_inside_a_struct() {
         int32_t id;
         tda_Vec kids;
     } node = {.id = 7};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &node.kids);
+    node.kids = TDA_VEC_INIT(int32_t, tda_al_default());
 
     TDA_TEST_OK(TDA_VEC_PUSH(int32_t, &node.kids, 1));
     TDA_TEST_OK(TDA_VEC_PUSH(int32_t, &node.kids, 2));
@@ -257,15 +257,15 @@ static void test_copy_of_empty_has_no_buffer() {
 
 static void test_copy_inherits_the_source_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec src = {};
-    TDA_TEST_OK(TDA_VEC_OF(int32_t, TDA_AL(&arena), &src, 1, 2, 3));
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, tda_arena_to_al(&arena), &src, 1, 2, 3));
 
     tda_Vec dst = {};
     TDA_TEST_OK(tda_vec_copy(&src, &dst));
 
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_vec_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_vec_al(&dst)));
     TEST_ASSERT_EQUAL_INT32_ARRAY(tda_vec_data(&src), tda_vec_data(&dst), 3);
 
     tda_vec_deinit(&dst);
@@ -275,15 +275,15 @@ static void test_copy_inherits_the_source_allocator() {
 
 static void test_copy_with_builds_on_the_given_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec src = make_vec(4);
 
     tda_Vec dst = {};
-    TDA_TEST_OK(tda_vec_copy_with(&src, TDA_AL(&arena), &dst));
+    TDA_TEST_OK(tda_vec_copy_with(&src, tda_arena_to_al(&arena), &dst));
 
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_vec_al(&dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_vec_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_vec_al(&dst)));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_vec_al(&src)));
     TEST_ASSERT_TRUE(tda_vec_eq(&src, &dst));
 
     // the copy outlives the source, so it owns its elems
@@ -297,14 +297,15 @@ static void test_copy_with_builds_on_the_given_allocator() {
 // the blocks come from the copy's allocator, not the source's
 static void test_copy_with_reports_an_exhausted_target_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
     tda_test_arena_leave(&arena, 0);
 
     tda_Vec src = make_vec(4);
 
-    tda_Vec dst = {};
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_copy_with(&src, TDA_AL(&arena), &dst));
-    TEST_ASSERT_NULL(dst.al_);
+    tda_Vec dst;
+    TDA_TEST_POISON(dst);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_copy_with(&src, tda_arena_to_al(&arena), &dst));
+    TDA_TEST_ASSERT_POISONED(dst);
     TEST_ASSERT_EQUAL_size_t(4, tda_vec_len(&src));
 
     tda_vec_deinit(&src);
@@ -317,10 +318,10 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Vec src = {};
-    TDA_TEST_OK(TDA_VEC_OF(int32_t, &al, &src, 1, 2, 3));
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, al, &src, 1, 2, 3));
 
     tda_Vec dst = {};
-    TDA_TEST_OK(TDA_VEC_OF(int32_t, &al, &dst, 9));
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, al, &dst, 9));
 
     const size_t requests = tda_test_probe_requests(&probe);
     tda_vec_move_assign(&dst, &src);
@@ -344,25 +345,25 @@ static void test_move_assign_hands_over_the_contents_on_one_allocator() {
 // the allocator is part of the value: 'dst' takes the block with the allocator it came from
 static void test_move_assign_across_allocators_hands_the_allocator_over() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec src = make_vec(4);
     const void *block = tda_vec_data(&src);
 
     tda_Vec dst = {};
-    TDA_TEST_OK(TDA_VEC_OF(int32_t, TDA_AL(&arena), &dst, 9));
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, tda_arena_to_al(&arena), &dst, 9));
 
     tda_vec_move_assign(&dst, &src);
 
     TEST_ASSERT_EQUAL_PTR(block, tda_vec_data(&dst));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_vec_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_vec_al(&dst)));
     TEST_ASSERT_EQUAL_size_t(4, tda_vec_len(&dst));
     TEST_ASSERT_EQUAL_INT32(3, *TDA_VEC_GET_AS(int32_t, &dst, 3));
 
     // the source is left empty and usable, on the allocator it had
     TEST_ASSERT_EQUAL_size_t(0, tda_vec_len(&src));
     TEST_ASSERT_NULL(tda_vec_data(&src));
-    TEST_ASSERT_EQUAL_PTR(tda_al_default(), tda_vec_al(&src));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_al_default(), tda_vec_al(&src)));
     push_int(&src, 5);
 
     tda_vec_deinit(&src);
@@ -373,10 +374,10 @@ static void test_move_assign_across_allocators_hands_the_allocator_over() {
 // nothing is allocated, so an exhausted allocator on either side cannot stop it
 static void test_move_assign_needs_no_memory() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec dst = {};
-    TDA_TEST_OK(TDA_VEC_OF(int32_t, TDA_AL(&arena), &dst, 9));
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, tda_arena_to_al(&arena), &dst, 9));
     tda_test_arena_leave(&arena, 0);
 
     tda_Vec src = make_vec(4);
@@ -454,17 +455,17 @@ static void test_copy_assign_of_itself_changes_nothing() {
 // assignment resizes through the target's allocator, not the source's
 static void test_copy_assign_keeps_the_target_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec src = make_vec(4);
 
     tda_Vec dst = {};
-    TDA_TEST_OK(TDA_VEC_INIT_LEN(int32_t, 1, TDA_AL(&arena), &dst));
+    TDA_TEST_OK(TDA_VEC_INIT_LEN(int32_t, 1, tda_arena_to_al(&arena), &dst));
 
     TDA_TEST_OK(tda_vec_copy_assign(&dst, &src));
 
     TEST_ASSERT_EQUAL_size_t(4, tda_vec_len(&dst));
-    TEST_ASSERT_EQUAL_PTR(TDA_AL(&arena), tda_vec_al(&dst));
+    TEST_ASSERT_TRUE(tda_al_eq(tda_arena_to_al(&arena), tda_vec_al(&dst)));
     TEST_ASSERT_EQUAL_INT32_ARRAY(tda_vec_data(&src), tda_vec_data(&dst), 4);
 
     tda_vec_deinit(&dst);
@@ -619,8 +620,7 @@ static void test_data_mut_writes_through() {
 
 // growth is 0 -> 1 and then doubling, and it only fires when the vec is full
 static void test_push_appends_and_doubles_the_capacity() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
 
     constexpr size_t want_cap[5] = {1, 2, 4, 4, 8};
     for (size_t i = 0; i < 5; ++i) {
@@ -658,8 +658,7 @@ static void test_push_assume_cap_after_a_reserve_allocates_nothing() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Vec v;
-    TDA_VEC_INIT(int32_t, &al, &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, al);
     TDA_TEST_OK(tda_vec_reserve(&v, 8));
     const size_t requests = tda_test_probe_requests(&probe);
 
@@ -690,8 +689,7 @@ static void test_push_assume_cap_takes_an_elem_of_its_own() {
 
 // the slot is the new back, filled in place
 static void test_add_one_hands_out_the_new_back() {
-    tda_Vec v;
-    TDA_VEC_INIT(Pair, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(Pair, tda_al_default());
 
     for (int64_t i = 0; i < 5; ++i) {
         void *slot;
@@ -710,10 +708,10 @@ static void test_add_one_hands_out_the_new_back() {
 // a refused growth leaves the vec as it was and the out untouched
 static void test_add_one_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec v = {};
-    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 1, TDA_AL(&arena), &v));
+    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 1, tda_arena_to_al(&arena), &v));
     push_int(&v, 1);
     tda_test_arena_leave(&arena, 0);
 
@@ -734,7 +732,7 @@ static void test_add_one_assume_cap_allocates_nothing() {
     tda_Al al = tda_test_probe_full(&probe);
 
     tda_Vec v;
-    TDA_TEST_OK(TDA_VEC_INIT_CAP(Pair, 3, &al, &v));
+    TDA_TEST_OK(TDA_VEC_INIT_CAP(Pair, 3, al, &v));
     const size_t requests = tda_test_probe_requests(&probe);
 
     for (int64_t i = 0; i < 3; ++i) {
@@ -750,8 +748,7 @@ static void test_add_one_assume_cap_allocates_nothing() {
 }
 
 static void test_push_moves_whole_elems() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(Pair, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(Pair, tda_al_default());
 
     TDA_TEST_OK(tda_vec_push(&v, &(Pair){1, 2}));
     TDA_TEST_OK(tda_vec_push(&v, &(Pair){3, 4}));
@@ -868,8 +865,7 @@ static void test_insert_at_front_middle_and_end() {
 
 // idx == len on an empty vec is the only legal index there
 static void test_insert_into_an_empty_vec() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
 
     TDA_TEST_OK(TDA_VEC_INSERT(int32_t, &v, 0, 42));
 
@@ -1007,8 +1003,7 @@ static void test_extend_appends_in_order() {
 }
 
 static void test_extend_onto_an_empty_vec() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
 
     constexpr int32_t src[2] = {4, 5};
     TDA_TEST_OK(tda_vec_extend(&v, TDA_SPAN_FROM_DATA(int32_t, src, 2)));
@@ -1040,8 +1035,7 @@ static void test_extend_takes_the_room_once() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, &al, &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, al);
 
     const size_t before = tda_test_probe_requests(&probe);
 
@@ -1061,8 +1055,7 @@ static void test_a_run_of_extends_stays_amortized() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, &al, &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, al);
 
     for (int32_t i = 0; i < 64; ++i) {
         TDA_TEST_OK(tda_vec_extend(&v, TDA_SPAN_FROM_DATA(int32_t, &i, 1)));
@@ -1083,8 +1076,7 @@ static void test_a_run_of_resizes_stays_amortized() {
     tda_test_probe_reset(&probe);
     tda_Al al = tda_test_probe_full(&probe);
 
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, &al, &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, al);
 
     for (size_t len = 1; len <= 64; ++len) {
         TDA_TEST_OK(tda_vec_resize(&v, len));
@@ -1101,10 +1093,9 @@ static void test_a_run_of_resizes_stays_amortized() {
 // charged the final capacity, not every capacity along the way
 static void test_growing_alone_on_an_arena_costs_only_the_capacity() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1 << 16, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1 << 16, tda_al_default(), &arena));
 
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, TDA_AL(&arena), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_arena_to_al(&arena));
 
     // counted from the first buffer, so the padding before it stays out
     constexpr int32_t zero = 0;
@@ -1124,8 +1115,7 @@ static void test_growing_alone_on_an_arena_costs_only_the_capacity() {
 }
 
 static void test_extend_moves_wide_elems_whole() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(Pair, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(Pair, tda_al_default());
 
     constexpr Pair src[2] = {{1, 10}, {2, 20}};
     TDA_TEST_OK(tda_vec_extend(&v, TDA_SPAN_FROM_DATA(Pair, src, 2)));
@@ -1276,8 +1266,7 @@ static void test_remove_range_leaves_the_capacity_alone() {
 }
 
 static void test_remove_range_moves_wide_elems_whole() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(Pair, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(Pair, tda_al_default());
 
     constexpr Pair src[4] = {{1, 10}, {2, 20}, {3, 30}, {4, 40}};
     TDA_TEST_OK(tda_vec_extend(&v, TDA_SPAN_FROM_DATA(Pair, src, 4)));
@@ -1492,8 +1481,7 @@ static void test_shrink_to_fit_of_empty_releases_the_buffer() {
 }
 
 static void test_shrink_to_fit_of_an_unallocated_vec_is_a_noop() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
 
     TDA_TEST_OK(tda_vec_shrink_to_fit(&v));
 
@@ -1673,13 +1661,13 @@ static void test_swap_across_allocators_carries_each_allocator() {
     tda_Al al_a = tda_test_probe_full(&pa), al_b = tda_test_probe_full(&pb);
 
     tda_Vec a = {}, b = {};
-    TDA_TEST_OK(TDA_VEC_OF(int32_t, &al_a, &a, 1, 2));
-    TDA_TEST_OK(TDA_VEC_OF(int32_t, &al_b, &b, 3, 4, 5));
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, al_a, &a, 1, 2));
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, al_b, &b, 3, 4, 5));
 
     tda_vec_swap(&a, &b);
 
-    TEST_ASSERT_EQUAL_PTR(&al_b, tda_vec_al(&a));
-    TEST_ASSERT_EQUAL_PTR(&al_a, tda_vec_al(&b));
+    TEST_ASSERT_TRUE(tda_al_eq(al_b, tda_vec_al(&a)));
+    TEST_ASSERT_TRUE(tda_al_eq(al_a, tda_vec_al(&b)));
     TEST_ASSERT_EQUAL_size_t(3, tda_vec_len(&a));
 
     tda_vec_deinit(&a);
@@ -1759,8 +1747,7 @@ static void test_to_span_mut_writes_reach_the_vec() {
 }
 
 static void test_to_span_of_empty_keeps_the_elem_layout() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
 
     const tda_Span s = tda_vec_to_span(&v);
 
@@ -1782,7 +1769,7 @@ static void test_init_len_reports_size_overflow() {
 
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_init_len(SIZE_MAX, TWO_BYTES, tda_al_default(), &v));
 
-    TEST_ASSERT_NULL(v.al_); // out is untouched on failure
+    TEST_ASSERT_NULL(v.al_.vt); // out is untouched on failure
 }
 
 static void test_init_cap_reports_size_overflow() {
@@ -1790,7 +1777,7 @@ static void test_init_cap_reports_size_overflow() {
 
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_init_cap(SIZE_MAX, TWO_BYTES, tda_al_default(), &v));
 
-    TEST_ASSERT_NULL(v.al_);
+    TEST_ASSERT_NULL(v.al_.vt);
 }
 
 static void test_from_data_reports_size_overflow() {
@@ -1799,18 +1786,20 @@ static void test_from_data_reports_size_overflow() {
 
     TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, tda_vec_from_data(src, SIZE_MAX, TWO_BYTES, tda_al_default(), &v));
 
-    TEST_ASSERT_NULL(v.al_);
+    TEST_ASSERT_NULL(v.al_.vt);
 }
 
 static void test_init_len_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 64, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(64, tda_al_default(), &arena));
 
-    tda_Vec v = {};
+    tda_Vec v;
 
-    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_VEC_INIT_LEN(int32_t, 1000, TDA_AL(&arena), &v));
+    TDA_TEST_POISON(v);
 
-    TEST_ASSERT_NULL(v.al_);
+    TDA_TEST_STATUS(TDA_STATUS_ERR_NO_MEM, TDA_VEC_INIT_LEN(int32_t, 1000, tda_arena_to_al(&arena), &v));
+
+    TDA_TEST_ASSERT_POISONED(v);
 
     tda_arena_deinit(&arena);
 }
@@ -1818,10 +1807,10 @@ static void test_init_len_reports_an_exhausted_arena() {
 // a push that cannot grow reports it and leaves the vec unchanged
 static void test_push_reports_an_exhausted_arena() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec v = {};
-    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 2, TDA_AL(&arena), &v));
+    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 2, tda_arena_to_al(&arena), &v));
 
     push_int(&v, 1);
     push_int(&v, 2);
@@ -1844,10 +1833,10 @@ static void test_push_reports_an_exhausted_arena() {
 // when doubling does not fit, growth falls back to a single extra slot
 static void test_push_falls_back_to_one_more_slot_when_doubling_fails() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec v = {};
-    TDA_TEST_OK(TDA_VEC_INIT_CAP(Pair, 2, TDA_AL(&arena), &v));
+    TDA_TEST_OK(TDA_VEC_INIT_CAP(Pair, 2, tda_arena_to_al(&arena), &v));
 
     TDA_TEST_OK(tda_vec_push(&v, &(Pair){1, 2}));
     TDA_TEST_OK(tda_vec_push(&v, &(Pair){3, 4}));
@@ -1875,10 +1864,10 @@ static void test_push_falls_back_to_one_more_slot_when_doubling_fails() {
 // 'src' written
 static void test_extend_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec v = {};
-    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 2, TDA_AL(&arena), &v));
+    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 2, tda_arena_to_al(&arena), &v));
     push_int(&v, 1);
     push_int(&v, 2);
     const void *before = tda_vec_data(&v);
@@ -1899,10 +1888,10 @@ static void test_extend_reports_an_exhausted_arena_and_changes_nothing() {
 // the same for a run into the middle: a failing call must not shift the tail
 static void test_insert_span_reports_an_exhausted_arena_and_changes_nothing() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec v = {};
-    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 3, TDA_AL(&arena), &v));
+    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 3, tda_arena_to_al(&arena), &v));
     push_int(&v, 1);
     push_int(&v, 2);
     push_int(&v, 3);
@@ -1934,10 +1923,10 @@ static void test_extend_reports_size_overflow() {
 // a run that fits in the existing room never allocates, so an exhausted arena is fine
 static void test_extend_within_the_capacity_needs_no_allocator() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena));
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));
 
     tda_Vec v = {};
-    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 8, TDA_AL(&arena), &v));
+    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 8, tda_arena_to_al(&arena), &v));
     push_int(&v, 1);
 
     tda_test_arena_leave(&arena, 0);
@@ -1977,8 +1966,7 @@ static void test_macro_of_derives_len_from_the_list() {
 }
 
 static void test_macro_push_appends_a_value() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
 
     TDA_TEST_OK(TDA_VEC_PUSH(int32_t, &v, 4));
     TDA_TEST_OK(TDA_VEC_PUSH(int32_t, &v, 5));
@@ -1992,8 +1980,7 @@ static void test_macro_push_appends_a_value() {
 
 // the value goes into a compound literal, so it is evaluated exactly once
 static void test_macro_push_evaluates_its_value_once() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
 
     int32_t next = 0;
     for (int i = 0; i < 3; ++i) {
@@ -2021,8 +2008,7 @@ static void test_macro_from_data_takes_the_layout_from_the_type() {
 }
 
 static void test_macro_extend_appends_a_literal_list() {
-    tda_Vec v = {};
-    TDA_VEC_INIT(int32_t, tda_al_default(), &v);
+    tda_Vec v = TDA_VEC_INIT(int32_t, tda_al_default());
 
     TDA_TEST_OK(TDA_VEC_EXTEND(int32_t, &v, 4, 5, 6));
 
@@ -2143,7 +2129,7 @@ static void assert_prints(const char *expected, const tda_Vec *v) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    tda_vec_fprint(v, stream, tda_fprint_i32);
+    tda_vec_fprint(v, stream, tda_fprint_i32, nullptr);
     rewind(stream);
 
     char buf[128];
@@ -2158,7 +2144,7 @@ static void test_fprint_writes_the_elems() {
     tda_Vec v = {};
     TDA_TEST_OK(TDA_VEC_OF(int32_t, tda_al_default(), &v, 5, 3, 1));
 
-    assert_prints("[5, 3, 1]\n", &v);
+    assert_prints("[5, 3, 1]", &v);
 
     tda_vec_deinit(&v);
 }
@@ -2167,7 +2153,7 @@ static void test_fprint_of_a_single_elem_has_no_separator() {
     tda_Vec v = {};
     TDA_TEST_OK(TDA_VEC_OF(int32_t, tda_al_default(), &v, 7));
 
-    assert_prints("[7]\n", &v);
+    assert_prints("[7]", &v);
 
     tda_vec_deinit(&v);
 }
@@ -2175,7 +2161,7 @@ static void test_fprint_of_a_single_elem_has_no_separator() {
 static void test_fprint_of_an_empty_vec() {
     tda_Vec v = make_vec(0);
 
-    assert_prints("[]\n", &v);
+    assert_prints("[]", &v);
 
     tda_vec_deinit(&v);
 }
@@ -2184,7 +2170,7 @@ static void test_fprint_of_an_empty_vec() {
 static void test_print_writes_to_stdout() {
     tda_Vec v = make_vec(3);
 
-    tda_vec_print(&v, tda_fprint_i32);
+    tda_vec_print(&v, tda_fprint_i32, nullptr);
 
     tda_vec_deinit(&v);
 }
@@ -2196,8 +2182,7 @@ static void test_insert_takes_an_unaligned_val() {
     constexpr int32_t val = 42;
     memcpy(raw + 1, &val, sizeof(val));
 
-    tda_Vec x;
-    TDA_VEC_INIT(int32_t, tda_al_default(), &x);
+    tda_Vec x = TDA_VEC_INIT(int32_t, tda_al_default());
     TDA_TEST_OK(tda_vec_insert(&x, 0, raw + 1));
 
     TEST_ASSERT_EQUAL_INT32(42, *TDA_VEC_GET_AS(int32_t, &x, 0));
@@ -2212,7 +2197,7 @@ static void test_shrink_to_fit_reports_a_refused_block() {
     tda_Al al = tda_test_probe_bare(&probe);
 
     tda_Vec v = {};
-    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 8, &al, &v));
+    TDA_TEST_OK(TDA_VEC_INIT_CAP(int32_t, 8, al, &v));
     push_int(&v, 1);
     push_int(&v, 2);
 
@@ -2226,6 +2211,33 @@ static void test_shrink_to_fit_reports_a_refused_block() {
     probe.fail_after = SIZE_MAX;
     tda_vec_deinit(&v);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
+}
+
+
+/* ========== print errors ========== */
+
+// the ctx reaches every call, every elem is still asked after a failure, and the first
+// failure is what comes back; print adds only its newline
+static void test_fprint_hands_on_the_ctx_and_the_first_failure() {
+    tda_Vec v = make_vec(3);
+    tda_TestPrint pr = {.fail_from = 2};
+    FILE *stream = tmpfile();
+    TEST_ASSERT_NOT_NULL(stream);
+
+    TEST_ASSERT_EQUAL_INT(-2, tda_vec_fprint(&v, stream, tda_test_fprint_i32_failing, &pr));
+    TEST_ASSERT_EQUAL_size_t(3, pr.calls);
+    fclose(stream);
+
+    pr = (tda_TestPrint){.fail_from = 0};
+    TEST_ASSERT_EQUAL_INT(0, tda_vec_print(&v, tda_test_fprint_i32_failing, &pr));
+    pr = (tda_TestPrint){.fail_from = 2};
+    TEST_ASSERT_EQUAL_INT(-2, tda_vec_print(&v, tda_test_fprint_i32_failing, &pr));
+
+    FILE *ro = tda_test_unwritable_stream();
+    TEST_ASSERT_LESS_THAN_INT(0, tda_vec_fprint(&v, ro, tda_fprint_i32, nullptr));
+    fclose(ro);
+
+    tda_vec_deinit(&v);
 }
 
 int main() {
@@ -2396,6 +2408,8 @@ int main() {
     RUN_TEST(test_insert_takes_an_unaligned_val);
 
     RUN_TEST(test_shrink_to_fit_reports_a_refused_block);
+
+    RUN_TEST(test_fprint_hands_on_the_ctx_and_the_first_failure);
 
     return UNITY_END();
 }

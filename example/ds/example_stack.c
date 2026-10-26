@@ -14,14 +14,14 @@
 int main() {
     /// [build]
     // pushed in the order given: the first ends up at the bottom, the last on top
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_Stack s;
     if (TDA_STATUS_IS_ERR(TDA_STACK_OF(int32_t, al, &s, 1, 2, 3))) {
         return 1;
     }
 
-    tda_stack_print(&s, tda_fprint_i32); // [1, 2, 3]
+    tda_stack_print(&s, tda_fprint_i32, nullptr); // [1, 2, 3]
     printf("%" PRId32 "\n", *TDA_STACK_TOP_AS(int32_t, &s)); // 3
     /// [build]
 
@@ -38,7 +38,7 @@ int main() {
 
     // the top is writable; a stack limits where elems go in and out, not their values
     *TDA_STACK_TOP_MUT_AS(int32_t, &s) = 9;
-    tda_stack_print(&s, tda_fprint_i32); // [1, 2, 3, 9]
+    tda_stack_print(&s, tda_fprint_i32, nullptr); // [1, 2, 3, 9]
 
     // read the elem before popping: a pop that returned it would have nowhere to put the
     // bytes
@@ -70,16 +70,16 @@ int main() {
     if (TDA_STATUS_IS_ERR(TDA_STACK_PUSH(int32_t, &s, 5))) {
         goto out;
     }
-    tda_stack_print(&s, tda_fprint_i32); // [7, 8, 5]
+    tda_stack_print(&s, tda_fprint_i32, nullptr); // [7, 8, 5]
     /// [read]
 
     /// [into]
     // the vec was under the stack all along, so taking it is free: same block, capacity
     // and allocator, nothing copied, and the stack is left inert
-    tda_stack_into_vec(&s, &v);
+    v = tda_stack_into_vec(&s);
 
     // the narrow interface is gone too: the vec allows the indexing the stack refused
-    tda_vec_print(&v, tda_fprint_i32); // [7, 8, 5]
+    tda_vec_print(&v, tda_fprint_i32, nullptr); // [7, 8, 5]
     printf("%" PRId32 "\n", *TDA_VEC_GET_AS(int32_t, &v, 0)); // 7
 
     rc = 0;

@@ -58,7 +58,7 @@ void tda_span_copy_overlapping(tda_SpanMut dst, tda_Span src);
 /// their order in 'src'
 /// @param dst its len is how many to pick
 /// @param src left unchanged; must not overlap 'dst'
-/// @param rng the source of randomness; the same seed gives the same pick
+/// @param rng the source of randomness; the same seed gives the same pick within a minor
 /// @return how many were written: dst.len, or src.len when 'src' is shorter (then all
 ///         of it is copied); the rest of 'dst' is untouched
 /// @bigo{n}. Selection sampling: each elem is taken with odds "still wanted / still

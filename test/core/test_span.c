@@ -20,7 +20,7 @@ static void assert_prints(const char *expected, tda_Span s) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    tda_span_fprint(s, stream, tda_fprint_i32);
+    tda_span_fprint(s, stream, tda_fprint_i32, nullptr);
     rewind(stream);
 
     char buf[128];
@@ -36,7 +36,7 @@ static void assert_mut_prints(const char *expected, tda_SpanMut s) {
     FILE *stream = tmpfile();
     TEST_ASSERT_NOT_NULL(stream);
 
-    tda_span_mut_fprint(s, stream, tda_fprint_i32);
+    tda_span_mut_fprint(s, stream, tda_fprint_i32, nullptr);
     rewind(stream);
 
     char buf[128];
@@ -459,27 +459,27 @@ static void test_swap_elems_moves_whole_element() {
 static void test_fprint_writes_the_elems() {
     constexpr int32_t buf[3] = {1, 2, 3};
 
-    assert_prints("[1, 2, 3]\n", TDA_SPAN_FROM_DATA(int32_t, buf, 3));
+    assert_prints("[1, 2, 3]", TDA_SPAN_FROM_DATA(int32_t, buf, 3));
 }
 
 static void test_fprint_of_a_single_elem_has_no_separator() {
     constexpr int32_t buf[1] = {7};
 
-    assert_prints("[7]\n", TDA_SPAN_FROM_DATA(int32_t, buf, 1));
+    assert_prints("[7]", TDA_SPAN_FROM_DATA(int32_t, buf, 1));
 }
 
 static void test_fprint_of_an_empty_span() {
     constexpr int32_t buf[1] = {7};
 
-    assert_prints("[]\n", TDA_SPAN_FROM_DATA(int32_t, buf, 0));
-    assert_prints("[]\n", TDA_SPAN_FROM_DATA(int32_t, nullptr, 0));
+    assert_prints("[]", TDA_SPAN_FROM_DATA(int32_t, buf, 0));
+    assert_prints("[]", TDA_SPAN_FROM_DATA(int32_t, nullptr, 0));
 }
 
 static void test_mut_fprint_writes_what_fprint_writes() {
     int32_t buf[3] = {1, 2, 3};
 
-    assert_mut_prints("[1, 2, 3]\n", TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3));
-    assert_mut_prints("[]\n", TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0));
+    assert_mut_prints("[1, 2, 3]", TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3));
+    assert_mut_prints("[]", TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0));
 }
 
 // the stdout twins take no stream, and C cannot portably capture stdout and restore it,
@@ -487,8 +487,8 @@ static void test_mut_fprint_writes_what_fprint_writes() {
 static void test_print_twins_write_to_stdout() {
     int32_t buf[2] = {4, 5};
 
-    tda_span_print(TDA_SPAN_FROM_DATA(int32_t, buf, 2), tda_fprint_i32);
-    tda_span_mut_print(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 2), tda_fprint_i32);
+    tda_span_print(TDA_SPAN_FROM_DATA(int32_t, buf, 2), tda_fprint_i32, nullptr);
+    tda_span_mut_print(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 2), tda_fprint_i32, nullptr);
 }
 
 int main() {

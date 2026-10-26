@@ -16,10 +16,10 @@
 /// @{
 
 /// the default allocator
-/// @return a static singleton, the same pointer on every call; it lives for the whole
+/// @return a view of it, the same on every call; it has no state, lives for the whole
 ///         program and has no deinit
 [[nodiscard]] TDA_API
-tda_Al *tda_al_default();
+tda_Al tda_al_default();
 
 /// @}
 

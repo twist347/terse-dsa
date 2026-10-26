@@ -13,7 +13,7 @@ int main() {
     /// [build]
     // a node per elem, so there is no block and no capacity: every push is one allocation
     // and can fail
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_List list;
     tda_List other = {}; // used below; declared here so the exit can see it
@@ -29,7 +29,7 @@ int main() {
     if (TDA_STATUS_IS_ERR(TDA_LIST_PUSH_BACK(int32_t, &list, 5))) {
         goto out;
     }
-    tda_list_print(&list, tda_fprint_i32); // [4, 3, 1, 2, 5]
+    tda_list_print(&list, tda_fprint_i32, nullptr); // [4, 3, 1, 2, 5]
     /// [build]
 
     /// [walk]
@@ -58,12 +58,12 @@ int main() {
     if (TDA_STATUS_IS_ERR(TDA_LIST_INSERT_AFTER(int32_t, &list, at, 8))) {
         goto out;
     }
-    tda_list_print(&list, tda_fprint_i32); // [4, 9, 3, 8, 1, 2, 5]
+    tda_list_print(&list, tda_fprint_i32, nullptr); // [4, 9, 3, 8, 1, 2, 5]
 
     // removing another elem does not disturb this one
     tda_list_pop_front(&list);
     tda_list_remove_node(&list, tda_list_front_node_mut(&list));
-    tda_list_print(&list, tda_fprint_i32); // [3, 8, 1, 2, 5]
+    tda_list_print(&list, tda_fprint_i32, nullptr); // [3, 8, 1, 2, 5]
     printf("%" PRId32 "\n", *TDA_LIST_NODE_ELEM_AS(int32_t, &list, at)); // 3
     /// [positions]
 
@@ -71,7 +71,7 @@ int main() {
     // sort relinks the nodes and leaves the elems where they are, so 'at' still names the
     // same 3. A copy sorted by algo/sort could not keep that, so a list sorts itself
     tda_list_sort(&list, tda_cmp_i32, nullptr);
-    tda_list_print(&list, tda_fprint_i32); // [1, 2, 3, 5, 8]
+    tda_list_print(&list, tda_fprint_i32, nullptr); // [1, 2, 3, 5, 8]
     printf("%" PRId32 "\n", *TDA_LIST_NODE_ELEM_AS(int32_t, &list, at)); // 3
 
     // merging two sorted lists also relinks: O(n + m), no allocation, and 'other' is left
@@ -82,11 +82,11 @@ int main() {
     if (TDA_STATUS_IS_ERR(tda_list_merge(&list, &other, tda_cmp_i32, nullptr))) {
         goto out;
     }
-    tda_list_print(&list, tda_fprint_i32); // [0, 1, 2, 3, 4, 5, 8, 9]
+    tda_list_print(&list, tda_fprint_i32, nullptr); // [0, 1, 2, 3, 4, 5, 8, 9]
     printf("%zu\n", tda_list_len(&other)); // 0
 
     tda_list_reverse(&list);
-    tda_list_print(&list, tda_fprint_i32); // [9, 8, 5, 4, 3, 2, 1, 0]
+    tda_list_print(&list, tda_fprint_i32, nullptr); // [9, 8, 5, 4, 3, 2, 1, 0]
 
     rc = 0;
 out:

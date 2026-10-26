@@ -4,6 +4,7 @@
 #include "tda/alloc/default.h"
 #include "tda/core/check.h"
 #include "tda/core/hash.h"
+#include "tda/core/print.h"
 #include "tda/core/util.h"
 
 #include <assert.h>
@@ -118,38 +119,23 @@ static bool table_find(const BlockTable *table, uintptr_t addr, BlockRecord *out
 [[nodiscard]]
 static bool table_take(BlockTable *table, uintptr_t addr, BlockRecord *out);
 
-// the ctx check is how a moved or copied allocator gets caught, so it stays under
-// TDA_HARDENED
-#define ASSERT_DEBUG(d)                     \
-    (assert(d),                             \
-     assert((d)->al_.alloc == debug_alloc), \
-     TDA_EXPECT((d)->al_.ctx == (d)))
+// the allocator is live while it has a parent: deinit and '= {}' leave none
+#define ASSERT_DEBUG(d) \
+    (assert(d), assert((d)->parent_.vt))
 
 /* ========== lifetime ========== */
 
-void tda_debug_init(tda_Al *parent, tda_Debug *out) {
-    assert(parent);
-    assert(out);
+tda_Debug tda_debug_init(tda_Al parent) {
+    assert(parent.vt);
 
-    // no resize, and a remap that only checks: every growth moves, through the wrapper's
-    // alloc, copy and dealloc, so every block passes the checks
-    *out = (tda_Debug){
-        .al_ = {
-            .ctx = out,
-            .alloc = debug_alloc,
-            .remap = debug_remap,
-            .dealloc = debug_dealloc,
-        },
-        .parent_ = parent,
-        .fail_after_ = SIZE_MAX,
-    };
+    return (tda_Debug){.parent_ = parent, .fail_after_ = UINT64_MAX};
 }
 
 void tda_debug_deinit(tda_Debug *self) {
     assert(self);
 
-    // the inert state, never filled in or already released
-    if (!self->al_.alloc) {
+    // the inert state, never made or already released
+    if (!self->parent_.vt) {
         return;
     }
 
@@ -160,6 +146,24 @@ void tda_debug_deinit(tda_Debug *self) {
     TDA_DEALLOC(BlockRecord, tda_al_default(), self->table_.slots, self->table_.cap);
 
     *self = (tda_Debug){};
+}
+
+/* ========== view ========== */
+
+tda_Al tda_debug_to_al(tda_Debug *self) {
+    ASSERT_DEBUG(self);
+
+    // no resize, and a remap that only checks: every growth moves, through the wrapper's
+    // alloc, copy and dealloc, so every block passes the checks
+    static const tda_AlVtable vtable = {
+        .alloc = debug_alloc,
+        .alloc_zeroed = nullptr,
+        .resize = nullptr,
+        .remap = debug_remap,
+        .dealloc = debug_dealloc,
+    };
+
+    return (tda_Al){.ctx = self, .vt = &vtable};
 }
 
 /* ========== quarantine ========== */
@@ -185,38 +189,40 @@ tda_DebugStats tda_debug_stats(const tda_Debug *self) {
     };
 }
 
-size_t tda_debug_fprint_leaks(const tda_Debug *self, FILE *stream) {
+int tda_debug_fprint_leaks(const tda_Debug *self, FILE *stream) {
     ASSERT_DEBUG(self);
     assert(stream);
 
     const BlockTable *table = &self->table_;
 
+    int rc = 0;
     for (size_t i = 0; i < table->cap; ++i) {
         const BlockRecord *entry = &table->slots[i];
         if (entry->addr != 0) {
-            fprintf(
+            const int line = fprintf(
                 stream,
                 "tda debug: leak: block #%llu, %zu bytes at %p\n",
                 (unsigned long long) entry->serial, entry->layout.size, (void *) entry->addr
             );
+            rc = tda_fprint_join_(rc, line);
         }
     }
-    fprintf(
+    const int total = fprintf(
         stream,
         "tda debug: %zu leaked, %zu bytes\n",
         table->len, self->live_bytes_
     );
 
-    return table->len;
+    return tda_fprint_join_(rc, total);
 }
 
 /* ========== fault injection ========== */
 
-void tda_debug_fail_after(tda_Debug *self, size_t count) {
+void tda_debug_fail_after(tda_Debug *self, uint64_t count) {
     ASSERT_DEBUG(self);
 
-    size_t at;
-    self->fail_after_ = ckd_add(&at, (size_t) self->requests_, count) ? SIZE_MAX : at;
+    uint64_t at;
+    self->fail_after_ = ckd_add(&at, self->requests_, count) ? UINT64_MAX : at;
 }
 
 void tda_debug_break_at(tda_Debug *self, uint64_t serial) {

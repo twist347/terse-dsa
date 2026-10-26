@@ -57,7 +57,7 @@ typedef struct tda_Arr {
     void *data_;      ///< the block; null while len is 0
     size_t len_;      ///< how many elems it holds
     tda_Layout elem_; ///< the layout of one elem
-    tda_Al *al_;      ///< where the block comes from; moves along with the arr
+    tda_Al al_;       ///< where the block comes from; moves along with the arr
 } tda_Arr;
 
 /// @name lifetime
@@ -73,7 +73,7 @@ typedef struct tda_Arr {
 ///         len * elem.size overflows
 /// @bigo{n}, for zeroing the block
 [[nodiscard]] TDA_API
-tda_Status tda_arr_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out);
+tda_Status tda_arr_init_len(size_t len, tda_Layout elem, tda_Al al, tda_Arr *out);
 
 /// a new arr holding a copy of 'len' elems read from 'data'
 /// @param data the elems to copy in; may be null only when len is 0
@@ -86,7 +86,7 @@ tda_Status tda_arr_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Arr *ou
 ///         len * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_arr_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Arr *out);
+tda_Status tda_arr_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_Arr *out);
 
 /// a new arr holding a copy of the elems 's' views
 /// @param s the view to copy; the elem layout is the span's
@@ -96,7 +96,7 @@ tda_Status tda_arr_from_data(const void *data, size_t len, tda_Layout elem, tda_
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_arr_from_span(tda_Span s, tda_Al *al, tda_Arr *out);
+tda_Status tda_arr_from_span(tda_Span s, tda_Al al, tda_Arr *out);
 
 /// releases the block and leaves the arr inert, `= {}`
 /// @param self an arr, or an inert one, for which this is a no-op; what the elems point
@@ -127,7 +127,7 @@ tda_Status tda_arr_copy(const tda_Arr *self, tda_Arr *out);
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al *al, tda_Arr *out);
+tda_Status tda_arr_copy_with(const tda_Arr *self, tda_Al al, tda_Arr *out);
 
 /// overwrites the elems of 'self' with those of 'other', resizing the block if the
 /// lengths differ
@@ -183,7 +183,7 @@ bool tda_arr_eq_by(const tda_Arr *a, const tda_Arr *b, tda_Eq eq, void *ctx);
 [[nodiscard]]
 static inline size_t tda_arr_len(const tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->len_;
 }
@@ -195,7 +195,7 @@ static inline size_t tda_arr_len(const tda_Arr *self) {
 [[nodiscard]]
 static inline tda_Layout tda_arr_elem_layout(const tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->elem_;
 }
@@ -207,19 +207,19 @@ static inline tda_Layout tda_arr_elem_layout(const tda_Arr *self) {
 [[nodiscard]]
 static inline size_t tda_arr_bytes(const tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->len_ * self->elem_.size;
 }
 
 /// the allocator the arr was built with
 /// @param self the arr
-/// @return the allocator, borrowed
+/// @return the view it was built with
 /// @bigo{1}
 [[nodiscard]]
-static inline tda_Al *tda_arr_al(const tda_Arr *self) {
+static inline tda_Al tda_arr_al(const tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->al_;
 }
@@ -236,7 +236,7 @@ static inline tda_Al *tda_arr_al(const tda_Arr *self) {
 [[nodiscard]]
 static inline const void *tda_arr_front(const tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return self->data_;
@@ -247,7 +247,7 @@ static inline const void *tda_arr_front(const tda_Arr *self) {
 [[nodiscard]]
 static inline void *tda_arr_front_mut(tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return self->data_;
@@ -258,7 +258,7 @@ static inline void *tda_arr_front_mut(tda_Arr *self) {
 [[nodiscard]]
 static inline const void *tda_arr_back(const tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return (const unsigned char *) self->data_ + (self->len_ - 1) * self->elem_.size;
@@ -269,7 +269,7 @@ static inline const void *tda_arr_back(const tda_Arr *self) {
 [[nodiscard]]
 static inline void *tda_arr_back_mut(tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return (unsigned char *) self->data_ + (self->len_ - 1) * self->elem_.size;
@@ -283,7 +283,7 @@ static inline void *tda_arr_back_mut(tda_Arr *self) {
 [[nodiscard]]
 static inline const void *tda_arr_get(const tda_Arr *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->len_);
 
     return (const unsigned char *) self->data_ + idx * self->elem_.size;
@@ -294,7 +294,7 @@ static inline const void *tda_arr_get(const tda_Arr *self, size_t idx) {
 [[nodiscard]]
 static inline void *tda_arr_get_mut(tda_Arr *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->len_);
 
     return (unsigned char *) self->data_ + idx * self->elem_.size;
@@ -316,7 +316,7 @@ void tda_arr_set(tda_Arr *self, size_t idx, const void *val);
 [[nodiscard]]
 static inline const void *tda_arr_data(const tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->data_;
 }
@@ -326,7 +326,7 @@ static inline const void *tda_arr_data(const tda_Arr *self) {
 [[nodiscard]]
 static inline void *tda_arr_data_mut(tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->data_;
 }
@@ -364,7 +364,7 @@ void tda_arr_swap_elems(tda_Arr *self, size_t i, size_t j);
 [[nodiscard]]
 static inline tda_SpanMut tda_arr_to_span_mut(tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return tda_span_from_data_mut(self->data_, self->len_, self->elem_);
 }
@@ -374,7 +374,7 @@ static inline tda_SpanMut tda_arr_to_span_mut(tda_Arr *self) {
 [[nodiscard]]
 static inline tda_Span tda_arr_to_span(const tda_Arr *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return tda_span_from_data(self->data_, self->len_, self->elem_);
 }
@@ -384,20 +384,24 @@ static inline tda_Span tda_arr_to_span(const tda_Arr *self) {
 /// @name print
 /// @{
 
-/// writes the elems as [a, b, c] and a newline
+/// writes the elems as [a, b, c], with no newline
 /// @param self the arr
 /// @param stream where to write
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_arr_fprint(const tda_Arr *self, FILE *stream, tda_FPrint fprint);
+int tda_arr_fprint(const tda_Arr *self, FILE *stream, tda_FPrint fprint, void *ctx);
 
-/// tda_arr_fprint to stdout
+/// tda_arr_fprint to stdout, and a newline
 /// @param self the arr
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_arr_print(const tda_Arr *self, tda_FPrint fprint);
+int tda_arr_print(const tda_Arr *self, tda_FPrint fprint, void *ctx);
 
 /// @}
 
@@ -490,13 +494,13 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
     ((T *) tda_arr_get_mut(TDA_ARR_TYPED_(T, self), (idx)))
 
 /// tda_arr_set from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the arr
 /// @param idx the index
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_ARR_SET(T, self, idx, val) \
-    tda_arr_set(TDA_ARR_TYPED_(T, self), (idx), &(T){ (val) })
+    tda_arr_set(TDA_ARR_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
 
 /// @}
 

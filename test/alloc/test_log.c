@@ -56,8 +56,7 @@ void tearDown() {
 static void test_init_announces_itself() {
     tda_Al parent = full_al();
 
-    tda_Log log;
-    tda_log_init(&parent, log_stream, &log);
+    tda_Log log = tda_log_init(log_stream, parent);
 
     char buf[512];
     log_text(buf, sizeof(buf));
@@ -69,15 +68,14 @@ static void test_init_announces_itself() {
 static void test_init_provides_every_hook() {
     tda_Al parent = full_al();
 
-    tda_Log log;
-    tda_log_init(&parent, log_stream, &log);
-    const tda_Al *al = TDA_AL(&log);
+    tda_Log log = tda_log_init(log_stream, parent);
+    const tda_Al al = tda_log_to_al(&log);
 
-    TEST_ASSERT_NOT_NULL(al->alloc);
-    TEST_ASSERT_NOT_NULL(al->alloc_zeroed);
-    TEST_ASSERT_NOT_NULL(al->resize);
-    TEST_ASSERT_NOT_NULL(al->remap);
-    TEST_ASSERT_NOT_NULL(al->dealloc);
+    TEST_ASSERT_NOT_NULL(al.vt->alloc);
+    TEST_ASSERT_NOT_NULL(al.vt->alloc_zeroed);
+    TEST_ASSERT_NOT_NULL(al.vt->resize);
+    TEST_ASSERT_NOT_NULL(al.vt->remap);
+    TEST_ASSERT_NOT_NULL(al.vt->dealloc);
 
     tda_log_deinit(&log);
 }
@@ -86,8 +84,7 @@ static void test_init_provides_every_hook() {
 static void test_the_log_takes_nothing_of_its_own() {
     tda_Al parent = full_al();
 
-    tda_Log log;
-    tda_log_init(&parent, log_stream, &log);
+    tda_Log log = tda_log_init(log_stream, parent);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 
     tda_log_deinit(&log);
@@ -109,13 +106,12 @@ static void test_deinit_of_an_inert_log_is_noop() {
 // logging is only a side effect; the memory must come from the wrapped allocator
 static void test_alloc_is_forwarded_and_usable() {
     tda_Al parent = full_al();
-    tda_Log log;
-    tda_log_init(&parent, log_stream, &log);
+    tda_Log log = tda_log_init(log_stream, parent);
 
     // the wrapper itself allocated from the probe, so count from here
     const size_t base = probe.alloc_calls;
 
-    unsigned char *p = tda_alloc(TDA_AL(&log), (tda_Layout){.size = 32, .align = 64});
+    unsigned char *p = tda_alloc(tda_log_to_al(&log), (tda_Layout){.size = 32, .align = 64});
     TEST_ASSERT_NOT_NULL(p);
     TEST_ASSERT_EQUAL_size_t(base + 1, probe.alloc_calls);
     TEST_ASSERT_EQUAL_size_t(64, probe.last_alloc.align);
@@ -123,7 +119,7 @@ static void test_alloc_is_forwarded_and_usable() {
     memset(p, 0x6D, 32);
     TEST_ASSERT_EQUAL_UINT8(0x6D, p[31]);
 
-    tda_dealloc(TDA_AL(&log), p, (tda_Layout){.size = 32, .align = 64});
+    tda_dealloc(tda_log_to_al(&log), p, (tda_Layout){.size = 32, .align = 64});
     TEST_ASSERT_EQUAL_size_t(64, probe.last_dealloc.align);
     TEST_ASSERT_EQUAL_size_t(1, probe.dealloc_calls);
 
@@ -133,34 +129,32 @@ static void test_alloc_is_forwarded_and_usable() {
 
 static void test_alloc_zeroed_is_forwarded() {
     tda_Al parent = full_al();
-    tda_Log log;
-    tda_log_init(&parent, log_stream, &log);
+    tda_Log log = tda_log_init(log_stream, parent);
 
-    unsigned char *p = tda_alloc_zeroed(TDA_AL(&log), bytes(32));
+    unsigned char *p = tda_alloc_zeroed(tda_log_to_al(&log), bytes(32));
     TEST_ASSERT_NOT_NULL(p);
     TEST_ASSERT_EQUAL_size_t(1, probe.zeroed_calls);
     for (size_t i = 0; i < 32; ++i) {
         TEST_ASSERT_EQUAL_UINT8(0, p[i]);
     }
 
-    tda_dealloc(TDA_AL(&log), p, bytes(32));
+    tda_dealloc(tda_log_to_al(&log), p, bytes(32));
     tda_log_deinit(&log);
     TEST_ASSERT_EQUAL_size_t(0, probe.live);
 }
 
 static void test_realloc_is_forwarded_and_keeps_the_contents() {
     tda_Al parent = full_al();
-    tda_Log log;
-    tda_log_init(&parent, log_stream, &log);
+    tda_Log log = tda_log_init(log_stream, parent);
 
-    unsigned char *p = tda_alloc(TDA_AL(&log), bytes(16));
+    unsigned char *p = tda_alloc(tda_log_to_al(&log), bytes(16));
     TEST_ASSERT_NOT_NULL(p);
     for (size_t i = 0; i < 16; ++i) {
         p[i] = (unsigned char) (i + 1);
     }
 
     // the probe never grows in place, so the growth passes resize on to remap
-    unsigned char *q = tda_realloc(TDA_AL(&log), p, bytes(16), 64);
+    unsigned char *q = tda_realloc(tda_log_to_al(&log), p, bytes(16), 64);
     TEST_ASSERT_NOT_NULL(q);
     TEST_ASSERT_EQUAL_size_t(1, probe.resize_calls);
     TEST_ASSERT_EQUAL_size_t(1, probe.remap_calls);
@@ -168,18 +162,17 @@ static void test_realloc_is_forwarded_and_keeps_the_contents() {
         TEST_ASSERT_EQUAL_UINT8((unsigned char) (i + 1), q[i]);
     }
 
-    tda_dealloc(TDA_AL(&log), q, bytes(64));
+    tda_dealloc(tda_log_to_al(&log), q, bytes(64));
     tda_log_deinit(&log);
 }
 
 // a failure in the wrapped allocator passes through unchanged
 static void test_failure_is_forwarded() {
     tda_Al parent = full_al();
-    tda_Log log;
-    tda_log_init(&parent, log_stream, &log);
+    tda_Log log = tda_log_init(log_stream, parent);
 
     tda_test_probe_fail_after_next(&probe, 0); // fail from here on
-    TEST_ASSERT_NULL(tda_alloc(TDA_AL(&log), bytes(32)));
+    TEST_ASSERT_NULL(tda_alloc(tda_log_to_al(&log), bytes(32)));
 
     probe.fail_after = SIZE_MAX;
     tda_log_deinit(&log);
@@ -189,17 +182,16 @@ static void test_failure_is_forwarded() {
 
 static void test_every_operation_is_recorded() {
     tda_Al parent = full_al();
-    tda_Log log;
-    tda_log_init(&parent, log_stream, &log);
+    tda_Log log = tda_log_init(log_stream, parent);
 
-    void *p = tda_alloc(TDA_AL(&log), bytes(32));
-    void *q = tda_realloc(TDA_AL(&log), p, bytes(32), 64);
-    void *r = tda_realloc(TDA_AL(&log), q, bytes(64), 16); // the probe shrinks in place
+    void *p = tda_alloc(tda_log_to_al(&log), bytes(32));
+    void *q = tda_realloc(tda_log_to_al(&log), p, bytes(32), 64);
+    void *r = tda_realloc(tda_log_to_al(&log), q, bytes(64), 16); // the probe shrinks in place
     TEST_ASSERT_EQUAL_PTR(q, r);
-    tda_dealloc(TDA_AL(&log), r, bytes(16));
+    tda_dealloc(tda_log_to_al(&log), r, bytes(16));
 
-    void *c = tda_alloc_zeroed(TDA_AL(&log), bytes(32));
-    tda_dealloc(TDA_AL(&log), c, bytes(32));
+    void *c = tda_alloc_zeroed(tda_log_to_al(&log), bytes(32));
+    tda_dealloc(tda_log_to_al(&log), c, bytes(32));
 
     char buf[2048];
     log_text(buf, sizeof(buf));
@@ -217,26 +209,24 @@ static void test_every_operation_is_recorded() {
 // the log is flushed as it goes, so it survives a crash before drop
 static void test_the_log_is_flushed_eagerly() {
     tda_Al parent = full_al();
-    tda_Log log;
-    tda_log_init(&parent, log_stream, &log);
+    tda_Log log = tda_log_init(log_stream, parent);
 
-    void *p = tda_alloc(TDA_AL(&log), bytes(128));
+    void *p = tda_alloc(tda_log_to_al(&log), bytes(128));
 
     char buf[1024];
     log_text(buf, sizeof(buf));
     TEST_ASSERT_NOT_NULL(strstr(buf, "alloc size = 128"));
 
-    tda_dealloc(TDA_AL(&log), p, bytes(128));
+    tda_dealloc(tda_log_to_al(&log), p, bytes(128));
     tda_log_deinit(&log);
 }
 
 // deinit leaves the inert state, so a second one is safe
 static void test_deinit_twice_is_noop() {
-    tda_Log x = {};
-    tda_log_init(tda_al_default(), stderr, &x);
+    tda_Log x = tda_log_init(log_stream, tda_al_default());
 
     tda_log_deinit(&x);
-    TEST_ASSERT_NULL(x.al_.alloc);
+    TEST_ASSERT_NULL(x.parent_.vt);
 
     tda_log_deinit(&x);
 }

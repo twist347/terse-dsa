@@ -19,11 +19,10 @@ int main() {
     unsigned char mem[1024];
 
     // the arena and the vec are values on the stack; the vec's elems live in 'mem'
-    tda_Arena arena;
-    tda_arena_init_buf(mem, sizeof(mem), &arena);
+    tda_Arena arena = tda_arena_init_buf(mem, sizeof(mem));
 
     tda_Vec vec;
-    if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, TDA_AL(&arena), &vec, 5, 3, 1, 4, 2))) {
+    if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, tda_arena_to_al(&arena), &vec, 5, 3, 1, 4, 2))) {
         return 1; // 'vec' is written only on success, and the arena holds no heap
     }
 
@@ -50,17 +49,17 @@ with the tests, and the reference quotes it on that module's page.
 Three rules shape the whole API:
 
 - **Memory is explicit and swappable.** Nothing allocates on its own — every container is
-  handed a `tda_Al *` and uses only that, so swapping in an arena, a slab or a logging
+  handed a `tda_Al`, a view of an allocator, and uses only that, so swapping in an arena, a slab or a logging
   allocator is a one-line change at the call site. Every request carries a size and an
   alignment, so an elem aligned past malloc's own lands aligned in any container, on any
   allocator.
 - **Containers and allocators are values.** A `tda_Vec` or a `tda_Arena` is a struct
-  the caller holds wherever it likes — on the stack, in a struct of its own — built in
-  place by an `init` and released by `deinit`. Nothing is allocated for the object
+  the caller holds wherever it likes — on the stack, in a struct of its own — made by
+  an `init` that returns it and released by `deinit`. Nothing is allocated for the object
   itself, so an empty container costs nothing and cannot fail to be made. A copy of the
   struct would be a second owner, so a value changes hands through `move_assign`.
-- **Errors cannot be dropped.** A fallible operation returns `tda_Status` and writes its
-  result through a trailing `out`; `[[nodiscard]]` makes ignoring it a warning every
+- **Errors cannot be dropped.** A function returns its result; a fallible one returns
+  `tda_Status` and writes its result through a trailing `out`; `[[nodiscard]]` makes ignoring it a warning every
   compiler raises unasked, and a compile error under `-Werror`. Broken preconditions are
   `assert`, not status — those are bugs, not runtime states.
 
@@ -76,16 +75,17 @@ reason it is what it is.
 ## Allocators
 
 An allocator is a value too — `tda_Arena`, `tda_Pool`, `tda_Slab`, `tda_Debug`, `tda_Log`
-— built in place over a parent allocator or a buffer of your own, and `TDA_AL(&arena)`
-hands out its `tda_Al *`. That interface points back at the allocator, so it must stay
-where it was built while anything uses it; a moved or copied one is caught by the first
-of its own functions called on it, under assert or `TDA_HARDENED`.
+— built over a parent allocator or a buffer of your own, and `tda_arena_to_al(&arena)`
+hands out a `tda_Al`, a view of it: a pointer to the arena and to a static table of its
+hooks, passed by value. The arena can move like any value until a view is out, and must
+stay where it is while one is, since the view and every container built on it point at
+it. Nothing checks this, as nothing checks a span.
 
 A pool hands out blocks of one layout, so of the containers only a list runs on it, with
 blocks of `tda_list_node_layout`; a slab keeps a pool per size class, and any container
 runs on it.
 
-A container keeps the `tda_Al *` it was built on, and the allocator is part of its value:
+A container keeps the `tda_Al` it was built on, and the allocator is part of its value:
 
 - **A copy is born on its source's allocator** — `tda_vec_copy_with` names another one.
 - **A move carries the allocator along**, as Rust's `Vec<T, A>` does: the target takes
@@ -111,7 +111,7 @@ uses stays the better habit.
 | `cmp.h` | `tda_Cmp` and `tda_Eq`, plus ready-made ones for the built-in types |
 | `hash.h` | `tda_Hasher`, `tda_Hash`, hashers for the built-in types and `tda_hash_combine` |
 | `rng.h` | `tda_Rng` — a seeded generator, and uniform ints, floats and bools drawn from one |
-| `print.h` | `tda_FPrint`, the printer a container is handed to show itself, plus ready-made ones for the built-in types |
+| `print.h` | `tda_FPrint`, the printer a container is handed to show itself, ready-made ones for the built-in types, and the span printers |
 | `check.h` | `TDA_CHECK`, an assert that survives NDEBUG, and `TDA_EXPECT`, one that does under `TDA_HARDENED` |
 | `util.h` | `TDA_SWAP`, `TDA_UNUSED`, `TDA_STRINGIFY` |
 | `version.h` | `TDA_VERSION_MAJOR/MINOR/PATCH`, `TDA_VERSION_STRING`, `TDA_VERSION_AT_LEAST` |
@@ -121,7 +121,7 @@ uses stays the better habit.
 
 | | |
 |---|---|
-| `alloc.h` | the `tda_Al` interface (Zig's four hooks and Rust's `alloc_zeroed`), `TDA_AL(&x)` for an allocator's own, the `tda_alloc` / `tda_alloc_zeroed` / `tda_resize` / `tda_remap` / `tda_realloc` / `tda_dealloc` wrappers, and their typed forms `TDA_ALLOC(T, al, count)` and kin |
+| `alloc.h` | the `tda_Al` view and its `tda_AlVtable` (Zig's four hooks and Rust's `alloc_zeroed`), `tda_al_eq`, the `tda_alloc` / `tda_alloc_zeroed` / `tda_resize` / `tda_remap` / `tda_realloc` / `tda_dealloc` wrappers, and their typed forms `TDA_ALLOC(T, al, count)` and kin |
 | `default.h` | malloc and friends, and `aligned_alloc` past malloc's own alignment |
 | `arena.h` | bump allocation, freed all at once or back to a mark; over a parent or a buffer of your own |
 | `pool.h` | blocks of one layout off a free list; over a parent or a buffer of your own |
@@ -232,6 +232,32 @@ add_subdirectory(thirdparty/terse-dsa)
 target_link_libraries(app PRIVATE tda::tda)
 ```
 
+## Compatibility
+
+A major keeps the names, the signatures and what the docs say they do; only the next one
+changes them, and a rename inside a major keeps the old name, deprecated. That is the
+API: tda is built from source together with what uses it, so a minor may add fields to
+a struct or hooks to the end of `tda_AlVtable`, and you rebuild against the new headers.
+A shared build of tda carries `MAJOR.MINOR` in its soname for that reason.
+
+Not promised, even within a major:
+
+- **The exact capacities.** Growth is geometric; how much a vec or a map reserves when
+  it grows may change.
+- **Hash values and walk order.** What `tda_hash_*` returns, and the order an hmap or an
+  hset is walked in. Do not store a hash, and do not rely on an order the docs call
+  unspecified.
+- **The stream behind a seed.** `tda_rng_u64` gives the same numbers for a seed within a
+  major; the draws built on it, `shuffle` and `sample` within a minor.
+- **Text meant for people.** The output of the printers, of `alloc/log` and of
+  `alloc/debug`'s reports.
+- **What a header pulls in.** Include what you use, or `tda/tda.h` for everything.
+- **The toolchain floor.** C23 with `nullptr`, `constexpr`, `typeof` and
+  `<stdckdint.h>`: the CI runs clang 22 and gcc 15, and a minor may need a newer one.
+  It is C only; nothing is wrapped in `extern "C"`.
+
+A status is tested with `TDA_STATUS_IS_ERR`, not against one cause: a minor may add one.
+
 ## What it does not do
 
 - **Elems are bytes.** A container copies `elem.size` bytes in and out, and drops them by
@@ -243,6 +269,8 @@ target_link_libraries(app PRIVATE tda::tda)
 - **The hashers are not seeded.** The ready-made ones are fixed functions, fine for keys
   you control. For keys from outside, write a hasher that takes a seed through its `ctx`,
   so no one can aim their keys at a single bucket.
+- **Printing goes to a `FILE *`.** The printers are for looking at data while debugging,
+  through stdio; there is no sink of your own to print into a string.
 - **Nothing is thread-safe.** No container takes a lock; sharing one across threads is the
   caller's problem. So is an allocator under containers on several threads: each growth
   reaches it, even when the containers themselves are never shared.

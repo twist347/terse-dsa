@@ -1,5 +1,102 @@
 # Changelog
 
+## 3.0.0 — unreleased
+
+2.0 made containers and allocators values, but an allocator kept its interface inside
+itself, pointing back at it, so it could never move, and every constructor wrote through
+`out` only because an allocator could not be returned. 3.0 takes the interface out of
+the allocator and settles what 2.0 left to accident: one rule for what a function
+returns, the order a key reaches a comparator in, and printers that can be told things.
+
+### Changed
+
+- **`tda_Al` is a view, passed by value.** It is two pointers, the allocator's state and a
+  `const tda_AlVtable *` of its hooks, one static table for each kind of allocator.
+  `tda_arena_to_al(&arena)`, `tda_pool_to_al`, `tda_slab_to_al`, `tda_debug_to_al` and
+  `tda_log_to_al` hand it out, named as `to_span` is: the object as another type;
+  containers keep it by value, and every function that took a `tda_Al *` takes a `tda_Al`.
+  An allocator holds no pointer to itself any more, so it moves and copies as any value
+  does until a view is out, and must stay where it is while one is, the rule of a span. As
+  with a span, nothing checks it: the check of 2.0 that a moved allocator's own functions
+  caught is gone, and so is the address an arena mark kept, so a mark from another arena
+  is no longer caught. `tda_al_default()` returns its view, and its hooks can no longer be
+  overwritten through the pointer it used to return. A container's `tda_<x>_al` accessor
+  returns the view it was built with, and `tda_span_inplace_merge` takes `(tda_Al){}` for
+  no buffer, where it took `nullptr`.
+- **An allocation through a view costs one more load**, the table's address: a loop of
+  nothing but allocs and frees on a pool or an arena runs about a tenth slower, and
+  nothing that does work between them notices.
+- **A function returns its result**; one that can fail returns a `tda_Status` and writes
+  through a trailing `out`, as before. Constructors are no longer the exception:
+  `tda_Vec v = tda_vec_init(elem, al)`, as for list, deque, hmap, hset, stack, queue and
+  pqueue, and their `TDA_*_INIT` macros take no `out`; `tda_stack_into_vec`,
+  `tda_queue_into_deque` and `tda_pqueue_into_vec` return what they hand over, and are
+  `[[nodiscard]]`, as is every `tda_<x>_to_al`: a dropped `into_*` result leaks. The
+  allocators follow: `tda_Arena a = tda_arena_init_buf(buf, cap)`,
+  `tda_Slab s = tda_slab_init(parent)`, `tda_Debug d = tda_debug_init(parent)` and
+  `tda_Log l = tda_log_init(stream, parent)`, which took the parent first.
+- **A bare `init` never fails**, now for allocators too: `tda_arena_init` is
+  `tda_arena_init_cap(cap, parent, &out)` and `tda_pool_init` is
+  `tda_pool_init_cap(block_count, block, parent, &out)`. The parent comes last in every
+  allocator's constructor, where a container takes its allocator.
+- **An op that takes a key passes it to `cmp` or `eq` on the right**, the elem on the
+  left, so the key need not be an elem: a span of users sorted by id is searched with the
+  id. `tda_span_upper_bound` and `tda_span_binary_search` used to ask with the key on the
+  left, to keep a comparator that only answers "less" working; that is no longer
+  promised, and a comparator answers all three ways, as `tda_Cmp` says.
+- **A printer is told things.** `tda_FPrint` is `int (*)(FILE *, const void *val,
+  void *ctx)` and returns what `fprintf` does; every `fprint` and `print` takes the ctx
+  after the printer, a map's one for each of its two, and returns negative if a write
+  failed. A container's or a span's `fprint` writes no newline, so it can print an elem
+  of another container; `print` ends the line. A bitset has no printer to hand one, and
+  its `fprint` and `print` only return the `int`. The span printers moved from
+  `core/span` to `core/print`. `tda_debug_fprint_leaks` returns the same `int` instead
+  of the number of leaks, which `tda_debug_stats` gives, and `alloc/log` no longer
+  prints the address of its parent, which a view no longer has.
+- **A typed macro takes a struct.** `TDA_VEC_PUSH(Pair, &v, p)` and
+  `TDA_HMAP_INSERT(Pair, Pair, &m, k, ((Pair){1, 2}), nullptr)` work, as does every
+  macro that takes one value or key: the value goes in as `&(T[1]){ (val) }[0]`, where
+  `&(T){ (val) }` poured a struct into its first field and did not compile. A scalar
+  passed for a struct, which filled its first field silently, now draws
+  `-Wmissing-braces`.
+- `tda_span_replace_if(s, val, pred, ctx)` takes the value before the predicate, as
+  every other op takes its data before the callback and its ctx.
+- `tda_cmp_char` orders as `unsigned char` on every target, as `strcmp` orders the
+  chars of a string and `tda_hash_char` reads them. Before, a byte past 0x7f sorted
+  first on x86 and last on ARM.
+- `tda_HSetNode` is a type of its own, no longer a name for `tda_HMapNode`: a set node
+  does not reach a map function, nor a map node a set one.
+- `tda_debug_fail_after` takes a `uint64_t`, as `tda_debug_break_at` does, and
+  `UINT64_MAX` turns refusing off.
+- A shared build's soname carries `MAJOR.MINOR`: the promise is the API, so a minor may
+  add a struct field, and a program built against another minor refuses to load rather
+  than read a struct of the wrong size.
+
+### Removed
+
+- `TDA_AL(&x)`: each allocator has its own `tda_<slug>_to_al`.
+- The check that a moved or copied allocator is caught, and its test.
+
+### Added
+
+- `TDA_HSET_OF`, a set from the keys written out, as every other container has its
+  `TDA_*_OF`.
+- `tda_AlVtable`, the hooks of one kind of allocator, and `tda_al_eq`, whether two views
+  are of one allocator. A list decides by it whether a splice relinks or copies.
+- `core/align`: `tda_align_up`, `tda_align_ckd_up`, `tda_align_pad` and
+  `tda_align_meets`, the arithmetic an allocator of your own needs.
+- `tda_span_overlap` and `tda_span_apart_or_same`.
+
+### Documentation
+
+- README: a Compatibility section, what a major keeps and what it does not: exact
+  capacities, hash values and walk order, the draws built on a seed past a minor, text
+  meant for people, what a header pulls in, and the toolchain floor.
+- conventions: the return rule and the shapes that only look like exceptions to it; an
+  elem is bytes for good; a status is tested with `TDA_STATUS_IS_ERR`, and
+  `TDA_STATUS_ERR_NO_MEM` stands for an overflowing size as well; every callback takes a
+  ctx, a printer included.
+
 ## 2.0.0 — 2026-10-23
 
 Four changes break the API, each for a fault that 1.x could not fix without breaking

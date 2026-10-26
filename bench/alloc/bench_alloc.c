@@ -35,11 +35,11 @@ static void fill_order() {
 static constexpr tda_Layout BLOCK = {.size = BLOCK_SIZE, .align = alignof(max_align_t)};
 
 // every pattern is written once against these, so libc and tda_Al run the same loop
-#define ALLOC(al) ((al) ? tda_alloc((al), BLOCK) : malloc(BLOCK_SIZE))
-#define DEALLOC(al, ptr) ((al) ? tda_dealloc((al), (ptr), BLOCK) : free(ptr))
+#define ALLOC(al) ((al).vt ? tda_alloc((al), BLOCK) : malloc(BLOCK_SIZE))
+#define DEALLOC(al, ptr) ((al).vt ? tda_dealloc((al), (ptr), BLOCK) : free(ptr))
 
 /// one block taken and given back, BLOCKS times: the free list never grows past one
-static void churn(tda_Al *al) {
+static void churn(tda_Al al) {
     for (size_t i = 0; i < BLOCKS; ++i) {
         void *ptr = ALLOC(al);
         UBENCH_DO_NOTHING(ptr);
@@ -48,7 +48,7 @@ static void churn(tda_Al *al) {
 }
 
 /// BLOCKS blocks taken, then given back in the order they came
-static void batch(tda_Al *al) {
+static void batch(tda_Al al) {
     for (size_t i = 0; i < BLOCKS; ++i) {
         ptrs[i] = ALLOC(al);
     }
@@ -60,7 +60,7 @@ static void batch(tda_Al *al) {
 
 /// as batch, but given back shuffled and then taken and given back once more, so the
 /// second round walks a free list in no particular order
-static void shuffled_batch(tda_Al *al) {
+static void shuffled_batch(tda_Al al) {
     for (size_t i = 0; i < BLOCKS; ++i) {
         ptrs[i] = ALLOC(al);
     }
@@ -70,12 +70,12 @@ static void shuffled_batch(tda_Al *al) {
     batch(al);
 }
 
-#define BENCH_LIBC(PATTERN)     \
-    UBENCH_EX(PATTERN, libc) {  \
-        fill_order();           \
-        UBENCH_DO_BENCHMARK() { \
-            PATTERN(nullptr);   \
-        }                       \
+#define BENCH_LIBC(PATTERN)      \
+    UBENCH_EX(PATTERN, libc) {   \
+        fill_order();            \
+        UBENCH_DO_BENCHMARK() {  \
+            PATTERN((tda_Al){}); \
+        }                        \
     }
 
 #define BENCH_DEFAULT(PATTERN)         \
@@ -86,34 +86,34 @@ static void shuffled_batch(tda_Al *al) {
         }                              \
     }
 
-// built once outside the timed loop: tda_pool_init threads every block, @bigo{n}
-#define BENCH_POOL(PATTERN)                                                             \
-    UBENCH_EX(PATTERN, pool) {                                                          \
-        fill_order();                                                                   \
-        tda_Pool pool;                                                                  \
-        if (TDA_STATUS_IS_ERR(tda_pool_init(tda_al_default(), BLOCK, BLOCKS, &pool))) { \
-            return;                                                                     \
-        }                                                                               \
-        UBENCH_DO_BENCHMARK() {                                                         \
-            PATTERN(TDA_AL(&pool));                                                     \
-        }                                                                               \
-        tda_pool_deinit(&pool);                                                         \
+// built once outside the timed loop: tda_pool_init_cap threads every block, @bigo{n}
+#define BENCH_POOL(PATTERN)                                                                 \
+    UBENCH_EX(PATTERN, pool) {                                                              \
+        fill_order();                                                                       \
+        tda_Pool pool;                                                                      \
+        if (TDA_STATUS_IS_ERR(tda_pool_init_cap(BLOCKS, BLOCK, tda_al_default(), &pool))) { \
+            return;                                                                         \
+        }                                                                                   \
+        UBENCH_DO_BENCHMARK() {                                                             \
+            PATTERN(tda_pool_to_al(&pool));                                                 \
+        }                                                                                   \
+        tda_pool_deinit(&pool);                                                             \
     }
 
 // dealloc is a no-op, so the reset that takes everything back is timed with the pattern
-#define BENCH_ARENA(PATTERN)                                                          \
-    UBENCH_EX(PATTERN, arena) {                                                       \
-        fill_order();                                                                 \
-        tda_Arena arena;                                                              \
-        if (TDA_STATUS_IS_ERR(                                                        \
-                tda_arena_init(tda_al_default(), 2 * BLOCKS * BLOCK_SIZE, &arena))) { \
-            return;                                                                   \
-        }                                                                             \
-        UBENCH_DO_BENCHMARK() {                                                       \
-            PATTERN(TDA_AL(&arena));                                                  \
-            tda_arena_reset(&arena);                                                  \
-        }                                                                             \
-        tda_arena_deinit(&arena);                                                     \
+#define BENCH_ARENA(PATTERN)                                                              \
+    UBENCH_EX(PATTERN, arena) {                                                           \
+        fill_order();                                                                     \
+        tda_Arena arena;                                                                  \
+        if (TDA_STATUS_IS_ERR(                                                            \
+                tda_arena_init_cap(2 * BLOCKS * BLOCK_SIZE, tda_al_default(), &arena))) { \
+            return;                                                                       \
+        }                                                                                 \
+        UBENCH_DO_BENCHMARK() {                                                           \
+            PATTERN(tda_arena_to_al(&arena));                                             \
+            tda_arena_reset(&arena);                                                      \
+        }                                                                                 \
+        tda_arena_deinit(&arena);                                                         \
     }
 
 BENCH_LIBC(churn)

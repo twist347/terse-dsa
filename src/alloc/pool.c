@@ -33,8 +33,9 @@ static void pool_dealloc(void *ctx, void *ptr, tda_Layout layout);
 [[nodiscard]]
 static bool ckd_block(tda_Layout *out, tda_Layout block);
 
-/// fills in a pool over 'data', its interface pointing back at it
-static void fill(tda_Pool *obj, tda_Al *parent, void *data, tda_Layout block, size_t block_count);
+/// a pool over 'data', its free list threaded
+[[nodiscard]]
+static tda_Pool fill(tda_Al parent, void *data, tda_Layout block, size_t block_count);
 
 static void build_free_list(tda_Pool *self);
 
@@ -48,21 +49,21 @@ static tda_Layout array_layout(const tda_Pool *self);
 [[nodiscard]] [[maybe_unused]]
 static bool owns_block(const tda_Pool *self, const void *ptr);
 
-// the ctx check is how a moved or copied allocator gets caught, so it stays under
-// TDA_HARDENED
-#define ASSERT_POOL(p)                     \
-    (assert(p),                            \
-     assert((p)->al_.alloc == pool_alloc), \
-     TDA_EXPECT((p)->al_.ctx == (p)))
+// the pool is live while it has blocks: deinit and '= {}' leave none
+#define ASSERT_POOL(p)              \
+    (assert(p),                     \
+     assert((p)->data_),            \
+     assert((p)->block_count_ > 0), \
+     assert((p)->used_ <= (p)->block_count_))
 
 /* ========== lifetime ========== */
 
-tda_Status tda_pool_init(tda_Al *parent, tda_Layout block, size_t block_count, tda_Pool *out) {
-    assert(parent);
+tda_Status tda_pool_init_cap(size_t block_count, tda_Layout block, tda_Al parent, tda_Pool *out) {
+    assert(block_count > 0);
     // not tda_layout_is_type: ckd_block rounds the size up to the alignment
     assert(block.size > 0);
     assert(tda_layout_is_align(block.align));
-    assert(block_count > 0);
+    assert(parent.vt);
     assert(out);
 
     tda_Layout data_layout;
@@ -75,7 +76,7 @@ tda_Status tda_pool_init(tda_Al *parent, tda_Layout block, size_t block_count, t
         return TDA_STATUS_ERR_NO_MEM;
     }
 
-    fill(out, parent, data, block, block_count);
+    *out = fill(parent, data, block, block_count);
 
     return TDA_STATUS_OK;
 }
@@ -99,7 +100,7 @@ tda_Status tda_pool_init_buf(void *buf, size_t cap, tda_Layout block, tda_Pool *
     }
 
     void *data = tda_byte_offset_mut(buf, 1, pad);
-    fill(out, nullptr, data, block, (cap - pad) / block.size);
+    *out = fill((tda_Al){}, data, block, (cap - pad) / block.size);
 
     return TDA_STATUS_OK;
 }
@@ -108,18 +109,34 @@ void tda_pool_deinit(tda_Pool *self) {
     assert(self);
 
     // the inert state, never filled in or already released
-    if (!self->al_.alloc) {
+    if (!self->data_) {
         return;
     }
 
     ASSERT_POOL(self);
 
     // init_buf: the blocks are the caller's
-    if (self->parent_) {
+    if (self->parent_.vt) {
         tda_dealloc(self->parent_, self->data_, array_layout(self));
     }
 
     *self = (tda_Pool){};
+}
+
+/* ========== view ========== */
+
+tda_Al tda_pool_to_al(tda_Pool *self) {
+    ASSERT_POOL(self);
+
+    static const tda_AlVtable vtable = {
+        .alloc = pool_alloc,
+        .alloc_zeroed = nullptr,
+        .resize = pool_resize,
+        .remap = nullptr,
+        .dealloc = pool_dealloc,
+    };
+
+    return (tda_Al){.ctx = self, .vt = &vtable};
 }
 
 void tda_pool_reset(tda_Pool *self) {
@@ -215,25 +232,20 @@ static bool ckd_block(tda_Layout *out, tda_Layout block) {
     return tda_align_ckd_up(&out->size, size, align);
 }
 
-static void fill(tda_Pool *obj, tda_Al *parent, void *data, tda_Layout block, size_t block_count) {
+static tda_Pool fill(tda_Al parent, void *data, tda_Layout block, size_t block_count) {
     assert(tda_layout_is_type(block));
     assert(tda_align_meets(data, block.align));
 
-    *obj = (tda_Pool){
-        .al_ = {
-            .ctx = obj,
-            .alloc = pool_alloc,
-            .resize = pool_resize,
-            .dealloc = pool_dealloc,
-        },
+    tda_Pool obj = {
         .parent_ = parent,
         .data_ = data,
         .block_size_ = block.size,
         .block_align_ = block.align,
         .block_count_ = block_count,
     };
+    build_free_list(&obj);
 
-    build_free_list(obj);
+    return obj;
 }
 
 static void build_free_list(tda_Pool *self) {

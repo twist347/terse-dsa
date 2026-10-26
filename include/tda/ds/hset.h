@@ -20,7 +20,7 @@
 /// @brief tda_HSet — an owning hash set of type-erased keys
 ///
 /// A ds/hmap with no values. C has no zero-sized type, so the map is built internally
-/// with a value of size 0, and a set's node is just the node struct plus the key, padded.
+/// with a value of size 0, and a set's node is the map's node header plus the key, padded.
 ///
 /// The hasher, the equality and their ctx are fixed at construction and travel with the
 /// keys through copy and swap, as in ds/hmap. Keys equal under 'eq' must hash alike, a
@@ -45,15 +45,15 @@
 /// @{
 
 /// Owning hash set of type-erased keys. A value the caller holds, like tda_HMap, whose
-/// rules it follows: an init or a from_ fills it in, tda_hset_deinit releases it, `= {}`
-/// is inert, and a copy of the struct is a second owner of the same entries.
+/// rules it follows: an init returns it, a from_ fills it in, tda_hset_deinit releases
+/// it, `= {}` is inert, and a copy of the struct is a second owner of the same entries.
 typedef struct tda_HSet {
     tda_HMap map_; ///< a map whose values have size 0
 } tda_HSet;
 
-/// A position in the set.
-/// A set entry is a map node with no value, so both share one type
-typedef tda_HMapNode tda_HSetNode;
+/// A position in the set. A set entry is a map node underneath, but the type is the
+/// set's own, so a set node never reaches a map function nor a map node a set one.
+typedef struct tda_HSetNode tda_HSetNode;
 
 /// @name lifetime
 /// @{
@@ -64,10 +64,10 @@ typedef tda_HMapNode tda_HSetNode;
 /// @param eq the equality the keys are matched by; must agree with 'hasher'
 /// @param ctx passed to every call of 'hasher' and 'eq'; may be null
 /// @param al used for every later allocation
-/// @param[out] out the new set
+/// @return the new set
 /// @bigo{1}
-TDA_API
-void tda_hset_init(tda_Layout key, tda_Hasher hasher, tda_Eq eq, void *ctx, tda_Al *al, tda_HSet *out);
+[[nodiscard]] TDA_API
+tda_HSet tda_hset_init(tda_Layout key, tda_Hasher hasher, tda_Eq eq, void *ctx, tda_Al al);
 
 /// an empty set with room for 'cap' keys before the first growth
 /// @param cap how many keys to make room for
@@ -85,7 +85,7 @@ tda_Status tda_hset_init_cap(
     size_t cap,
     tda_Layout key,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     tda_HSet *out
 );
 
@@ -97,13 +97,13 @@ tda_Status tda_hset_init_cap(
 /// @param al the allocator
 /// @param[out] out the new set, written only on success
 /// @retval TDA_STATUS_OK on success
-/// @retval TDA_STATUS_ERR_NO_MEM when the set, its buckets or a node cannot be allocated
+/// @retval TDA_STATUS_ERR_NO_MEM when the buckets or a node cannot be allocated
 /// @bigo{n} expected
 [[nodiscard]] TDA_API
 tda_Status tda_hset_from_span(
     tda_Span s,
     tda_Hasher hasher, tda_Eq eq, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     tda_HSet *out
 );
 
@@ -135,7 +135,7 @@ tda_Status tda_hset_copy(const tda_HSet *self, tda_HSet *out);
 /// @retval TDA_STATUS_ERR_NO_MEM when the buckets or any node cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_hset_copy_with(const tda_HSet *self, tda_Al *al, tda_HSet *out);
+tda_Status tda_hset_copy_with(const tda_HSet *self, tda_Al al, tda_HSet *out);
 
 /// overwrites the keys, hasher, equality and ctx of 'self' with those of 'other'
 /// @param[in,out] self must have the same key layout; keeps its allocator
@@ -166,7 +166,7 @@ void tda_hset_move_assign(tda_HSet *self, tda_HSet *other);
 [[nodiscard]]
 static inline size_t tda_hset_len(const tda_HSet *self) {
     assert(self);
-    assert(self->map_.al_);
+    assert(self->map_.al_.vt);
 
     return tda_hmap_len(&self->map_);
 }
@@ -178,7 +178,7 @@ static inline size_t tda_hset_len(const tda_HSet *self) {
 [[nodiscard]]
 static inline size_t tda_hset_bucket_count(const tda_HSet *self) {
     assert(self);
-    assert(self->map_.al_);
+    assert(self->map_.al_.vt);
 
     return tda_hmap_bucket_count(&self->map_);
 }
@@ -190,19 +190,19 @@ static inline size_t tda_hset_bucket_count(const tda_HSet *self) {
 [[nodiscard]]
 static inline tda_Layout tda_hset_key_layout(const tda_HSet *self) {
     assert(self);
-    assert(self->map_.al_);
+    assert(self->map_.al_.vt);
 
     return tda_hmap_key_layout(&self->map_);
 }
 
 /// the allocator the set was built with
 /// @param self the set
-/// @return the allocator, borrowed
+/// @return the view it was built with
 /// @bigo{1}
 [[nodiscard]]
-static inline tda_Al *tda_hset_al(const tda_HSet *self) {
+static inline tda_Al tda_hset_al(const tda_HSet *self) {
     assert(self);
-    assert(self->map_.al_);
+    assert(self->map_.al_.vt);
 
     return tda_hmap_al(&self->map_);
 }
@@ -214,7 +214,7 @@ static inline tda_Al *tda_hset_al(const tda_HSet *self) {
 [[nodiscard]]
 static inline tda_Hasher tda_hset_hasher(const tda_HSet *self) {
     assert(self);
-    assert(self->map_.al_);
+    assert(self->map_.al_.vt);
 
     return tda_hmap_hasher(&self->map_);
 }
@@ -227,7 +227,7 @@ static inline tda_Hasher tda_hset_hasher(const tda_HSet *self) {
 [[nodiscard]]
 static inline tda_Eq tda_hset_key_eq(const tda_HSet *self) {
     assert(self);
-    assert(self->map_.al_);
+    assert(self->map_.al_.vt);
 
     return tda_hmap_key_eq(&self->map_);
 }
@@ -239,7 +239,7 @@ static inline tda_Eq tda_hset_key_eq(const tda_HSet *self) {
 [[nodiscard]]
 static inline void *tda_hset_key_ctx(const tda_HSet *self) {
     assert(self);
-    assert(self->map_.al_);
+    assert(self->map_.al_.vt);
 
     return tda_hmap_key_ctx(&self->map_);
 }
@@ -481,20 +481,24 @@ bool tda_hset_intersects(const tda_HSet *self, const tda_HSet *other);
 /// @name print
 /// @{
 
-/// writes the keys as {a, b, c} and a newline, in walk order
+/// writes the keys as {a, b, c}, with no newline, in walk order
 /// @param self the set
 /// @param stream where to write
 /// @param fprint the printer, called once per key
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_hset_fprint(const tda_HSet *self, FILE *stream, tda_FPrint fprint);
+int tda_hset_fprint(const tda_HSet *self, FILE *stream, tda_FPrint fprint, void *ctx);
 
-/// tda_hset_fprint to stdout
+/// tda_hset_fprint to stdout, and a newline
 /// @param self the set
 /// @param fprint the printer, called once per key
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_hset_print(const tda_HSet *self, tda_FPrint fprint);
+int tda_hset_print(const tda_HSet *self, tda_FPrint fprint, void *ctx);
 
 /// @}
 
@@ -526,10 +530,9 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
 /// @param eq the equality the keys are matched by
 /// @param ctx passed to every call of 'hasher' and 'eq'; may be null
 /// @param al the allocator
-/// @param[out] out where the new set is written
 /// @bigo{1}
-#define TDA_HSET_INIT(K, hasher, eq, ctx, al, out) \
-    tda_hset_init(TDA_LAYOUT_OF(K), (hasher), (eq), (ctx), (al), (out))
+#define TDA_HSET_INIT(K, hasher, eq, ctx, al) \
+    tda_hset_init(TDA_LAYOUT_OF(K), (hasher), (eq), (ctx), (al))
 
 /// tda_hset_init_cap with TDA_LAYOUT_OF(K)
 /// @param K the key type
@@ -543,22 +546,35 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
 #define TDA_HSET_INIT_CAP(K, cap, hasher, eq, ctx, al, out) \
     tda_hset_init_cap((cap), TDA_LAYOUT_OF(K), (hasher), (eq), (ctx), (al), (out))
 
+/// a new set from the keys written out:
+/// TDA_HSET_OF(int32_t, tda_hash_i32, tda_eq_i32, nullptr, al, &s, 5, 3, 5)
+/// @param K the key type
+/// @param hasher the hash the keys are placed by
+/// @param eq the equality the keys are matched by
+/// @param ctx passed to every call of 'hasher' and 'eq'; may be null
+/// @param al the allocator
+/// @param[out] out where the new set is written
+/// @param ... the keys, as a K initializer list, not empty; a repeat is kept once
+/// @bigo{n} expected
+#define TDA_HSET_OF(K, hasher, eq, ctx, al, out, ...) \
+    tda_hset_from_span(TDA_SPAN_OF(K, __VA_ARGS__), (hasher), (eq), (ctx), (al), (out))
+
 /// tda_hset_insert from a value rather than an address
-/// @param K the key type; scalars only, as 'key' becomes a compound literal
+/// @param K the key type; 'key' may be any K, a struct literal in parentheses too
 /// @param self the set
 /// @param key the value to copy in
 /// @param[out] out_is_new whether the key was absent; may be null
 /// @bigo{1} expected
 #define TDA_HSET_INSERT(K, self, key, out_is_new) \
-    tda_hset_insert(TDA_HSET_TYPED_(K, self), &(K){ (key) }, (out_is_new))
+    tda_hset_insert(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0], (out_is_new))
 
 /// tda_hset_contains from a value rather than an address
-/// @param K the key type; scalars only, as 'key' becomes a compound literal
+/// @param K the key type; 'key' may be any K, a struct literal in parentheses too
 /// @param self the set
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HSET_CONTAINS(K, self, key) \
-    tda_hset_contains(TDA_HSET_TYPED_(K, self), &(K){ (key) })
+    tda_hset_contains(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0])
 
 /// tda_hset_extend from the keys written out
 /// @param K the key type
@@ -571,26 +587,26 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
 /// tda_hset_find from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_FIND(K, self, key) \
-    tda_hset_find(TDA_HSET_TYPED_(K, self), &(K){ (key) })
+    tda_hset_find(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0])
 
 /// tda_hset_find_mut from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_FIND_MUT(K, self, key) \
-    tda_hset_find_mut(TDA_HSET_TYPED_(K, self), &(K){ (key) })
+    tda_hset_find_mut(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0])
 
 /// tda_hset_remove from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_REMOVE(K, self, key) \
-    tda_hset_remove(TDA_HSET_TYPED_(K, self), &(K){ (key) })
+    tda_hset_remove(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0])
 
 /// tda_hset_take from a key value rather than an address, 'out_key' typechecked as K *
-/// @param K the key type; scalars only, as 'key' becomes a compound literal
+/// @param K the key type; 'key' may be any K, a struct literal in parentheses too
 /// @param self the set
 /// @param key the key to drop
 /// @param[out] out_key the stored key, or nullptr
 /// @bigo{1} expected
 #define TDA_HSET_TAKE(K, self, key, out_key) \
-    tda_hset_take(TDA_HSET_TYPED_(K, self), &(K){ (key) }, (K *){ (out_key) })
+    tda_hset_take(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0], (K *){ (out_key) })
 
 /// @cond
 // the body of both walks; the hidden names come in already unique, and 'self' is

@@ -33,17 +33,19 @@ static void *bump_alloc(void *ctx, tda_Layout layout) {
 static void bump_dealloc(void *, void *, tda_Layout) {
     // the blocks go all at once, with the buffer
 }
+
+static const tda_AlVtable BUMP_VTABLE = {.alloc = bump_alloc, .dealloc = bump_dealloc};
 /// [bump_def]
 
 int main() {
     /// [bump]
     alignas(64) static unsigned char buf[1024];
     Bump bump = {.buf = buf, .cap = sizeof(buf)};
-    tda_Al al = {.ctx = &bump, .alloc = bump_alloc, .dealloc = bump_dealloc};
+    tda_Al al = {.ctx = &bump, .vt = &BUMP_VTABLE};
 
     // a byte, then a double: the double skips ahead to its own boundary
-    unsigned char *byte = TDA_ALLOC(unsigned char, &al, 1);
-    double *num = TDA_ALLOC(double, &al, 1);
+    unsigned char *byte = TDA_ALLOC(unsigned char, al, 1);
+    double *num = TDA_ALLOC(double, al, 1);
     if (!byte || !num) {
         return 1;
     }

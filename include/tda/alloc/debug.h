@@ -72,22 +72,19 @@ enum { TDA_DEBUG_QUARANTINE_ = 64 };
 /// @endcond
 
 /// A debug allocator. A value the caller holds, on the stack or inside a struct:
-/// tda_debug_init fills it in, TDA_AL hands out the allocator over it, and
-/// tda_debug_deinit releases what it holds. `= {}` is the inert state. It holds the
-/// quarantine in place, a few kilobytes.
+/// tda_debug_init makes it, tda_debug_to_al hands out views of it, and tda_debug_deinit
+/// releases what it holds. `= {}` is the inert state. It holds the quarantine in place,
+/// a few kilobytes.
 ///
 /// The fields belong to the allocator: read and change them only through the functions
 /// here.
 ///
-/// @warning the allocator must not move, nor be copied, once it is filled in: the
-///          allocator TDA_AL gives points into it, and so does every container
-///          built on it.
-///          A moved or copied one is caught by the first of its own functions
-///          called on it, deinit included, under assert or TDA_HARDENED; a request
-///          made through its tda_Al is not checked.
+/// @warning once a view from tda_debug_to_al is out, the allocator must not move nor be
+///          copied: the view points at it, and so does every container built on it.
+///          While no view is out, a copy is a second owner of its table, as a copy of a
+///          container is.
 typedef struct tda_Debug {
-    tda_Al al_;              ///< the interface; its ctx is the allocator itself
-    tda_Al *parent_;         ///< where the blocks come from
+    tda_Al parent_;          ///< where the blocks come from
     tda_DebugTable_ table_;  ///< the live blocks
     /// a ring of the last freed blocks, quarantine_len_ of them oldest first from
     /// quarantine_head_
@@ -97,7 +94,7 @@ typedef struct tda_Debug {
     size_t live_bytes_;      ///< what the live blocks were asked for
     size_t peak_bytes_;      ///< the most live_bytes_ has been
     uint64_t requests_;      ///< requests seen, refused ones included
-    size_t fail_after_;      ///< requests let through before refusing starts
+    uint64_t fail_after_;    ///< requests let through before refusing starts
     uint64_t break_at_;      ///< the serial to stop at; 0 for none
 } tda_Debug;
 
@@ -107,10 +104,10 @@ typedef struct tda_Debug {
 /// a debug allocator over 'parent'; takes nothing until the first request, so it
 /// cannot fail
 /// @param parent where the blocks come from; borrowed, and must outlive the allocator
-/// @param[out] out the allocator
+/// @return the allocator
 /// @bigo{1}
-TDA_API
-void tda_debug_init(tda_Al *parent, tda_Debug *out);
+[[nodiscard]] TDA_API
+tda_Debug tda_debug_init(tda_Al parent);
 
 /// gives the quarantined blocks back to the parent, checking each, frees the table and
 /// leaves the allocator inert
@@ -120,6 +117,18 @@ void tda_debug_init(tda_Al *parent, tda_Debug *out);
 /// @bigo{q + c}; q quarantined blocks, checked byte by byte, and the table capacity c
 TDA_API
 void tda_debug_deinit(tda_Debug *self);
+
+/// @}
+
+/// @name view
+/// @{
+
+/// a view of the allocator, to hand to a container or a wrapper
+/// @param self the allocator; from now on it must stay where it is
+/// @return the view, valid while the allocator stays where it is and until its deinit
+/// @bigo{1}
+[[nodiscard]] TDA_API
+tda_Al tda_debug_to_al(tda_Debug *self);
 
 /// @}
 
@@ -150,7 +159,7 @@ typedef struct {
 
 /// what the allocator has seen
 /// @param self the allocator
-/// @return the four numbers
+/// @return what it has seen
 /// @bigo{1}
 [[nodiscard]] TDA_API
 tda_DebugStats tda_debug_stats(const tda_Debug *self);
@@ -158,10 +167,11 @@ tda_DebugStats tda_debug_stats(const tda_Debug *self);
 /// writes one line per live block, with its serial and size, and a total
 /// @param self the allocator
 /// @param stream where the lines go
-/// @return how many blocks are live; 0 is a clean run
+/// @return negative if a write failed, as fprintf; 0 otherwise. How many blocks are
+///         live is tda_debug_stats's live_blocks
 /// @bigo{c} in the table capacity
 TDA_API
-size_t tda_debug_fprint_leaks(const tda_Debug *self, FILE *stream);
+int tda_debug_fprint_leaks(const tda_Debug *self, FILE *stream);
 
 /// @}
 
@@ -171,12 +181,12 @@ size_t tda_debug_fprint_leaks(const tda_Debug *self, FILE *stream);
 /// lets the next 'count' requests through and refuses every one after them, as if the
 /// parent were out of memory
 /// @param self the allocator
-/// @param count how many to let through; SIZE_MAX turns refusing off
+/// @param count how many to let through; UINT64_MAX turns refusing off
 /// @note a request is an alloc or an alloc_zeroed, a realloc's among them; giving back
 ///       is never refused
 /// @bigo{1}
 TDA_API
-void tda_debug_fail_after(tda_Debug *self, size_t count);
+void tda_debug_fail_after(tda_Debug *self, uint64_t count);
 
 /// stops the program when the request with this serial arrives, before it is served
 /// @param self the allocator

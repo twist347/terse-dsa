@@ -43,9 +43,9 @@
 /// @{
 
 /// Owning queue that serves the greatest elem first. A value the caller holds, like
-/// tda_Vec, whose rules it follows: an init or a from_ fills it in, tda_pqueue_deinit
-/// releases it, `= {}` is inert, and a copy of the struct is a second owner of the same
-/// block.
+/// tda_Vec, whose rules it follows: an init returns it, a from_ fills it in,
+/// tda_pqueue_deinit releases it, `= {}` is inert, and a copy of the struct is a second
+/// owner of the same block.
 typedef struct tda_PQueue {
     tda_Vec vec_; ///< the elems, kept a heap under cmp_
     tda_Cmp cmp_; ///< the order to serve in
@@ -60,10 +60,10 @@ typedef struct tda_PQueue {
 /// @param cmp the order to serve in, fixed for the life of the queue
 /// @param ctx passed to every call of 'cmp'; may be null
 /// @param al used for every later allocation
-/// @param[out] out the new queue
+/// @return the new queue
 /// @bigo{1}
-TDA_API
-void tda_pqueue_init(tda_Layout elem, tda_Cmp cmp, void *ctx, tda_Al *al, tda_PQueue *out);
+[[nodiscard]] TDA_API
+tda_PQueue tda_pqueue_init(tda_Layout elem, tda_Cmp cmp, void *ctx, tda_Al al);
 
 /// an empty queue with room for 'cap' elems before the first growth
 /// @param cap how many elems to make room for
@@ -77,7 +77,7 @@ void tda_pqueue_init(tda_Layout elem, tda_Cmp cmp, void *ctx, tda_Al *al, tda_PQ
 ///         cap * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_pqueue_init_cap(size_t cap, tda_Layout elem, tda_Cmp cmp, void *ctx, tda_Al *al, tda_PQueue *out);
+tda_Status tda_pqueue_init_cap(size_t cap, tda_Layout elem, tda_Cmp cmp, void *ctx, tda_Al al, tda_PQueue *out);
 
 /// a queue over a copy of 'len' elems read from 'data', in any order
 /// @param data the elems to copy in; may be null only when len is 0
@@ -95,7 +95,7 @@ tda_Status tda_pqueue_init_cap(size_t cap, tda_Layout elem, tda_Cmp cmp, void *c
 tda_Status tda_pqueue_from_data(
     const void *data, size_t len, tda_Layout elem,
     tda_Cmp cmp, void *ctx,
-    tda_Al *al,
+    tda_Al al,
     tda_PQueue *out
 );
 
@@ -109,7 +109,7 @@ tda_Status tda_pqueue_from_data(
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_pqueue_from_span(tda_Span s, tda_Cmp cmp, void *ctx, tda_Al *al, tda_PQueue *out);
+tda_Status tda_pqueue_from_span(tda_Span s, tda_Cmp cmp, void *ctx, tda_Al al, tda_PQueue *out);
 
 /// releases what the queue holds and leaves it inert, `= {}`
 /// @param self a queue, or an inert one, for which this is a no-op
@@ -119,13 +119,13 @@ void tda_pqueue_deinit(tda_PQueue *self);
 
 /// hands over the vec that holds the elems, leaving the queue inert
 /// @param self the queue; inert afterwards
-/// @param[out] out the vec, elems in heap order (not sorted), with the same capacity and
-///                 allocator; the comparator is dropped. tda_span_sort_heap over
-///                 tda_vec_to_span_mut sorts it in place. Nothing is copied, so this
-///                 cannot fail
+/// @return the vec, elems in heap order (not sorted), with the same capacity and
+///         allocator; the comparator is dropped. tda_span_sort_heap over
+///         tda_vec_to_span_mut sorts it in place. Nothing is copied, so this
+///         cannot fail
 /// @bigo{1}
-TDA_API
-void tda_pqueue_into_vec(tda_PQueue *self, tda_Vec *out);
+[[nodiscard]] TDA_API
+tda_Vec tda_pqueue_into_vec(tda_PQueue *self);
 
 /// @}
 
@@ -149,7 +149,7 @@ tda_Status tda_pqueue_copy(const tda_PQueue *self, tda_PQueue *out);
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}; the heap is copied as is, not rebuilt
 [[nodiscard]] TDA_API
-tda_Status tda_pqueue_copy_with(const tda_PQueue *self, tda_Al *al, tda_PQueue *out);
+tda_Status tda_pqueue_copy_with(const tda_PQueue *self, tda_Al al, tda_PQueue *out);
 
 /// overwrites the elems of 'self' with those of 'other', growing the block if needed
 /// @param[in,out] self must have the same elem layout; takes the comparator of 'other' and
@@ -181,7 +181,7 @@ void tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other);
 [[nodiscard]]
 static inline size_t tda_pqueue_len(const tda_PQueue *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_len(&self->vec_);
 }
@@ -193,7 +193,7 @@ static inline size_t tda_pqueue_len(const tda_PQueue *self) {
 [[nodiscard]]
 static inline size_t tda_pqueue_cap(const tda_PQueue *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_cap(&self->vec_);
 }
@@ -205,19 +205,19 @@ static inline size_t tda_pqueue_cap(const tda_PQueue *self) {
 [[nodiscard]]
 static inline tda_Layout tda_pqueue_elem_layout(const tda_PQueue *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_elem_layout(&self->vec_);
 }
 
 /// the allocator the queue was built with
 /// @param self the queue
-/// @return the allocator, borrowed
+/// @return the view it was built with
 /// @bigo{1}
 [[nodiscard]]
-static inline tda_Al *tda_pqueue_al(const tda_PQueue *self) {
+static inline tda_Al tda_pqueue_al(const tda_PQueue *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_al(&self->vec_);
 }
@@ -229,7 +229,7 @@ static inline tda_Al *tda_pqueue_al(const tda_PQueue *self) {
 [[nodiscard]]
 static inline tda_Cmp tda_pqueue_cmp(const tda_PQueue *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return self->cmp_;
 }
@@ -241,7 +241,7 @@ static inline tda_Cmp tda_pqueue_cmp(const tda_PQueue *self) {
 [[nodiscard]]
 static inline void *tda_pqueue_cmp_ctx(const tda_PQueue *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return self->ctx_;
 }
@@ -258,7 +258,7 @@ static inline void *tda_pqueue_cmp_ctx(const tda_PQueue *self) {
 [[nodiscard]]
 static inline const void *tda_pqueue_top(const tda_PQueue *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);
 
     return tda_vec_front(&self->vec_);
@@ -343,7 +343,7 @@ void tda_pqueue_swap(tda_PQueue *self, tda_PQueue *other);
 [[nodiscard]]
 static inline tda_Span tda_pqueue_to_span(const tda_PQueue *self) {
     assert(self);
-    assert(self->vec_.al_);
+    assert(self->vec_.al_.vt);
 
     return tda_vec_to_span(&self->vec_);
 }
@@ -353,20 +353,24 @@ static inline tda_Span tda_pqueue_to_span(const tda_PQueue *self) {
 /// @name print
 /// @{
 
-/// writes the elems in heap order as [a, b, c] and a newline
+/// writes the elems in heap order as [a, b, c], with no newline
 /// @param self the queue
 /// @param stream where to write
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_pqueue_fprint(const tda_PQueue *self, FILE *stream, tda_FPrint fprint);
+int tda_pqueue_fprint(const tda_PQueue *self, FILE *stream, tda_FPrint fprint, void *ctx);
 
-/// tda_pqueue_fprint to stdout
+/// tda_pqueue_fprint to stdout, and a newline
 /// @param self the queue
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_pqueue_print(const tda_PQueue *self, tda_FPrint fprint);
+int tda_pqueue_print(const tda_PQueue *self, tda_FPrint fprint, void *ctx);
 
 /// @}
 
@@ -397,10 +401,9 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
 /// @param cmp the order to serve in
 /// @param ctx passed to every call of 'cmp'; may be null
 /// @param al the allocator
-/// @param[out] out where the new queue is written
 /// @bigo{1}
-#define TDA_PQUEUE_INIT(T, cmp, ctx, al, out) \
-    tda_pqueue_init(TDA_LAYOUT_OF(T), (cmp), (ctx), (al), (out))
+#define TDA_PQUEUE_INIT(T, cmp, ctx, al) \
+    tda_pqueue_init(TDA_LAYOUT_OF(T), (cmp), (ctx), (al))
 
 /// tda_pqueue_init_cap with TDA_LAYOUT_OF(T)
 /// @param T the elem type
@@ -448,12 +451,12 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
     ((const T *) tda_pqueue_top(TDA_PQUEUE_TYPED_(T, self)))
 
 /// tda_pqueue_push from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the queue
 /// @param val the value to copy in
 /// @bigo{log n}
 #define TDA_PQUEUE_PUSH(T, self, val) \
-    tda_pqueue_push(TDA_PQUEUE_TYPED_(T, self), &(T){ (val) })
+    tda_pqueue_push(TDA_PQUEUE_TYPED_(T, self), &(T[1]){ (val) }[0])
 
 /// tda_pqueue_pop_to with 'out' typechecked as T *
 /// @param T the elem type
@@ -464,12 +467,12 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
     tda_pqueue_pop_to(TDA_PQUEUE_TYPED_(T, self), (T *){ (out) })
 
 /// tda_pqueue_replace_top from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the queue
 /// @param val the value to put in
 /// @bigo{log n}
 #define TDA_PQUEUE_REPLACE_TOP(T, self, val) \
-    tda_pqueue_replace_top(TDA_PQUEUE_TYPED_(T, self), &(T){ (val) })
+    tda_pqueue_replace_top(TDA_PQUEUE_TYPED_(T, self), &(T[1]){ (val) }[0])
 
 /// @}
 

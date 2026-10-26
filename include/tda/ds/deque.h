@@ -41,7 +41,7 @@
 /// @{
 
 /// Owning queue with two cheap ends. A value the caller holds wherever it likes: an init
-/// or a from_ fills it in, tda_deque_deinit releases its block. `= {}` is the inert
+/// returns it, a from_ fills it in, tda_deque_deinit releases its block. `= {}` is the inert
 /// state, which tda_deque_deinit accepts and every other op asserts.
 ///
 /// The fields belong to the deque: read and change them only through the functions here.
@@ -57,7 +57,7 @@ typedef struct tda_Deque {
     /// two indices a full ring and an empty one look exactly alike
     size_t head_;
     tda_Layout elem_; ///< the layout of one elem
-    tda_Al *al_;      ///< where the ring comes from; moves along with the deque
+    tda_Al al_;       ///< where the ring comes from; moves along with the deque
 } tda_Deque;
 
 /// @cond
@@ -84,10 +84,10 @@ static inline unsigned char *tda_deque_elem_at_mut_(tda_Deque *self, size_t idx)
 /// an empty deque that owns no block yet; allocates nothing, so it cannot fail
 /// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
 /// @param al used for every later allocation
-/// @param[out] out the new deque
+/// @return the new deque
 /// @bigo{1}
-TDA_API
-void tda_deque_init(tda_Layout elem, tda_Al *al, tda_Deque *out);
+[[nodiscard]] TDA_API
+tda_Deque tda_deque_init(tda_Layout elem, tda_Al al);
 
 /// a deque of 'len' zeroed elems, ready to be written through get_mut or set
 /// @param len how many elems
@@ -99,7 +99,7 @@ void tda_deque_init(tda_Layout elem, tda_Al *al, tda_Deque *out);
 ///         len * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_deque_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Deque *out);
+tda_Status tda_deque_init_len(size_t len, tda_Layout elem, tda_Al al, tda_Deque *out);
 
 /// an empty deque with room for 'cap' elems before the first growth
 /// @param cap how many elems to make room for
@@ -111,7 +111,7 @@ tda_Status tda_deque_init_len(size_t len, tda_Layout elem, tda_Al *al, tda_Deque
 ///         cap * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_deque_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Deque *out);
+tda_Status tda_deque_init_cap(size_t cap, tda_Layout elem, tda_Al al, tda_Deque *out);
 
 /// a deque holding a copy of 'len' elems read from 'data', front to back
 /// @param data the elems to copy in; may be null only when len is 0
@@ -124,7 +124,7 @@ tda_Status tda_deque_init_cap(size_t cap, tda_Layout elem, tda_Al *al, tda_Deque
 ///         len * elem.size overflows
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_deque_from_data(const void *data, size_t len, tda_Layout elem, tda_Al *al, tda_Deque *out);
+tda_Status tda_deque_from_data(const void *data, size_t len, tda_Layout elem, tda_Al al, tda_Deque *out);
 
 /// a deque holding a copy of the elems 's' views
 /// @param s the view to copy; the elem layout is the span's
@@ -134,7 +134,7 @@ tda_Status tda_deque_from_data(const void *data, size_t len, tda_Layout elem, td
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_deque_from_span(tda_Span s, tda_Al *al, tda_Deque *out);
+tda_Status tda_deque_from_span(tda_Span s, tda_Al al, tda_Deque *out);
 
 /// releases what the deque holds and leaves it inert, `= {}`
 /// @param self a deque, or an inert one, for which this is a no-op
@@ -164,7 +164,7 @@ tda_Status tda_deque_copy(const tda_Deque *self, tda_Deque *out);
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot be allocated
 /// @bigo{n}
 [[nodiscard]] TDA_API
-tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al *al, tda_Deque *out);
+tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al al, tda_Deque *out);
 
 /// overwrites the elems of 'self' with those of 'other', growing the block if needed
 /// @param[in,out] self must have the same elem layout; keeps its allocator
@@ -254,7 +254,7 @@ bool tda_deque_eq_by(const tda_Deque *a, const tda_Deque *b, tda_Eq eq, void *ct
 [[nodiscard]]
 static inline size_t tda_deque_len(const tda_Deque *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->len_;
 }
@@ -266,7 +266,7 @@ static inline size_t tda_deque_len(const tda_Deque *self) {
 [[nodiscard]]
 static inline size_t tda_deque_cap(const tda_Deque *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->cap_;
 }
@@ -278,7 +278,7 @@ static inline size_t tda_deque_cap(const tda_Deque *self) {
 [[nodiscard]]
 static inline tda_Layout tda_deque_elem_layout(const tda_Deque *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->elem_;
 }
@@ -290,19 +290,19 @@ static inline tda_Layout tda_deque_elem_layout(const tda_Deque *self) {
 [[nodiscard]]
 static inline size_t tda_deque_bytes(const tda_Deque *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->len_ * self->elem_.size;
 }
 
 /// the allocator the deque was built with
 /// @param self the deque
-/// @return the allocator, borrowed
+/// @return the view it was built with
 /// @bigo{1}
 [[nodiscard]]
-static inline tda_Al *tda_deque_al(const tda_Deque *self) {
+static inline tda_Al tda_deque_al(const tda_Deque *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
 
     return self->al_;
 }
@@ -319,7 +319,7 @@ static inline tda_Al *tda_deque_al(const tda_Deque *self) {
 [[nodiscard]]
 static inline const void *tda_deque_front(const tda_Deque *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return tda_deque_elem_at_(self, 0);
@@ -330,7 +330,7 @@ static inline const void *tda_deque_front(const tda_Deque *self) {
 [[nodiscard]]
 static inline void *tda_deque_front_mut(tda_Deque *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return tda_deque_elem_at_mut_(self, 0);
@@ -341,7 +341,7 @@ static inline void *tda_deque_front_mut(tda_Deque *self) {
 [[nodiscard]]
 static inline const void *tda_deque_back(const tda_Deque *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return tda_deque_elem_at_(self, self->len_ - 1);
@@ -352,7 +352,7 @@ static inline const void *tda_deque_back(const tda_Deque *self) {
 [[nodiscard]]
 static inline void *tda_deque_back_mut(tda_Deque *self) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(self->len_ > 0);
 
     return tda_deque_elem_at_mut_(self, self->len_ - 1);
@@ -367,7 +367,7 @@ static inline void *tda_deque_back_mut(tda_Deque *self) {
 [[nodiscard]]
 static inline const void *tda_deque_get(const tda_Deque *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->len_);
 
     return tda_deque_elem_at_(self, idx);
@@ -378,7 +378,7 @@ static inline const void *tda_deque_get(const tda_Deque *self, size_t idx) {
 [[nodiscard]]
 static inline void *tda_deque_get_mut(tda_Deque *self, size_t idx) {
     assert(self);
-    assert(self->al_);
+    assert(self->al_.vt);
     TDA_EXPECT(idx < self->len_);
 
     return tda_deque_elem_at_mut_(self, idx);
@@ -555,20 +555,24 @@ void tda_deque_retain(tda_Deque *self, tda_Pred pred, void *ctx);
 /// @name print
 /// @{
 
-/// writes the elems in ring order as [a, b, c] and a newline
+/// writes the elems in ring order as [a, b, c], with no newline
 /// @param self the deque
 /// @param stream where to write
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_deque_fprint(const tda_Deque *self, FILE *stream, tda_FPrint fprint);
+int tda_deque_fprint(const tda_Deque *self, FILE *stream, tda_FPrint fprint, void *ctx);
 
-/// tda_deque_fprint to stdout
+/// tda_deque_fprint to stdout, and a newline
 /// @param self the deque
 /// @param fprint the printer, called once per elem
+/// @param ctx passed to every call of 'fprint'; may be null
+/// @return negative if a write failed, as fprintf; 0 otherwise
 /// @bigo{n}
 TDA_API
-void tda_deque_print(const tda_Deque *self, tda_FPrint fprint);
+int tda_deque_print(const tda_Deque *self, tda_FPrint fprint, void *ctx);
 
 /// @}
 
@@ -597,10 +601,9 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// tda_deque_init with TDA_LAYOUT_OF(T)
 /// @param T the elem type
 /// @param al the allocator
-/// @param[out] out where the new deque is written
 /// @bigo{1}
-#define TDA_DEQUE_INIT(T, al, out) \
-    tda_deque_init(TDA_LAYOUT_OF(T), (al), (out))
+#define TDA_DEQUE_INIT(T, al) \
+    tda_deque_init(TDA_LAYOUT_OF(T), (al))
 
 /// tda_deque_init_len with TDA_LAYOUT_OF(T)
 /// @param T the elem type
@@ -726,35 +729,35 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
     ((T *) tda_deque_get_mut(TDA_DEQUE_TYPED_(T, self), (idx)))
 
 /// tda_deque_set from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the deque
 /// @param idx the index, counted from the front
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_DEQUE_SET(T, self, idx, val) \
-    tda_deque_set(TDA_DEQUE_TYPED_(T, self), (idx), &(T){ (val) })
+    tda_deque_set(TDA_DEQUE_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
 
 /// tda_deque_push_front from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the deque
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_DEQUE_PUSH_FRONT(T, self, val) \
-    tda_deque_push_front(TDA_DEQUE_TYPED_(T, self), &(T){ (val) })
+    tda_deque_push_front(TDA_DEQUE_TYPED_(T, self), &(T[1]){ (val) }[0])
 
 /// tda_deque_push_back from a value rather than an address
 /// @copydetails TDA_DEQUE_PUSH_FRONT
 #define TDA_DEQUE_PUSH_BACK(T, self, val) \
-    tda_deque_push_back(TDA_DEQUE_TYPED_(T, self), &(T){ (val) })
+    tda_deque_push_back(TDA_DEQUE_TYPED_(T, self), &(T[1]){ (val) }[0])
 
 /// tda_deque_insert from a value rather than an address
-/// @param T the elem type; scalars only, as 'val' becomes a compound literal
+/// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the deque
 /// @param idx the index, counted from the front
 /// @param val the value to copy in
 /// @bigo{n}
 #define TDA_DEQUE_INSERT(T, self, idx, val) \
-    tda_deque_insert(TDA_DEQUE_TYPED_(T, self), (idx), &(T){ (val) })
+    tda_deque_insert(TDA_DEQUE_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
 
 /// tda_deque_pop_front_to with 'out' typechecked as T *
 /// @param T the elem type

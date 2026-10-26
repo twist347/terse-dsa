@@ -91,36 +91,23 @@ static void *carve(tda_Slab *self, SizeClass *cls, size_t size);
 [[nodiscard]] [[maybe_unused]]
 static bool owns_block(const tda_Slab *self, const void *ptr);
 
-// the ctx check is how a moved or copied allocator gets caught, so it stays under
-// TDA_HARDENED
-#define ASSERT_SLAB(s)                     \
-    (assert(s),                            \
-     assert((s)->al_.alloc == slab_alloc), \
-     TDA_EXPECT((s)->al_.ctx == (s)))
+// the slab is live while it has a parent: deinit and '= {}' leave none
+#define ASSERT_SLAB(s) \
+    (assert(s), assert((s)->parent_.vt))
 
 /* ========== lifetime ========== */
 
-void tda_slab_init(tda_Al *parent, tda_Slab *out) {
-    assert(parent);
-    assert(out);
+tda_Slab tda_slab_init(tda_Al parent) {
+    assert(parent.vt);
 
-    *out = (tda_Slab){
-        .al_ = {
-            .ctx = out,
-            .alloc = slab_alloc,
-            .resize = slab_resize,
-            .remap = slab_remap,
-            .dealloc = slab_dealloc,
-        },
-        .parent_ = parent,
-    };
+    return (tda_Slab){.parent_ = parent};
 }
 
 void tda_slab_deinit(tda_Slab *self) {
     assert(self);
 
-    // the inert state, never filled in or already released
-    if (!self->al_.alloc) {
+    // the inert state, never made or already released
+    if (!self->parent_.vt) {
         return;
     }
 
@@ -132,6 +119,22 @@ void tda_slab_deinit(tda_Slab *self) {
     }
 
     *self = (tda_Slab){};
+}
+
+/* ========== view ========== */
+
+tda_Al tda_slab_to_al(tda_Slab *self) {
+    ASSERT_SLAB(self);
+
+    static const tda_AlVtable vtable = {
+        .alloc = slab_alloc,
+        .alloc_zeroed = nullptr,
+        .resize = slab_resize,
+        .remap = slab_remap,
+        .dealloc = slab_dealloc,
+    };
+
+    return (tda_Al){.ctx = self, .vt = &vtable};
 }
 
 /* ========== stats ========== */
@@ -167,9 +170,9 @@ static void *slab_alloc(void *ctx, tda_Layout layout) {
     SizeClass *cls = &self->classes_[idx];
 
     void *ptr;
-    if (cls->free_head_) {
-        ptr = cls->free_head_;
-        cls->free_head_ = cls->free_head_->next;
+    if (cls->free_head) {
+        ptr = cls->free_head;
+        cls->free_head = cls->free_head->next;
     } else {
         ptr = carve(self, cls, CLASS_SIZES[idx]);
         if (!ptr) {
@@ -237,12 +240,12 @@ static void slab_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     // builds make it
     SizeClass *cls = &self->classes_[idx];
     TDA_EXPECT(self->small_blocks_ > 0);
-    TDA_EXPECT(ptr != cls->free_head_);
+    TDA_EXPECT(ptr != cls->free_head);
     assert(owns_block(self, ptr));
 
     FreeBlock *block = ptr;
-    block->next = cls->free_head_;
-    cls->free_head_ = block;
+    block->next = cls->free_head;
+    cls->free_head = block;
 
     --self->small_blocks_;
 }
@@ -288,15 +291,15 @@ static bool add_chunk(tda_Slab *self, SizeClass *cls) {
     self->chunks_ = chunk;
     ++self->chunk_count_;
 
-    cls->carve_ = bytes;
-    cls->carve_end_ = (unsigned char *) chunk;
+    cls->carve = bytes;
+    cls->carve_end = (unsigned char *) chunk;
 
     return true;
 }
 
 static bool can_carve(const SizeClass *cls, size_t size) {
     // a class not yet started has no chunk to carve, and null pointers do not subtract
-    return cls->carve_ && (size_t) (cls->carve_end_ - cls->carve_) >= size;
+    return cls->carve && (size_t) (cls->carve_end - cls->carve) >= size;
 }
 
 static void *carve(tda_Slab *self, SizeClass *cls, size_t size) {
@@ -305,8 +308,8 @@ static void *carve(tda_Slab *self, SizeClass *cls, size_t size) {
         return nullptr;
     }
 
-    void *ptr = cls->carve_;
-    cls->carve_ += size;
+    void *ptr = cls->carve;
+    cls->carve += size;
 
     return ptr;
 }

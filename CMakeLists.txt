@@ -120,7 +120,7 @@ target_compile_definitions(tda
 
 set_target_properties(tda PROPERTIES
         VERSION ${PROJECT_VERSION}
-        SOVERSION ${PROJECT_VERSION_MAJOR}
+        SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
         POSITION_INDEPENDENT_CODE ON
         C_EXTENSIONS OFF
         C_VISIBILITY_PRESET hidden

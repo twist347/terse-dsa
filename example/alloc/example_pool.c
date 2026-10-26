@@ -9,7 +9,7 @@
 int main() {
     /// [build]
     tda_Pool pool;
-    if (TDA_STATUS_IS_ERR(tda_pool_init(tda_al_default(), TDA_LAYOUT_OF(int32_t), 3, &pool))) {
+    if (TDA_STATUS_IS_ERR(tda_pool_init_cap(3, TDA_LAYOUT_OF(int32_t), tda_al_default(), &pool))) {
         return 1;
     }
 
@@ -29,17 +29,17 @@ int main() {
     // every block has the same size, so a request is one pointer move or nothing
     void *last = nullptr;
     for (size_t i = 0; i < st.blocks; ++i) {
-        last = tda_alloc(TDA_AL(&pool), TDA_LAYOUT_OF(int32_t));
+        last = tda_alloc(tda_pool_to_al(&pool), TDA_LAYOUT_OF(int32_t));
     }
     printf("%zu free after taking them all\n", tda_pool_stats(&pool).free); // 0
 
     // null now means the blocks ran out
-    printf("%s\n", tda_alloc(TDA_AL(&pool), TDA_LAYOUT_OF(int32_t)) ? "served" : "null: none left");
+    printf("%s\n", tda_alloc(tda_pool_to_al(&pool), TDA_LAYOUT_OF(int32_t)) ? "served" : "null: none left");
 
     // null also comes back for a request larger than a block, even with blocks free
-    tda_dealloc(TDA_AL(&pool), last, TDA_LAYOUT_OF(int32_t));
+    tda_dealloc(tda_pool_to_al(&pool), last, TDA_LAYOUT_OF(int32_t));
     const tda_Layout too_big = {.size = st.block_size + 1, .align = 1};
-    printf("%s\n", tda_alloc(TDA_AL(&pool), too_big) ? "served" : "null: over a block");
+    printf("%s\n", tda_alloc(tda_pool_to_al(&pool), too_big) ? "served" : "null: over a block");
     /// [limits]
 
     tda_pool_deinit(&pool);

@@ -16,10 +16,10 @@ void tearDown() {
 // not in someone else's project
 static void test_the_umbrella_reaches_every_module() {
     tda_Arena arena;
-    TDA_TEST_OK(tda_arena_init(tda_al_default(), 1024, &arena)); // alloc
+    TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena)); // alloc
 
     tda_Vec v = {};
-    TDA_TEST_OK(TDA_VEC_OF(int32_t, TDA_AL(&arena), &v, 5, 3, 1)); // ds
+    TDA_TEST_OK(TDA_VEC_OF(int32_t, tda_arena_to_al(&arena), &v, 5, 3, 1)); // ds
 
     tda_span_sort(tda_vec_to_span_mut(&v), tda_cmp_i32, nullptr); // algo, core
 

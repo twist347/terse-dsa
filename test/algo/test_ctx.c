@@ -284,7 +284,7 @@ static void test_unique_and_permutations_read_the_ctx() {
 // every container's eq_by hands its ctx to the equality
 static void test_every_eq_by_passes_the_ctx() {
     int32_t ten = 10;
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_Arr aa = {}, ab = {};
     TDA_TEST_OK(TDA_ARR_OF(int32_t, al, &aa, 1, 2));
@@ -433,7 +433,7 @@ static void test_every_algo_hands_the_ctx_to_every_call() {
     const tda_SpanMut o = TDA_SPAN_FROM_DATA_MUT(int32_t, other, SWEEP_N);
     const tda_SpanMut dst = TDA_SPAN_FROM_DATA_MUT(int32_t, out, 2 * SWEEP_N);
     void *ctx = &SWEEP;
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
     constexpr int32_t key = 42;
     size_t at;
     sweep_calls = 0;
@@ -474,7 +474,7 @@ static void test_every_algo_hands_the_ctx_to_every_call() {
             sweep_fill(buf);
             tda_span_sort(tda_span_sub_mut(s, 0, mid), cmp_seen, ctx);
             tda_span_sort(tda_span_sub_mut(s, mid, SWEEP_N - mid), cmp_seen, ctx);
-            tda_span_inplace_merge(s, mid, cmp_seen, ctx, with_buf ? al : nullptr);
+            tda_span_inplace_merge(s, mid, cmp_seen, ctx, with_buf ? al : (tda_Al){});
             TEST_ASSERT_TRUE(tda_span_is_sorted(v, cmp_seen, ctx));
         }
     }
@@ -548,7 +548,7 @@ static void test_every_algo_hands_the_ctx_to_every_call() {
     // in-place edits
     sweep_fill(buf);
     tda_span_replace(s, &buf[0], &key, eq_seen, ctx);
-    tda_span_replace_if(s, small_seen, ctx, &key);
+    tda_span_replace_if(s, &key, small_seen, ctx);
     sweep_fill(buf);
     TDA_TEST_OK(tda_span_partition_stable(s, small_seen, ctx, al, &at));
     sweep_fill(buf);
@@ -579,9 +579,8 @@ static void test_container_lookups_hand_the_ctx_on() {
     sweep_calls = 0;
     sweep_wrong = 0;
 
-    tda_HMap a = {}, b = {};
-    TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &a);
-    TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default(), &b);
+    tda_HMap a = TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default());
+    tda_HMap b = TDA_HMAP_INIT(int32_t, int32_t, tda_hash_i32, tda_eq_i32, nullptr, tda_al_default());
     for (int32_t i = 0; i < 10; ++i) {
         TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &a, i, i, nullptr));
         TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &b, i, i, nullptr));
@@ -605,8 +604,7 @@ static void test_container_lookups_hand_the_ctx_on() {
 // the map stores one ctx for its hasher and its equality: 3, 13 and 23 are one key
 static void test_hmap_hashes_and_matches_under_its_ctx() {
     int32_t ten = 10;
-    tda_HMap m = {};
-    TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &ten, tda_al_default(), &m);
+    tda_HMap m = TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &ten, tda_al_default());
     TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(&m));
 
     TDA_TEST_OK(TDA_HMAP_INSERT(int32_t, int32_t, &m, 3, 100, nullptr));
@@ -649,8 +647,7 @@ static void test_hmap_hashes_and_matches_under_its_ctx() {
 // the queue serves by weights it does not hold
 static void test_pqueue_serves_by_weights_in_its_ctx() {
     int32_t weight[4] = {5, 50, 0, 20};
-    tda_PQueue q = {};
-    TDA_PQUEUE_INIT(size_t, cmp_by_key, weight, tda_al_default(), &q);
+    tda_PQueue q = TDA_PQUEUE_INIT(size_t, cmp_by_key, weight, tda_al_default());
     TEST_ASSERT_EQUAL_PTR(weight, tda_pqueue_cmp_ctx(&q));
 
     for (size_t i = 0; i < 4; ++i) {
@@ -683,7 +680,7 @@ static void test_pqueue_serves_by_weights_in_its_ctx() {
 static void test_pqueue_constructors_heapify_under_the_ctx() {
     int32_t weight[4] = {5, 50, 0, 20};
     constexpr size_t idx[4] = {0, 1, 2, 3};
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
     tda_PQueue a = {};
     TDA_TEST_OK(TDA_PQUEUE_INIT_CAP(size_t, 4, cmp_by_key, weight, al, &a));
@@ -756,14 +753,12 @@ static void test_hash_containers_from_spans_hash_under_the_ctx() {
 // and combine, as long as their equalities agree
 static void test_hash_containers_of_differing_seeds_meet() {
     tda_Hash seed_a = 0x1234, seed_b = 0xabcd0000;
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
-    tda_HSet a = {}, b = {};
-    TDA_HSET_INIT(int32_t, hash_seeded, tda_eq_i32, &seed_a, al, &a);
-    TDA_HSET_INIT(int32_t, hash_seeded, tda_eq_i32, &seed_b, al, &b);
-    tda_HMap m = {}, n = {};
-    TDA_HMAP_INIT(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_a, al, &m);
-    TDA_HMAP_INIT(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_b, al, &n);
+    tda_HSet a = TDA_HSET_INIT(int32_t, hash_seeded, tda_eq_i32, &seed_a, al);
+    tda_HSet b = TDA_HSET_INIT(int32_t, hash_seeded, tda_eq_i32, &seed_b, al);
+    tda_HMap m = TDA_HMAP_INIT(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_a, al);
+    tda_HMap n = TDA_HMAP_INIT(int32_t, int32_t, hash_seeded, tda_eq_i32, &seed_b, al);
 
     for (int32_t i = 0; i < 40; ++i) {
         TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &a, i, nullptr));
@@ -790,11 +785,10 @@ static void test_hash_containers_of_differing_seeds_meet() {
 // over, a swap trades it
 static void test_hmap_and_hset_carry_their_ctx() {
     int32_t ten = 10, seven = 7;
-    tda_Al *al = tda_al_default();
+    tda_Al al = tda_al_default();
 
-    tda_HMap m = {}, n = {};
-    TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &ten, al, &m);
-    TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &seven, al, &n);
+    tda_HMap m = TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &ten, al);
+    tda_HMap n = TDA_HMAP_INIT(int32_t, int32_t, hash_mod, eq_mod, &seven, al);
 
     tda_HMap c = {};
     TDA_TEST_OK(tda_hmap_copy_with(&m, al, &c));
@@ -808,9 +802,8 @@ static void test_hmap_and_hset_carry_their_ctx() {
     tda_hmap_move_assign(&m, &n);
     TEST_ASSERT_EQUAL_PTR(&ten, tda_hmap_key_ctx(&m));
 
-    tda_HSet s = {}, u = {};
-    TDA_HSET_INIT(int32_t, hash_mod, eq_mod, &ten, al, &s);
-    TDA_HSET_INIT(int32_t, hash_mod, eq_mod, &seven, al, &u);
+    tda_HSet s = TDA_HSET_INIT(int32_t, hash_mod, eq_mod, &ten, al);
+    tda_HSet u = TDA_HSET_INIT(int32_t, hash_mod, eq_mod, &seven, al);
     TEST_ASSERT_EQUAL_PTR(&ten, tda_hset_key_ctx(&s));
     TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &s, 3, nullptr));
     TDA_TEST_OK(TDA_HSET_INSERT(int32_t, &s, 13, nullptr));
@@ -835,9 +828,8 @@ static void test_hmap_and_hset_carry_their_ctx() {
 // a move hands the comparator over with its ctx, and a swap trades both
 static void test_pqueue_ctx_travels_with_its_comparator() {
     int32_t a_ctx[1] = {0}, b_ctx[1] = {0};
-    tda_PQueue a = {}, b = {};
-    TDA_PQUEUE_INIT(size_t, cmp_by_key, a_ctx, tda_al_default(), &a);
-    TDA_PQUEUE_INIT(size_t, cmp_by_key, b_ctx, tda_al_default(), &b);
+    tda_PQueue a = TDA_PQUEUE_INIT(size_t, cmp_by_key, a_ctx, tda_al_default());
+    tda_PQueue b = TDA_PQUEUE_INIT(size_t, cmp_by_key, b_ctx, tda_al_default());
 
     tda_pqueue_swap(&a, &b);
     TEST_ASSERT_EQUAL_PTR(b_ctx, tda_pqueue_cmp_ctx(&a));
@@ -852,8 +844,7 @@ static void test_pqueue_ctx_travels_with_its_comparator() {
     TEST_ASSERT_EQUAL_PTR(a_ctx, tda_pqueue_cmp_ctx(&c));
 
     int32_t d_ctx[1] = {0};
-    tda_PQueue d = {};
-    TDA_PQUEUE_INIT(size_t, cmp_by_key, d_ctx, tda_al_default(), &d);
+    tda_PQueue d = TDA_PQUEUE_INIT(size_t, cmp_by_key, d_ctx, tda_al_default());
     tda_PQueue e = {};
     TDA_TEST_OK(tda_pqueue_copy_with(&d, tda_al_default(), &e));
     TEST_ASSERT_EQUAL_PTR(d_ctx, tda_pqueue_cmp_ctx(&e));

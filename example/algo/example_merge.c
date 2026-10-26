@@ -17,7 +17,7 @@ int main() {
     const tda_SpanMut dst = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6);
 
     tda_span_merge(dst, a, b, tda_cmp_i32, nullptr);
-    tda_span_mut_print(dst, tda_fprint_i32); // [1, 2, 3, 4, 7, 8]
+    tda_span_mut_print(dst, tda_fprint_i32, nullptr); // [1, 2, 3, 4, 7, 8]
 
     // in place: two sorted runs end to end become one; tda_span_is_sorted_until finds
     // where the second run starts
@@ -26,7 +26,7 @@ int main() {
 
     // the allocator only speeds this up; with null it runs without a buffer
     tda_span_inplace_merge(s, mid, tda_cmp_i32, nullptr, tda_al_default());
-    tda_span_mut_print(s, tda_fprint_i32); // [1, 2, 3, 4, 7, 8]
+    tda_span_mut_print(s, tda_fprint_i32, nullptr); // [1, 2, 3, 4, 7, 8]
     /// [merge]
 
     return 0;
