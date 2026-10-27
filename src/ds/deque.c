@@ -19,7 +19,7 @@
      assert(!(d)->data_ || (d)->cap_ > 0),             \
      assert((d)->cap_ == 0 || (d)->head_ < (d)->cap_), \
      assert((d)->cap_ > 0 || (d)->head_ == 0),         \
-     assert((d)->al_.vt))
+     TDA_EXPECT((d)->al_.vt))
 
 #define EXPECT_SAME_DEQUE(a, b) \
     (TDA_EXPECT(tda_layout_eq((a)->elem_, (b)->elem_)))
@@ -730,11 +730,11 @@ static size_t alias_idx(const tda_Deque *self, const void *val) {
 
     const size_t off = (size_t) tda_byte_diff(val, self->data_);
     // anything else in the block is no value: a free slot holds no elem
-    assert(off % self->elem_.size == 0);
+    TDA_EXPECT(off % self->elem_.size == 0);
 
     const size_t slot = off / self->elem_.size;
     const size_t idx = slot >= self->head_ ? slot - self->head_ : slot + self->cap_ - self->head_;
-    assert(idx < self->len_);
+    TDA_EXPECT(idx < self->len_);
 
     return idx;
 }

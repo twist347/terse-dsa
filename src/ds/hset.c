@@ -11,7 +11,7 @@
 // the map asserts the rest of its invariants on every call
 #define ASSERT_HSET(s)                                     \
     (assert(s),                                            \
-     assert((s)->map_.al_.vt),                             \
+     TDA_EXPECT((s)->map_.al_.vt),                         \
      assert(tda_hmap_val_layout(&(s)->map_).size == 0))
 
 // two sets whose keys can pass between them: one key layout. The ops whose answer also

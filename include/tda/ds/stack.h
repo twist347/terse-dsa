@@ -155,7 +155,8 @@ void tda_stack_move_assign(tda_Stack *self, tda_Stack *other);
 /// whether the two hold the same elems bottom to top, byte for byte
 /// @param a one stack
 /// @param b must have the same elem layout (asserted); a different length gives false
-/// @return whether the lengths match and the bytes do
+/// @return whether the lengths match and the bytes do; as memcmp, it tells -0.0 from
+///         +0.0 and compares struct padding
 /// @bigo{n}
 [[nodiscard]] TDA_API
 bool tda_stack_eq(const tda_Stack *a, const tda_Stack *b);
@@ -259,7 +260,8 @@ static inline void *tda_stack_top_mut(tda_Stack *self) {
 
 /// puts a copy of 'val' on top
 /// @param self the stack
-/// @param val the elem to copy in; may be one of this stack's
+/// @param val the elem to copy in; may be one of this stack's elems, but not a slot past
+///            the length
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized

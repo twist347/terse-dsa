@@ -29,7 +29,9 @@
 /// the two runs as they lie, for whatever works run by run, and the pair
 /// tda_deque_copy_to_span / tda_deque_copy_from_span for whatever needs one run.
 ///
-/// Pointers are not stable: growing moves every elem. For stable positions use ds/list.
+/// Pointers are not stable: growing moves every elem. A pointer to an elem that a pop,
+/// truncate or clear dropped still points into the block but at no elem. For stable
+/// positions use ds/list.
 ///
 /// Out-of-range indices assert. Only the ops that allocate return a tda_Status.
 ///
@@ -229,7 +231,8 @@ void tda_deque_to_spans_mut(tda_Deque *self, tda_SpanMut *out_front, tda_SpanMut
 /// whether the two hold the same elems in ring order, byte for byte
 /// @param a one deque
 /// @param b must have the same elem layout (asserted); a different length gives false
-/// @return whether the lengths match and the elems do, wherever either ring starts
+/// @return whether the lengths match and the elems do, wherever either ring starts; as
+///         memcmp, it tells -0.0 from +0.0 and compares struct padding
 /// @bigo{n}
 [[nodiscard]] TDA_API
 bool tda_deque_eq(const tda_Deque *a, const tda_Deque *b);
@@ -401,7 +404,7 @@ void tda_deque_set(tda_Deque *self, size_t idx, const void *val);
 
 /// puts a copy of 'val' at the front
 /// @param self the deque
-/// @param val the elem to copy in; may be one of this deque's
+/// @param val the elem to copy in; may be one of this deque's elems, but not a free slot
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized
@@ -439,7 +442,7 @@ void tda_deque_pop_back_to(tda_Deque *self, void *out);
 /// puts a copy of 'val' at 'idx', shifting whichever side is shorter
 /// @param self the deque
 /// @param idx asserts idx <= len; idx == len is push_back
-/// @param val the elem to copy in; may be one of this deque's
+/// @param val the elem to copy in; may be one of this deque's elems, but not a free slot
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{n}; at most half the elems move, the shorter side, but one at a time, where a

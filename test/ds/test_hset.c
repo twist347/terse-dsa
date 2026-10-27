@@ -577,16 +577,40 @@ static void test_shrink_to_fit_keeps_borrowed_nodes() {
     tda_hset_deinit(&s);
 }
 
+// the walk steps from the node after the body, so the body may drop another one: each
+// key takes its partner k ^ 1 out, one of every pair stays, under one long chain, where
+// the partner is often the next node, and short ones alike
+static void test_for_each_mut_may_remove_another_node() {
+    const tda_Hasher hashers[] = {tda_hash_i32, hash_all_alike};
+
+    for (size_t h = 0; h < 2; ++h) {
+        tda_HSet s = make_filled(hashers[h], nullptr, 64);
+
+        TDA_HSET_FOR_EACH_MUT(node, &s) {
+            const int32_t key = *TDA_HSET_NODE_KEY_AS(int32_t, &s, node);
+            TDA_HSET_REMOVE(int32_t, &s, key ^ 1);
+        }
+
+        TEST_ASSERT_EQUAL_size_t(32, tda_hset_len(&s));
+        for (int32_t i = 0; i < 64; i += 2) {
+            TEST_ASSERT_TRUE(TDA_HSET_CONTAINS(int32_t, &s, i) != TDA_HSET_CONTAINS(int32_t, &s, i + 1));
+        }
+        assert_walk_sees_everything(&s);
+
+        tda_hset_deinit(&s);
+    }
+}
+
 // the walk takes the next node before the body, so the body may drop the one it is on:
 // the odd keys go, each node is reached once, under one long chain and short ones alike
-static void test_for_each_mut_may_remove_the_node_it_is_on() {
+static void test_for_each_safe_may_remove_the_node_it_is_on() {
     const tda_Hasher hashers[] = {tda_hash_i32, hash_all_alike};
 
     for (size_t h = 0; h < 2; ++h) {
         tda_HSet s = make_filled(hashers[h], nullptr, 40);
 
         size_t seen = 0;
-        TDA_HSET_FOR_EACH_MUT(node, &s) {
+        TDA_HSET_FOR_EACH_SAFE(node, &s) {
             if (*TDA_HSET_NODE_KEY_AS(int32_t, &s, node) % 2 != 0) {
                 tda_hset_remove_node(&s, node);
             }
@@ -1597,7 +1621,8 @@ int main() {
     RUN_TEST(test_shrink_to_fit_gives_the_buckets_back);
     RUN_TEST(test_shrink_to_fit_of_an_empty_set_owns_nothing);
     RUN_TEST(test_shrink_to_fit_keeps_borrowed_nodes);
-    RUN_TEST(test_for_each_mut_may_remove_the_node_it_is_on);
+    RUN_TEST(test_for_each_mut_may_remove_another_node);
+    RUN_TEST(test_for_each_safe_may_remove_the_node_it_is_on);
 
     RUN_TEST(test_remove_takes_the_key_out);
     RUN_TEST(test_remove_of_a_missing_key_says_so);

@@ -17,7 +17,7 @@
      assert((a)->len_ == 0 || (a)->data_),                                 \
      assert(!(a)->data_ || (a)->len_ > 0),                                 \
      assert(!(a)->data_ || tda_align_meets((a)->data_, (a)->elem_.align)), \
-     assert((a)->al_.vt))
+     TDA_EXPECT((a)->al_.vt))
 
 #define EXPECT_SAME_ARR(a, b) \
     (TDA_EXPECT(tda_layout_eq((a)->elem_, (b)->elem_)))

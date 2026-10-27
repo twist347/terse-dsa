@@ -35,7 +35,8 @@
 /// invalidated only when its own entry is removed, cleared, assigned over or released with
 /// the map. This is why a position is a node and not a slot index.
 ///
-/// The iteration order is unspecified and may change on any insert that grows. A walk
+/// The iteration order is unspecified and may change on any insert that grows, and on
+/// tda_hmap_reserve and tda_hmap_shrink_to_fit, which relink the nodes too. A walk
 /// (and so clear, copy, eq, print and deinit) visits every bucket as well as every entry,
 /// so a map that grew and then emptied walks as slowly as when full, until
 /// tda_hmap_shrink_to_fit gives the buckets back.
@@ -299,9 +300,10 @@ static inline void *tda_hmap_key_ctx(const tda_HMap *self) {
 
 /// whether the two hold the same keys with equal values, looked up with the hasher of 'b'
 /// @param a one map
-/// @param b must have the same key and value layouts and key equality, since the check runs
-///          one way only; a different length gives false. Its key ctx may differ, a seed
-///          say, as long as both equalities agree on what a key is
+/// @param b must have the same key and value layouts and the same key equality function
+///          (asserted), since the check runs one way only; a different length gives
+///          false. Its key ctx may differ, a seed say, as long as both equalities agree
+///          on what a key is
 /// @return whether the lengths match and every entry of 'a' is in 'b' with the same value
 ///         byte for byte (a tda_Eq takes no size, so it cannot do this)
 /// @bigo{n} expected over the entries and the buckets of 'a'
@@ -310,7 +312,8 @@ bool tda_hmap_eq(const tda_HMap *a, const tda_HMap *b);
 
 /// the same, with 'val_eq' deciding what an equal value is
 /// @param a one map
-/// @param b must have the same key and value layouts and key equality
+/// @param b must have the same key and value layouts and the same key equality function
+///          (asserted)
 /// @param val_eq the value equality, which the map does not carry; needed for values with
 ///               padding or fields that do not count
 /// @param ctx passed to every call of 'val_eq'; may be null
@@ -459,7 +462,7 @@ bool tda_hmap_remove(tda_HMap *self, const void *key);
 /// @param[out] out_val the stored value; may be null, written only on a hit
 /// @return whether there was an entry
 /// @bigo{1} expected
-TDA_API
+[[nodiscard]] TDA_API
 bool tda_hmap_take(tda_HMap *self, const void *key, void *out_key, void *out_val);
 
 /// drops the entry 'node' names
@@ -512,7 +515,7 @@ void tda_hmap_clear(tda_HMap *self);
 tda_Status tda_hmap_reserve(tda_HMap *self, size_t new_cap);
 
 /// gives back unneeded buckets, down to the smallest power of two that holds the
-/// entries, but never below the count a fresh map starts with
+/// entries, but never below the count the first insert takes
 /// @param self an empty map is left owning no buckets
 /// @retval TDA_STATUS_OK on success, including when there was nothing to give back
 /// @retval TDA_STATUS_ERR_NO_MEM when the smaller array is refused; the map is unchanged
@@ -705,22 +708,25 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
     tda_hmap_take(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0], (K *){ (out_key) }, (V *){ (out_val) })
 
 /// @cond
-// the body of both walks; the hidden names come in already unique, and 'self' is
-// read once. The node after 'node' is taken before the body runs, so the body may
-// remove 'node'
-#define TDA_HMAP_WALK_(SelfT, NodeT, node, self, first, next, hmap, once, after)    \
-    for (SelfT *hmap = (self), **once = &hmap; once; once = nullptr)                \
-        for (NodeT *node = first(hmap), *after = node ? next(hmap, node) : nullptr; \
-             node;                                                                  \
+// the bodies of the walks; the hidden names come in already unique, and 'self' is read
+// once. The safe one takes the node after 'node' before the body runs
+#define TDA_HMAP_WALK_(SelfT, NodeT, node, self, first, next, hmap, once) \
+    for (SelfT *hmap = (self), **once = &hmap; once; once = nullptr)      \
+        for (NodeT *node = first(hmap); node; node = next(hmap, node))
+
+#define TDA_HMAP_WALK_SAFE_(SelfT, NodeT, node, self, first, next, hmap, once, after) \
+    for (SelfT *hmap = (self), **once = &hmap; once; once = nullptr)                    \
+        for (NodeT *node = first(hmap), *after = node ? next(hmap, node) : nullptr;     \
+             node;                                                                      \
              node = after, after = node ? next(hmap, node) : nullptr)
 /// @endcond
 
 /// walks every entry, binding 'node' to each in turn, in unspecified (bucket) order
 /// @param node the name of the loop variable, a const tda_HMapNode *
 /// @param self the map
-/// @note the next node is taken before the body runs, so the body of
-///       TDA_HMAP_FOR_EACH_MUT may drop 'node' with tda_hmap_remove_node. Dropping any
-///       other node, or inserting, is not allowed; see tda_hmap_node_next
+/// @note the loop steps from 'node' after the body, so the body of
+///       TDA_HMAP_FOR_EACH_MUT may drop any node but 'node'. To drop 'node' itself, walk
+///       with TDA_HMAP_FOR_EACH_SAFE. Inserting is not allowed; see tda_hmap_node_next
 #define TDA_HMAP_FOR_EACH(node, self) \
     TDA_HMAP_WALK_(                   \
         const tda_HMap,               \
@@ -730,12 +736,10 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
         tda_hmap_first_node,          \
         tda_hmap_node_next,           \
         TDA_LINE_NAME_(hmap_),        \
-        TDA_LINE_NAME_(once_),        \
-        TDA_LINE_NAME_(after_)        \
+        TDA_LINE_NAME_(once_)         \
     )
 
-/// the same walk over entries whose values may be written through, and which may be
-/// removed
+/// the same walk over entries whose values may be written through
 /// @copydetails TDA_HMAP_FOR_EACH
 #define TDA_HMAP_FOR_EACH_MUT(node, self) \
     TDA_HMAP_WALK_(                       \
@@ -746,8 +750,26 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
         tda_hmap_first_node_mut,          \
         tda_hmap_node_next_mut,           \
         TDA_LINE_NAME_(hmap_),            \
-        TDA_LINE_NAME_(once_),            \
-        TDA_LINE_NAME_(after_)            \
+        TDA_LINE_NAME_(once_)             \
+    )
+
+/// walks every entry taking the next node before the body runs, so the body may drop
+/// the one it is on
+/// @param node the name of the loop variable, a tda_HMapNode *
+/// @param self the map
+/// @note the body may drop 'node' with tda_hmap_remove_node, but no other node: the one
+///       taken next may be it. Inserting is not allowed; see tda_hmap_node_next
+#define TDA_HMAP_FOR_EACH_SAFE(node, self) \
+    TDA_HMAP_WALK_SAFE_(                   \
+        tda_HMap,                          \
+        tda_HMapNode,                      \
+        node,                              \
+        self,                              \
+        tda_hmap_first_node_mut,           \
+        tda_hmap_node_next_mut,            \
+        TDA_LINE_NAME_(hmap_),             \
+        TDA_LINE_NAME_(once_),             \
+        TDA_LINE_NAME_(after_)             \
     )
 
 /// tda_hmap_node_key as a const K *

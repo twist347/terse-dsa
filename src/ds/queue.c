@@ -10,7 +10,7 @@
 // the deque asserts the rest of its invariants on every call
 #define ASSERT_QUEUE(q) \
     (assert(q),         \
-     assert((q)->deque_.al_.vt))
+     TDA_EXPECT((q)->deque_.al_.vt))
 
 // two queues whose elems can pass between them or be compared: one elem layout
 #define EXPECT_SAME_QUEUE(a, b) \

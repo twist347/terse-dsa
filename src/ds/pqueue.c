@@ -12,9 +12,9 @@
 /* ========== internals ========== */
 
 // the vec asserts the rest of its invariants on every call
-#define ASSERT_PQUEUE(q)       \
-    (assert(q),                \
-     assert((q)->vec_.al_.vt), \
+#define ASSERT_PQUEUE(q)           \
+    (assert(q),                    \
+     TDA_EXPECT((q)->vec_.al_.vt), \
      assert((q)->cmp_))
 
 // two queues whose elems can pass between them: one elem layout

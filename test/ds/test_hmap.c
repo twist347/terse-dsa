@@ -890,16 +890,40 @@ static void test_for_each_reads_its_map_once() {
     tda_hmap_deinit(&m);
 }
 
+// the walk steps from the node after the body, so the body may drop another one: each
+// key takes its partner k ^ 1 out, one of every pair stays, under one long chain, where
+// the partner is often the next node, and short ones alike
+static void test_for_each_mut_may_remove_another_node() {
+    const tda_Hasher hashers[] = {tda_hash_i32, hash_all_alike, hash_by_parity};
+
+    for (size_t h = 0; h < 3; ++h) {
+        tda_HMap m = make_filled(hashers[h], nullptr, 64);
+
+        TDA_HMAP_FOR_EACH_MUT(node, &m) {
+            const int32_t key = *TDA_HMAP_NODE_KEY_AS(int32_t, &m, node);
+            TDA_HMAP_REMOVE(int32_t, &m, key ^ 1);
+        }
+
+        TEST_ASSERT_EQUAL_size_t(32, tda_hmap_len(&m));
+        for (int32_t i = 0; i < 64; i += 2) {
+            TEST_ASSERT_TRUE(TDA_HMAP_CONTAINS(int32_t, &m, i) != TDA_HMAP_CONTAINS(int32_t, &m, i + 1));
+        }
+        assert_walk_sees_everything(&m);
+
+        tda_hmap_deinit(&m);
+    }
+}
+
 // the walk takes the next node before the body, so the body may drop the one it is on:
 // the odd keys go, each node is reached once, under one long chain and short ones alike
-static void test_for_each_mut_may_remove_the_node_it_is_on() {
+static void test_for_each_safe_may_remove_the_node_it_is_on() {
     const tda_Hasher hashers[] = {tda_hash_i32, hash_all_alike, hash_by_parity};
 
     for (size_t h = 0; h < 3; ++h) {
         tda_HMap m = make_filled(hashers[h], nullptr, 40);
 
         size_t seen = 0;
-        TDA_HMAP_FOR_EACH_MUT(node, &m) {
+        TDA_HMAP_FOR_EACH_SAFE(node, &m) {
             if (*TDA_HMAP_NODE_KEY_AS(int32_t, &m, node) % 2 != 0) {
                 tda_hmap_remove_node(&m, node);
             }
@@ -2244,7 +2268,8 @@ int main() {
     RUN_TEST(test_the_walk_of_an_empty_map_stops_at_once);
     RUN_TEST(test_the_walk_after_a_removal_sees_the_rest);
     RUN_TEST(test_for_each_reads_its_map_once);
-    RUN_TEST(test_for_each_mut_may_remove_the_node_it_is_on);
+    RUN_TEST(test_for_each_mut_may_remove_another_node);
+    RUN_TEST(test_for_each_safe_may_remove_the_node_it_is_on);
 
     RUN_TEST(test_copy_is_independent);
     RUN_TEST(test_copy_carries_the_hasher_and_the_equality);

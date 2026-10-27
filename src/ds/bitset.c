@@ -34,7 +34,7 @@ static constexpr uint64_t WORD_ONES = ~UINT64_C(0);
     assert((b)->nwords_ > 0 || !(b)->words_),                                                    \
     assert((b)->nwords_ == 0 || (b)->words_),                                                    \
     assert((b)->nwords_ == 0 || ((b)->words_[(b)->nwords_ - 1] & ~tail_mask((b)->nbits_)) == 0), \
-    assert((b)->al_.vt))
+    TDA_EXPECT((b)->al_.vt))
 
 // two bitsets a pairwise op can combine: one universe, so one word count
 #define EXPECT_SAME_BITSET(a, b) \

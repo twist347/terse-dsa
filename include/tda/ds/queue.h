@@ -162,7 +162,8 @@ void tda_queue_copy_to_span(const tda_Queue *self, tda_SpanMut dst);
 /// whether the two hold the same elems in queue order, byte for byte
 /// @param a one queue
 /// @param b must have the same elem layout (asserted); a different length gives false
-/// @return whether the lengths match and the bytes do
+/// @return whether the lengths match and the bytes do; as memcmp, it tells -0.0 from
+///         +0.0 and compares struct padding
 /// @bigo{n}
 [[nodiscard]] TDA_API
 bool tda_queue_eq(const tda_Queue *a, const tda_Queue *b);
@@ -290,7 +291,7 @@ static inline void *tda_queue_back_mut(tda_Queue *self) {
 
 /// pushes a copy of 'val' at the back
 /// @param self the queue
-/// @param val the elem to copy in; may be one of this queue's
+/// @param val the elem to copy in; may be one of this queue's elems, but not a free slot
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized

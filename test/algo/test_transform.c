@@ -32,8 +32,16 @@ static void swap_pair_fields(void *dst, const void *src, void *) {
     ((Pair *) dst)->b = in.a;
 }
 
+static void widen_i32(void *dst, const void *src, void *) {
+    *(int64_t *) dst = *(const int32_t *) src;
+}
+
 static void add_i32(void *dst, const void *a, const void *b, void *) {
     *(int32_t *) dst = *(const int32_t *) a + *(const int32_t *) b;
+}
+
+static void add_into_i64(void *dst, const void *a, const void *b, void *) {
+    *(int64_t *) dst = (int64_t) *(const int32_t *) a + *(const int32_t *) b;
 }
 
 // deliberately not symmetric: min would pass even with the operands swapped
@@ -89,6 +97,16 @@ static void test_transform_of_an_empty_span_writes_nothing() {
         TDA_SPAN_FROM_DATA_MUT(int32_t, nullptr, 0),
         TDA_SPAN_FROM_DATA(int32_t, nullptr, 0),
         double_i32,
+        nullptr
+    );
+}
+
+// two empty spans share the null data pointer, which is no reason to refuse a wider elem
+static void test_transform_of_empty_spans_may_widen_the_elem() {
+    tda_span_transform(
+        TDA_SPAN_FROM_DATA_MUT(int64_t, nullptr, 0),
+        TDA_SPAN_FROM_DATA(int32_t, nullptr, 0),
+        widen_i32,
         nullptr
     );
 }
@@ -200,6 +218,16 @@ static void test_zip_with_of_empty_spans_writes_nothing() {
     );
 }
 
+static void test_zip_with_of_empty_spans_may_widen_the_elem() {
+    tda_span_zip_with(
+        TDA_SPAN_FROM_DATA_MUT(int64_t, nullptr, 0),
+        TDA_SPAN_FROM_DATA(int32_t, nullptr, 0),
+        TDA_SPAN_FROM_DATA(int32_t, nullptr, 0),
+        add_into_i64,
+        nullptr
+    );
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -207,6 +235,7 @@ int main() {
     RUN_TEST(test_transform_works_in_place);
     RUN_TEST(test_transform_leaves_the_source_alone);
     RUN_TEST(test_transform_of_an_empty_span_writes_nothing);
+    RUN_TEST(test_transform_of_empty_spans_may_widen_the_elem);
     RUN_TEST(test_transform_passes_the_ctx_through);
     RUN_TEST(test_transform_may_narrow_the_elem);
     RUN_TEST(test_transform_writes_whole_elems);
@@ -215,6 +244,7 @@ int main() {
     RUN_TEST(test_zip_with_keeps_the_operand_order);
     RUN_TEST(test_zip_with_can_write_into_one_of_its_sources);
     RUN_TEST(test_zip_with_of_empty_spans_writes_nothing);
+    RUN_TEST(test_zip_with_of_empty_spans_may_widen_the_elem);
 
     return UNITY_END();
 }

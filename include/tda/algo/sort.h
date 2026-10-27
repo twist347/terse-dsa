@@ -34,7 +34,8 @@
 /// @name sort
 /// @{
 
-/// insertion sort; worth it only on a span that is nearly sorted
+/// insertion sort, stable: equal elems keep their order; worth it only on a span that
+/// is nearly sorted
 /// @param s the span
 /// @param cmp the order to put it in
 /// @param ctx passed to every call of 'cmp'; may be null

@@ -1231,12 +1231,36 @@ static void test_for_each_mut_writes_through_every_position() {
     tda_list_deinit(&l);
 }
 
-// the walk takes the next node before the body, so the body may drop the one it is on
-static void test_for_each_mut_may_remove_the_node_it_is_on() {
-    tda_List l = make_list(6);
+// the walk steps from the node after the body, so the body may drop the one after it:
+// dropping each node's equal neighbour leaves one of every run
+static void test_for_each_mut_may_remove_another_node() {
+    tda_List l = {};
+    TDA_TEST_OK(TDA_LIST_OF(int32_t, tda_al_default(), &l, 1, 1, 2, 3, 3, 3));
 
     size_t seen = 0;
     TDA_LIST_FOR_EACH_MUT(node, &l) {
+        const int32_t val = *TDA_LIST_NODE_ELEM_AS(int32_t, &l, node);
+        tda_ListNode *after = tda_list_node_next_mut(node);
+        while (after && *TDA_LIST_NODE_ELEM_AS(int32_t, &l, after) == val) {
+            tda_ListNode *dup = after;
+            after = tda_list_node_next_mut(after);
+            tda_list_remove_node(&l, dup);
+        }
+        ++seen;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(3, seen);
+    assert_elems(&l, (int32_t[]){1, 2, 3}, 3);
+
+    tda_list_deinit(&l);
+}
+
+// the walk takes the next node before the body, so the body may drop the one it is on
+static void test_for_each_safe_may_remove_the_node_it_is_on() {
+    tda_List l = make_list(6);
+
+    size_t seen = 0;
+    TDA_LIST_FOR_EACH_SAFE(node, &l) {
         if (*TDA_LIST_NODE_ELEM_AS(int32_t, &l, node) % 2 != 0) {
             tda_list_remove_node(&l, node);
         }
@@ -1246,7 +1270,7 @@ static void test_for_each_mut_may_remove_the_node_it_is_on() {
     TEST_ASSERT_EQUAL_size_t(6, seen);
     assert_elems(&l, (int32_t[]){0, 2, 4}, 3);
 
-    TDA_LIST_FOR_EACH_MUT(node, &l) {
+    TDA_LIST_FOR_EACH_SAFE(node, &l) {
         tda_list_remove_node(&l, node);
     }
     TEST_ASSERT_EQUAL_size_t(0, tda_list_len(&l));
@@ -2412,7 +2436,8 @@ int main() {
     RUN_TEST(test_for_each_walks_front_to_back);
     RUN_TEST(test_for_each_over_an_empty_list_runs_no_body);
     RUN_TEST(test_for_each_mut_writes_through_every_position);
-    RUN_TEST(test_for_each_mut_may_remove_the_node_it_is_on);
+    RUN_TEST(test_for_each_mut_may_remove_another_node);
+    RUN_TEST(test_for_each_safe_may_remove_the_node_it_is_on);
 
     RUN_TEST(test_swap_exchanges_the_contents);
     RUN_TEST(test_swap_keeps_the_nodes_alive);

@@ -16,8 +16,8 @@ size_t tda_span_set_union(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp cmp, 
     TDA_EXPECT(tda_layout_eq(dst.elem, a.elem));
     TDA_EXPECT(tda_layout_eq(dst.elem, b.elem));
     TDA_EXPECT(dst.len >= a.len + b.len);
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), a));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), b));
 
     size_t i = 0, j = 0;
     size_t write = 0;
@@ -55,8 +55,8 @@ size_t tda_span_set_intersection(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cm
     TDA_EXPECT(tda_layout_eq(dst.elem, a.elem));
     TDA_EXPECT(tda_layout_eq(dst.elem, b.elem));
     TDA_EXPECT(dst.len >= (a.len < b.len ? a.len : b.len));
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), a));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), b));
 
     size_t i = 0, j = 0;
     size_t write = 0;
@@ -89,8 +89,8 @@ size_t tda_span_set_difference(tda_SpanMut dst, tda_Span a, tda_Span b, tda_Cmp 
     TDA_EXPECT(tda_layout_eq(dst.elem, a.elem));
     TDA_EXPECT(tda_layout_eq(dst.elem, b.elem));
     TDA_EXPECT(dst.len >= a.len);
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), a));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), b));
 
     size_t i = 0, j = 0;
     size_t write = 0;
@@ -123,8 +123,8 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
     TDA_EXPECT(tda_layout_eq(dst.elem, a.elem));
     TDA_EXPECT(tda_layout_eq(dst.elem, b.elem));
     TDA_EXPECT(dst.len >= a.len + b.len);
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), a));
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), b));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), a));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), b));
 
     size_t i = 0, j = 0;
     size_t write = 0;

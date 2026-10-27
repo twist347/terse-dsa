@@ -127,13 +127,17 @@ old one stays a function that calls it, marked `[[deprecated("use …")]]` and `
 with the major that removes it. A name never leaves the headers within a major; only the
 next one deletes it.
 
+**A minor never changes what an existing name does.** New behavior comes under a new
+name, and the old one keeps doing what its docs say.
+
 **The promise is the API, not the ABI.** tda is built from source with what uses it, so a
 minor may add a field to a struct, a hook to the end of `tda_AlVtable` or a field to a
 stats struct, and a program is rebuilt against the headers it links. The shared library's
 `SOVERSION` is `MAJOR.MINOR`, so one built against another minor refuses to load instead
-of reading a struct of the wrong size. A hook is only ever added at the end and optional,
-and a table is written with designated initializers, so a table written for an older
-minor still compiles.
+of reading a struct of the wrong size. Windows puts no `SOVERSION` in a DLL's name, so
+there nothing refuses. A hook is only ever added at the end and optional, and a table is
+written with designated initializers, so a table written for an older minor still
+compiles.
 
 ## Values
 
@@ -249,18 +253,20 @@ from what is returned, not from which function it is:
 - **`TDA_EXPECT` vs `assert`.** A precondition of a public function whose breach would
   touch memory out of bounds — an index, emptiness, a range, a matching elem layout — is a
   `TDA_EXPECT`, which `TDA_HARDENED` keeps in release, and so is an allocator's block
-  that misses the alignment the contract promises. Invariants, anything above O(1) and a
-  breach that only gives a wrong answer, such as an output overlapping an input in algo,
-  stay `assert`. The debug allocator is the one exception: what it catches it reports
-  and aborts on in every build, since catching it is its whole job.
+  that misses the alignment the contract promises, and an output in algo overlapping an
+  input it is copied from with `memcpy`, where the overlap is UB. Invariants, anything
+  above O(1) and a breach that only gives a wrong answer, such as an overlap that an op
+  reads and writes through, stay `assert`. The debug allocator is the one exception:
+  what it catches it reports and aborts on in every build, since catching it is its
+  whole job.
 - **One shape for the checks.** A public function opens with them as one paragraph, in
   this order: `ASSERT_<TYPE>` on each container argument, `TDA_SPAN_ASSERT` on each span,
-  `assert` on each pointer and callback that must not be null, the `TDA_EXPECT`s, and
-  last the plain asserts that cost more than O(1) or only guard a wrong answer (an
-  overlap, `owns_node` in the ops that relink, two containers agreeing on an equality).
-  An O(1) accessor called on every step of a walk takes no such check: in debug it would
-  make the walk quadratic. Within a group the parameters keep their order. `ctx` and a
-  pointer documented as nullable are never asserted.
+  `assert` on each pointer and callback that must not be null, the `TDA_EXPECT`s, and last
+  the plain asserts that cost more than O(1) or only guard a wrong answer (an overlap an
+  op reads and writes through, `owns_node` in the ops that relink, two containers agreeing
+  on an equality). An O(1) accessor called on every step of a walk takes no such check: in
+  debug it would make the walk quadratic. Within a group the parameters keep their order.
+  `ctx` and a pointer documented as nullable are never asserted.
 - **A function checks all its own arguments**, even when it forwards to another that
   checks them again: what a function promises to catch should not depend on how it is
   written today. A hardened build pays the second check, which is a branch.
@@ -303,15 +309,17 @@ from what is returned, not from which function it is:
 - Public symbols carry `TDA_API` (see `core/export.h`); everything else stays hidden under
   the library's default-hidden visibility.
 - **An accessor that only reads a field or indexes is `static inline` in the header**:
-  `len`, `cap`, `al`, the layouts, `data`, the contiguous containers' `get`, `front`
-  and `back`, `to_span`, a list's end nodes, a bit's
-  `test` and `set`, and an adapter's forwarding of them. A call across the shared object
-  cost more than the read itself; inline, `TDA_VEC_GET_AS` in a loop runs several times
-  faster. Anything that allocates, moves elems or walks nodes stays behind `TDA_API`, and
-  so does the whole allocator layer, the wrappers in `alloc.h` included: an allocation
-  costs far more than the call that reaches it. The struct is public anyway, so inlining
-  adds nothing to the ABI, and `TDA_HARDENED` is a public definition, so an inlined
-  `TDA_EXPECT` checks in the caller as it would in the library.
+  `len`, `cap`, `al`, the layouts, `data`, the contiguous containers' `get`, `front` and
+  `back`, `to_span`, a list's end nodes, a bit's `test` and `set`, and an adapter's
+  forwarding of them. So is a write as small: a vec's `pop` and `clear`, a push into room
+  already reserved, a bit's `reset` and `flip`. core/span has no source file, so all of it
+  is inline, its printing too. A call across the shared object cost more than the read
+  itself; inline, `TDA_VEC_GET_AS` in a loop runs several times faster. Anything that
+  allocates, moves elems or walks nodes stays behind `TDA_API`, and so does the whole
+  allocator layer, the wrappers in `alloc.h` included: an allocation costs far more than
+  the call that reaches it. The struct is public anyway, so inlining adds nothing to the
+  ABI, and `TDA_HARDENED` is a public definition, so an inlined `TDA_EXPECT` checks in the
+  caller as it would in the library.
 
 ## Code layout
 

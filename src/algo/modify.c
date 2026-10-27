@@ -38,8 +38,8 @@ size_t tda_span_unique(tda_SpanMut s, tda_Eq eq, void *ctx) {
     for (size_t read = 1; read < s.len; ++read) {
         const void *cur = tda_span_get(view, read);
 
-        // compare against the last elem KEPT, not the previous one read: its
-        // slot may already hold a different value
+        // against the last elem kept, not the previous one read, as std::unique does:
+        // with an 'eq' that is not transitive the two give different runs
         if (!eq(tda_span_get(view, write - 1), cur, ctx)) {
             write = tda_emit_over(s, write, cur);
         }

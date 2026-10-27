@@ -69,59 +69,43 @@ static void test_copy_moves_whole_elements() {
     TEST_ASSERT_EQUAL_INT64(4, dst_buf[1].b);
 }
 
-/* ========== copy_overlapping ========== */
-
-// shifting right overlaps: a plain memcpy would smear the first element
-static void test_copy_overlapping_shifts_right() {
+// spans that overlap copy as memmove does: a plain memcpy would smear the first elem
+static void test_copy_shifts_right_over_itself() {
     int32_t buf[5] = {1, 2, 3, 4, 5};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
     // buf[2..4] <- buf[1..3]
-    tda_span_copy_overlapping(tda_span_sub_mut(s, 2, 3), tda_span_mut_to_span(tda_span_sub_mut(s, 1, 3)));
+    tda_span_copy(tda_span_sub_mut(s, 2, 3), tda_span_mut_to_span(tda_span_sub_mut(s, 1, 3)));
 
     constexpr int32_t expected[5] = {1, 2, 2, 3, 4};
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 5);
 }
 
-static void test_copy_overlapping_shifts_left() {
+static void test_copy_shifts_left_over_itself() {
     int32_t buf[5] = {1, 2, 3, 4, 5};
     const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
     // buf[0..2] <- buf[2..4]
-    tda_span_copy_overlapping(tda_span_sub_mut(s, 0, 3), tda_span_mut_to_span(tda_span_sub_mut(s, 2, 3)));
+    tda_span_copy(tda_span_sub_mut(s, 0, 3), tda_span_mut_to_span(tda_span_sub_mut(s, 2, 3)));
 
     constexpr int32_t expected[5] = {3, 4, 5, 4, 5};
     TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 5);
 }
 
-static void test_copy_overlapping_onto_itself_is_noop() {
-    int32_t buf[3] = {1, 2, 3};
-    const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
+/* ========== copy_overlapping ========== */
 
-    tda_span_copy_overlapping(s, tda_span_mut_to_span(s));
+// the old name still copies over an overlap
+static void test_copy_overlapping_is_copy() {
+    int32_t buf[5] = {1, 2, 3, 4, 5};
+    const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
-    constexpr int32_t expected[3] = {1, 2, 3};
-    TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 3);
-}
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    tda_span_copy_overlapping(tda_span_sub_mut(s, 2, 3), tda_span_mut_to_span(tda_span_sub_mut(s, 1, 3)));
+#pragma GCC diagnostic pop
 
-// disjoint ranges must behave exactly like tda_span_copy
-static void test_copy_overlapping_handles_disjoint_ranges() {
-    constexpr int32_t src_buf[2] = {7, 8};
-    int32_t dst_buf[2] = {0, 0};
-
-    tda_span_copy_overlapping(TDA_SPAN_FROM_DATA_MUT(int32_t, dst_buf, 2), TDA_SPAN_FROM_DATA(int32_t, src_buf, 2));
-
-    TEST_ASSERT_EQUAL_INT32_ARRAY(src_buf, dst_buf, 2);
-}
-
-static void test_copy_overlapping_empty_is_noop() {
-    int32_t buf[2] = {1, 2};
-    const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 0);
-
-    tda_span_copy_overlapping(s, tda_span_mut_to_span(s));
-
-    constexpr int32_t expected[2] = {1, 2};
-    TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 2);
+    constexpr int32_t expected[5] = {1, 2, 2, 3, 4};
+    TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 5);
 }
 
 /* ========== copy_if ========== */
@@ -403,11 +387,10 @@ int main() {
     RUN_TEST(test_copy_stays_within_the_subspan);
     RUN_TEST(test_copy_moves_whole_elements);
 
-    RUN_TEST(test_copy_overlapping_shifts_right);
-    RUN_TEST(test_copy_overlapping_shifts_left);
-    RUN_TEST(test_copy_overlapping_onto_itself_is_noop);
-    RUN_TEST(test_copy_overlapping_handles_disjoint_ranges);
-    RUN_TEST(test_copy_overlapping_empty_is_noop);
+    RUN_TEST(test_copy_shifts_right_over_itself);
+    RUN_TEST(test_copy_shifts_left_over_itself);
+
+    RUN_TEST(test_copy_overlapping_is_copy);
 
     RUN_TEST(test_copy_if_takes_only_the_matching_elems);
     RUN_TEST(test_copy_if_needs_room_only_for_the_matches);

@@ -57,7 +57,7 @@ void tda_span_adjacent_difference(tda_SpanMut dst, tda_Span src, tda_BinOp op, v
     assert(op);
     TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
     TDA_EXPECT(dst.len == src.len);
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), src));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), src));
 
     if (src.len == 0) {
         return;

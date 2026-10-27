@@ -14,7 +14,7 @@
 #define ASSERT_LIST(l)                                   \
     (assert(l),                                          \
      assert(tda_layout_is_type((l)->elem_)),             \
-     assert((l)->al_.vt),                                \
+     TDA_EXPECT((l)->al_.vt),                            \
      assert(((l)->len_ > 0) == ((l)->head_ != nullptr)), \
      assert(((l)->head_ != nullptr) == ((l)->tail_ != nullptr)))
 
@@ -390,7 +390,8 @@ const void *tda_list_node_elem(const tda_List *self, const tda_ListNode *node) {
     ASSERT_LIST(self);
     ASSERT_NODE(node);
     // no owns_node: a read called on every step of a walk, which that would make
-    // quadratic in debug, and a foreign node only reads another list's elem
+    // quadratic in debug. A node of another list is read with this list's layout, so
+    // passing one is UB
 
     return elem_of(self, node);
 }

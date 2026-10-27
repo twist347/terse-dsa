@@ -19,7 +19,7 @@
      assert(tda_layout_is_type((m)->key_)),                              \
      assert((m)->hasher_),                                               \
      assert((m)->eq_),                                                   \
-     assert((m)->al_.vt),                                                \
+     TDA_EXPECT((m)->al_.vt),                                            \
      assert(((m)->bucket_count_ == 0) == ((m)->buckets_ == nullptr)),    \
      assert((m)->bucket_count_ == 0 || tda_is_pow2((m)->bucket_count_)), \
      assert((m)->len_ == 0 || (m)->bucket_count_ > 0))

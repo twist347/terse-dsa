@@ -69,7 +69,9 @@ typedef struct tda_Arena {
 
 /// an arena over 'cap' bytes taken from 'parent'
 /// @param cap the most bytes it will hand out, padding included, greater than 0
-/// @param parent where the block comes from; borrowed, and must outlive the arena
+/// @param parent where the block comes from; borrowed, and must outlive the arena. A
+///               reset or rewind of it takes the block back while the arena still
+///               hands out pieces of it
 /// @param[out] out the arena, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when 'parent' cannot give the block

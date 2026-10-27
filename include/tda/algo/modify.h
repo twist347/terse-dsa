@@ -32,7 +32,9 @@
 /// @name unique
 /// @{
 
-/// drops every elem equal to the one before it, so each run keeps only its first
+/// drops every elem equal to the last one kept before it, so each run keeps only its
+/// first. This is std::unique's rule; with an 'eq' that is not transitive, an elem
+/// equal to its neighbour but not to the one kept stays
 /// @param s the span
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null

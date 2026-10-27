@@ -17,7 +17,7 @@
      assert((v)->len_ <= (v)->cap_),         \
      assert((v)->cap_ == 0 || (v)->data_),   \
      assert(!(v)->data_ || (v)->cap_ > 0),   \
-     assert((v)->al_.vt))
+     TDA_EXPECT((v)->al_.vt))
 
 #define EXPECT_SAME_VEC(a, b) \
     (TDA_EXPECT(tda_layout_eq((a)->elem_, (b)->elem_)))
@@ -596,8 +596,8 @@ static size_t alias_idx(const tda_Vec *self, const void *val) {
 
     const size_t off = (size_t) tda_byte_diff(val, self->data_);
     // anything else in the block is no value: a slot past the length holds no elem
-    assert(off % self->elem_.size == 0);
-    assert(off / self->elem_.size < self->len_);
+    TDA_EXPECT(off % self->elem_.size == 0);
+    TDA_EXPECT(off / self->elem_.size < self->len_);
 
     return off / self->elem_.size;
 }

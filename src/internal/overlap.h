@@ -12,9 +12,9 @@
 /// elems with the destination's no wider, so each position is read before it is written
 [[nodiscard]]
 static inline bool tda_span_may_write_over(tda_SpanMut dst, tda_Span src) {
-    if (dst.data == src.data) {
-        return dst.elem.size <= src.elem.size;
+    if (!tda_span_overlap(tda_span_mut_to_span(dst), src)) {
+        return true; // apart, or nothing to write
     }
 
-    return !tda_span_overlap(tda_span_mut_to_span(dst), src);
+    return dst.data == src.data && dst.elem.size <= src.elem.size;
 }

@@ -23,8 +23,9 @@
 /// Growing moves the elems. Pointers from get_mut and data, and views from to_span_mut,
 /// stay valid only until the next op that may reallocate — push, add_one, insert,
 /// extend, insert_span, reserve, resize, shrink_to_fit, copy_assign — or a move_assign,
-/// which releases the old block. swap moves no elem: a pointer stays valid but points
-/// into the other vec. For stable positions use ds/list.
+/// which releases the old block. A pointer to an elem that pop, truncate or clear
+/// dropped still points into the block but at no elem. swap moves no elem: a pointer
+/// stays valid but points into the other vec. For stable positions use ds/list.
 ///
 /// algo works on the elems in place through tda_vec_to_span_mut; tda_vec_truncate then
 /// adopts the length an algorithm leaves.
@@ -195,7 +196,8 @@ void tda_vec_move_assign(tda_Vec *self, tda_Vec *other);
 /// whether the two hold the same elems, byte for byte
 /// @param a one vec
 /// @param b must have the same elem layout (asserted); a different length gives false
-/// @return whether the lengths match and the bytes do
+/// @return whether the lengths match and the bytes do; as memcmp, it tells -0.0 from
+///         +0.0 and compares struct padding
 /// @bigo{n}
 [[nodiscard]] TDA_API
 bool tda_vec_eq(const tda_Vec *a, const tda_Vec *b);
@@ -389,7 +391,8 @@ static inline void *tda_vec_data_mut(tda_Vec *self) {
 
 /// appends a copy of 'val'
 /// @param self the vec
-/// @param val the elem to copy in; may be one of this vec's
+/// @param val the elem to copy in; may be one of this vec's elems, but not a slot past
+///            the length
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized
@@ -399,7 +402,8 @@ tda_Status tda_vec_push(tda_Vec *self, const void *val);
 /// appends a copy of 'val' into room already reserved, so it cannot fail: one
 /// tda_vec_reserve before a loop, and the pushes inside need no status
 /// @param self the vec; asserts len < cap
-/// @param val the elem to copy in; may point into this vec, since nothing moves
+/// @param val the elem to copy in; may be one of this vec's elems, since nothing moves,
+///            but not a slot past the length: the copy would land on itself
 /// @bigo{1}
 static inline void tda_vec_push_assume_cap(tda_Vec *self, const void *val) {
     assert(self);
@@ -459,7 +463,8 @@ void tda_vec_pop_to(tda_Vec *self, void *out);
 /// puts a copy of 'val' at 'idx', moving the elems from there on one place up
 /// @param self the vec
 /// @param idx asserts idx <= len; idx == len appends
-/// @param val the elem to copy in; may be one of this vec's
+/// @param val the elem to copy in; may be one of this vec's elems, but not a slot past
+///            the length
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{n}

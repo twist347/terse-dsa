@@ -10,7 +10,7 @@
 // the vec asserts the rest of its invariants on every call
 #define ASSERT_STACK(s) \
     (assert(s),         \
-     assert((s)->vec_.al_.vt))
+     TDA_EXPECT((s)->vec_.al_.vt))
 
 // two stacks whose elems can pass between them or be compared: one elem layout
 #define EXPECT_SAME_STACK(a, b) \

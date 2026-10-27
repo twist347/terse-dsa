@@ -27,7 +27,7 @@
 
 /// copies 'src' over 'dst'
 /// @param dst asserts the same len and elem layout as 'src'
-/// @param src must not overlap 'dst' unless it is exactly 'dst'
+/// @param src may overlap 'dst' in any way, as with memmove
 /// @bigo{n}
 TDA_API
 void tda_span_copy(tda_SpanMut dst, tda_Span src);
@@ -42,11 +42,10 @@ void tda_span_copy(tda_SpanMut dst, tda_Span src);
 [[nodiscard]] TDA_API
 size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx);
 
-/// tda_span_copy where the two may overlap
-/// @param dst asserts the same len and elem layout as 'src'
-/// @param src may overlap 'dst' in any way
-/// @bigo{n}; memmove instead of memcpy
-TDA_API
+/// tda_span_copy under its old name, from when it took no overlap
+/// @copydetails tda_span_copy
+/// @deprecated tda_span_copy takes overlapping spans since 3.2.1; removed in 4.0
+[[deprecated("use tda_span_copy")]] TDA_API
 void tda_span_copy_overlapping(tda_SpanMut dst, tda_Span src);
 
 /// @}

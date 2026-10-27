@@ -117,6 +117,34 @@ static void test_a_freed_block_is_handed_out_again() {
     tda_slab_deinit(&slab);
 }
 
+// the class keeps every block freed into it, not only the last: all of them come back
+// before a new one is carved
+static void test_every_freed_block_is_handed_out_again() {
+    tda_Slab slab = tda_slab_init(parent);
+    tda_Al al = tda_slab_to_al(&slab);
+
+    void *freed[4];
+    for (size_t i = 0; i < 4; ++i) {
+        freed[i] = tda_alloc(al, bytes(40));
+        TEST_ASSERT_NOT_NULL(freed[i]);
+    }
+    for (size_t i = 0; i < 4; ++i) {
+        tda_dealloc(al, freed[i], bytes(40));
+    }
+
+    for (size_t i = 0; i < 4; ++i) {
+        void *again = tda_alloc(al, bytes(40));
+
+        bool seen = false;
+        for (size_t j = 0; j < 4; ++j) {
+            seen = seen || again == freed[j];
+        }
+        TEST_ASSERT_TRUE(seen);
+    }
+
+    tda_slab_deinit(&slab);
+}
+
 static void test_classes_do_not_share_blocks() {
     tda_Slab slab = tda_slab_init(parent);
     tda_Al al = tda_slab_to_al(&slab);
@@ -415,6 +443,7 @@ int main() {
 
     RUN_TEST(test_a_small_block_takes_a_chunk_once);
     RUN_TEST(test_a_freed_block_is_handed_out_again);
+    RUN_TEST(test_every_freed_block_is_handed_out_again);
     RUN_TEST(test_classes_do_not_share_blocks);
     RUN_TEST(test_every_block_is_aligned);
     RUN_TEST(test_a_refused_chunk_gives_null_and_keeps_the_count);

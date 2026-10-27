@@ -90,7 +90,8 @@ A container keeps the `tda_Al` it was built on, and the allocator is part of its
 - **A copy is born on its source's allocator** — `tda_vec_copy_with` names another one.
 - **A move carries the allocator along**, as Rust's `Vec<T, A>` does: the target takes
   the block and the allocator it came from, the source is left empty on that allocator,
-  and nothing is copied, so it is O(1) and cannot fail on any two allocators.
+  and nothing is copied, so it cannot fail on any two allocators. It is O(1), except
+  into a list, hmap or hset that still holds nodes: those are freed one by one first.
   `copy_assign` keeps the target's allocator.
 - **`swap` exchanges allocators too**, so each block still goes back to the one that made
   it, whatever the two sides were built on.
@@ -139,7 +140,7 @@ uses stays the better habit.
 | `heap.h` | make_heap, push_heap, pop_heap, sort_heap and the is_heap checks |
 | `permute.h` | reverse, rotate, swap_ranges, shuffle and shuffle_prefix, the partition family and stepping through permutations |
 | `modify.h` | remove, remove_if and unique, which return the new length; replace and replace_if, which write in place |
-| `copy.h` | copy, copy_if, copy_overlapping, sample |
+| `copy.h` | copy, copy_if, sample |
 | `fill.h` | fill, fill_zero, generate |
 | `fold.h` | fold, fold_back, partial_sum, adjacent_difference |
 | `transform.h` | transform and zip_with |
@@ -211,7 +212,7 @@ With `FetchContent`:
 include(FetchContent)
 FetchContent_Declare(terse-dsa
     GIT_REPOSITORY https://github.com/twist347/terse-dsa.git
-    GIT_TAG v3.2.0
+    GIT_TAG v3.2.1
 )
 FetchContent_MakeAvailable(terse-dsa)
 
@@ -223,7 +224,7 @@ As a submodule:
 ```sh
 git submodule add https://github.com/twist347/terse-dsa.git \
     thirdparty/terse-dsa
-git -C thirdparty/terse-dsa checkout v3.2.0
+git -C thirdparty/terse-dsa checkout v3.2.1
 ```
 
 ```cmake

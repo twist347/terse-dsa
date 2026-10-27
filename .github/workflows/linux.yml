@@ -23,6 +23,7 @@ jobs:
           - { name: gcc-release-static, cc: gcc-15, type: Release, shared: "OFF", flags: "", bench: "ON" }
           - { name: clang-release-static, cc: clang-22, type: Release, shared: "OFF", flags: "" }
           - { name: clang-release-hardened, cc: clang-22, type: Release, shared: "ON", flags: "", hardened: "ON" }
+          - { name: clang-release-hardened-san, cc: clang-22, type: Release, shared: "ON", flags: "-fsanitize=address,undefined,implicit-conversion,local-bounds -fno-sanitize-recover=all", hardened: "ON" }
 
     steps:
       - uses: actions/checkout@v7

@@ -71,7 +71,8 @@ typedef struct tda_Slab {
 
 /// a slab over 'parent'; takes nothing until the first request, so it cannot fail
 /// @param parent where the chunks and the large blocks come from; borrowed, and must
-///               outlive the slab
+///               outlive the slab. A reset or rewind of it takes the chunks back while
+///               the slab still hands out their blocks
 /// @return the slab
 /// @bigo{1}
 [[nodiscard]] TDA_API

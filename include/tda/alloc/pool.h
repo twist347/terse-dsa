@@ -64,7 +64,9 @@ typedef struct tda_Pool {
 /// @param block a floor, its size greater than 0: raised to what the free list needs,
 ///              its size then rounded up to its alignment; tda_pool_stats reports
 ///              the result
-/// @param parent where the blocks come from; borrowed, and must outlive the pool
+/// @param parent where the blocks come from; borrowed, and must outlive the pool. A reset
+///               or rewind of it takes the pool's block back while the pool still
+///               hands it out
 /// @param[out] out the pool, written only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the product overflows or 'parent' cannot give

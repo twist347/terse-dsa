@@ -12,9 +12,9 @@ function(tda_add_test target_name source_file)
     add_test(NAME ${target_name} COMMAND ${target_name})
 
     # the allocator wrappers contract on getting nullptr back for an oversized request,
-    # but ASan aborts on one by default. Ignored when not built with a sanitizer.
+    # but ASan and MSan abort on one by default. Ignored when not built with a sanitizer.
     set_tests_properties(${target_name} PROPERTIES
-        ENVIRONMENT "ASAN_OPTIONS=allocator_may_return_null=1"
+        ENVIRONMENT "ASAN_OPTIONS=allocator_may_return_null=1;MSAN_OPTIONS=allocator_may_return_null=1"
         TIMEOUT ${TDA_TEST_TIMEOUT})
 endfunction()
 

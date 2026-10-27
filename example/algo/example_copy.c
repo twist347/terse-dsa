@@ -30,9 +30,9 @@ int main() {
     printf("%zu kept\n", kept); // 2 kept
     tda_span_mut_print(tda_span_sub_mut(dst, 0, kept), tda_fprint_i32, nullptr); // [2, 4]
 
-    // overlapping spans need copy_overlapping: plain copy reads what it already wrote
+    // the two may overlap, as with memmove
     const tda_SpanMut all = TDA_SPAN_OF_MUT(int32_t, 1, 2, 3, 4, 5);
-    tda_span_copy_overlapping(tda_span_sub_mut(all, 1, 4), tda_span_sub(tda_span_mut_to_span(all), 0, 4));
+    tda_span_copy(tda_span_sub_mut(all, 1, 4), tda_span_sub(tda_span_mut_to_span(all), 0, 4));
     tda_span_mut_print(all, tda_fprint_i32, nullptr); // [1, 1, 2, 3, 4]
     /// [copy]
 

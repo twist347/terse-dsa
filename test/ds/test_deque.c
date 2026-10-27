@@ -1650,12 +1650,20 @@ static void test_eq_matches_the_same_elems() {
     tda_deque_deinit(&b);
 }
 
+// one differing elem parts them wherever it sits, the front and the back included
 static void test_eq_parts_one_differing_elem() {
     tda_Deque a = make_deque(4), b = make_deque(4);
-    TDA_DEQUE_SET(int32_t, &b, 3, 99);
 
-    TEST_ASSERT_FALSE(tda_deque_eq(&a, &b));
-    TEST_ASSERT_FALSE(tda_deque_eq_by(&a, &b, tda_eq_i32, nullptr));
+    for (size_t i = 0; i < 4; ++i) {
+        const int32_t was = *TDA_DEQUE_GET_AS(int32_t, &b, i);
+        TDA_DEQUE_SET(int32_t, &b, i, 99);
+
+        TEST_ASSERT_FALSE(tda_deque_eq(&a, &b));
+        TEST_ASSERT_FALSE(tda_deque_eq_by(&a, &b, tda_eq_i32, nullptr));
+
+        TDA_DEQUE_SET(int32_t, &b, i, was);
+    }
+    TEST_ASSERT_TRUE(tda_deque_eq(&a, &b));
 
     tda_deque_deinit(&a);
     tda_deque_deinit(&b);

@@ -156,7 +156,8 @@ void tda_list_move_assign(tda_List *self, tda_List *other);
 /// whether the two hold the same elems front to back, byte for byte
 /// @param a one list
 /// @param b must have the same elem layout (asserted); a different length gives false
-/// @return whether the lengths match and the bytes do
+/// @return whether the lengths match and the bytes do; as memcmp, it tells -0.0 from
+///         +0.0 and compares struct padding
 /// @bigo{n}
 [[nodiscard]] TDA_API
 bool tda_list_eq(const tda_List *a, const tda_List *b);
@@ -457,8 +458,9 @@ tda_Status tda_list_splice_back(tda_List *self, tda_List *src);
 /// exchanges the contents of two lists
 /// @param self one list
 /// @param other must have the same elem layout; the nodes do not move, so borrowed
-///              positions stay valid. Each side keeps the allocator its nodes came from,
-///              so the two may differ
+///              positions stay valid, but each now belongs to the other list and goes to
+///              it as 'self'. Each side keeps the allocator its nodes came from, so the
+///              two may differ
 /// @bigo{1}
 TDA_API
 void tda_list_swap(tda_List *self, tda_List *other);
@@ -633,8 +635,8 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
     ((T *) tda_list_back_mut(TDA_LIST_TYPED_(T, self)))
 
 /// @cond
-// the body of both walks; the hidden name comes in already unique
-#define TDA_LIST_WALK_(NodeT, node, self, front, next, after)           \
+// the body of the safe walk; the hidden name comes in already unique
+#define TDA_LIST_WALK_SAFE_(NodeT, node, self, front, next, after)      \
     for (NodeT *node = front(self), *after = node ? next(node) : nullptr; \
          node;                                                          \
          node = after, after = node ? next(node) : nullptr)
@@ -643,29 +645,35 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// walks the list front to back, binding 'node' to each position in turn
 /// @param node the name of the loop variable, a const tda_ListNode *
 /// @param self the list
-/// @note the next node is taken before the body runs, so the body of
-///       TDA_LIST_FOR_EACH_MUT may drop 'node' with tda_list_remove_node. Dropping any
-///       other node is not allowed, and one put in after 'node' is not visited
-#define TDA_LIST_FOR_EACH(node, self) \
-    TDA_LIST_WALK_(                   \
-        const tda_ListNode,           \
-        node,                         \
-        self,                         \
-        tda_list_front_node,          \
-        tda_list_node_next,           \
-        TDA_LINE_NAME_(after_)        \
-    )
+/// @note the loop steps from 'node' after the body, so the body of
+///       TDA_LIST_FOR_EACH_MUT may drop any node but 'node', and one put in right after
+///       'node' is visited. To drop 'node' itself, walk with TDA_LIST_FOR_EACH_SAFE
+#define TDA_LIST_FOR_EACH(node, self)                          \
+    for (const tda_ListNode *node = tda_list_front_node(self); \
+         node;                                                 \
+         node = tda_list_node_next(node))
 
-/// the same walk over positions that may be written through, and which may be removed
+/// the same walk over positions that may be written through
 /// @copydetails TDA_LIST_FOR_EACH
-#define TDA_LIST_FOR_EACH_MUT(node, self) \
-    TDA_LIST_WALK_(                       \
-        tda_ListNode,                     \
-        node,                             \
-        self,                             \
-        tda_list_front_node_mut,          \
-        tda_list_node_next_mut,           \
-        TDA_LINE_NAME_(after_)            \
+#define TDA_LIST_FOR_EACH_MUT(node, self)                    \
+    for (tda_ListNode *node = tda_list_front_node_mut(self); \
+         node;                                               \
+         node = tda_list_node_next_mut(node))
+
+/// walks the list front to back taking the next position before the body runs, so the
+/// body may drop the one it is on
+/// @param node the name of the loop variable, a tda_ListNode *
+/// @param self the list
+/// @note the body may drop 'node' with tda_list_remove_node, but no other node: the one
+///       taken next may be it. One put in right after 'node' is not visited
+#define TDA_LIST_FOR_EACH_SAFE(node, self) \
+    TDA_LIST_WALK_SAFE_(                   \
+        tda_ListNode,                      \
+        node,                              \
+        self,                              \
+        tda_list_front_node_mut,           \
+        tda_list_node_next_mut,            \
+        TDA_LINE_NAME_(after_)             \
     )
 
 /// tda_list_find from a value rather than an address

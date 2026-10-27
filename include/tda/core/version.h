@@ -8,7 +8,8 @@
 /// @ingroup core
 /// @brief the version of these headers
 ///
-/// The only place the version is written; CMakeLists.txt reads it from here.
+/// CMakeLists.txt reads the version from here; docs/Doxyfile and the README's install
+/// lines repeat it.
 /// @{
 
 /// @name macro
@@ -21,7 +22,7 @@
 #define TDA_VERSION_MINOR 2
 
 /// bumped by a fix
-#define TDA_VERSION_PATCH 0
+#define TDA_VERSION_PATCH 1
 
 /// the version as one comparable number
 /// @param major the major part

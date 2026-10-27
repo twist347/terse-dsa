@@ -12,13 +12,13 @@ void tda_span_copy(tda_SpanMut dst, tda_Span src) {
     TDA_SPAN_ASSERT(src);
     TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
     TDA_EXPECT(dst.len == src.len);
-    assert(tda_span_apart_or_same(tda_span_mut_to_span(dst), src));
 
     if (dst.len == 0 || dst.data == src.data) {
         return;
     }
 
-    memcpy(dst.data, src.data, tda_span_bytes(src));
+    // the two may overlap
+    memmove(dst.data, src.data, tda_span_bytes(src));
 }
 
 size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx) {
@@ -26,7 +26,7 @@ size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx)
     TDA_SPAN_ASSERT(src);
     assert(pred);
     TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), src));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), src));
 
     // the count is known only at the end, so tda_span_get_mut checks room on each write;
     // 'dst' may be shorter than 'src' as long as the passing elems fit
@@ -43,16 +43,7 @@ size_t tda_span_copy_if(tda_SpanMut dst, tda_Span src, tda_Pred pred, void *ctx)
 }
 
 void tda_span_copy_overlapping(tda_SpanMut dst, tda_Span src) {
-    TDA_SPAN_ASSERT(dst);
-    TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
-    TDA_EXPECT(dst.len == src.len);
-
-    if (dst.len == 0 || dst.data == src.data) {
-        return;
-    }
-
-    memmove(dst.data, src.data, tda_span_bytes(src));
+    tda_span_copy(dst, src);
 }
 
 size_t tda_span_sample(tda_SpanMut dst, tda_Span src, tda_Rng *rng) {
@@ -60,7 +51,7 @@ size_t tda_span_sample(tda_SpanMut dst, tda_Span src, tda_Rng *rng) {
     TDA_SPAN_ASSERT(src);
     assert(rng);
     TDA_EXPECT(tda_layout_eq(dst.elem, src.elem));
-    assert(!tda_span_overlap(tda_span_mut_to_span(dst), src));
+    TDA_EXPECT(!tda_span_overlap(tda_span_mut_to_span(dst), src));
 
     const size_t want = dst.len < src.len ? dst.len : src.len;
     size_t write = 0;

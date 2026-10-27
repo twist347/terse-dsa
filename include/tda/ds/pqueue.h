@@ -272,7 +272,8 @@ static inline const void *tda_pqueue_top(const tda_PQueue *self) {
 
 /// puts a copy of 'val' in, sifting it up to its place
 /// @param self the queue
-/// @param val the elem to copy in; may be one of this queue's
+/// @param val the elem to copy in; may be one of this queue's elems, but not a slot past
+///            the length
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{log n}, plus the amortized cost of growing

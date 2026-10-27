@@ -1,5 +1,81 @@
 # Changelog
 
+## 3.2.1 — 2026-10-27
+
+Two regressions of 3.2.0 undone, and a hardened build stopping where a breach would be UB.
+
+### Fixed
+
+- **The `_MUT` walks step after the body again, as in 3.1.1.** 3.2.0 made
+  `TDA_LIST_FOR_EACH_MUT`, `TDA_HMAP_FOR_EACH_MUT` and `TDA_HSET_FOR_EACH_MUT` take the
+  next node before the body, so the body could drop the one it was on. Dropping any other
+  node then read freed memory, the equal neighbours of a node or the partner of a key,
+  which 3.1.1 allowed. The const walks step the same way again, so a node put in right
+  after 'node' is visited. The 3.2.0 walk is now `*_FOR_EACH_SAFE`.
+- **A hardened build stops on a `val` that names no elem again.** Since 3.2.0 `push` and
+  `insert` of vec and deque, and through them the adapters', take an elem of their own,
+  found again by its index. A pointer into the block past the length, a slot a pop left,
+  was caught by a plain assert, so a hardened build read the slot as an elem. The check
+  is a `TDA_EXPECT`, as in 3.1.1.
+- **An overlap that algo copies across with `memcpy` stops a hardened build.**
+  `copy_if`, `sample`, `merge`, `adjacent_difference` and the set ops asserted that the
+  output was apart from the inputs, and a release build then copied an overlap with
+  `memcpy`, which is UB. The check is a `TDA_EXPECT`.
+- **A container left `= {}` stops a hardened build as it stops a debug one.** `push` on a
+  vec, a deque or a stack reported `TDA_STATUS_ERR_NO_MEM`, and a list or an hmap
+  crashed, since the check that it has an allocator was a plain assert.
+- **`tda_span_transform` and `tda_span_zip_with` take two empty spans of different
+  widths.** Both have a null data pointer, which the overlap check read as the same elems
+  with a wider output.
+- **`tda_hmap_take` and `tda_hset_take` are `[[nodiscard]]`**, as every other function
+  that writes out what it found: 'out' is written only on a hit.
+
+### Added
+
+- `TDA_LIST_FOR_EACH_SAFE`, `TDA_HMAP_FOR_EACH_SAFE` and `TDA_HSET_FOR_EACH_SAFE`, the
+  walks that take the next node before the body: the body may drop the node it is on,
+  and no other.
+
+### Changed
+
+- **`tda_span_copy` takes spans that overlap in any way**, as memmove does; it asserted
+  that they were apart or the same.
+
+### Deprecated
+
+- `tda_span_copy_overlapping`, which `tda_span_copy` now does. The name stays, exported
+  and meaning the same, until 4.0 removes it; a call to it warns, which `-Werror` turns
+  into an error.
+
+### Docs
+
+- **What the code did and the pages did not say.** A pointer to an elem a pop dropped
+  names no elem; `eq` of vec, deque, list, stack and queue tells -0.0 from +0.0 and
+  compares padding, as arr's already said; hmap and hset compare and combine only under
+  the same key equality function, which is what they assert; `unique` compares with the
+  last elem kept, as std::unique does; insertion sort is stable; reserve and
+  shrink_to_fit reorder a walk of a hash container, and shrink_to_fit stops at the bucket
+  count the first insert takes; a reset or rewind of the parent of a pool, a slab or an
+  arena takes back the blocks they hand out; a move into a list, hmap or hset that holds
+  nodes frees them first; a position borrowed across a list's swap belongs to the other
+  list, as a map's does; the version is in docs/Doxyfile and the README too.
+- **`docs/conventions.md`:** a minor never changes what an existing name does; an
+  overlap that algo copies across with `memcpy` is a `TDA_EXPECT`; the small writes and
+  core/span are inline too; Windows loads a DLL built for another minor.
+
+### Tests and CI
+
+- A `clang-release-hardened-san` leg: a hardened release build under the sanitizers,
+  where the other sanitized leg is a debug build, whose asserts are on anyway.
+- A test run under MSan gets null for an oversized request, as under ASan.
+- `test_alloc_stale` and `test_alloc_debug_misuse` are gone: all they checked was that
+  a program aborts, and with which message.
+- A `_MUT` walk dropping the equal neighbours of a list node, and each key's partner in
+  hmap and hset; the `_SAFE` walks dropping the node they are on; deque `eq` with the one
+  difference at each index, the front included; a slab handing back every freed block of
+  a class before it carves; transform and zip_with over two empty spans of different
+  widths; copy over spans that overlap.
+
 ## 3.2.0 — 2026-10-27
 
 Preconditions dropped or caught, and the docs brought in line with the code. Two things
