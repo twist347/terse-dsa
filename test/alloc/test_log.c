@@ -196,12 +196,12 @@ static void test_every_operation_is_recorded() {
     char buf[2048];
     log_text(buf, sizeof(buf));
 
-    TEST_ASSERT_NOT_NULL(strstr(buf, "] alloc size = 32 align = 8"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "] alloc_zeroed size = 32 align = 8"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "tda log: alloc size = 32 align = 8"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "tda log: alloc_zeroed size = 32 align = 8"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "size = 32 -> 64 align = 8: refused"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "size = 64 -> 16 align = 8: in place"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "] remap "));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "] dealloc "));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "tda log: remap "));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "tda log: dealloc "));
 
     tda_log_deinit(&log);
 }

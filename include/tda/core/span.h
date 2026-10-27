@@ -62,7 +62,8 @@ typedef struct {
 
 /// asserts what every view holds: 'data' set unless empty and on the elem's alignment,
 /// 'elem' a type's layout
-/// @param s the view, of either type
+/// @param s the view, of either type; evaluated more than once, so pass a name, not a call
+///          or an expression with a side effect. Under NDEBUG it is not evaluated at all
 #define TDA_SPAN_ASSERT(s)                 \
     (assert((s).data || (s).len == 0),     \
      assert(tda_layout_is_type((s).elem)), \

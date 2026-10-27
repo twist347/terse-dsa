@@ -56,3 +56,16 @@ jobs:
       - run: cmake --build build-consumer -j
 
       - run: ./build-consumer/consumer_app
+
+  docs:
+    name: docs
+    runs-on: ubuntu-26.04
+
+    # the reference is published only on a release, so this is where a broken @param or
+    # a stale link shows up first: any doxygen warning fails the leg
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: sudo apt-get update && sudo apt-get install -y doxygen
+
+      - run: (cat docs/Doxyfile; echo "WARN_AS_ERROR = FAIL_ON_WARNINGS") | doxygen -

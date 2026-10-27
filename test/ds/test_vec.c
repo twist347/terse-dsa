@@ -491,6 +491,21 @@ static void test_move_assign_needs_no_memory() {
     tda_arena_deinit(&arena);
 }
 
+// an inert target, `= {}`, takes on everything the source has: layout, allocator and
+// all, and the source stays usable
+static void test_move_assign_fills_an_inert_target() {
+    tda_Vec src = make_vec(4), dst = {};
+
+    tda_vec_move_assign(&dst, &src);
+
+    assert_elems(&dst, (int32_t[]){0, 1, 2, 3}, 4);
+    push_int(&src, 7);
+    assert_elems(&src, (int32_t[]){7}, 1);
+
+    tda_vec_deinit(&src);
+    tda_vec_deinit(&dst);
+}
+
 static void test_move_assign_of_itself_changes_nothing() {
     tda_Vec v = make_vec(3);
 
@@ -786,6 +801,18 @@ static void test_push_assume_cap_takes_an_elem_of_its_own() {
     tda_vec_deinit(&v);
 }
 
+// growing frees the block the elem is read from, so the push finds it again by index
+static void test_push_takes_an_elem_of_its_own_while_growing() {
+    tda_Vec v = make_vec(4); // len == cap == 4
+
+    TDA_TEST_OK(tda_vec_push(&v, tda_vec_get(&v, 1)));
+
+    constexpr int32_t want[5] = {0, 1, 2, 3, 1};
+    assert_elems(&v, want, 5);
+
+    tda_vec_deinit(&v);
+}
+
 // the slot is the new back, filled in place
 static void test_add_one_hands_out_the_new_back() {
     tda_Vec v = TDA_VEC_INIT(Pair, tda_al_default());
@@ -988,6 +1015,31 @@ static void test_insert_grows_when_full() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(want, tda_vec_data(&v), 3);
 
     tda_vec_deinit(&v);
+}
+
+// an elem of its own from every index into every place, once growing and once with
+// room: the move up shifts the elems from 'idx' on, and growing frees the old block
+static void test_insert_takes_an_elem_of_its_own_from_anywhere() {
+    constexpr size_t len = 4;
+
+    for (size_t room = 0; room < 2; ++room) {
+        for (size_t idx = 0; idx <= len; ++idx) {
+            for (size_t from = 0; from < len; ++from) {
+                tda_Vec v = make_vec(len);
+                TDA_TEST_OK(tda_vec_reserve(&v, len + room));
+
+                TDA_TEST_OK(tda_vec_insert(&v, idx, tda_vec_get(&v, from)));
+
+                int32_t want[len + 1];
+                for (size_t i = 0, j = 0; i <= len; ++i) {
+                    want[i] = i == idx ? (int32_t) from : (int32_t) j++;
+                }
+                assert_elems(&v, want, len + 1);
+
+                tda_vec_deinit(&v);
+            }
+        }
+    }
 }
 
 static void test_remove_from_front_middle_and_end() {
@@ -2369,6 +2421,7 @@ int main() {
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
     RUN_TEST(test_move_assign_across_allocators_hands_the_allocator_over);
     RUN_TEST(test_move_assign_needs_no_memory);
+    RUN_TEST(test_move_assign_fills_an_inert_target);
     RUN_TEST(test_move_assign_of_itself_changes_nothing);
     RUN_TEST(test_copy_assign_grows_and_shrinks_the_len);
     RUN_TEST(test_copy_assign_keeps_the_target_capacity);
@@ -2394,6 +2447,7 @@ int main() {
     RUN_TEST(test_push_uses_reserved_capacity_without_reallocating);
     RUN_TEST(test_push_assume_cap_after_a_reserve_allocates_nothing);
     RUN_TEST(test_push_assume_cap_takes_an_elem_of_its_own);
+    RUN_TEST(test_push_takes_an_elem_of_its_own_while_growing);
     RUN_TEST(test_add_one_hands_out_the_new_back);
     RUN_TEST(test_add_one_reports_an_exhausted_arena_and_changes_nothing);
     RUN_TEST(test_add_one_assume_cap_allocates_nothing);
@@ -2407,6 +2461,7 @@ int main() {
     RUN_TEST(test_insert_at_front_middle_and_end);
     RUN_TEST(test_insert_into_an_empty_vec);
     RUN_TEST(test_insert_grows_when_full);
+    RUN_TEST(test_insert_takes_an_elem_of_its_own_from_anywhere);
     RUN_TEST(test_remove_from_front_middle_and_end);
     RUN_TEST(test_remove_of_the_last_elem_empties_the_vec);
     RUN_TEST(test_insert_and_remove_move_whole_elems);

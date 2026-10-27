@@ -6,7 +6,6 @@
 #include "internal/ptr.h"
 
 #include <assert.h>
-#include <stdckdint.h>
 #include <stdint.h>
 
 /* ========== internals ========== */

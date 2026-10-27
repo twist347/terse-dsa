@@ -45,8 +45,9 @@
 /// @{
 
 /// Owning array whose length is set when it is built. A value the caller holds wherever
-/// it likes: an init or a from_ fills it in, tda_arr_deinit releases its block. `= {}`
-/// is the inert state, which tda_arr_deinit accepts and every other op asserts.
+/// it likes: an init or a from_ fills it in, tda_arr_deinit releases its block. `= {}` is
+/// the inert state, which tda_arr_deinit accepts, tda_arr_move_assign takes as its
+/// target, and every other op asserts.
 ///
 /// The fields belong to the arr: read and change them only through the functions here.
 ///
@@ -162,7 +163,7 @@ tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other);
 
 /// releases the elems of 'self' and hands it everything 'other' holds, its allocator
 /// included, leaving 'other' empty on that allocator
-/// @param[in,out] self must have the same elem layout
+/// @param[in,out] self must have the same elem layout, or be inert
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{1}
 TDA_API

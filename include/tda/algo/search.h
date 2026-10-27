@@ -110,7 +110,8 @@ bool tda_span_find_run(tda_Span s, const void *key, size_t count, tda_Eq eq, voi
 
 /// the first elem of 's' equal to any elem of 'set'
 /// @param s the span to look in
-/// @param set what counts as a hit; unordered, duplicates allowed
+/// @param set what counts as a hit; unordered, duplicates allowed. Each is a key, so it
+///            need not share the layout of 's'
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null
 /// @param[out] out_idx the index, written only on a hit

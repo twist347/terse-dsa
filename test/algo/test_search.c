@@ -1180,6 +1180,29 @@ static void test_find_run_and_contains_take_a_key_of_another_type() {
     TEST_ASSERT_TRUE(tda_span_contains(s, &twenty, eq_user_by_id, &twenty));
 }
 
+// the set holds keys, not elems: a span of users is searched with a span of ids, and
+// each id arrives on the right
+static bool eq_user_to_id(const void *elem, const void *key, void *) {
+    return ((const User *) elem)->id == *(const int64_t *) key;
+}
+
+static void test_find_any_of_takes_keys_of_another_type() {
+    static const User users[5] = {{1, 10}, {2, 20}, {3, 20}, {4, 30}, {5, 40}};
+    static const int64_t ids[3] = {40, 30, 99};
+
+    size_t idx = 99;
+    TEST_ASSERT_TRUE(
+        tda_span_find_any_of(
+            TDA_SPAN_FROM_DATA(User, users, 5),
+            TDA_SPAN_FROM_DATA(int64_t, ids, 3),
+            eq_user_to_id,
+            nullptr,
+            &idx
+        )
+    );
+    TEST_ASSERT_EQUAL_size_t(3, idx);
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -1287,6 +1310,7 @@ int main() {
     RUN_TEST(test_the_key_ops_take_a_key_of_another_type);
 
     RUN_TEST(test_find_run_and_contains_take_a_key_of_another_type);
+    RUN_TEST(test_find_any_of_takes_keys_of_another_type);
 
     return UNITY_END();
 }

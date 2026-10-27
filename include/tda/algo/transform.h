@@ -16,7 +16,8 @@
 ///
 /// The destination may be a source if its elems are no wider than the source's; wider
 /// ones would overwrite elems not yet read. Partial overlap is never allowed, since each
-/// position is written before the next is read.
+/// position is written before the next is read. In place the op gets one address as
+/// both 'dst' and an operand; see tda_UnOp and tda_BinOp.
 ///
 /// @par Example
 /// @snippet algo/example_transform.c ops

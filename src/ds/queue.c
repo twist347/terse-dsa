@@ -18,6 +18,10 @@
 
 // The deque does all the work; this type only hides the ops a queue should not have.
 
+/// whether 'src' views any elem of the queue, in either of the runs the ring may form
+[[nodiscard]] [[maybe_unused]]
+static bool views_elems(const tda_Queue *self, tda_Span src);
+
 /* ========== lifetime ========== */
 
 tda_Queue tda_queue_init(tda_Layout elem, tda_Al al) {
@@ -99,9 +103,13 @@ tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
 }
 
 void tda_queue_move_assign(tda_Queue *self, tda_Queue *other) {
-    ASSERT_QUEUE(self);
+    assert(self);
     ASSERT_QUEUE(other);
-    EXPECT_SAME_QUEUE(self, other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->deque_.al_.vt) {
+        ASSERT_QUEUE(self);
+        EXPECT_SAME_QUEUE(self, other);
+    }
 
     // self-move is handled by the deque, as in copy_assign
     tda_deque_move_assign(&self->deque_, &other->deque_);
@@ -155,6 +163,8 @@ tda_Status tda_queue_extend(tda_Queue *self, tda_Span src) {
     ASSERT_QUEUE(self);
     TDA_SPAN_ASSERT(src);
     TDA_EXPECT(tda_layout_eq(tda_deque_elem_layout(&self->deque_), src.elem));
+    // growing may free what 'src' views; the elems lie in up to two runs
+    TDA_EXPECT(!views_elems(self, src));
 
     const tda_Status st = tda_deque_extend(&self->deque_, src);
 
@@ -237,4 +247,13 @@ int tda_queue_print(const tda_Queue *self, tda_FPrint fprint, void *ctx) {
     assert(fprint);
 
     return tda_deque_print(&self->deque_, fprint, ctx);
+}
+
+/* ========== internals ========== */
+
+static bool views_elems(const tda_Queue *self, tda_Span src) {
+    tda_Span front, back;
+    tda_deque_to_spans(&self->deque_, &front, &back);
+
+    return tda_span_overlap(front, src) || tda_span_overlap(back, src);
 }

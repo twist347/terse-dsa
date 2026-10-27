@@ -101,7 +101,7 @@ bool tda_span_is_sorted(tda_Span s, tda_Cmp cmp, void *ctx);
 /// @param cmp the order in question
 /// @param ctx passed to every call of 'cmp'; may be null
 /// @return the index of the first elem out of order, or s.len. The prefix before it is
-///         sorted, ready for tda_span_inplace_merge
+///         sorted: sort the rest, and tda_span_inplace_merge joins the two
 /// @bigo{n}
 [[nodiscard]] TDA_API
 size_t tda_span_is_sorted_until(tda_Span s, tda_Cmp cmp, void *ctx);

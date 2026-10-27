@@ -254,6 +254,24 @@ static void *debug_alloc(void *ctx, tda_Layout layout) {
         return nullptr;
     }
 
+    // a block the parent still counts as handed out, whether live here or quarantined;
+    // the table would otherwise lose the older record without a word
+    BlockRecord live;
+    if (table_find(&self->table_, (uintptr_t) block, &live)) {
+        report(
+            "the parent handed out %p again while block #%llu still lives there",
+            (void *) block, (unsigned long long) live.serial
+        );
+    }
+    const FreedBlock *freed = quarantine_find(self, block);
+    if (freed) {
+        report(
+            "the parent handed out %p again while block #%llu waits in quarantine; a reset "
+            "or rewind of the parent needs tda_debug_flush_quarantine first",
+            (void *) block, (unsigned long long) freed->serial
+        );
+    }
+
     const BlockRecord entry = {.addr = (uintptr_t) block, .layout = layout, .serial = serial};
     if (!table_insert(&self->table_, entry)) {
         tda_dealloc(self->parent_, block, with_guard);
@@ -470,7 +488,7 @@ static bool table_insert(BlockTable *table, BlockRecord entry) {
     }
 
     const size_t i = table_probe(table, entry.addr);
-    assert(table->slots[i].addr == 0); // the parent handed out a live block twice
+    assert(table->slots[i].addr == 0); // debug_alloc reports a block handed out twice
 
     table->slots[i] = entry;
     ++table->len;

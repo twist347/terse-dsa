@@ -22,6 +22,8 @@ set(debug_misuse_cases
     "write_after_free|was written after it was freed"
     "stale_realloc|was written after it was freed"
     "break_at|break at block #2"
+    "parent_twice|handed out .+ again while block #1 still lives"
+    "parent_reset|handed out .+ again while block #1 waits in quarantine"
 )
 foreach(entry IN LISTS debug_misuse_cases)
     string(REPLACE "|" ";" parts "${entry}")
@@ -29,7 +31,8 @@ foreach(entry IN LISTS debug_misuse_cases)
     list(GET parts 1 report)
     add_test(NAME test_alloc_debug_misuse_${name} COMMAND test_alloc_debug_misuse ${name})
     set_tests_properties(test_alloc_debug_misuse_${name} PROPERTIES
-        PASS_REGULAR_EXPRESSION "tda debug: .*${report}")
+        PASS_REGULAR_EXPRESSION "tda debug: .*${report}"
+        TIMEOUT ${TDA_TEST_TIMEOUT})
 endforeach()
 
 # a view used after its allocator was released, caught by the hook's liveness check;
@@ -45,5 +48,6 @@ foreach(entry IN ITEMS "arena|data_" "pool|data_" "slab|parent_\\.vt" "debug|par
     add_test(NAME test_alloc_stale_${name} COMMAND test_alloc_stale ${name})
     set_tests_properties(test_alloc_stale_${name} PROPERTIES
         PASS_REGULAR_EXPRESSION "${check}"
-        SKIP_RETURN_CODE 77)
+        SKIP_RETURN_CODE 77
+        TIMEOUT ${TDA_TEST_TIMEOUT})
 endforeach()

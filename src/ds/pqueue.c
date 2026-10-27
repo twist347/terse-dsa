@@ -151,9 +151,13 @@ tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
 }
 
 void tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other) {
-    ASSERT_PQUEUE(self);
+    assert(self);
     ASSERT_PQUEUE(other);
-    EXPECT_SAME_PQUEUE(self, other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->vec_.al_.vt) {
+        ASSERT_PQUEUE(self);
+        EXPECT_SAME_PQUEUE(self, other);
+    }
 
     if (self == other) {
         return;
@@ -192,6 +196,8 @@ tda_Status tda_pqueue_extend(tda_PQueue *self, tda_Span src) {
     ASSERT_PQUEUE(self);
     TDA_SPAN_ASSERT(src);
     TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), src.elem));
+    // growing may free what 'src' views
+    TDA_EXPECT(!tda_span_overlap(tda_vec_to_span(&self->vec_), src));
 
     const size_t old_len = tda_vec_len(&self->vec_);
     const tda_Status st = tda_vec_extend(&self->vec_, src);

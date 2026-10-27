@@ -41,9 +41,9 @@
 /// @{
 
 /// Owning array that grows. A value the caller holds wherever it likes, on the stack or
-/// inside a struct: an init returns it, a from_ fills it in, tda_vec_deinit releases its
-/// block. `= {}` is the inert state, which tda_vec_deinit accepts and every other op
-/// asserts.
+/// inside a struct: an init that cannot fail returns it, one that can and a from_ fill it
+/// in, tda_vec_deinit releases its block. `= {}` is the inert state, which tda_vec_deinit
+/// accepts, tda_vec_move_assign takes as its target, and every other op asserts.
 ///
 /// The fields belong to the vec: read and change them only through the functions here.
 ///
@@ -181,7 +181,7 @@ tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other);
 
 /// releases the elems of 'self' and hands it everything 'other' holds, its allocator
 /// included, leaving 'other' empty on that allocator
-/// @param[in,out] self must have the same elem layout
+/// @param[in,out] self must have the same elem layout, or be inert
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{1}
 TDA_API
@@ -389,7 +389,7 @@ static inline void *tda_vec_data_mut(tda_Vec *self) {
 
 /// appends a copy of 'val'
 /// @param self the vec
-/// @param val must not point into this vec: growing would move it
+/// @param val the elem to copy in; may be one of this vec's
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized
@@ -459,7 +459,7 @@ void tda_vec_pop_to(tda_Vec *self, void *out);
 /// puts a copy of 'val' at 'idx', moving the elems from there on one place up
 /// @param self the vec
 /// @param idx asserts idx <= len; idx == len appends
-/// @param val must not point into this vec
+/// @param val the elem to copy in; may be one of this vec's
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{n}

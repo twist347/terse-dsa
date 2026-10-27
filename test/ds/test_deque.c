@@ -666,6 +666,21 @@ static void test_move_assign_needs_no_memory() {
     tda_arena_deinit(&arena);
 }
 
+// an inert target, `= {}`, takes on everything the source has: layout, allocator and
+// all, and the source stays usable
+static void test_move_assign_fills_an_inert_target() {
+    tda_Deque src = make_deque(4), dst = {};
+
+    tda_deque_move_assign(&dst, &src);
+
+    assert_elems(&dst, (int32_t[]){0, 1, 2, 3}, 4);
+    push_back_int(&src, 7);
+    assert_elems(&src, (int32_t[]){7}, 1);
+
+    tda_deque_deinit(&src);
+    tda_deque_deinit(&dst);
+}
+
 static void test_move_assign_of_itself_changes_nothing() {
     tda_Deque d = make_deque(3);
 
@@ -904,6 +919,55 @@ static void test_insert_into_a_wrapped_ring() {
     TEST_ASSERT_EQUAL_size_t(4, tda_deque_cap(&d));
 
     tda_deque_deinit(&d);
+}
+
+// an elem of its own from every index into every place, with the seam at every slot,
+// once full and once with room: either side may shift, and growing frees the old block
+static void test_insert_takes_an_elem_of_its_own_from_anywhere() {
+    constexpr size_t cap = 5;
+
+    for (size_t len = cap - 1; len <= cap; ++len) {
+        for (size_t head = 0; head < cap; ++head) {
+            for (size_t idx = 0; idx <= len; ++idx) {
+                for (size_t from = 0; from < len; ++from) {
+                    tda_Deque d = make_at(cap, head, len);
+
+                    TDA_TEST_OK(tda_deque_insert(&d, idx, tda_deque_get(&d, from)));
+
+                    int32_t want[cap + 1];
+                    for (size_t i = 0, j = 0; i <= len; ++i) {
+                        want[i] = 100 + (int32_t) (i == idx ? from : j++);
+                    }
+                    assert_elems(&d, want, len + 1);
+
+                    tda_deque_deinit(&d);
+                }
+            }
+        }
+    }
+}
+
+// both pushes onto a full ring with the seam at every slot, so each one grows
+static void test_pushes_take_an_elem_of_their_own_while_growing() {
+    constexpr size_t cap = 4;
+
+    for (size_t head = 0; head < cap; ++head) {
+        for (size_t from = 0; from < cap; ++from) {
+            tda_Deque front = make_at(cap, head, cap);
+            tda_Deque back = make_at(cap, head, cap);
+
+            TDA_TEST_OK(tda_deque_push_front(&front, tda_deque_get(&front, from)));
+            TDA_TEST_OK(tda_deque_push_back(&back, tda_deque_get(&back, from)));
+
+            TEST_ASSERT_EQUAL_INT32(100 + (int32_t) from, *TDA_DEQUE_FRONT_AS(int32_t, &front));
+            TEST_ASSERT_EQUAL_INT32(100 + (int32_t) from, *TDA_DEQUE_BACK_AS(int32_t, &back));
+            TEST_ASSERT_EQUAL_size_t(cap + 1, tda_deque_len(&front));
+            TEST_ASSERT_EQUAL_size_t(cap + 1, tda_deque_len(&back));
+
+            tda_deque_deinit(&front);
+            tda_deque_deinit(&back);
+        }
+    }
 }
 
 static void test_insert_moves_whole_elems() {
@@ -1922,6 +1986,7 @@ int main() {
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
     RUN_TEST(test_move_assign_across_allocators_hands_the_allocator_over);
     RUN_TEST(test_move_assign_needs_no_memory);
+    RUN_TEST(test_move_assign_fills_an_inert_target);
     RUN_TEST(test_move_assign_of_itself_changes_nothing);
     RUN_TEST(test_copy_assign_overwrites_a_longer_target);
     RUN_TEST(test_copy_assign_grows_a_shorter_target);
@@ -1941,6 +2006,8 @@ int main() {
     RUN_TEST(test_insert_into_an_empty_deque);
     RUN_TEST(test_insert_in_the_middle_shifts_either_side);
     RUN_TEST(test_insert_into_a_wrapped_ring);
+    RUN_TEST(test_insert_takes_an_elem_of_its_own_from_anywhere);
+    RUN_TEST(test_pushes_take_an_elem_of_their_own_while_growing);
     RUN_TEST(test_insert_moves_whole_elems);
     RUN_TEST(test_remove_at_the_ends_matches_the_pops);
     RUN_TEST(test_remove_in_the_middle_closes_the_gap_from_either_side);

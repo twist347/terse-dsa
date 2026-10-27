@@ -1,5 +1,8 @@
 #include "tda/alloc/alloc.h"
 
+#include "tda/core/align.h"
+#include "tda/core/check.h"
+
 #include <assert.h>
 #include <string.h>
 
@@ -19,7 +22,12 @@ void *tda_alloc(tda_Al al, tda_Layout layout) {
         return nullptr;
     }
 
-    return al.vt->alloc(al.ctx, layout);
+    void *ptr = al.vt->alloc(al.ctx, layout);
+    // the one place every block passes through: a hook that misses the alignment would
+    // leave each container on it reading misaligned elems
+    TDA_EXPECT(!ptr || tda_align_meets(ptr, layout.align));
+
+    return ptr;
 }
 
 void *tda_alloc_zeroed(tda_Al al, tda_Layout layout) {
@@ -31,7 +39,10 @@ void *tda_alloc_zeroed(tda_Al al, tda_Layout layout) {
     }
 
     if (al.vt->alloc_zeroed) {
-        return al.vt->alloc_zeroed(al.ctx, layout);
+        void *ptr = al.vt->alloc_zeroed(al.ctx, layout);
+        TDA_EXPECT(!ptr || tda_align_meets(ptr, layout.align));
+
+        return ptr;
     }
 
     void *ptr = tda_alloc(al, layout);
@@ -57,7 +68,14 @@ void *tda_remap(tda_Al al, void *ptr, tda_Layout old, size_t new_size) {
     assert(old.size > 0 && new_size > 0);
     assert(tda_layout_is_align(old.align));
 
-    return al.vt->remap ? al.vt->remap(al.ctx, ptr, old, new_size) : nullptr;
+    if (!al.vt->remap) {
+        return nullptr;
+    }
+
+    void *moved = al.vt->remap(al.ctx, ptr, old, new_size);
+    TDA_EXPECT(!moved || tda_align_meets(moved, old.align));
+
+    return moved;
 }
 
 void *tda_realloc(tda_Al al, void *ptr, tda_Layout old, size_t new_size) {

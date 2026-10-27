@@ -12,9 +12,10 @@ int main() {
     // no memory of its own
     tda_Log log = tda_log_init(stdout, tda_al_default());
 
-    int32_t *nums = TDA_ALLOC_ZEROED(int32_t, tda_log_to_al(&log), 4); // [TDA] alloc_zeroed size = 16 align = 4 -> 0x...
+    // tda log: alloc_zeroed size = 16 align = 4 -> 0x...
+    int32_t *nums = TDA_ALLOC_ZEROED(int32_t, tda_log_to_al(&log), 4);
     if (nums) {
-        TDA_DEALLOC(int32_t, tda_log_to_al(&log), nums, 4); // [TDA] dealloc 0x... size = 16 align = 4
+        TDA_DEALLOC(int32_t, tda_log_to_al(&log), nums, 4); // tda log: dealloc 0x... size = 16 align = 4
     }
 
     // the wrapped allocator must outlive the log, which passes every call on to it

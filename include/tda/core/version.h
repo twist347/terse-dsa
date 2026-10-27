@@ -18,10 +18,10 @@
 #define TDA_VERSION_MAJOR 3
 
 /// bumped by an addition
-#define TDA_VERSION_MINOR 1
+#define TDA_VERSION_MINOR 2
 
 /// bumped by a fix
-#define TDA_VERSION_PATCH 1
+#define TDA_VERSION_PATCH 0
 
 /// the version as one comparable number
 /// @param major the major part

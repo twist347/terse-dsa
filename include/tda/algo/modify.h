@@ -49,8 +49,8 @@ size_t tda_span_unique(tda_SpanMut s, tda_Eq eq, void *ctx);
 
 /// drops every elem equal to 'key'
 /// @param s the span
-/// @param key must not point into 's': elems move during the pass, and 'key' would
-///            then read whatever lands there
+/// @param key asserts it does not point into 's': elems move during the pass, and 'key'
+///            would then read whatever lands there
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null
 /// @return the new length
@@ -74,7 +74,7 @@ size_t tda_span_remove_if(tda_SpanMut s, tda_Pred pred, void *ctx);
 
 /// overwrites every elem equal to 'key' with 'val'
 /// @param s the span
-/// @param key must not point into 's': the first match would overwrite it
+/// @param key asserts it does not point into 's': the first match would overwrite it
 /// @param val the value to write
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null

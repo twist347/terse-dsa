@@ -20,7 +20,8 @@
 /// - a dealloc or realloc with a size or an alignment other than the block was made with;
 /// - a pointer it never handed out, or one already given back;
 /// - a write past the end of a block, seen when the block is given back;
-/// - a write into a block after it was given back.
+/// - a write into a block after it was given back;
+/// - a parent that hands out a block it already handed out and has not had back.
 ///
 /// A new block is filled with 0xCD and a freed one with 0xDD, so a read of either shows
 /// up as a pattern rather than as plausible data. A freed block does not go back to the

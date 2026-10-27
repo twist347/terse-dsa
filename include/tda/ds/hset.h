@@ -45,8 +45,9 @@
 /// @{
 
 /// Owning hash set of type-erased keys. A value the caller holds, like tda_HMap, whose
-/// rules it follows: an init returns it, a from_ fills it in, tda_hset_deinit releases
-/// it, `= {}` is inert, and a copy of the struct is a second owner of the same entries.
+/// rules it follows: an init that cannot fail returns it, one that can and a from_ fill
+/// it in, tda_hset_deinit releases it, `= {}` is inert, and a copy of the struct is a
+/// second owner of the same entries.
 typedef struct tda_HSet {
     tda_HMap map_; ///< a map whose values have size 0
 } tda_HSet;
@@ -148,7 +149,7 @@ tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other);
 
 /// releases the keys of 'self' and hands it everything 'other' holds, its allocator,
 /// hasher, equality and ctx included, leaving 'other' empty on that allocator
-/// @param[in,out] self must have the same key layout
+/// @param[in,out] self must have the same key layout, or be inert
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{k} for the k old keys of 'self', freed one by one
 TDA_API
@@ -332,7 +333,8 @@ const void *tda_hset_node_key(const tda_HSet *self, const tda_HSetNode *node);
 
 /// puts 'key' in the set
 /// @param self the set
-/// @param key the key to copy in; an equal key already there is kept as is
+/// @param key the key to copy in; an equal key already there is kept as is. A key that
+///            points at memory, such as a string, is then the caller's to free
 /// @param[out] out_is_new whether the key was absent; may be null, set only on success
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when a node or the bucket array cannot be allocated
@@ -411,8 +413,9 @@ tda_Status tda_hset_shrink_to_fit(tda_HSet *self);
 /// exchanges the contents of two sets, hashers, equalities and ctx included
 /// @param self one set
 /// @param other must have the same key layout; may be 'self'. The nodes do not move, so
-///              borrowed nodes stay valid. Each side keeps the allocator its nodes came
-///              from, so the two may differ
+///              borrowed nodes stay valid, but each now belongs to the other set and
+///              goes to it as 'self'. Each side keeps the allocator its nodes came from,
+///              so the two may differ
 /// @bigo{1}
 TDA_API
 void tda_hset_swap(tda_HSet *self, tda_HSet *other);
@@ -610,26 +613,21 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
 
 /// @cond
 // the body of both walks; the hidden names come in already unique, and 'self' is
-// read once
-#define TDA_HSET_WALK_(SelfT, NodeT, node, self, first, next, hset, once) \
-    for (SelfT *hset = (self), **once = &hset; once; once = nullptr)      \
-        for (NodeT *node = first(hset); node; node = next(hset, node))
+// read once. The node after 'node' is taken before the body runs, so the body may
+// remove 'node'
+#define TDA_HSET_WALK_(SelfT, NodeT, node, self, first, next, hset, once, after)    \
+    for (SelfT *hset = (self), **once = &hset; once; once = nullptr)                \
+        for (NodeT *node = first(hset), *after = node ? next(hset, node) : nullptr; \
+             node;                                                                  \
+             node = after, after = node ? next(hset, node) : nullptr)
 /// @endcond
 
 /// walks every key, binding 'node' to each in turn, in unspecified (bucket) order
 /// @param node the name of the loop variable, a const tda_HSetNode *
 /// @param self the set
-/// @warning the loop steps through 'node' after the body, so removing it inside the loop
-///          uses a freed node. To remove while walking, take the next node first:
-/// @code
-/// for (tda_HSetNode *node = tda_hset_first_node_mut(s), *next; node; node = next) {
-///     next = tda_hset_node_next_mut(s, node);
-///     if (drop_it(node)) {
-///         tda_hset_remove_node(s, node);
-///     }
-/// }
-/// @endcode
-/// @warning inserting inside the loop is not allowed either; see tda_hset_node_next
+/// @note the next node is taken before the body runs, so the body of
+///       TDA_HSET_FOR_EACH_MUT may drop 'node' with tda_hset_remove_node. Dropping any
+///       other node, or inserting, is not allowed; see tda_hset_node_next
 #define TDA_HSET_FOR_EACH(node, self) \
     TDA_HSET_WALK_(                   \
         const tda_HSet,               \
@@ -639,7 +637,8 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
         tda_hset_first_node,          \
         tda_hset_node_next,           \
         TDA_LINE_NAME_(hset_),        \
-        TDA_LINE_NAME_(once_)         \
+        TDA_LINE_NAME_(once_),        \
+        TDA_LINE_NAME_(after_)        \
     )
 
 /// the same walk, over nodes that can be removed through
@@ -653,7 +652,8 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
         tda_hset_first_node_mut,          \
         tda_hset_node_next_mut,           \
         TDA_LINE_NAME_(hset_),            \
-        TDA_LINE_NAME_(once_)             \
+        TDA_LINE_NAME_(once_),            \
+        TDA_LINE_NAME_(after_)            \
     )
 
 /// tda_hset_node_key as a const K *

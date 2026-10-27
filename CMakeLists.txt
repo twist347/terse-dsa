@@ -126,22 +126,26 @@ set_target_properties(tda PROPERTIES
         C_VISIBILITY_PRESET hidden
 )
 
-include(CheckIPOSupported)
-check_ipo_supported(RESULT TDA_IPO_SUPPORTED OUTPUT TDA_IPO_ERROR)
 # only on the shared library: a static archive of LTO objects links only with a linker that
 # can read them, which a consumer's clang without -flto is not; it takes the consumer's
-# CMAKE_INTERPROCEDURAL_OPTIMIZATION instead
-if (TDA_IPO_SUPPORTED AND TDA_BUILD_SHARED)
-    set_target_properties(tda PROPERTIES
-            INTERPROCEDURAL_OPTIMIZATION_RELEASE ON
-            INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON
-    )
-elseif (NOT TDA_IPO_SUPPORTED)
-    message(STATUS "  LTO unavailable : ${TDA_IPO_ERROR}")
+# CMAKE_INTERPROCEDURAL_OPTIMIZATION instead. The check is a trial build, so a static
+# build, a consumer's by default, skips it
+if (TDA_BUILD_SHARED)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT TDA_IPO_SUPPORTED OUTPUT TDA_IPO_ERROR)
+    if (TDA_IPO_SUPPORTED)
+        set_target_properties(tda PROPERTIES
+                INTERPROCEDURAL_OPTIMIZATION_RELEASE ON
+                INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON
+        )
+    else ()
+        message(STATUS "  LTO unavailable : ${TDA_IPO_ERROR}")
+    endif ()
 endif ()
 
 if (TDA_BUILD_TEST OR TDA_BUILD_EXAMPLE)
     enable_testing()
+    set(TDA_TEST_TIMEOUT 60)
 endif ()
 
 if (TDA_BUILD_TEST)

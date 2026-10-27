@@ -890,6 +890,34 @@ static void test_for_each_reads_its_map_once() {
     tda_hmap_deinit(&m);
 }
 
+// the walk takes the next node before the body, so the body may drop the one it is on:
+// the odd keys go, each node is reached once, under one long chain and short ones alike
+static void test_for_each_mut_may_remove_the_node_it_is_on() {
+    const tda_Hasher hashers[] = {tda_hash_i32, hash_all_alike, hash_by_parity};
+
+    for (size_t h = 0; h < 3; ++h) {
+        tda_HMap m = make_filled(hashers[h], nullptr, 40);
+
+        size_t seen = 0;
+        TDA_HMAP_FOR_EACH_MUT(node, &m) {
+            if (*TDA_HMAP_NODE_KEY_AS(int32_t, &m, node) % 2 != 0) {
+                tda_hmap_remove_node(&m, node);
+            }
+            ++seen;
+        }
+
+        TEST_ASSERT_EQUAL_size_t(40, seen);
+        TEST_ASSERT_EQUAL_size_t(20, tda_hmap_len(&m));
+        for (int32_t i = 0; i < 40; i += 2) {
+            assert_has(&m, i, i * 10);
+            assert_missing(&m, i + 1);
+        }
+        assert_walk_sees_everything(&m);
+
+        tda_hmap_deinit(&m);
+    }
+}
+
 /* ========== get_or_insert ========== */
 
 static void test_get_or_insert_puts_a_missing_key_in() {
@@ -1326,6 +1354,24 @@ static void test_move_assign_needs_no_memory() {
     tda_hmap_deinit(&src);
     tda_hmap_deinit(&dst);
     tda_arena_deinit(&arena);
+}
+
+// an inert target, `= {}`, takes on everything the source has: layout, allocator and
+// all, and the source stays usable
+static void test_move_assign_fills_an_inert_target() {
+    tda_HMap src = make_filled(tda_hash_i32, nullptr, 8), dst = {};
+
+    tda_hmap_move_assign(&dst, &src);
+
+    TEST_ASSERT_EQUAL_size_t(8, tda_hmap_len(&dst));
+    for (int32_t i = 0; i < 8; ++i) {
+        assert_has(&dst, i, i * 10);
+    }
+    put(&src, 7, 70);
+    assert_has(&src, 7, 70);
+
+    tda_hmap_deinit(&src);
+    tda_hmap_deinit(&dst);
 }
 
 static void test_move_assign_of_itself_changes_nothing() {
@@ -2198,6 +2244,7 @@ int main() {
     RUN_TEST(test_the_walk_of_an_empty_map_stops_at_once);
     RUN_TEST(test_the_walk_after_a_removal_sees_the_rest);
     RUN_TEST(test_for_each_reads_its_map_once);
+    RUN_TEST(test_for_each_mut_may_remove_the_node_it_is_on);
 
     RUN_TEST(test_copy_is_independent);
     RUN_TEST(test_copy_carries_the_hasher_and_the_equality);
@@ -2207,6 +2254,7 @@ int main() {
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
     RUN_TEST(test_move_assign_across_allocators_hands_the_allocator_over);
     RUN_TEST(test_move_assign_needs_no_memory);
+    RUN_TEST(test_move_assign_fills_an_inert_target);
     RUN_TEST(test_move_assign_of_itself_changes_nothing);
     RUN_TEST(test_copy_of_empty_stays_empty);
     RUN_TEST(test_copy_assign_overwrites_the_target);

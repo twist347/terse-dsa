@@ -40,11 +40,11 @@ int main() {
     *TDA_STACK_TOP_MUT_AS(int32_t, &s) = 9;
     tda_stack_print(&s, tda_fprint_i32, nullptr); // [1, 2, 3, 9]
 
-    // read the elem before popping: a pop that returned it would have nowhere to put the
-    // bytes
+    // pop only drops the top; pop_to copies it out first
     while (tda_stack_len(&s) > 0) {
-        printf("%" PRId32 " ", *TDA_STACK_TOP_AS(int32_t, &s));
-        tda_stack_pop(&s);
+        int32_t top;
+        TDA_STACK_POP_TO(int32_t, &s, &top);
+        printf("%" PRId32 " ", top);
     }
     putchar('\n'); // 9 3 2 1
     /// [lifo]

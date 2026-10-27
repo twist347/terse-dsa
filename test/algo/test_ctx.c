@@ -547,14 +547,15 @@ static void test_every_algo_hands_the_ctx_to_every_call() {
 
     // in-place edits
     sweep_fill(buf);
-    tda_span_replace(s, &buf[0], &key, eq_seen, ctx);
+    const int32_t first = buf[0]; // a key inside 's' would be written over
+    tda_span_replace(s, &first, &key, eq_seen, ctx);
     tda_span_replace_if(s, &key, small_seen, ctx);
     sweep_fill(buf);
     TDA_TEST_OK(tda_span_partition_stable(s, small_seen, ctx, al, &at));
     sweep_fill(buf);
     (void) tda_span_partition(s, small_seen, ctx);
     sweep_fill(buf);
-    (void) tda_span_remove(s, &buf[0], eq_seen, ctx);
+    (void) tda_span_remove(s, &first, eq_seen, ctx);
     sweep_fill(buf);
     (void) tda_span_remove_if(s, small_seen, ctx);
     sweep_fill(buf);

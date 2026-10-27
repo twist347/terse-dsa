@@ -45,11 +45,10 @@ int main() {
     // both ends are writable; a queue limits where elems go in and out, not their values
     *TDA_QUEUE_FRONT_MUT_AS(int32_t, &q) = 9;
 
-    // read the elem before popping: a pop that returned it would have nowhere to put the
-    // bytes
-    printf("%" PRId32 " ", *TDA_QUEUE_FRONT_AS(int32_t, &q));
-    tda_queue_pop(&q);
-    printf("%" PRId32 "\n", *TDA_QUEUE_FRONT_AS(int32_t, &q)); // 9 2
+    // pop only drops the front; pop_to copies it out first
+    int32_t front;
+    TDA_QUEUE_POP_TO(int32_t, &q, &front);
+    printf("%" PRId32 " %" PRId32 "\n", front, *TDA_QUEUE_FRONT_AS(int32_t, &q)); // 9 2
     /// [fifo]
 
     /// [read]

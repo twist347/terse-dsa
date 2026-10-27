@@ -41,8 +41,9 @@
 /// @{
 
 /// Owning queue with two cheap ends. A value the caller holds wherever it likes: an init
-/// returns it, a from_ fills it in, tda_deque_deinit releases its block. `= {}` is the inert
-/// state, which tda_deque_deinit accepts and every other op asserts.
+/// that cannot fail returns it, one that can and a from_ fill it in, tda_deque_deinit
+/// releases its block. `= {}` is the inert state, which tda_deque_deinit accepts,
+/// tda_deque_move_assign takes as its target, and every other op asserts.
 ///
 /// The fields belong to the deque: read and change them only through the functions here.
 ///
@@ -61,20 +62,21 @@ typedef struct tda_Deque {
 } tda_Deque;
 
 /// @cond
-// the elem 'idx' places past the front, one lap back when that passes the last slot.
-// Compared against the room left rather than through head + idx, which cannot overflow
-static inline const unsigned char *tda_deque_elem_at_(const tda_Deque *self, size_t idx) {
+// the slot of the elem 'idx' places past the front, one lap back when that passes the
+// last slot. Compared against the room left rather than through head + idx, which
+// cannot overflow. The one place an index becomes a slot; deque.c goes through it too
+static inline size_t tda_deque_slot_of_(const tda_Deque *self, size_t idx) {
     const size_t room = self->cap_ - self->head_;
-    const size_t slot = idx < room ? self->head_ + idx : idx - room;
 
-    return (const unsigned char *) self->data_ + slot * self->elem_.size;
+    return idx < room ? self->head_ + idx : idx - room;
+}
+
+static inline const unsigned char *tda_deque_elem_at_(const tda_Deque *self, size_t idx) {
+    return (const unsigned char *) self->data_ + tda_deque_slot_of_(self, idx) * self->elem_.size;
 }
 
 static inline unsigned char *tda_deque_elem_at_mut_(tda_Deque *self, size_t idx) {
-    const size_t room = self->cap_ - self->head_;
-    const size_t slot = idx < room ? self->head_ + idx : idx - room;
-
-    return (unsigned char *) self->data_ + slot * self->elem_.size;
+    return (unsigned char *) self->data_ + tda_deque_slot_of_(self, idx) * self->elem_.size;
 }
 /// @endcond
 
@@ -177,7 +179,7 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other);
 
 /// releases the elems of 'self' and hands it everything 'other' holds, its allocator
 /// included, leaving 'other' empty on that allocator
-/// @param[in,out] self must have the same elem layout
+/// @param[in,out] self must have the same elem layout, or be inert
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{1}
 TDA_API
@@ -399,7 +401,7 @@ void tda_deque_set(tda_Deque *self, size_t idx, const void *val);
 
 /// puts a copy of 'val' at the front
 /// @param self the deque
-/// @param val must not point into this deque: growing would move it
+/// @param val the elem to copy in; may be one of this deque's
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized
@@ -437,10 +439,12 @@ void tda_deque_pop_back_to(tda_Deque *self, void *out);
 /// puts a copy of 'val' at 'idx', shifting whichever side is shorter
 /// @param self the deque
 /// @param idx asserts idx <= len; idx == len is push_back
-/// @param val must not point into this deque
+/// @param val the elem to copy in; may be one of this deque's
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
-/// @bigo{n}, with half the constant of a vec
+/// @bigo{n}; at most half the elems move, the shorter side, but one at a time, where a
+///       vec moves its tail in one memmove: a vec is faster unless the inserts land near
+///       the front
 [[nodiscard]] TDA_API
 tda_Status tda_deque_insert(tda_Deque *self, size_t idx, const void *val);
 

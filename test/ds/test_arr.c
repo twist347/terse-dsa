@@ -646,6 +646,21 @@ static void test_move_assign_needs_no_memory() {
     tda_arena_deinit(&arena);
 }
 
+// an inert target, `= {}`, takes on everything the source has: layout, allocator and
+// all, and the source stays usable
+static void test_move_assign_fills_an_inert_target() {
+    tda_Arr src = make_arr(4), dst = {};
+
+    tda_arr_move_assign(&dst, &src);
+
+    TEST_ASSERT_EQUAL_size_t(4, tda_arr_len(&dst));
+    TEST_ASSERT_EQUAL_INT32(3, *TDA_ARR_GET_AS(int32_t, &dst, 3));
+    TEST_ASSERT_EQUAL_size_t(0, tda_arr_len(&src));
+
+    tda_arr_deinit(&src);
+    tda_arr_deinit(&dst);
+}
+
 static void test_move_assign_of_itself_changes_nothing() {
     tda_Arr a = make_arr(3);
 
@@ -1198,6 +1213,7 @@ int main() {
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
     RUN_TEST(test_move_assign_across_allocators_hands_the_allocator_over);
     RUN_TEST(test_move_assign_needs_no_memory);
+    RUN_TEST(test_move_assign_fills_an_inert_target);
     RUN_TEST(test_move_assign_of_itself_changes_nothing);
     RUN_TEST(test_copy_assign_keeps_the_target_allocator);
 

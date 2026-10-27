@@ -7,7 +7,6 @@
 #include "internal/ptr.h"
 
 #include <assert.h>
-#include <stdint.h>
 #include <string.h>
 
 /* ========== internals ========== */
@@ -263,9 +262,13 @@ tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other) {
 }
 
 void tda_list_move_assign(tda_List *self, tda_List *other) {
-    ASSERT_LIST(self);
+    assert(self);
     ASSERT_LIST(other);
-    EXPECT_SAME_LIST(self, other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->al_.vt) {
+        ASSERT_LIST(self);
+        EXPECT_SAME_LIST(self, other);
+    }
 
     if (self == other) {
         return;
@@ -386,7 +389,8 @@ tda_ListNode *tda_list_find_mut(tda_List *self, const void *key, tda_Eq eq, void
 const void *tda_list_node_elem(const tda_List *self, const tda_ListNode *node) {
     ASSERT_LIST(self);
     ASSERT_NODE(node);
-    assert(owns_node(self, node));
+    // no owns_node: a read called on every step of a walk, which that would make
+    // quadratic in debug, and a foreign node only reads another list's elem
 
     return elem_of(self, node);
 }
@@ -394,7 +398,6 @@ const void *tda_list_node_elem(const tda_List *self, const tda_ListNode *node) {
 void *tda_list_node_elem_mut(tda_List *self, tda_ListNode *node) {
     ASSERT_LIST(self);
     ASSERT_NODE(node);
-    assert(owns_node(self, node));
 
     return elem_of_mut(self, node);
 }
@@ -432,6 +435,8 @@ tda_Status tda_list_extend(tda_List *self, tda_Span src) {
     }
 
     splice_nodes(self, &chain, false);
+
+    ASSERT_LIST(self);
 
     return TDA_STATUS_OK;
 }

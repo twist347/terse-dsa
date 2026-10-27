@@ -29,10 +29,9 @@
 /// @snippet core/example_rng.c span
 /// @{
 
-/// A pseudorandom generator: four words of xoshiro256++ state, never all zero.
-/// @warning a zeroed tda_Rng, such as `tda_Rng rng = {0}` or a static one, is not a
-///          generator: it draws zeros forever and the bounded draws never return. Start
-///          one with tda_rng_from_seed; debug builds assert on the zero state
+/// A pseudorandom generator: four words of xoshiro256++ state.
+/// @note a zeroed tda_Rng, such as `tda_Rng rng = {0}` or a static one, draws the same
+///       numbers as `tda_rng_from_seed(0)`: the first draw seeds it
 typedef struct {
     uint64_t s_[4]; ///< the state; set only by tda_rng_from_seed
 } tda_Rng;

@@ -12,8 +12,8 @@
 /// @brief joining two sorted runs into one
 ///
 /// Both are stable: among equal elems, those of the left run come first. To finish
-/// sorting a partly sorted span, find the boundary with tda_span_is_sorted_until and
-/// merge.
+/// sorting a span whose front is in order, find where the order ends with
+/// tda_span_is_sorted_until, sort the tail from there, and merge the two runs in place.
 ///
 /// @par Example
 /// @snippet algo/example_merge.c merge
@@ -23,7 +23,7 @@
 /// @{
 
 /// writes two sorted spans into 'dst' as one sorted run
-/// @param dst must hold a.len + b.len and overlap neither source
+/// @param dst asserts a len of exactly a.len + b.len; must overlap neither source
 /// @param a one sorted run
 /// @param b the other, sorted by the same 'cmp'
 /// @param cmp the order both are in

@@ -1,5 +1,102 @@
 # Changelog
 
+## 3.2.0 — 2026-10-27
+
+Preconditions dropped or caught, and the docs brought in line with the code. Two things
+read differently: the log's prefix, and a list walk no longer visits a node put in right
+after the one it is on.
+
+### Changed
+
+- **`push` and `insert` take an elem of their own container.** `tda_vec_push`,
+  `tda_vec_insert`, `tda_deque_push_front`, `tda_deque_push_back` and `tda_deque_insert`,
+  and through them the pushes of stack, queue and pqueue, asserted that 'val' did not
+  point into the block, even with room to spare. Now `push(&v, get(&v, 0))` works: the
+  elem is found again by its index once the block has grown or the gap has opened.
+- **The `_MUT` walks of hmap, hset and list may remove the node they are on.**
+  `TDA_HMAP_FOR_EACH_MUT`, `TDA_HSET_FOR_EACH_MUT` and `TDA_LIST_FOR_EACH_MUT` take the
+  next node before the body runs, so `tda_*_remove_node` on 'node' no longer reads freed
+  memory, and the loop written out by hand that the docs showed is no longer needed. The
+  const walks step the same way, so a node put in right after 'node' is not visited.
+- **`move_assign` takes an inert target.** A `= {}` 'self' asserted in every container;
+  it now takes on the layout, the allocator and the contents, so a field zeroed with its
+  struct can be handed a container.
+- **`tda_span_find_any_of` takes a set of keys.** The set had to share the layout of the
+  span; like every key op in algo/search it now calls 'eq' with the elem on the left and
+  the key on the right, so a span of records is searched with a span of ids.
+- **`alloc/log` writes `tda log:` before each line**, where it wrote `[TDA]`, so it reads
+  like `alloc/debug`'s `tda debug:`. The README never promised this text.
+- **A zeroed `tda_Rng` draws as `tda_rng_from_seed(0)`.** `tda_Rng rng = {}` drew zeros
+  forever and its bounded draws never returned in release; the first draw now seeds it.
+
+### Fixed
+
+- **A walk over a list is linear in debug builds too.** `tda_list_node_elem` and
+  `tda_list_node_elem_mut` walked the list to assert the node was in it, so every
+  `TDA_LIST_FOR_EACH` that read its elems was quadratic under assert. They now check the
+  node alone, as hmap's accessors do; the ops that relink still check ownership.
+- **`TDA_DEALLOC` and `TDA_REALLOC` typecheck the pointer as `T *`**, as the other typed
+  macros do, so a block freed under the wrong type no longer compiles: the size handed
+  back would have been that type's. A `void *` still passes.
+- **`tda_span_remove` and `tda_span_replace` assert that the key is not in the span.**
+  The docs already forbade it, since the pass writes over the key; the wrong answer it
+  gave now stops a debug build.
+- **A block that misses its alignment is caught where it comes in.** `tda_alloc`,
+  `tda_alloc_zeroed` and `tda_remap`, and so `tda_realloc`, check what the hook returns
+  against the alignment asked for, as `docs/conventions.md` already promised; the check is
+  a `TDA_EXPECT`, kept in release under `TDA_HARDENED`.
+- **The debug allocator reports a parent that hands out a block twice.** A block the
+  parent still has out, live or in quarantine, used to overwrite the older record, or
+  trip an assert in a debug build only. Both now stop with a report in every build, and
+  the quarantine case names the likely cause: a reset or rewind of the parent without
+  `tda_debug_flush_quarantine`.
+
+### Docs
+
+- **What a few pages said and the code did not.** hmap and hset `insert` keep the key
+  already there, which matters when a key points at memory; a node borrowed across a
+  `swap` belongs to the other map; pqueue's comparator is replaced by copy_assign,
+  move_assign and swap, not fixed for life; `tda_span_merge` asserts an exact length;
+  `tda_deque_insert` moves elems one at a time, so it does not beat a vec by half; an
+  arena pads before any block whose alignment the cursor misses, not only an
+  over-aligned one; `TDA_ALLOC` and `TDA_REALLOC` say what a count of 0 gives.
+- **An op called in place gets one address as `dst` and as an operand.** `tda_UnOp`
+  and `tda_BinOp` say so, and transform and partial_sum point there: an op that writes a
+  field before reading all it needs reads its own output.
+- **What was missing.** The recipe for finishing a partly sorted span sorts the tail
+  before the merge; `tda_al_default` is the one allocator threads may share, and has a
+  `@bigo`; `TDA_SPAN_ASSERT` evaluates its argument more than once; the adapters list
+  `extend` among the ops that reallocate; the type pages say that an init that can fail
+  writes through `out`, as a from_ does; the stack, queue and pqueue examples drain
+  through `pop_to`.
+- **`docs/conventions.md`** names the roles `other`, `src`/`dst`, `elems`, `nbits` and
+  `from`, the verbs `init_raw` and `into_raw`, and that two walks nest only on separate
+  lines; its `is_empty`, which does not exist, is `is_sorted`; no line passes 90.
+- **README:** the CMake options and their defaults, CMake 3.22 as the floor, a 128-bit
+  `_BitInt` in the toolchain floor, and the links into `example/` that broke on the
+  published reference.
+
+### Internal
+
+- The adapters' `extend` repeats the overlap check the container under it makes;
+  `tda_list_extend` ends with its own invariant check; a container's layout comes first
+  in every check against a span's; the deque turns an index into a slot in one place,
+  shared by the header and the source; unused includes are gone, `<stdckdint.h>` from
+  the public `alloc.h` among them.
+
+### Tests and CI
+
+- A static build, a consumer's by default, no longer runs CMake's trial build for LTO,
+  which only the shared library uses.
+- Every test has a 60-second timeout, where ctest waited 1500 for a loop that never ends.
+- A `docs` leg builds the reference on every push and pull request and fails on any
+  doxygen warning.
+
+- `find_any_of` over users with a set of ids; each container's `move_assign` into `= {}`; push and insert of an elem of their own,
+  for every index and position of the seam; remove inside each `_MUT` walk; the zeroed
+  rng against seed 0; `test_alloc_debug_misuse` for a parent handing out a live block
+  and a quarantined one.
+
 ## 3.1.1 — 2026-10-26
 
 ### Fixed

@@ -172,8 +172,8 @@ bool tda_span_find_any_of(tda_Span s, tda_Span set, tda_Eq eq, void *ctx, size_t
     TDA_SPAN_ASSERT(set);
     assert(eq);
     assert(out_idx);
-    TDA_EXPECT(tda_layout_eq(s.elem, set.elem));
 
+    // each span is walked with its own stride, so 'set' may hold keys rather than elems
     for (size_t i = 0; i < s.len; ++i) {
         const void *elem = tda_span_get(s, i);
 

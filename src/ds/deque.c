@@ -27,6 +27,9 @@
 static constexpr size_t DEQUE_GROWTH_BASE = 1;
 static constexpr size_t DEQUE_GROWTH_FACTOR = 2;
 
+/// what alias_idx returns for an address outside the block
+static constexpr size_t NOT_IN_BLOCK = SIZE_MAX;
+
 [[nodiscard]]
 static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al al, tda_Deque *out);
 
@@ -37,6 +40,16 @@ static void release_data(tda_Deque *self);
 /// body of insert and insert_span
 [[nodiscard]]
 static tda_Status insert_raw(tda_Deque *self, size_t idx, const void *src, size_t count);
+
+/// makes room for 'count' elems at 'idx', shifting the shorter side; their bytes are left
+/// as they were
+[[nodiscard]]
+static tda_Status open_gap(tda_Deque *self, size_t idx, size_t count);
+
+/// the index of the elem 'val' points at, or NOT_IN_BLOCK. Growing frees the block, so an
+/// elem of this deque passed as a value is found again by index after
+[[nodiscard]]
+static size_t alias_idx(const tda_Deque *self, const void *val);
 
 [[nodiscard]]
 static size_t next_cap(const tda_Deque *self);
@@ -252,9 +265,13 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
 }
 
 void tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
-    ASSERT_DEQUE(self);
+    assert(self);
     ASSERT_DEQUE(other);
-    EXPECT_SAME_DEQUE(self, other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->al_.vt) {
+        ASSERT_DEQUE(self);
+        EXPECT_SAME_DEQUE(self, other);
+    }
 
     if (self == other) {
         return;
@@ -344,16 +361,18 @@ void tda_deque_set(tda_Deque *self, size_t idx, const void *val) {
 tda_Status tda_deque_push_front(tda_Deque *self, const void *val) {
     ASSERT_DEQUE(self);
     assert(val);
-    // growing frees the block 'val' would be read from
-    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self, self->cap_).size, val));
+
+    const size_t from = alias_idx(self, val);
 
     const tda_Status st = reserve_one(self);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
+    // read before the head moves, which renumbers every elem; the new slot is a free one
+    const void *src = from == NOT_IN_BLOCK ? val : elem_at(self, from);
     self->head_ = slot_back(self, self->head_, 1);
-    memcpy(slot_at_mut(self, self->head_), val, self->elem_.size);
+    memcpy(slot_at_mut(self, self->head_), src, self->elem_.size);
     ++self->len_;
 
     ASSERT_DEQUE(self);
@@ -364,15 +383,20 @@ tda_Status tda_deque_push_front(tda_Deque *self, const void *val) {
 tda_Status tda_deque_push_back(tda_Deque *self, const void *val) {
     ASSERT_DEQUE(self);
     assert(val);
-    // growing frees the block 'val' would be read from
-    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self, self->cap_).size, val));
+
+    const size_t from = alias_idx(self, val);
 
     const tda_Status st = reserve_one(self);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    memcpy(elem_at_mut(self, self->len_), val, self->elem_.size);
+    // the new slot is a free one, so an elem of this deque does not overlap it
+    memcpy(
+        elem_at_mut(self, self->len_),
+        from == NOT_IN_BLOCK ? val : elem_at(self, from),
+        self->elem_.size
+    );
     ++self->len_;
 
     ASSERT_DEQUE(self);
@@ -423,11 +447,25 @@ tda_Status tda_deque_insert(tda_Deque *self, size_t idx, const void *val) {
     ASSERT_DEQUE(self);
     assert(val);
     TDA_EXPECT(idx <= self->len_);
-    // growing frees the block 'val' would be read from
-    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self, self->cap_).size, val));
 
-    // straight from 'val', not through a span, which would ask it to be aligned
-    return insert_raw(self, idx, val, 1);
+    const size_t from = alias_idx(self, val);
+    if (from == NOT_IN_BLOCK) {
+        // straight from 'val', not through a span, which would ask it to be aligned
+        return insert_raw(self, idx, val, 1);
+    }
+
+    const tda_Status st = open_gap(self, idx, 1);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    // whichever side moved, the elems before 'idx' keep their index and the rest are one
+    // up, the one 'val' named among them
+    move_elem(self, idx, from < idx ? from : from + 1);
+
+    ASSERT_DEQUE(self);
+
+    return TDA_STATUS_OK;
 }
 
 void tda_deque_remove(tda_Deque *self, size_t idx) {
@@ -644,6 +682,21 @@ static tda_Status insert_raw(tda_Deque *self, size_t idx, const void *src, size_
         return TDA_STATUS_OK;
     }
 
+    const tda_Status st = open_gap(self, idx, count);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    copy_range_in(self, idx, src, count);
+
+    ASSERT_DEQUE(self);
+
+    return TDA_STATUS_OK;
+}
+
+static tda_Status open_gap(tda_Deque *self, size_t idx, size_t count) {
+    assert(idx <= self->len_);
+
     size_t new_len;
     if (ckd_add(&new_len, self->len_, count)) {
         return TDA_STATUS_ERR_NO_MEM;
@@ -667,11 +720,23 @@ static tda_Status insert_raw(tda_Deque *self, size_t idx, const void *src, size_
         move_elems(self, idx + count, idx, old_len - idx);
     }
 
-    copy_range_in(self, idx, src, count);
-
-    ASSERT_DEQUE(self);
-
     return TDA_STATUS_OK;
+}
+
+static size_t alias_idx(const tda_Deque *self, const void *val) {
+    if (!tda_addr_in(self->data_, block_layout(self, self->cap_).size, val)) {
+        return NOT_IN_BLOCK;
+    }
+
+    const size_t off = (size_t) tda_byte_diff(val, self->data_);
+    // anything else in the block is no value: a free slot holds no elem
+    assert(off % self->elem_.size == 0);
+
+    const size_t slot = off / self->elem_.size;
+    const size_t idx = slot >= self->head_ ? slot - self->head_ : slot + self->cap_ - self->head_;
+    assert(idx < self->len_);
+
+    return idx;
 }
 
 static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al al, tda_Deque *out) {
@@ -831,7 +896,7 @@ static size_t slot_back(const tda_Deque *self, size_t slot, size_t count) {
 static size_t slot_of(const tda_Deque *self, size_t idx) {
     assert(idx < self->cap_);
 
-    return slot_fwd(self, self->head_, idx);
+    return tda_deque_slot_of_(self, idx);
 }
 
 static const unsigned char *slot_at(const tda_Deque *self, size_t slot) {
@@ -843,11 +908,15 @@ static unsigned char *slot_at_mut(tda_Deque *self, size_t slot) {
 }
 
 static const unsigned char *elem_at(const tda_Deque *self, size_t idx) {
-    return slot_at(self, slot_of(self, idx));
+    assert(idx < self->cap_);
+
+    return tda_deque_elem_at_(self, idx);
 }
 
 static unsigned char *elem_at_mut(tda_Deque *self, size_t idx) {
-    return slot_at_mut(self, slot_of(self, idx));
+    assert(idx < self->cap_);
+
+    return tda_deque_elem_at_mut_(self, idx);
 }
 
 static size_t run_from(const tda_Deque *self, size_t slot, size_t count) {

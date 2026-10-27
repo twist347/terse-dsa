@@ -26,10 +26,10 @@
 /// tda_queue_copy_to_span; there is no copy_from_span. There is no to_span either, as
 /// the elems may wrap around the ring.
 ///
-/// Pointers are not stable. An op that may reallocate (push, reserve, shrink_to_fit,
-/// copy_assign) moves every elem, move_assign releases the old block, and a pop ends the
-/// one it takes. swap moves no elem: a pointer stays valid but points into the other
-/// one. For stable positions use ds/list.
+/// Pointers are not stable. An op that may reallocate (push, extend, reserve,
+/// shrink_to_fit, copy_assign) moves every elem, move_assign releases the old block, and
+/// a pop ends the one it takes. swap moves no elem: a pointer stays valid but points
+/// into the other one. For stable positions use ds/list.
 ///
 /// @par Example
 /// @snippet ds/example_queue.c build
@@ -39,8 +39,9 @@
 /// @{
 
 /// Owning first in first out queue. A value the caller holds, like tda_Deque, whose rules
-/// it follows: an init returns it, a from_ fills it in, tda_queue_deinit releases it,
-/// `= {}` is inert, and a copy of the struct is a second owner of the same block.
+/// it follows: an init that cannot fail returns it, one that can and a from_ fill it in,
+/// tda_queue_deinit releases it, `= {}` is inert, and a copy of the struct is a second
+/// owner of the same block.
 typedef struct tda_Queue {
     tda_Deque deque_; ///< holds the elems, front first
 } tda_Queue;
@@ -140,7 +141,7 @@ tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other);
 
 /// releases the elems of 'self' and hands it everything 'other' holds, its allocator
 /// included, leaving 'other' empty on that allocator
-/// @param[in,out] self must have the same elem layout
+/// @param[in,out] self must have the same elem layout, or be inert
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{1}
 TDA_API
@@ -289,7 +290,7 @@ static inline void *tda_queue_back_mut(tda_Queue *self) {
 
 /// pushes a copy of 'val' at the back
 /// @param self the queue
-/// @param val must not point into this queue: growing would move it
+/// @param val the elem to copy in; may be one of this queue's
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized

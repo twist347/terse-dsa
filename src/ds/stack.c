@@ -99,9 +99,13 @@ tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
 }
 
 void tda_stack_move_assign(tda_Stack *self, tda_Stack *other) {
-    ASSERT_STACK(self);
+    assert(self);
     ASSERT_STACK(other);
-    EXPECT_SAME_STACK(self, other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->vec_.al_.vt) {
+        ASSERT_STACK(self);
+        EXPECT_SAME_STACK(self, other);
+    }
 
     // self-move is handled by the vec, as in copy_assign
     tda_vec_move_assign(&self->vec_, &other->vec_);
@@ -146,6 +150,8 @@ tda_Status tda_stack_extend(tda_Stack *self, tda_Span src) {
     ASSERT_STACK(self);
     TDA_SPAN_ASSERT(src);
     TDA_EXPECT(tda_layout_eq(tda_vec_elem_layout(&self->vec_), src.elem));
+    // growing may free what 'src' views
+    TDA_EXPECT(!tda_span_overlap(tda_vec_to_span(&self->vec_), src));
 
     const tda_Status st = tda_vec_extend(&self->vec_, src);
 

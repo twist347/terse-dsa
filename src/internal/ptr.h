@@ -5,7 +5,6 @@
 #include "tda/core/util.h"
 
 #include <assert.h>
-#include <stdckdint.h>
 #include <stddef.h>
 #include <stdint.h>
 

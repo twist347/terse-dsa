@@ -41,7 +41,7 @@ tda_Log tda_log_init(FILE *stream, tda_Al parent) {
     assert(parent.vt);
 
     const tda_Log obj = {.parent_ = parent, .stream_ = stream};
-    log_line(&obj, "[TDA] log allocator created\n");
+    log_line(&obj, "tda log: log allocator created\n");
 
     return obj;
 }
@@ -56,7 +56,7 @@ void tda_log_deinit(tda_Log *self) {
 
     ASSERT_LOG(self);
 
-    log_line(self, "[TDA] log allocator destroyed\n");
+    log_line(self, "tda log: log allocator destroyed\n");
 
     *self = (tda_Log){};
 }
@@ -86,7 +86,7 @@ static void *log_alloc(void *ctx, tda_Layout layout) {
     assert(layout.size > 0); // tda_alloc answers a request for nothing itself
 
     void *ptr = tda_alloc(self->parent_, layout);
-    log_line(self, "[TDA] alloc size = %zu align = %zu -> %p\n", layout.size, layout.align, ptr);
+    log_line(self, "tda log: alloc size = %zu align = %zu -> %p\n", layout.size, layout.align, ptr);
 
     return ptr;
 }
@@ -98,7 +98,7 @@ static void *log_alloc_zeroed(void *ctx, tda_Layout layout) {
     assert(layout.size > 0); // tda_alloc_zeroed answers a request for nothing itself
 
     void *ptr = tda_alloc_zeroed(self->parent_, layout);
-    log_line(self, "[TDA] alloc_zeroed size = %zu align = %zu -> %p\n", layout.size, layout.align, ptr);
+    log_line(self, "tda log: alloc_zeroed size = %zu align = %zu -> %p\n", layout.size, layout.align, ptr);
 
     return ptr;
 }
@@ -114,7 +114,7 @@ static bool log_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     const bool done = tda_resize(self->parent_, ptr, old, new_size);
     log_line(
         self,
-        "[TDA] resize %p size = %zu -> %zu align = %zu: %s\n",
+        "tda log: resize %p size = %zu -> %zu align = %zu: %s\n",
         ptr, old.size, new_size, old.align, done ? "in place" : "refused"
     );
 
@@ -135,7 +135,7 @@ static void *log_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     void *moved = tda_remap(self->parent_, ptr, old, new_size);
     log_line(
         self,
-        "[TDA] remap %p size = %zu -> %zu align = %zu -> %p\n",
+        "tda log: remap %p size = %zu -> %zu align = %zu -> %p\n",
         (void *) old_addr, old.size, new_size, old.align, moved
     );
 
@@ -148,7 +148,7 @@ static void log_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     ASSERT_LOG(self);
     assert(ptr); // tda_dealloc takes null itself
 
-    log_line(self, "[TDA] dealloc %p size = %zu align = %zu\n", ptr, layout.size, layout.align);
+    log_line(self, "tda log: dealloc %p size = %zu align = %zu\n", ptr, layout.size, layout.align);
     tda_dealloc(self->parent_, ptr, layout);
 }
 

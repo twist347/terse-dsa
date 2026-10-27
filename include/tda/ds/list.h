@@ -49,7 +49,8 @@ typedef struct tda_ListNode tda_ListNode;
 
 /// Owning list whose positions never move. A value the caller holds wherever it likes: an
 /// init returns it, a from_ fills it in, tda_list_deinit releases its nodes. `= {}` is
-/// the inert state, which tda_list_deinit accepts and every other op asserts.
+/// the inert state, which tda_list_deinit accepts, tda_list_move_assign takes as its
+/// target, and every other op asserts.
 ///
 /// The fields belong to the list: read and change them only through the functions here.
 /// No node points back at the struct, so it can be moved as bytes.
@@ -141,7 +142,7 @@ tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other);
 
 /// releases the elems of 'self' and hands it everything 'other' holds, its allocator
 /// included, leaving 'other' empty on that allocator
-/// @param[in,out] self must have the same elem layout
+/// @param[in,out] self must have the same elem layout, or be inert
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{k} for the k old nodes of 'self', freed one by one
 TDA_API
@@ -631,30 +632,41 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 #define TDA_LIST_BACK_MUT_AS(T, self) \
     ((T *) tda_list_back_mut(TDA_LIST_TYPED_(T, self)))
 
+/// @cond
+// the body of both walks; the hidden name comes in already unique
+#define TDA_LIST_WALK_(NodeT, node, self, front, next, after)           \
+    for (NodeT *node = front(self), *after = node ? next(node) : nullptr; \
+         node;                                                          \
+         node = after, after = node ? next(node) : nullptr)
+/// @endcond
+
 /// walks the list front to back, binding 'node' to each position in turn
 /// @param node the name of the loop variable, a const tda_ListNode *
 /// @param self the list
-/// @warning the loop steps through the current node after the body, so removing it in
-///          the body reads freed memory. To remove while walking, take the next first:
-/// @code
-/// for (tda_ListNode *node = tda_list_front_node_mut(l), *next; node; node = next) {
-///     next = tda_list_node_next_mut(node);
-///     if (drop_it(node)) {
-///         tda_list_remove_node(l, node);
-///     }
-/// }
-/// @endcode
-#define TDA_LIST_FOR_EACH(node, self)                          \
-    for (const tda_ListNode *node = tda_list_front_node(self); \
-         node;                                                 \
-         node = tda_list_node_next(node))
+/// @note the next node is taken before the body runs, so the body of
+///       TDA_LIST_FOR_EACH_MUT may drop 'node' with tda_list_remove_node. Dropping any
+///       other node is not allowed, and one put in after 'node' is not visited
+#define TDA_LIST_FOR_EACH(node, self) \
+    TDA_LIST_WALK_(                   \
+        const tda_ListNode,           \
+        node,                         \
+        self,                         \
+        tda_list_front_node,          \
+        tda_list_node_next,           \
+        TDA_LINE_NAME_(after_)        \
+    )
 
-/// the same walk over positions that may be written through
+/// the same walk over positions that may be written through, and which may be removed
 /// @copydetails TDA_LIST_FOR_EACH
-#define TDA_LIST_FOR_EACH_MUT(node, self)                    \
-    for (tda_ListNode *node = tda_list_front_node_mut(self); \
-         node;                                               \
-         node = tda_list_node_next_mut(node))
+#define TDA_LIST_FOR_EACH_MUT(node, self) \
+    TDA_LIST_WALK_(                       \
+        tda_ListNode,                     \
+        node,                             \
+        self,                             \
+        tda_list_front_node_mut,          \
+        tda_list_node_next_mut,           \
+        TDA_LINE_NAME_(after_)            \
+    )
 
 /// tda_list_find from a value rather than an address
 /// @param T the elem type; 'key' may be any T, a struct literal in parentheses too

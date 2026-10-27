@@ -41,7 +41,7 @@ int main() {
 }
 ```
 
-Most modules have a program of their own in [example/](example/): each is built and run
+Most modules have a program of their own in [example/](https://github.com/twist347/terse-dsa/tree/main/example): each is built and run
 with the tests, and the reference quotes it on that module's page.
 
 ## Design
@@ -65,7 +65,7 @@ Three rules shape the whole API:
 
 Out of bounds is never silent in a build that asks: `-DTDA_HARDENED=ON` keeps every
 bounds, emptiness and range check in release, so an index past the end aborts with its
-place instead of reading past it. [example_check.c](example/core/example_check.c) shows
+place instead of reading past it. [example_check.c](https://github.com/twist347/terse-dsa/blob/main/example/core/example_check.c) shows
 the same mistake in a debug, a release and a hardened build.
 
 The rest of them — how a name is built, where the `mut` marker sits, what is an `assert`
@@ -187,7 +187,7 @@ cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release -DTDA_BUILD_BENCH=ON
 cmake --build build-bench && ./build-bench/bin/bench_algo_sort
 ```
 
-Requires a C23 toolchain. CI builds and runs the tests on Linux with gcc 15 and clang 22,
+Requires CMake 3.22 and a C23 toolchain. CI builds and runs the tests on Linux with gcc 15 and clang 22,
 on macOS with Apple clang, and on Windows with clang from MSYS2 against the UCRT, the
 shared library included. MSVC's `cl` does not build it: it lacks too much of C23
 (`constexpr`, `_BitInt`, `<stdckdint.h>`).
@@ -211,7 +211,7 @@ With `FetchContent`:
 include(FetchContent)
 FetchContent_Declare(terse-dsa
     GIT_REPOSITORY https://github.com/twist347/terse-dsa.git
-    GIT_TAG v3.1.1
+    GIT_TAG v3.2.0
 )
 FetchContent_MakeAvailable(terse-dsa)
 
@@ -223,7 +223,7 @@ As a submodule:
 ```sh
 git submodule add https://github.com/twist347/terse-dsa.git \
     thirdparty/terse-dsa
-git -C thirdparty/terse-dsa checkout v3.1.1
+git -C thirdparty/terse-dsa checkout v3.2.0
 ```
 
 ```cmake
@@ -231,6 +231,16 @@ add_subdirectory(thirdparty/terse-dsa)
 
 target_link_libraries(app PRIVATE tda::tda)
 ```
+
+The options, set before tda is added:
+
+| Option | Default | What it does |
+|---|---|---|
+| `TDA_BUILD_SHARED` | on at top level, off as a dependency | a shared library rather than a static one |
+| `TDA_BUILD_TEST` | on at top level, off as a dependency | the unit tests, run by `ctest` |
+| `TDA_BUILD_EXAMPLE` | on at top level, off as a dependency | the examples the reference quotes |
+| `TDA_BUILD_BENCH` | off | the benchmarks |
+| `TDA_HARDENED` | off | keeps the bounds, emptiness and range checks in release |
 
 ## Compatibility
 
@@ -252,8 +262,9 @@ Not promised, even within a major:
 - **Text meant for people.** The output of the printers, of `alloc/log` and of
   `alloc/debug`'s reports.
 - **What a header pulls in.** Include what you use, or `tda/tda.h` for everything.
-- **The toolchain floor.** C23 with `nullptr`, `constexpr`, `typeof` and
-  `<stdckdint.h>`: the CI runs clang 22 and gcc 15, and a minor may need a newer one.
+- **The toolchain floor.** CMake 3.22, and C23 with `nullptr`, `constexpr`, `typeof`,
+  `<stdckdint.h>` and a `_BitInt` 128 bits wide: the CI runs clang 22 and gcc 15, and a
+  minor may need a newer one.
   It is C only; nothing is wrapped in `extern "C"`.
 
 A status is tested with `TDA_STATUS_IS_ERR`, not against one cause: a minor may add one.
@@ -273,7 +284,8 @@ A status is tested with `TDA_STATUS_IS_ERR`, not against one cause: a minor may 
   through stdio; there is no sink of your own to print into a string.
 - **Nothing is thread-safe.** No container takes a lock; sharing one across threads is the
   caller's problem. So is an allocator under containers on several threads: each growth
-  reaches it, even when the containers themselves are never shared.
+  reaches it, even when the containers themselves are never shared. `tda_al_default` is
+  the exception: it has no state, and libc guards its own.
 
 ## License
 

@@ -5,6 +5,7 @@ function(tda_add_example target_name source_file)
     target_compile_options(${target_name} PRIVATE ${TDA_WARNINGS})
 
     add_test(NAME ${target_name} COMMAND ${target_name})
+    set_tests_properties(${target_name} PROPERTIES TIMEOUT ${TDA_TEST_TIMEOUT})
 endfunction()
 
 add_subdirectory(algo)

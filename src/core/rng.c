@@ -227,8 +227,12 @@ static uint64_t rotl64(uint64_t val, int count) {
 }
 
 static uint64_t next_u64(tda_Rng *self) {
-    // a zeroed struct is the one state xoshiro cannot leave; the bounded draws would hang
-    assert((self->s_[0] | self->s_[1] | self->s_[2] | self->s_[3]) != 0);
+    // a zeroed struct is the one state xoshiro cannot leave, and the bounded draws would
+    // spin on it forever. from_seed never makes it, so meeting it means `= {0}` or a
+    // static: start that one as seed 0 would. One predictable branch per draw.
+    if ((self->s_[0] | self->s_[1] | self->s_[2] | self->s_[3]) == 0) {
+        *self = tda_rng_from_seed(0);
+    }
 
     // xoshiro256++. The state advances by a linear step (shift, xor, rotate), which
     // gives the period and nothing else. The ++ scrambler in front, a rotate-add over

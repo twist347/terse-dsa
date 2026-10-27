@@ -117,7 +117,7 @@ tda_Status tda_bitset_from_span(size_t nbits, tda_Span s, tda_Al al, tda_BitSet 
     TDA_SPAN_ASSERT(s);
     assert(al.vt);
     assert(out);
-    TDA_EXPECT(tda_layout_eq(s.elem, TDA_LAYOUT_OF(size_t)));
+    TDA_EXPECT(tda_layout_eq(TDA_LAYOUT_OF(size_t), s.elem));
 
     tda_BitSet obj;
     const tda_Status st = tda_bitset_init_len(nbits, al, &obj);
@@ -208,8 +208,12 @@ tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other) {
 }
 
 void tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other) {
-    ASSERT_BITSET(self);
+    assert(self);
     ASSERT_BITSET(other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->al_.vt) {
+        ASSERT_BITSET(self);
+    }
 
     if (self == other) {
         return;

@@ -161,9 +161,13 @@ tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other) {
 }
 
 void tda_hset_move_assign(tda_HSet *self, tda_HSet *other) {
-    ASSERT_HSET(self);
+    assert(self);
     ASSERT_HSET(other);
-    EXPECT_SAME_HSET(self, other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->map_.al_.vt) {
+        ASSERT_HSET(self);
+        EXPECT_SAME_HSET(self, other);
+    }
 
     // the map handles self assignment; a guard here would be untestable
     tda_hmap_move_assign(&self->map_, &other->map_);
@@ -267,7 +271,7 @@ tda_Status tda_hset_insert(tda_HSet *self, const void *key, bool *out_is_new) {
 tda_Status tda_hset_extend(tda_HSet *self, tda_Span src) {
     ASSERT_HSET(self);
     TDA_SPAN_ASSERT(src);
-    TDA_EXPECT(tda_layout_eq(src.elem, tda_hmap_key_layout(&self->map_)));
+    TDA_EXPECT(tda_layout_eq(tda_hmap_key_layout(&self->map_), src.elem));
 
     for (size_t i = 0; i < src.len; ++i) {
         const tda_Status st = tda_hmap_insert(&self->map_, tda_span_get(src, i), nullptr, nullptr);

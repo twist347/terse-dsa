@@ -16,7 +16,9 @@
 /// a no-op; everything is freed at once by tda_arena_reset in O(1).
 ///
 /// Each block starts on the alignment it asks for and takes its size and no more, so the
-/// only waste is the padding before an over-aligned block. The last block resizes in
+/// only waste is the padding that brings the cursor up to a block's alignment: none
+/// between blocks of one alignment whose sizes keep it, up to align - 1 bytes before one
+/// that asks for more than the block before it left. The last block resizes in
 /// place, since nothing lies past it; any other block shrinks in place and moves to grow,
 /// its old slot staying used. A vec growing alone costs the arena its final
 /// capacity; one growing beside others costs every capacity it passed through. A deque

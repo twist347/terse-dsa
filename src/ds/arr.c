@@ -7,7 +7,6 @@
 #include "internal/ptr.h"
 
 #include <assert.h>
-#include <stdckdint.h>
 #include <string.h>
 
 /* ========== internals ========== */
@@ -166,9 +165,13 @@ tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
 }
 
 void tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
-    ASSERT_ARR(self);
+    assert(self);
     ASSERT_ARR(other);
-    EXPECT_SAME_ARR(self, other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->al_.vt) {
+        ASSERT_ARR(self);
+        EXPECT_SAME_ARR(self, other);
+    }
 
     if (self == other) {
         return;

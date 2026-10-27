@@ -381,6 +381,21 @@ static void test_move_assign_needs_no_memory() {
     tda_arena_deinit(&arena);
 }
 
+// an inert target, `= {}`, takes on everything the source has: layout, allocator and
+// all, and the source stays usable
+static void test_move_assign_fills_an_inert_target() {
+    tda_List src = make_list(4), dst = {};
+
+    tda_list_move_assign(&dst, &src);
+
+    assert_elems(&dst, (int32_t[]){0, 1, 2, 3}, 4);
+    push_int(&src, 7);
+    assert_elems(&src, (int32_t[]){7}, 1);
+
+    tda_list_deinit(&src);
+    tda_list_deinit(&dst);
+}
+
 static void test_move_assign_of_itself_changes_nothing() {
     tda_List l = make_list(3);
 
@@ -1212,6 +1227,29 @@ static void test_for_each_mut_writes_through_every_position() {
     }
 
     assert_elems(&l, (int32_t[]){0, 10, 20, 30}, 4);
+
+    tda_list_deinit(&l);
+}
+
+// the walk takes the next node before the body, so the body may drop the one it is on
+static void test_for_each_mut_may_remove_the_node_it_is_on() {
+    tda_List l = make_list(6);
+
+    size_t seen = 0;
+    TDA_LIST_FOR_EACH_MUT(node, &l) {
+        if (*TDA_LIST_NODE_ELEM_AS(int32_t, &l, node) % 2 != 0) {
+            tda_list_remove_node(&l, node);
+        }
+        ++seen;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(6, seen);
+    assert_elems(&l, (int32_t[]){0, 2, 4}, 3);
+
+    TDA_LIST_FOR_EACH_MUT(node, &l) {
+        tda_list_remove_node(&l, node);
+    }
+    TEST_ASSERT_EQUAL_size_t(0, tda_list_len(&l));
 
     tda_list_deinit(&l);
 }
@@ -2301,6 +2339,7 @@ int main() {
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
     RUN_TEST(test_move_assign_across_allocators_hands_the_allocator_over);
     RUN_TEST(test_move_assign_needs_no_memory);
+    RUN_TEST(test_move_assign_fills_an_inert_target);
     RUN_TEST(test_move_assign_of_itself_changes_nothing);
     RUN_TEST(test_copy_of_empty_is_empty);
     RUN_TEST(test_copy_assign_grows_the_target);
@@ -2373,6 +2412,7 @@ int main() {
     RUN_TEST(test_for_each_walks_front_to_back);
     RUN_TEST(test_for_each_over_an_empty_list_runs_no_body);
     RUN_TEST(test_for_each_mut_writes_through_every_position);
+    RUN_TEST(test_for_each_mut_may_remove_the_node_it_is_on);
 
     RUN_TEST(test_swap_exchanges_the_contents);
     RUN_TEST(test_swap_keeps_the_nodes_alive);

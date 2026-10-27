@@ -37,7 +37,8 @@
 
 /// A fixed set of indices, one bit each. A value the caller holds wherever it likes:
 /// tda_bitset_init_len fills it in, tda_bitset_deinit releases its words. `= {}` is the
-/// inert state, which tda_bitset_deinit accepts and every other op asserts.
+/// inert state, which tda_bitset_deinit accepts, tda_bitset_move_assign takes as its
+/// target, and every other op asserts.
 ///
 /// The fields belong to the bitset: read and change them only through the functions
 /// here.
@@ -117,7 +118,7 @@ tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other);
 
 /// releases the words of 'self' and hands it everything 'other' holds, universe and
 /// allocator included, leaving 'other' an empty universe on that allocator
-/// @param[in,out] self the bitset to overwrite
+/// @param[in,out] self the bitset to overwrite, or an inert one
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{1}
 TDA_API

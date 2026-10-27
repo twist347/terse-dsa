@@ -577,6 +577,34 @@ static void test_shrink_to_fit_keeps_borrowed_nodes() {
     tda_hset_deinit(&s);
 }
 
+// the walk takes the next node before the body, so the body may drop the one it is on:
+// the odd keys go, each node is reached once, under one long chain and short ones alike
+static void test_for_each_mut_may_remove_the_node_it_is_on() {
+    const tda_Hasher hashers[] = {tda_hash_i32, hash_all_alike};
+
+    for (size_t h = 0; h < 2; ++h) {
+        tda_HSet s = make_filled(hashers[h], nullptr, 40);
+
+        size_t seen = 0;
+        TDA_HSET_FOR_EACH_MUT(node, &s) {
+            if (*TDA_HSET_NODE_KEY_AS(int32_t, &s, node) % 2 != 0) {
+                tda_hset_remove_node(&s, node);
+            }
+            ++seen;
+        }
+
+        TEST_ASSERT_EQUAL_size_t(40, seen);
+        TEST_ASSERT_EQUAL_size_t(20, tda_hset_len(&s));
+        for (int32_t i = 0; i < 40; i += 2) {
+            assert_has(&s, i);
+            assert_missing(&s, i + 1);
+        }
+        assert_walk_sees_everything(&s);
+
+        tda_hset_deinit(&s);
+    }
+}
+
 /* ========== copy ========== */
 
 static void test_copy_is_independent() {
@@ -763,6 +791,24 @@ static void test_move_assign_needs_no_memory() {
     tda_hset_deinit(&src);
     tda_hset_deinit(&dst);
     tda_arena_deinit(&arena);
+}
+
+// an inert target, `= {}`, takes on everything the source has: layout, allocator and
+// all, and the source stays usable
+static void test_move_assign_fills_an_inert_target() {
+    tda_HSet src = make_filled(tda_hash_i32, nullptr, 8), dst = {};
+
+    tda_hset_move_assign(&dst, &src);
+
+    TEST_ASSERT_EQUAL_size_t(8, tda_hset_len(&dst));
+    for (int32_t i = 0; i < 8; ++i) {
+        assert_has(&dst, i);
+    }
+    put(&src, 7);
+    assert_has(&src, 7);
+
+    tda_hset_deinit(&src);
+    tda_hset_deinit(&dst);
 }
 
 static void test_move_assign_of_itself_changes_nothing() {
@@ -1551,6 +1597,7 @@ int main() {
     RUN_TEST(test_shrink_to_fit_gives_the_buckets_back);
     RUN_TEST(test_shrink_to_fit_of_an_empty_set_owns_nothing);
     RUN_TEST(test_shrink_to_fit_keeps_borrowed_nodes);
+    RUN_TEST(test_for_each_mut_may_remove_the_node_it_is_on);
 
     RUN_TEST(test_remove_takes_the_key_out);
     RUN_TEST(test_remove_of_a_missing_key_says_so);
@@ -1575,6 +1622,7 @@ int main() {
     RUN_TEST(test_move_assign_hands_over_the_contents_on_one_allocator);
     RUN_TEST(test_move_assign_across_allocators_hands_the_allocator_over);
     RUN_TEST(test_move_assign_needs_no_memory);
+    RUN_TEST(test_move_assign_fills_an_inert_target);
     RUN_TEST(test_move_assign_of_itself_changes_nothing);
     RUN_TEST(test_a_copy_keeps_the_smaller_node);
     RUN_TEST(test_copy_of_empty_stays_empty);

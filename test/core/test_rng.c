@@ -77,6 +77,18 @@ static void test_rng_takes_zero_as_a_seed() {
     TEST_ASSERT_EQUAL_size_t(0, agreements);
 }
 
+// xoshiro cannot leave the all-zero state, so a zeroed struct would draw zeros and hang
+// the bounded draws; it starts as seed 0 instead
+static void test_rng_zeroed_draws_as_seed_zero() {
+    tda_Rng zeroed = {};
+    tda_Rng seeded = tda_rng_from_seed(0);
+
+    TEST_ASSERT_EQUAL_UINT32(tda_rng_u32_max(&seeded, 9), tda_rng_u32_max(&zeroed, 9));
+    for (size_t i = 0; i < 100; ++i) {
+        TEST_ASSERT_EQUAL_UINT64(tda_rng_u64(&seeded), tda_rng_u64(&zeroed));
+    }
+}
+
 // the struct is transparent, so a copy forks the stream and both copies replay it
 static void test_rng_copies_as_a_value() {
     tda_Rng rng = tda_rng_from_seed(7);
@@ -398,6 +410,7 @@ int main() {
     RUN_TEST(test_rng_matches_the_reference_stream);
     RUN_TEST(test_rng_replays_the_same_seed);
     RUN_TEST(test_rng_takes_zero_as_a_seed);
+    RUN_TEST(test_rng_zeroed_draws_as_seed_zero);
     RUN_TEST(test_rng_copies_as_a_value);
 
     RUN_TEST(test_rng_u32_is_the_top_half_of_a_draw);

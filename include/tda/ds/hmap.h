@@ -55,9 +55,10 @@
 typedef struct tda_HMapNode tda_HMapNode;
 
 /// Owning hash map from type-erased keys to type-erased values. A value the caller holds
-/// wherever it likes: an init returns it, a from_ fills it in, tda_hmap_deinit releases
-/// its entries. `= {}` is the inert state, which tda_hmap_deinit accepts and every other
-/// op asserts.
+/// wherever it likes: an init that cannot fail returns it, one that can and a from_ fill
+/// it in, tda_hmap_deinit releases its entries. `= {}` is the inert state, which
+/// tda_hmap_deinit accepts, tda_hmap_move_assign takes as its target, and every other op
+/// asserts.
 ///
 /// The fields belong to the map: read and change them only through the functions here.
 /// No entry points back at the struct, so it can be moved as bytes.
@@ -183,7 +184,7 @@ tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other);
 
 /// releases the entries of 'self' and hands it everything 'other' holds, its allocator,
 /// hasher, equality and ctx included, leaving 'other' empty on that allocator
-/// @param[in,out] self must have the same key and value layouts
+/// @param[in,out] self must have the same key and value layouts, or be inert
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{k} for the k old entries of 'self', freed one by one
 TDA_API
@@ -419,7 +420,9 @@ void *tda_hmap_node_val_mut(tda_HMap *self, tda_HMapNode *node);
 
 /// stores 'val' under 'key', overwriting the value if the key is present
 /// @param self the map
-/// @param key the key to copy in
+/// @param key the key to copy in; an equal key already there is kept as is, and only its
+///            value is overwritten. A key that points at memory, such as a string, is
+///            then the caller's to free, not the stored one
 /// @param val the value to copy in
 /// @param[out] out_is_new whether the key was absent; may be null, set only on success
 /// @retval TDA_STATUS_OK on success
@@ -520,8 +523,9 @@ tda_Status tda_hmap_shrink_to_fit(tda_HMap *self);
 /// exchanges the contents of two maps, hashers, equalities and ctx included
 /// @param self one map
 /// @param other must have the same key and value layouts; may be 'self'. The nodes do not
-///              move, so borrowed nodes stay valid. Different hashers and allocators are
-///              fine, as each travels with its entries
+///              move, so borrowed nodes stay valid, but each now belongs to the other
+///              map and goes to it as 'self'. Different hashers and allocators are fine,
+///              as each travels with its entries
 /// @bigo{1}
 TDA_API
 void tda_hmap_swap(tda_HMap *self, tda_HMap *other);
@@ -702,26 +706,21 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 
 /// @cond
 // the body of both walks; the hidden names come in already unique, and 'self' is
-// read once
-#define TDA_HMAP_WALK_(SelfT, NodeT, node, self, first, next, hmap, once) \
-    for (SelfT *hmap = (self), **once = &hmap; once; once = nullptr)      \
-        for (NodeT *node = first(hmap); node; node = next(hmap, node))
+// read once. The node after 'node' is taken before the body runs, so the body may
+// remove 'node'
+#define TDA_HMAP_WALK_(SelfT, NodeT, node, self, first, next, hmap, once, after)    \
+    for (SelfT *hmap = (self), **once = &hmap; once; once = nullptr)                \
+        for (NodeT *node = first(hmap), *after = node ? next(hmap, node) : nullptr; \
+             node;                                                                  \
+             node = after, after = node ? next(hmap, node) : nullptr)
 /// @endcond
 
 /// walks every entry, binding 'node' to each in turn, in unspecified (bucket) order
 /// @param node the name of the loop variable, a const tda_HMapNode *
 /// @param self the map
-/// @warning the loop steps through 'node' after the body, so removing it inside the loop
-///          uses a freed node. To remove while walking, take the next node first:
-/// @code
-/// for (tda_HMapNode *node = tda_hmap_first_node_mut(m), *next; node; node = next) {
-///     next = tda_hmap_node_next_mut(m, node);
-///     if (drop_it(node)) {
-///         tda_hmap_remove_node(m, node);
-///     }
-/// }
-/// @endcode
-/// @warning inserting inside the loop is not allowed either; see tda_hmap_node_next
+/// @note the next node is taken before the body runs, so the body of
+///       TDA_HMAP_FOR_EACH_MUT may drop 'node' with tda_hmap_remove_node. Dropping any
+///       other node, or inserting, is not allowed; see tda_hmap_node_next
 #define TDA_HMAP_FOR_EACH(node, self) \
     TDA_HMAP_WALK_(                   \
         const tda_HMap,               \
@@ -731,10 +730,12 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
         tda_hmap_first_node,          \
         tda_hmap_node_next,           \
         TDA_LINE_NAME_(hmap_),        \
-        TDA_LINE_NAME_(once_)         \
+        TDA_LINE_NAME_(once_),        \
+        TDA_LINE_NAME_(after_)        \
     )
 
-/// the same walk over entries whose values may be written through
+/// the same walk over entries whose values may be written through, and which may be
+/// removed
 /// @copydetails TDA_HMAP_FOR_EACH
 #define TDA_HMAP_FOR_EACH_MUT(node, self) \
     TDA_HMAP_WALK_(                       \
@@ -745,7 +746,8 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
         tda_hmap_first_node_mut,          \
         tda_hmap_node_next_mut,           \
         TDA_LINE_NAME_(hmap_),            \
-        TDA_LINE_NAME_(once_)             \
+        TDA_LINE_NAME_(once_),            \
+        TDA_LINE_NAME_(after_)            \
     )
 
 /// tda_hmap_node_key as a const K *

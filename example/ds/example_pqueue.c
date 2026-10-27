@@ -38,11 +38,11 @@ int main() {
     }
     printf("%" PRId32 "\n", *TDA_PQUEUE_TOP_AS(int32_t, &q)); // 9
 
-    // draining the queue yields the elems sorted. Read each one before popping: a pop
-    // that returned it would have nowhere to put the bytes
+    // draining the queue yields the elems sorted; pop_to copies each top out as it goes
     while (tda_pqueue_len(&q) > 0) {
-        printf("%" PRId32 " ", *TDA_PQUEUE_TOP_AS(int32_t, &q));
-        tda_pqueue_pop(&q);
+        int32_t top;
+        TDA_PQUEUE_POP_TO(int32_t, &q, &top);
+        printf("%" PRId32 " ", top);
     }
     putchar('\n'); // 9 5 4 3 1 1
     /// [serve]

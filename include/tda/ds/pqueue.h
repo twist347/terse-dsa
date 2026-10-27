@@ -21,8 +21,9 @@
 /// For a min-queue, build it with a descending comparator such as tda_cmp_desc_i32;
 /// there is no separate type.
 ///
-/// The comparator is fixed at construction and travels with the elems through copy and
-/// swap, since a heap is only valid under the order it was built with.
+/// The comparator is set at construction and travels with the elems: copy_assign,
+/// move_assign and swap hand it over along with them, since a heap is only valid under
+/// the order it was built with, and nothing else changes it.
 ///
 /// There is no tda_pqueue_eq: the same elems pushed in another order form another heap,
 /// so a real answer would have to sort a copy. Compare two queues by draining them.
@@ -30,9 +31,9 @@
 /// No elem is handed out to write through (no top_mut, get or to_span_mut): a write
 /// could break the heap invariant without the queue noticing.
 ///
-/// Pointers are not stable: every push and pop rearranges the heap, push, reserve,
-/// shrink_to_fit and copy_assign may reallocate, moving every elem, and move_assign
-/// releases the old block. swap moves no elem: a pointer stays valid but points into
+/// Pointers are not stable: every push and pop rearranges the heap, push, extend,
+/// reserve, shrink_to_fit and copy_assign may reallocate, moving every elem, and
+/// move_assign releases the old block. swap moves no elem: a pointer stays valid but points into
 /// the other queue.
 ///
 /// @par Example
@@ -43,9 +44,9 @@
 /// @{
 
 /// Owning queue that serves the greatest elem first. A value the caller holds, like
-/// tda_Vec, whose rules it follows: an init returns it, a from_ fills it in,
-/// tda_pqueue_deinit releases it, `= {}` is inert, and a copy of the struct is a second
-/// owner of the same block.
+/// tda_Vec, whose rules it follows: an init that cannot fail returns it, one that can and
+/// a from_ fill it in, tda_pqueue_deinit releases it, `= {}` is inert, and a copy of the
+/// struct is a second owner of the same block.
 typedef struct tda_PQueue {
     tda_Vec vec_; ///< the elems, kept a heap under cmp_
     tda_Cmp cmp_; ///< the order to serve in
@@ -57,7 +58,7 @@ typedef struct tda_PQueue {
 
 /// an empty queue that owns no block yet; allocates nothing, so it cannot fail
 /// @param elem the layout of one elem, asserted to be a type's: TDA_LAYOUT_OF gives it
-/// @param cmp the order to serve in, fixed for the life of the queue
+/// @param cmp the order to serve in, which only copy_assign, move_assign and swap replace
 /// @param ctx passed to every call of 'cmp'; may be null
 /// @param al used for every later allocation
 /// @return the new queue
@@ -163,7 +164,7 @@ tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other);
 
 /// releases the elems of 'self' and hands it everything 'other' holds, its allocator
 /// included, leaving 'other' empty on that allocator
-/// @param[in,out] self must have the same elem layout
+/// @param[in,out] self must have the same elem layout, or be inert
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{1}
 TDA_API
@@ -271,7 +272,7 @@ static inline const void *tda_pqueue_top(const tda_PQueue *self) {
 
 /// puts a copy of 'val' in, sifting it up to its place
 /// @param self the queue
-/// @param val must not point into this queue: growing would move it
+/// @param val the elem to copy in; may be one of this queue's
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{log n}, plus the amortized cost of growing

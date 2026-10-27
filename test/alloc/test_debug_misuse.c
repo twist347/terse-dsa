@@ -3,6 +3,7 @@
 // even when the output matches. The test passes on the report line it expects, which
 // test/alloc/CMakeLists.txt names per case.
 
+#include "tda/alloc/arena.h"
 #include "tda/alloc/debug.h"
 #include "tda/alloc/default.h"
 #include "tda/core/util.h"
@@ -82,6 +83,40 @@ static void break_at(tda_Al al) {
     TDA_UNUSED(tda_alloc(al, bytes(8)));
 }
 
+// a broken parent: every request gets the same block
+static void *same_block(void *, tda_Layout) {
+    alignas(16) static unsigned char block[64];
+
+    return block;
+}
+
+static void give_back_nothing(void *, void *, tda_Layout) {
+}
+
+static void parent_twice(tda_Al) {
+    static const tda_AlVtable vt = {.alloc = same_block, .dealloc = give_back_nothing};
+    tda_Debug over = tda_debug_init((tda_Al){.vt = &vt});
+    const tda_Al al = tda_debug_to_al(&over);
+
+    TDA_UNUSED(tda_alloc(al, bytes(8)));
+    TDA_UNUSED(tda_alloc(al, bytes(8)));
+}
+
+// the misuse the header warns of: the parent is reset under a quarantined block, and
+// hands its address out again
+static void parent_reset(tda_Al) {
+    tda_Arena arena;
+    if (TDA_STATUS_IS_ERR(tda_arena_init_cap(256, tda_al_default(), &arena))) {
+        exit(1);
+    }
+    tda_Debug over = tda_debug_init(tda_arena_to_al(&arena));
+    const tda_Al al = tda_debug_to_al(&over);
+
+    tda_dealloc(al, tda_alloc(al, bytes(8)), bytes(8));
+    tda_arena_reset(&arena);
+    TDA_UNUSED(tda_alloc(al, bytes(8)));
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         return 2;
@@ -101,6 +136,8 @@ int main(int argc, char **argv) {
         {"write_after_free", write_after_free},
         {"stale_realloc", stale_realloc},
         {"break_at", break_at},
+        {"parent_twice", parent_twice},
+        {"parent_reset", parent_reset},
     };
 
     debug = tda_debug_init(tda_al_default());

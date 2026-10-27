@@ -48,7 +48,8 @@ void tda_span_fold_back(tda_Span s, void *acc, tda_Fold fold, void *ctx);
 
 /// running totals: dst[0] = src[0], then dst[i] = op(dst[i - 1], src[i])
 /// @param dst asserts the same len as 'src'; may be 'src', since step i reads dst[i - 1],
-///            already final, and src[i], not yet written
+///            already final, and src[i], not yet written. 'op' then gets src[i] as both
+///            'dst' and 'rhs'; see tda_BinOp
 /// @param src the source
 /// @param op combines a running result with the next elem
 /// @param ctx handed to 'op'

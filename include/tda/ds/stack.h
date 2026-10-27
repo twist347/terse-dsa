@@ -25,10 +25,10 @@
 /// The order of the elems is the stack's meaning, so algo gets only a read-only view
 /// through tda_stack_to_span.
 ///
-/// Pointers are not stable. An op that may reallocate (push, reserve, shrink_to_fit,
-/// copy_assign) moves every elem, move_assign releases the old block, and a pop ends the
-/// one it takes. swap moves no elem: a pointer stays valid but points into the other
-/// one. For stable positions use ds/list.
+/// Pointers are not stable. An op that may reallocate (push, extend, reserve,
+/// shrink_to_fit, copy_assign) moves every elem, move_assign releases the old block, and
+/// a pop ends the one it takes. swap moves no elem: a pointer stays valid but points
+/// into the other one. For stable positions use ds/list.
 ///
 /// @par Example
 /// @snippet ds/example_stack.c build
@@ -38,8 +38,9 @@
 /// @{
 
 /// Owning last in first out stack. A value the caller holds, like tda_Vec, whose rules it
-/// follows: an init returns it, a from_ fills it in, tda_stack_deinit releases it, `= {}`
-/// is inert, and a copy of the struct is a second owner of the same block.
+/// follows: an init that cannot fail returns it, one that can and a from_ fill it in,
+/// tda_stack_deinit releases it, `= {}` is inert, and a copy of the struct is a second
+/// owner of the same block.
 typedef struct tda_Stack {
     tda_Vec vec_; ///< holds the elems, bottom first
 } tda_Stack;
@@ -140,7 +141,7 @@ tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other);
 
 /// releases the elems of 'self' and hands it everything 'other' holds, its allocator
 /// included, leaving 'other' empty on that allocator
-/// @param[in,out] self must have the same elem layout
+/// @param[in,out] self must have the same elem layout, or be inert
 /// @param[in,out] other emptied and still usable; may be 'self'
 /// @bigo{1}
 TDA_API
@@ -258,7 +259,7 @@ static inline void *tda_stack_top_mut(tda_Stack *self) {
 
 /// puts a copy of 'val' on top
 /// @param self the stack
-/// @param val must not point into this stack: growing would move it
+/// @param val the elem to copy in; may be one of this stack's
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow
 /// @bigo{1} amortized

@@ -25,6 +25,9 @@
 static constexpr size_t VEC_GROWTH_BASE = 1;
 static constexpr size_t VEC_GROWTH_FACTOR = 2;
 
+/// what alias_idx returns for an address outside the block
+static constexpr size_t NOT_IN_BLOCK = SIZE_MAX;
+
 [[nodiscard]]
 static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem, tda_Al al, tda_Vec *out);
 
@@ -35,6 +38,16 @@ static void release_data(tda_Vec *self);
 /// body of insert and insert_span
 [[nodiscard]]
 static tda_Status insert_raw(tda_Vec *self, size_t idx, const void *src, size_t count);
+
+/// makes room for 'count' elems at 'idx', moving the tail up once; their bytes are left
+/// as they were
+[[nodiscard]]
+static tda_Status open_gap(tda_Vec *self, size_t idx, size_t count);
+
+/// the index of the elem 'val' points at, or NOT_IN_BLOCK. Growing may free the block, so
+/// an elem of this vec passed as a value is found again by index after
+[[nodiscard]]
+static size_t alias_idx(const tda_Vec *self, const void *val);
 
 [[nodiscard]]
 static size_t next_cap(const tda_Vec *self);
@@ -212,9 +225,13 @@ tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other) {
 }
 
 void tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
-    ASSERT_VEC(self);
+    assert(self);
     ASSERT_VEC(other);
-    EXPECT_SAME_VEC(self, other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->al_.vt) {
+        ASSERT_VEC(self);
+        EXPECT_SAME_VEC(self, other);
+    }
 
     if (self == other) {
         return;
@@ -264,15 +281,20 @@ void tda_vec_set(tda_Vec *self, size_t idx, const void *val) {
 tda_Status tda_vec_push(tda_Vec *self, const void *val) {
     ASSERT_VEC(self);
     assert(val);
-    // growing frees the block 'val' would be read from
-    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self).size, val));
+
+    const size_t from = alias_idx(self, val);
 
     const tda_Status st = reserve_one(self);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
 
-    memcpy(elem_at_mut(self, self->len_), val, self->elem_.size);
+    // the new slot lies past every elem, so an elem of this vec does not overlap it
+    memcpy(
+        elem_at_mut(self, self->len_),
+        from == NOT_IN_BLOCK ? val : elem_at(self, from),
+        self->elem_.size
+    );
     ++self->len_;
 
     ASSERT_VEC(self);
@@ -313,11 +335,24 @@ tda_Status tda_vec_insert(tda_Vec *self, size_t idx, const void *val) {
     ASSERT_VEC(self);
     assert(val);
     TDA_EXPECT(idx <= self->len_);
-    // growing frees the block 'val' would be read from
-    TDA_EXPECT(!tda_addr_in(self->data_, block_layout(self).size, val));
 
-    // straight from 'val', not through a span, which would ask it to be aligned
-    return insert_raw(self, idx, val, 1);
+    const size_t from = alias_idx(self, val);
+    if (from == NOT_IN_BLOCK) {
+        // straight from 'val', not through a span, which would ask it to be aligned
+        return insert_raw(self, idx, val, 1);
+    }
+
+    const tda_Status st = open_gap(self, idx, 1);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    // the gap moved every elem from 'idx' on one place up, the one 'val' named among them
+    memcpy(elem_at_mut(self, idx), elem_at(self, from < idx ? from : from + 1), self->elem_.size);
+
+    ASSERT_VEC(self);
+
+    return TDA_STATUS_OK;
 }
 
 void tda_vec_remove(tda_Vec *self, size_t idx) {
@@ -519,6 +554,21 @@ static tda_Status insert_raw(tda_Vec *self, size_t idx, const void *src, size_t 
         return TDA_STATUS_OK;
     }
 
+    const tda_Status st = open_gap(self, idx, count);
+    if (TDA_STATUS_IS_ERR(st)) {
+        return st;
+    }
+
+    memcpy(elem_at_mut(self, idx), src, count * self->elem_.size);
+
+    ASSERT_VEC(self);
+
+    return TDA_STATUS_OK;
+}
+
+static tda_Status open_gap(tda_Vec *self, size_t idx, size_t count) {
+    assert(idx <= self->len_);
+
     size_t new_len;
     if (ckd_add(&new_len, self->len_, count)) {
         return TDA_STATUS_ERR_NO_MEM;
@@ -534,13 +584,22 @@ static tda_Status insert_raw(tda_Vec *self, size_t idx, const void *src, size_t 
     if (tail > 0) {
         memmove(elem_at_mut(self, idx + count), elem_at_mut(self, idx), tail * self->elem_.size);
     }
-
-    memcpy(elem_at_mut(self, idx), src, count * self->elem_.size);
     self->len_ = new_len;
 
-    ASSERT_VEC(self);
-
     return TDA_STATUS_OK;
+}
+
+static size_t alias_idx(const tda_Vec *self, const void *val) {
+    if (!tda_addr_in(self->data_, block_layout(self).size, val)) {
+        return NOT_IN_BLOCK;
+    }
+
+    const size_t off = (size_t) tda_byte_diff(val, self->data_);
+    // anything else in the block is no value: a slot past the length holds no elem
+    assert(off % self->elem_.size == 0);
+    assert(off / self->elem_.size < self->len_);
+
+    return off / self->elem_.size;
 }
 
 [[nodiscard]]

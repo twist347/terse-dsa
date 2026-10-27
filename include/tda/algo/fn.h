@@ -24,10 +24,13 @@ typedef void (*tda_Fold)(void *acc, const void *elem, void *ctx);
 /// Produces the elem for position 'idx', writing it to 'dst'.
 typedef void (*tda_Gen)(void *dst, size_t idx, void *ctx);
 
-/// Produces the elem written to 'dst' from the one at 'src'.
+/// Produces the elem written to 'dst' from the one at 'src'. In place 'dst' is 'src', so
+/// an op that writes a field before it has read every field it needs reads its own
+/// output.
 typedef void (*tda_UnOp)(void *dst, const void *src, void *ctx);
 
-/// Combines two elems into 'dst': 'dst' is written, 'lhs' and 'rhs' are read.
+/// Combines two elems into 'dst': 'dst' is written, 'lhs' and 'rhs' are read. In place
+/// 'dst' is one of them, so read both in full before writing.
 typedef void (*tda_BinOp)(void *dst, const void *lhs, const void *rhs, void *ctx);
 
 /// @}

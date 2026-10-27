@@ -351,9 +351,13 @@ tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
 }
 
 void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
-    ASSERT_HMAP(self);
+    assert(self);
     ASSERT_HMAP(other);
-    EXPECT_SAME_HMAP(self, other);
+    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
+    if (self->al_.vt) {
+        ASSERT_HMAP(self);
+        EXPECT_SAME_HMAP(self, other);
+    }
 
     if (self == other) {
         return;
@@ -524,8 +528,8 @@ tda_Status tda_hmap_extend(tda_HMap *self, tda_Span keys, tda_Span vals) {
     ASSERT_HMAP(self);
     TDA_SPAN_ASSERT(keys);
     TDA_SPAN_ASSERT(vals);
-    TDA_EXPECT(tda_layout_eq(keys.elem, self->key_));
-    TDA_EXPECT(tda_layout_eq(vals.elem, self->val_));
+    TDA_EXPECT(tda_layout_eq(self->key_, keys.elem));
+    TDA_EXPECT(tda_layout_eq(self->val_, vals.elem));
     TDA_EXPECT(keys.len == vals.len);
 
     for (size_t i = 0; i < keys.len; ++i) {
