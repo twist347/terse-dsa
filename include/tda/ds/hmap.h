@@ -643,12 +643,12 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HMAP_GET_AS(K, V, self, key) \
-    ((const typeof(V) *) tda_hmap_get(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0]))
+    ((const typeof(V) *) tda_hmap_get(TDA_HMAP_TYPED_(K, V, self), &(typeof(K)[1]){ (key) }[0]))
 
 /// tda_hmap_get_mut as a V *
 /// @copydetails TDA_HMAP_GET_AS
 #define TDA_HMAP_GET_MUT_AS(K, V, self, key) \
-    ((V *) tda_hmap_get_mut(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0]))
+    ((typeof(V) *) tda_hmap_get_mut(TDA_HMAP_TYPED_(K, V, self), &(typeof(K)[1]){ (key) }[0]))
 
 /// tda_hmap_contains from a key value rather than an address
 /// @param K the key type; 'key' may be any K, a struct literal in parentheses too
@@ -656,17 +656,17 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HMAP_CONTAINS(K, self, key) \
-    tda_hmap_contains(TDA_HMAP_KEY_TYPED_(K, self), &(K[1]){ (key) }[0])
+    tda_hmap_contains(TDA_HMAP_KEY_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0])
 
 /// tda_hmap_find from a key value rather than an address
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_FIND(K, self, key) \
-    tda_hmap_find(TDA_HMAP_KEY_TYPED_(K, self), &(K[1]){ (key) }[0])
+    tda_hmap_find(TDA_HMAP_KEY_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0])
 
 /// tda_hmap_find_mut from a key value rather than an address
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_FIND_MUT(K, self, key) \
-    tda_hmap_find_mut(TDA_HMAP_KEY_TYPED_(K, self), &(K[1]){ (key) }[0])
+    tda_hmap_find_mut(TDA_HMAP_KEY_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0])
 
 /// tda_hmap_insert from values rather than addresses
 /// @param K the key type; 'key' may be any K, a struct literal in parentheses too
@@ -677,7 +677,7 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param[out] out_is_new whether the key was absent; may be null
 /// @bigo{1} expected
 #define TDA_HMAP_INSERT(K, V, self, key, val, out_is_new) \
-    tda_hmap_insert(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0], &(V[1]){ (val) }[0], (out_is_new))
+    tda_hmap_insert(TDA_HMAP_TYPED_(K, V, self), &(typeof(K)[1]){ (key) }[0], &(typeof(V)[1]){ (val) }[0], (out_is_new))
 
 /// tda_hmap_get_or_insert from values rather than addresses
 /// @param K the key type; 'key' may be any K, a struct literal in parentheses too
@@ -688,12 +688,12 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param[out] out_node the entry either way
 /// @bigo{1} expected
 #define TDA_HMAP_GET_OR_INSERT(K, V, self, key, val, out_node) \
-    tda_hmap_get_or_insert(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0], &(V[1]){ (val) }[0], (out_node))
+    tda_hmap_get_or_insert(TDA_HMAP_TYPED_(K, V, self), &(typeof(K)[1]){ (key) }[0], &(typeof(V)[1]){ (val) }[0], (out_node))
 
 /// tda_hmap_remove from a key value rather than an address
 /// @copydetails TDA_HMAP_CONTAINS
 #define TDA_HMAP_REMOVE(K, self, key) \
-    tda_hmap_remove(TDA_HMAP_KEY_TYPED_(K, self), &(K[1]){ (key) }[0])
+    tda_hmap_remove(TDA_HMAP_KEY_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0])
 
 /// tda_hmap_take from a key value rather than an address, with 'out_key' and 'out_val'
 /// typechecked as K * and V *
@@ -705,7 +705,7 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// @param[out] out_val the stored value, or nullptr
 /// @bigo{1} expected
 #define TDA_HMAP_TAKE(K, V, self, key, out_key, out_val) \
-    tda_hmap_take(TDA_HMAP_TYPED_(K, V, self), &(K[1]){ (key) }[0], (K *){ (out_key) }, (V *){ (out_val) })
+    tda_hmap_take(TDA_HMAP_TYPED_(K, V, self), &(typeof(K)[1]){ (key) }[0], (typeof(K) *){ (out_key) }, (typeof(V) *){ (out_val) })
 
 /// @cond
 // the bodies of the walks; the hidden names come in already unique, and 'self' is read
@@ -791,7 +791,7 @@ static inline tda_HMap *tda_hmap_val_typed_mut_(tda_HMap *self, [[maybe_unused]]
 /// tda_hmap_node_val_mut as a V *
 /// @copydetails TDA_HMAP_NODE_VAL_AS
 #define TDA_HMAP_NODE_VAL_MUT_AS(V, self, node) \
-    ((V *) tda_hmap_node_val_mut(TDA_HMAP_VAL_TYPED_(V, self), (node)))
+    ((typeof(V) *) tda_hmap_node_val_mut(TDA_HMAP_VAL_TYPED_(V, self), (node)))
 
 /// @}
 

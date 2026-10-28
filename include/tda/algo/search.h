@@ -75,7 +75,8 @@ bool tda_span_find_last_if(tda_Span s, tda_Pred pred, void *ctx, size_t *out_idx
 
 /// the first place 'sub' occurs in 's', elem by elem
 /// @param s the span to look in
-/// @param sub what to look for; empty occurs at 0
+/// @param sub what to look for; empty occurs at 0. Each elem is a key, the right side of
+///            'eq', so it need not share the layout of 's'
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null
 /// @param[out] out_idx where it starts, on a hit
@@ -86,7 +87,8 @@ bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, void *ctx, size_t *o
 
 /// the last place 'sub' occurs in 's'
 /// @param s the span to look in
-/// @param sub what to look for; empty occurs at s.len
+/// @param sub what to look for; empty occurs at s.len. Each elem is a key, as in
+///            tda_span_find_sub
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null
 /// @param[out] out_idx where it starts, on a hit
@@ -259,7 +261,8 @@ bool tda_span_none_of(tda_Span s, tda_Pred pred, void *ctx);
 
 /// whether 's' opens with 'prefix'
 /// @param s the span to look in
-/// @param prefix what it should open with; empty is true, longer than 's' is false
+/// @param prefix what it should open with; empty is true, longer than 's' is false. Each
+///               elem is a key, as in tda_span_find_sub
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null
 /// @return whether the first prefix.len elems of 's' equal those of 'prefix'
@@ -269,7 +272,8 @@ bool tda_span_starts_with(tda_Span s, tda_Span prefix, tda_Eq eq, void *ctx);
 
 /// whether 's' closes with 'suffix'
 /// @param s the span to look in
-/// @param suffix what it should close with; empty is true, longer than 's' is false
+/// @param suffix what it should close with; empty is true, longer than 's' is false. Each
+///               elem is a key, as in tda_span_find_sub
 /// @param eq the equality
 /// @param ctx passed to every call of 'eq'; may be null
 /// @return whether the last suffix.len elems of 's' equal those of 'suffix'
@@ -332,12 +336,12 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
 /// @param[out] out_idx the index, written only on a hit
 /// @bigo{n}
 #define TDA_SPAN_FIND(K, s, key, eq, ctx, out_idx) \
-    tda_span_find((s), &(K[1]){ (key) }[0], (eq), (ctx), (out_idx))
+    tda_span_find((s), &(typeof(K)[1]){ (key) }[0], (eq), (ctx), (out_idx))
 
 /// tda_span_find_last from a value rather than an address
 /// @copydetails TDA_SPAN_FIND
 #define TDA_SPAN_FIND_LAST(K, s, key, eq, ctx, out_idx) \
-    tda_span_find_last((s), &(K[1]){ (key) }[0], (eq), (ctx), (out_idx))
+    tda_span_find_last((s), &(typeof(K)[1]){ (key) }[0], (eq), (ctx), (out_idx))
 
 /// tda_span_find_run from a value rather than an address
 /// @param K the key's type, which need not be the elem's, so nothing checks it against
@@ -350,7 +354,7 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
 /// @param[out] out_idx where the run starts, on a hit
 /// @bigo{n}
 #define TDA_SPAN_FIND_RUN(K, s, key, count, eq, ctx, out_idx) \
-    tda_span_find_run((s), &(K[1]){ (key) }[0], (count), (eq), (ctx), (out_idx))
+    tda_span_find_run((s), &(typeof(K)[1]){ (key) }[0], (count), (eq), (ctx), (out_idx))
 
 /// tda_span_contains from a value rather than an address
 /// @param K the key's type, which need not be the elem's, so nothing checks it against
@@ -361,12 +365,12 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
 /// @param ctx passed to every call of 'eq'; may be null
 /// @bigo{n}
 #define TDA_SPAN_CONTAINS(K, s, key, eq, ctx) \
-    tda_span_contains((s), &(K[1]){ (key) }[0], (eq), (ctx))
+    tda_span_contains((s), &(typeof(K)[1]){ (key) }[0], (eq), (ctx))
 
 /// tda_span_count from a value rather than an address
 /// @copydetails TDA_SPAN_CONTAINS
 #define TDA_SPAN_COUNT(K, s, key, eq, ctx) \
-    tda_span_count((s), &(K[1]){ (key) }[0], (eq), (ctx))
+    tda_span_count((s), &(typeof(K)[1]){ (key) }[0], (eq), (ctx))
 
 /// tda_span_lower_bound from a value rather than an address
 /// @param K the key's type, which need not be the elem's, so nothing checks it against
@@ -377,17 +381,17 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
 /// @param ctx passed to every call of 'cmp'; may be null
 /// @bigo{log n}
 #define TDA_SPAN_LOWER_BOUND(K, s, key, cmp, ctx) \
-    tda_span_lower_bound((s), &(K[1]){ (key) }[0], (cmp), (ctx))
+    tda_span_lower_bound((s), &(typeof(K)[1]){ (key) }[0], (cmp), (ctx))
 
 /// tda_span_upper_bound from a value rather than an address
 /// @copydetails TDA_SPAN_LOWER_BOUND
 #define TDA_SPAN_UPPER_BOUND(K, s, key, cmp, ctx) \
-    tda_span_upper_bound((s), &(K[1]){ (key) }[0], (cmp), (ctx))
+    tda_span_upper_bound((s), &(typeof(K)[1]){ (key) }[0], (cmp), (ctx))
 
 /// tda_span_equal_range from a value rather than an address
 /// @copydetails TDA_SPAN_LOWER_BOUND
 #define TDA_SPAN_EQUAL_RANGE(K, s, key, cmp, ctx) \
-    tda_span_equal_range((s), &(K[1]){ (key) }[0], (cmp), (ctx))
+    tda_span_equal_range((s), &(typeof(K)[1]){ (key) }[0], (cmp), (ctx))
 
 /// tda_span_binary_search from a value rather than an address
 /// @param K the key's type, which need not be the elem's, so nothing checks it against
@@ -399,7 +403,7 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
 /// @param[out] out_idx where it is, on a hit
 /// @bigo{log n}
 #define TDA_SPAN_BINARY_SEARCH(K, s, key, cmp, ctx, out_idx) \
-    tda_span_binary_search((s), &(K[1]){ (key) }[0], (cmp), (ctx), (out_idx))
+    tda_span_binary_search((s), &(typeof(K)[1]){ (key) }[0], (cmp), (ctx), (out_idx))
 
 /// @}
 

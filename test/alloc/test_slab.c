@@ -339,7 +339,7 @@ static void test_every_container_runs_on_it() {
     tda_HSet set = tda_hset_init(TDA_LAYOUT_OF(int32_t), tda_hash_i32, tda_eq_i32, nullptr, al);
     tda_PQueue pq = tda_pqueue_init(TDA_LAYOUT_OF(int32_t), tda_cmp_i32, nullptr, al);
     tda_BitSet bits = {};
-    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_bitset_init_len(5000, al, &bits));
+    TEST_ASSERT_EQUAL(TDA_STATUS_OK, tda_bitset_init_nbits(5000, al, &bits));
 
     for (int32_t i = 0; i < 3000; ++i) {
         const int64_t v = i;

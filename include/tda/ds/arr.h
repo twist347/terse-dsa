@@ -33,8 +33,9 @@
 /// An arr knows the layout of its elem, size and alignment, and asks the allocator for a
 /// block aligned to it. The typed macros pass TDA_LAYOUT_OF(T).
 ///
-/// The typed macros write 'const typeof(T)', so T may be any type name, a pointer type
-/// such as 'const char *' or one already const included.
+/// The typed macros write typeof(T), so T may be any type name: a pointer such as
+/// 'const char *', a function pointer, an array, one already const. An array has no value
+/// to copy in, so the macros that take one do not take an array T.
 ///
 /// @par Example
 /// @snippet ds/example_arr.c build
@@ -490,7 +491,7 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
 /// tda_arr_front_mut as a T *
 /// @copydetails TDA_ARR_FRONT_AS
 #define TDA_ARR_FRONT_MUT_AS(T, self) \
-    ((T *) tda_arr_front_mut(TDA_ARR_TYPED_(T, self)))
+    ((typeof(T) *) tda_arr_front_mut(TDA_ARR_TYPED_(T, self)))
 
 /// tda_arr_back as a const T *
 /// @copydetails TDA_ARR_FRONT_AS
@@ -500,7 +501,7 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
 /// tda_arr_back_mut as a T *
 /// @copydetails TDA_ARR_FRONT_AS
 #define TDA_ARR_BACK_MUT_AS(T, self) \
-    ((T *) tda_arr_back_mut(TDA_ARR_TYPED_(T, self)))
+    ((typeof(T) *) tda_arr_back_mut(TDA_ARR_TYPED_(T, self)))
 
 /// tda_arr_get as a const T *
 /// @param T the elem type
@@ -513,7 +514,7 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
 /// tda_arr_get_mut as a T *
 /// @copydetails TDA_ARR_GET_AS
 #define TDA_ARR_GET_MUT_AS(T, self, idx) \
-    ((T *) tda_arr_get_mut(TDA_ARR_TYPED_(T, self), (idx)))
+    ((typeof(T) *) tda_arr_get_mut(TDA_ARR_TYPED_(T, self), (idx)))
 
 /// tda_arr_set from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -522,7 +523,7 @@ static inline tda_Arr *tda_arr_typed_mut_(tda_Arr *self, [[maybe_unused]] tda_La
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_ARR_SET(T, self, idx, val) \
-    tda_arr_set(TDA_ARR_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
+    tda_arr_set(TDA_ARR_TYPED_(T, self), (idx), &(typeof(T)[1]){ (val) }[0])
 
 /// @}
 

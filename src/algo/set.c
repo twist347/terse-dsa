@@ -159,7 +159,6 @@ bool tda_span_includes(tda_Span sup, tda_Span sub, tda_Cmp cmp, void *ctx) {
     TDA_SPAN_ASSERT(sup);
     TDA_SPAN_ASSERT(sub);
     assert(cmp);
-    TDA_EXPECT(tda_layout_eq(sup.elem, sub.elem));
 
     size_t i = 0;
 

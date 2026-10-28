@@ -26,14 +26,17 @@
 ///
 /// Two spans meet only on one layout: an algo over two of them, or over a span and a
 /// container, asserts the layouts are equal, alignment included. Only algo/transform maps
-/// between layouts.
+/// between layouts. The one exception is a second span that is only compared against the
+/// first: find_any_of, find_sub, find_last_sub, starts_with, ends_with and includes take
+/// it as keys, of any layout 'eq' or 'cmp' reads.
 ///
 /// Spans are the seam between ds and algo. Nothing here allocates, so nothing returns a
 /// tda_Status, and out-of-range indices assert. A view must not outlive what it views,
 /// nor survive an op that moves the source block; nothing checks that.
 ///
-/// The typed macros write 'const typeof(T)', so T may be any type name, a pointer type
-/// such as 'const char *' or one already const included.
+/// The typed macros write typeof(T), so T may be any type name: a pointer such as
+/// 'const char *', a function pointer, an array, one already const. An array has no value
+/// to copy in, so the macros that take one do not take an array T.
 ///
 /// @par Example
 /// @snippet core/example_span.c build
@@ -373,7 +376,7 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 /// @param len elems in the view
 /// @bigo{1}
 #define TDA_SPAN_FROM_DATA_MUT(T, data, len) \
-    tda_span_from_data_mut((T *){ (data) }, (len), TDA_LAYOUT_OF(T))
+    tda_span_from_data_mut((typeof(T) *){ (data) }, (len), TDA_LAYOUT_OF(T))
 
 /// a view over the elems written out: TDA_SPAN_OF(int32_t, 5, 3, 1)
 /// @param T the elem type
@@ -392,10 +395,10 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 /// @param ... the elems, as a T initializer list, not empty
 /// @warning the elems are a compound literal, gone at the end of the enclosing block
 /// @bigo{1}
-#define TDA_SPAN_OF_MUT(T, ...)                   \
-    tda_span_from_data_mut(                       \
-        (T[]){ __VA_ARGS__ },                     \
-        sizeof((T[]){ __VA_ARGS__ }) / sizeof(T), \
+#define TDA_SPAN_OF_MUT(T, ...)                           \
+    tda_span_from_data_mut(                               \
+        (typeof(T)[]){ __VA_ARGS__ },                     \
+        sizeof((typeof(T)[]){ __VA_ARGS__ }) / sizeof(T), \
         TDA_LAYOUT_OF(T))
 
 /// tda_span_get as a const T *
@@ -412,16 +415,16 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 /// @param idx the index
 /// @bigo{1}
 #define TDA_SPAN_GET_MUT_AS(T, self, idx) \
-    ((T *) tda_span_get_mut(tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)), (idx)))
+    ((typeof(T) *) tda_span_get_mut(tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)), (idx)))
 
 /// @cond
 // the body of both span walks; the hidden names come in already unique. An empty view
 // may carry a null data pointer, and null + 0 is undefined in C23, so the end is formed
 // only when there are elems to step over
-#define TDA_SPAN_WALK_(SpanT, ElemT, elem, view, span, once, end)               \
-    for (SpanT span = (view), *once = &span; once; once = nullptr)              \
-        for (ElemT *elem = span.data, *end = span.len ? elem + span.len : elem; \
-             elem != end;                                                       \
+#define TDA_SPAN_WALK_(SpanT, ElemT, elem, view, span, once, end)                       \
+    for (SpanT span = (view), *once = &span; once; once = nullptr)                      \
+        for (typeof(ElemT) *elem = span.data, *end = span.len ? elem + span.len : elem; \
+             elem != end;                                                               \
              ++elem)
 /// @endcond
 
@@ -461,7 +464,7 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_SPAN_SET(T, self, idx, val) \
-    tda_span_set(tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)), (idx), &(T[1]){ (val) }[0])
+    tda_span_set(tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)), (idx), &(typeof(T)[1]){ (val) }[0])
 
 /// @}
 

@@ -231,6 +231,21 @@ static void test_includes_counts_duplicates() {
     TEST_ASSERT_FALSE(tda_span_includes(span_of(sup, 4), span_of(three, 3), tda_cmp_i32, nullptr));
 }
 
+// 'sub' holds keys: its elems only ever arrive on the right of 'cmp', so pairs sorted by
+// 'a' are checked against a span of plain ints
+static int cmp_pair_a_to_key(const void *elem, const void *key, void *) {
+    return tda_cmp_i64(&((const Pair *) elem)->a, key, nullptr);
+}
+
+static void test_includes_takes_keys_of_another_type() {
+    static const Pair sup[4] = {{1, 0}, {2, 0}, {2, 0}, {5, 0}};
+    static const int64_t twos[2] = {2, 2}, missing[2] = {2, 3};
+    const tda_Span s = tda_span_from_data(sup, 4, TDA_LAYOUT_OF(Pair));
+
+    TEST_ASSERT_TRUE(tda_span_includes(s, tda_span_from_data(twos, 2, TDA_LAYOUT_OF(int64_t)), cmp_pair_a_to_key, nullptr));
+    TEST_ASSERT_FALSE(tda_span_includes(s, tda_span_from_data(missing, 2, TDA_LAYOUT_OF(int64_t)), cmp_pair_a_to_key, nullptr));
+}
+
 static void test_includes_of_an_empty_sub_is_true() {
     constexpr int32_t sup[] = {1, 2, 3};
 
@@ -388,6 +403,7 @@ int main() {
     RUN_TEST(test_includes_accepts_a_subset);
     RUN_TEST(test_includes_rejects_a_missing_elem);
     RUN_TEST(test_includes_counts_duplicates);
+    RUN_TEST(test_includes_takes_keys_of_another_type);
     RUN_TEST(test_includes_of_an_empty_sub_is_true);
     RUN_TEST(test_includes_rejects_anything_from_an_empty_sup);
     RUN_TEST(test_includes_rejects_a_sub_that_runs_past_the_end);

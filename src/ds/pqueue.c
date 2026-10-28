@@ -205,10 +205,10 @@ tda_Status tda_pqueue_extend(tda_PQueue *self, tda_Span src) {
         return st;
     }
 
-    // an empty queue heapifies in O(n); otherwise each new elem sifts up past the ones
-    // before it, which are a heap already
+    // as many new elems as old ones or more: one heapify, O(n + k), beats k sift-ups at
+    // log(n + k) each. Fewer: each new one sifts up past the ones before it, a heap already
     const tda_SpanMut all = tda_vec_to_span_mut(&self->vec_);
-    if (old_len == 0) {
+    if (all.len - old_len >= old_len) {
         tda_span_make_heap(all, self->cmp_, self->ctx_);
     } else {
         for (size_t len = old_len + 1; len <= all.len; ++len) {

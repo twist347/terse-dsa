@@ -20,7 +20,7 @@
 
 /// writes one value over every elem
 /// @param s the span
-/// @param val points to elem.size bytes, read once per elem
+/// @param val points to elem.size bytes, read once; may be one of the elems
 /// @bigo{n}
 TDA_API
 void tda_span_fill(tda_SpanMut s, const void *val);
@@ -50,7 +50,7 @@ void tda_span_generate(tda_SpanMut s, tda_Gen gen, void *ctx);
 /// @param val the value to write
 /// @bigo{n}
 #define TDA_SPAN_FILL(T, s, val) \
-    tda_span_fill(tda_span_mut_typed_((s), TDA_LAYOUT_OF(T)), &(T[1]){ (val) }[0])
+    tda_span_fill(tda_span_mut_typed_((s), TDA_LAYOUT_OF(T)), &(typeof(T)[1]){ (val) }[0])
 
 /// @}
 

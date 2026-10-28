@@ -1088,7 +1088,7 @@ static void test_extend_an_empty_queue() {
     tda_pqueue_deinit(&q);
 }
 
-// into a queue that has elems: each new one sifts up past the old
+// more new elems than old: one heapify over everything
 static void test_extend_a_filled_queue() {
     tda_PQueue q = make_queue(SPREAD, 5);
 
@@ -1097,6 +1097,18 @@ static void test_extend_a_filled_queue() {
     assert_drains_sorted(&q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
 
     tda_pqueue_deinit(&q);
+}
+
+// every split of old and new: fewer new ones sift up one by one, as many or more heapify
+static void test_extend_at_every_split_of_old_and_new() {
+    for (size_t old = 1; old < SPREAD_LEN; ++old) {
+        tda_PQueue q = make_queue(SPREAD, old);
+
+        TDA_TEST_OK(tda_pqueue_extend(&q, TDA_SPAN_FROM_DATA(int32_t, SPREAD + old, SPREAD_LEN - old)));
+        assert_drains_sorted(&q, SPREAD, SPREAD_LEN, tda_cmp_desc_i32, nullptr);
+
+        tda_pqueue_deinit(&q);
+    }
 }
 
 // the largest of the new elems, and the last of them, has to reach the top past every
@@ -1291,6 +1303,7 @@ int main() {
     RUN_TEST(test_push_reports_a_refused_growth);
     RUN_TEST(test_extend_an_empty_queue);
     RUN_TEST(test_extend_a_filled_queue);
+    RUN_TEST(test_extend_at_every_split_of_old_and_new);
     RUN_TEST(test_extend_puts_a_new_largest_on_top);
     RUN_TEST(test_extend_macro_takes_whole_elems);
     RUN_TEST(test_extend_reports_a_refused_growth);

@@ -340,6 +340,21 @@ static void test_adjacent_difference_undoes_partial_sum() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(src, back, 6);
 }
 
+// in place the steps go from the back, so each reads two elems not yet written over, and
+// the pair with partial_sum, in place too, gives the original back
+static void test_adjacent_difference_in_place_undoes_partial_sum_in_place() {
+    constexpr int32_t src[6] = {4, -2, 7, 0, 1, 9};
+    int32_t buf[6] = {4, -2, 7, 0, 1, 9};
+    const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 6);
+
+    tda_span_partial_sum(s, tda_span_mut_to_span(s), add_i32, nullptr);
+    constexpr int32_t scanned[6] = {4, 2, 9, 9, 10, 19};
+    TEST_ASSERT_EQUAL_INT32_ARRAY(scanned, buf, 6);
+
+    tda_span_adjacent_difference(s, tda_span_mut_to_span(s), sub_i32, nullptr);
+    TEST_ASSERT_EQUAL_INT32_ARRAY(src, buf, 6);
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -367,6 +382,7 @@ int main() {
     RUN_TEST(test_adjacent_difference_reads_only_the_source);
     RUN_TEST(test_adjacent_difference_of_short_spans);
     RUN_TEST(test_adjacent_difference_undoes_partial_sum);
+    RUN_TEST(test_adjacent_difference_in_place_undoes_partial_sum_in_place);
 
     return UNITY_END();
 }

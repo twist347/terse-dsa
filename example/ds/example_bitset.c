@@ -11,7 +11,7 @@ int main() {
     tda_Al al = tda_al_default();
 
     tda_BitSet a;
-    if (TDA_STATUS_IS_ERR(tda_bitset_init_len(12, al, &a))) {
+    if (TDA_STATUS_IS_ERR(tda_bitset_init_nbits(12, al, &a))) {
         return 1;
     }
 
@@ -21,7 +21,7 @@ int main() {
 
     // the printer shows the members, not a row of bits
     tda_bitset_print(&a); // {0, 3, 7}
-    printf("%zu of %zu\n", tda_bitset_count(&a), tda_bitset_len(&a)); // 3 of 12
+    printf("%zu of %zu\n", tda_bitset_count(&a), tda_bitset_nbits(&a)); // 3 of 12
     /// [build]
 
     /// [bits]
@@ -58,7 +58,7 @@ int main() {
     tda_BitSet b = {}, both = {};
     int rc = 1;
 
-    if (TDA_STATUS_IS_ERR(tda_bitset_init_len(12, al, &b))) {
+    if (TDA_STATUS_IS_ERR(tda_bitset_init_nbits(12, al, &b))) {
         goto out;
     }
     tda_bitset_set(&b, 7);

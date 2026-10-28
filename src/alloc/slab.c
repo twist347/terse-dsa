@@ -7,7 +7,6 @@
 
 #include <assert.h>
 #include <stddef.h>
-#include <stdint.h>
 
 /* ========== internals ========== */
 
@@ -86,9 +85,6 @@ static bool can_carve(const SizeClass *cls, size_t size);
 /// is used up; null when the parent refuses
 [[nodiscard]]
 static void *carve(tda_Slab *self, SizeClass *cls, size_t size);
-
-[[nodiscard]] [[maybe_unused]]
-static bool owns_block(const tda_Slab *self, const void *ptr);
 
 // the slab is live while it has a parent: deinit and '= {}' leave none
 #define ASSERT_SLAB(s) \
@@ -191,8 +187,6 @@ static bool slab_resize(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ptr);
     assert(old.size > 0);
     assert(new_size > 0);
-    // a large block is the parent's, which checks it; the walk keeps this to debug builds
-    assert(class_of(old) == CLASS_COUNT || owns_block(self, ptr));
 
     if (stays_large(old, new_size)) {
         return tda_resize(self->parent_, ptr, old, new_size);
@@ -209,8 +203,6 @@ static void *slab_remap(void *ctx, void *ptr, tda_Layout old, size_t new_size) {
     assert(ptr);
     assert(old.size > 0);
     assert(new_size > 0);
-    // a large block is the parent's, which checks it; the walk keeps this to debug builds
-    assert(class_of(old) == CLASS_COUNT || owns_block(self, ptr));
 
     if (stays_large(old, new_size)) {
         return tda_remap(self->parent_, ptr, old, new_size);
@@ -234,13 +226,12 @@ static void slab_dealloc(void *ctx, void *ptr, tda_Layout layout) {
     }
 
     // a block freed twice is caught, as in the pool, only while it is still the head of
-    // its class's list or would take the count below zero. A foreign block would be
-    // handed out again as this slab's own; that check walks the chunks, so only debug
-    // builds make it
+    // its class's list or would take the count below zero. A foreign block is not looked
+    // for: that would walk every chunk on every free, and it is handed out again as this
+    // slab's own
     SizeClass *cls = &self->classes_[idx];
     TDA_EXPECT(self->small_blocks_ > 0);
     TDA_EXPECT(ptr != cls->free_head);
-    assert(owns_block(self, ptr));
 
     FreeBlock *block = ptr;
     block->next = cls->free_head;
@@ -311,20 +302,4 @@ static void *carve(tda_Slab *self, SizeClass *cls, size_t size) {
     cls->carve += size;
 
     return ptr;
-}
-
-static bool owns_block(const tda_Slab *self, const void *ptr) {
-    // addresses, not pointers: ordering a pointer from outside a chunk against the
-    // chunk's own is undefined, and one from outside is what this is here to catch
-    const uintptr_t addr = (uintptr_t) ptr;
-
-    for (const Chunk *chunk = self->chunks_; chunk; chunk = chunk->next) {
-        const uintptr_t end = (uintptr_t) chunk;
-        const uintptr_t begin = end - CHUNK_ROOM;
-        if (addr >= begin && addr < end) {
-            return true;
-        }
-    }
-
-    return false;
 }

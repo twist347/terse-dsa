@@ -17,7 +17,7 @@ function.
 - **Lifetime verbs** are `init` and `deinit`: `tda_Vec v = tda_vec_init(elem, al)` /
   `tda_vec_deinit(&v)`, the value being the caller's (see *Values* below). A type that
   cannot be built empty spells out what it needs — `tda_arr_init_len`, because an array's
-  length is fixed at construction, and `tda_bitset_init_len` — so a bare `init` never
+  length is fixed at construction, and `tda_bitset_init_nbits` — so a bare `init` never
   fails. One that copies elems in says from what: `from_data`, `from_span`. One laid over
   memory the caller lends says so: `tda_arena_init_buf`. One that takes over a block the
   caller made through the same allocator is `init_raw`, and `into_raw` hands the block
@@ -305,7 +305,9 @@ from what is returned, not from which function it is:
 - **Layouts are passed, never guessed.** Whatever allocates for elems — a container, an
   algo's scratch buffer — gets their whole layout from its caller: a constructor takes a
   `tda_Layout`, a span carries one. Nothing infers an alignment from a size. Two spans,
-  or a span and a container, meet only on one layout, alignment included.
+  or a span and a container, meet only on one layout, alignment included — unless the
+  second span is only compared against the first, through `eq` or `cmp`, with its elems
+  always on the right: then they are keys, as in `find_any_of` or `includes`.
 - Public symbols carry `TDA_API` (see `core/export.h`); everything else stays hidden under
   the library's default-hidden visibility.
 - **An accessor that only reads a field or indexes is `static inline` in the header**:

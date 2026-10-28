@@ -622,7 +622,7 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// tda_list_front_mut as a T *
 /// @copydetails TDA_LIST_FRONT_AS
 #define TDA_LIST_FRONT_MUT_AS(T, self) \
-    ((T *) tda_list_front_mut(TDA_LIST_TYPED_(T, self)))
+    ((typeof(T) *) tda_list_front_mut(TDA_LIST_TYPED_(T, self)))
 
 /// tda_list_back as a const T *
 /// @copydetails TDA_LIST_FRONT_AS
@@ -632,7 +632,7 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// tda_list_back_mut as a T *
 /// @copydetails TDA_LIST_FRONT_AS
 #define TDA_LIST_BACK_MUT_AS(T, self) \
-    ((T *) tda_list_back_mut(TDA_LIST_TYPED_(T, self)))
+    ((typeof(T) *) tda_list_back_mut(TDA_LIST_TYPED_(T, self)))
 
 /// @cond
 // the body of the safe walk; the hidden name comes in already unique
@@ -684,12 +684,12 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// @param ctx passed to every call of 'eq'; may be null
 /// @bigo{n}
 #define TDA_LIST_FIND(T, self, key, eq, ctx) \
-    tda_list_find(TDA_LIST_TYPED_(T, self), &(T[1]){ (key) }[0], (eq), (ctx))
+    tda_list_find(TDA_LIST_TYPED_(T, self), &(typeof(T)[1]){ (key) }[0], (eq), (ctx))
 
 /// tda_list_find_mut from a value rather than an address
 /// @copydetails TDA_LIST_FIND
 #define TDA_LIST_FIND_MUT(T, self, key, eq, ctx) \
-    tda_list_find_mut(TDA_LIST_TYPED_(T, self), &(T[1]){ (key) }[0], (eq), (ctx))
+    tda_list_find_mut(TDA_LIST_TYPED_(T, self), &(typeof(T)[1]){ (key) }[0], (eq), (ctx))
 
 /// tda_list_node_elem as a const T *
 /// @param T the elem type
@@ -702,7 +702,7 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// tda_list_node_elem_mut as a T *
 /// @copydetails TDA_LIST_NODE_ELEM_AS
 #define TDA_LIST_NODE_ELEM_MUT_AS(T, self, node) \
-    ((T *) tda_list_node_elem_mut(TDA_LIST_TYPED_(T, self), (node)))
+    ((typeof(T) *) tda_list_node_elem_mut(TDA_LIST_TYPED_(T, self), (node)))
 
 /// tda_list_push_front from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -710,12 +710,12 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_LIST_PUSH_FRONT(T, self, val) \
-    tda_list_push_front(TDA_LIST_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_list_push_front(TDA_LIST_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_list_push_back from a value rather than an address
 /// @copydetails TDA_LIST_PUSH_FRONT
 #define TDA_LIST_PUSH_BACK(T, self, val) \
-    tda_list_push_back(TDA_LIST_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_list_push_back(TDA_LIST_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_list_extend from the elems written out
 /// @param T the elem type
@@ -731,12 +731,12 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// @param[out] out where the elem goes
 /// @bigo{1}
 #define TDA_LIST_POP_FRONT_TO(T, self, out) \
-    tda_list_pop_front_to(TDA_LIST_TYPED_(T, self), (T *){ (out) })
+    tda_list_pop_front_to(TDA_LIST_TYPED_(T, self), (typeof(T) *){ (out) })
 
 /// tda_list_pop_back_to with 'out' typechecked as T *
 /// @copydetails TDA_LIST_POP_FRONT_TO
 #define TDA_LIST_POP_BACK_TO(T, self, out) \
-    tda_list_pop_back_to(TDA_LIST_TYPED_(T, self), (T *){ (out) })
+    tda_list_pop_back_to(TDA_LIST_TYPED_(T, self), (typeof(T) *){ (out) })
 
 /// tda_list_insert_before from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -745,12 +745,12 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_LIST_INSERT_BEFORE(T, self, at, val) \
-    tda_list_insert_before(TDA_LIST_TYPED_(T, self), (at), &(T[1]){ (val) }[0])
+    tda_list_insert_before(TDA_LIST_TYPED_(T, self), (at), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_list_insert_after from a value rather than an address
 /// @copydetails TDA_LIST_INSERT_BEFORE
 #define TDA_LIST_INSERT_AFTER(T, self, at, val) \
-    tda_list_insert_after(TDA_LIST_TYPED_(T, self), (at), &(T[1]){ (val) }[0])
+    tda_list_insert_after(TDA_LIST_TYPED_(T, self), (at), &(typeof(T)[1]){ (val) }[0])
 
 /// @}
 

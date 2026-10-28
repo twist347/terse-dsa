@@ -569,7 +569,7 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
 /// @param[out] out_is_new whether the key was absent; may be null
 /// @bigo{1} expected
 #define TDA_HSET_INSERT(K, self, key, out_is_new) \
-    tda_hset_insert(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0], (out_is_new))
+    tda_hset_insert(TDA_HSET_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0], (out_is_new))
 
 /// tda_hset_contains from a value rather than an address
 /// @param K the key type; 'key' may be any K, a struct literal in parentheses too
@@ -577,7 +577,7 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
 /// @param key the value to look for
 /// @bigo{1} expected
 #define TDA_HSET_CONTAINS(K, self, key) \
-    tda_hset_contains(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0])
+    tda_hset_contains(TDA_HSET_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0])
 
 /// tda_hset_extend from the keys written out
 /// @param K the key type
@@ -590,17 +590,17 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
 /// tda_hset_find from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_FIND(K, self, key) \
-    tda_hset_find(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0])
+    tda_hset_find(TDA_HSET_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0])
 
 /// tda_hset_find_mut from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_FIND_MUT(K, self, key) \
-    tda_hset_find_mut(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0])
+    tda_hset_find_mut(TDA_HSET_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0])
 
 /// tda_hset_remove from a value rather than an address
 /// @copydetails TDA_HSET_CONTAINS
 #define TDA_HSET_REMOVE(K, self, key) \
-    tda_hset_remove(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0])
+    tda_hset_remove(TDA_HSET_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0])
 
 /// tda_hset_take from a key value rather than an address, 'out_key' typechecked as K *
 /// @param K the key type; 'key' may be any K, a struct literal in parentheses too
@@ -609,7 +609,7 @@ static inline tda_HSet *tda_hset_typed_mut_(tda_HSet *self, [[maybe_unused]] tda
 /// @param[out] out_key the stored key, or nullptr
 /// @bigo{1} expected
 #define TDA_HSET_TAKE(K, self, key, out_key) \
-    tda_hset_take(TDA_HSET_TYPED_(K, self), &(K[1]){ (key) }[0], (K *){ (out_key) })
+    tda_hset_take(TDA_HSET_TYPED_(K, self), &(typeof(K)[1]){ (key) }[0], (typeof(K) *){ (out_key) })
 
 /// @cond
 // the bodies of the walks; the hidden names come in already unique, and 'self' is read

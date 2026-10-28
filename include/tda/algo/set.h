@@ -88,8 +88,9 @@ size_t tda_span_set_symmetric_difference(tda_SpanMut dst, tda_Span a, tda_Span b
 
 /// the subset test, with the containing span first
 /// @param sup the span that may contain the other
-/// @param sub the span to look for; an empty one is included in anything
-/// @param cmp the order both are in
+/// @param sub the span to look for; an empty one is included in anything. Each elem is a
+///            key, the right side of 'cmp', so it need not share the layout of 'sup'
+/// @param cmp the order both are in, called as cmp(elem of sup, elem of sub)
 /// @param ctx passed to every call of 'cmp'; may be null
 /// @return whether 'sup' contains every elem of 'sub', counting duplicates
 /// @bigo{n}

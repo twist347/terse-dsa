@@ -79,15 +79,41 @@ static void test_fill_copies_whole_elements() {
     TEST_ASSERT_EQUAL_INT64(22, buf[1].b);
 }
 
-// the source is read once per element, so it may live inside the span itself
+// the source is read once, before anything is written over it, so it may be any elem of
+// the span itself: the first, one in the middle or the last
 static void test_fill_from_an_element_of_the_same_span() {
-    int32_t buf[3] = {5, 1, 2};
-    const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 3);
+    for (size_t from = 0; from < 5; ++from) {
+        int32_t buf[5] = {1, 2, 3, 4, 5};
+        const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 5);
 
-    tda_span_fill(s, &buf[0]);
+        tda_span_fill(s, &buf[from]);
 
-    constexpr int32_t expected[3] = {5, 5, 5};
-    TEST_ASSERT_EQUAL_INT32_ARRAY(expected, buf, 3);
+        const int32_t want = (int32_t) from + 1;
+        for (size_t i = 0; i < 5; ++i) {
+            TEST_ASSERT_EQUAL_INT32(want, buf[i]);
+        }
+    }
+}
+
+// the filled prefix doubles until it meets the end, so every len has to come out whole:
+// powers of two, one past and one short of them; the guard after the span stays
+static void test_fill_covers_every_len() {
+    enum { MAX = 70 };
+    int32_t buf[MAX + 1];
+
+    for (size_t len = 1; len <= MAX; ++len) {
+        for (size_t i = 0; i <= MAX; ++i) {
+            buf[i] = -1;
+        }
+
+        constexpr int32_t val = 4;
+        tda_span_fill(TDA_SPAN_FROM_DATA_MUT(int32_t, buf, len), &val);
+
+        for (size_t i = 0; i < len; ++i) {
+            TEST_ASSERT_EQUAL_INT32(4, buf[i]);
+        }
+        TEST_ASSERT_EQUAL_INT32(-1, buf[len]);
+    }
 }
 
 /* ========== fill_zero ========== */
@@ -174,6 +200,7 @@ int main() {
     RUN_TEST(test_fill_stays_within_the_subspan);
     RUN_TEST(test_fill_copies_whole_elements);
     RUN_TEST(test_fill_from_an_element_of_the_same_span);
+    RUN_TEST(test_fill_covers_every_len);
 
     RUN_TEST(test_fill_zero_clears_every_byte);
     RUN_TEST(test_fill_zero_empty_is_noop);

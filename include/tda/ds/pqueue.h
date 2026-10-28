@@ -286,7 +286,7 @@ tda_Status tda_pqueue_push(tda_PQueue *self, const void *val);
 ///            free what it reads
 /// @retval TDA_STATUS_OK on success
 /// @retval TDA_STATUS_ERR_NO_MEM when the block cannot grow; the queue is left unchanged
-/// @bigo{n} into an empty queue, which heapifies once; k log n for k elems into n,
+/// @bigo{n + k} for k elems into n when k >= n, which heapifies once; k log n otherwise,
 ///         sifted up one by one. Grows at most once
 [[nodiscard]] TDA_API
 tda_Status tda_pqueue_extend(tda_PQueue *self, tda_Span src);
@@ -469,13 +469,13 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
 /// @param val the value to copy in
 /// @bigo{log n}
 #define TDA_PQUEUE_PUSH(T, self, val) \
-    tda_pqueue_push(TDA_PQUEUE_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_pqueue_push(TDA_PQUEUE_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_pqueue_extend from the elems written out
 /// @param T the elem type
 /// @param self the queue
 /// @param ... the elems, as a T initializer list, not empty
-/// @bigo{n} into an empty queue, k log n otherwise
+/// @bigo{n + k} when k >= n, k log n otherwise
 #define TDA_PQUEUE_EXTEND(T, self, ...) \
     tda_pqueue_extend((self), TDA_SPAN_OF(T, __VA_ARGS__))
 
@@ -485,7 +485,7 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
 /// @param[out] out where the elem goes
 /// @bigo{log n}
 #define TDA_PQUEUE_POP_TO(T, self, out) \
-    tda_pqueue_pop_to(TDA_PQUEUE_TYPED_(T, self), (T *){ (out) })
+    tda_pqueue_pop_to(TDA_PQUEUE_TYPED_(T, self), (typeof(T) *){ (out) })
 
 /// tda_pqueue_replace_top from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -493,7 +493,7 @@ static inline tda_PQueue *tda_pqueue_typed_mut_(tda_PQueue *self, [[maybe_unused
 /// @param val the value to put in
 /// @bigo{log n}
 #define TDA_PQUEUE_REPLACE_TOP(T, self, val) \
-    tda_pqueue_replace_top(TDA_PQUEUE_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_pqueue_replace_top(TDA_PQUEUE_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// @}
 

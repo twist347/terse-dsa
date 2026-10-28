@@ -1,5 +1,53 @@
 # Changelog
 
+## 3.3.0 — unreleased
+
+### Added
+
+- **`tda_bitset_nbits` and `tda_bitset_init_nbits`**, the size of the universe and the
+  constructor that takes it, under the name the conventions give it. Every other
+  container's `len` counts its elems, which for a bitset is `tda_bitset_count`.
+
+### Changed
+
+- **`tda_span_find_sub`, `find_last_sub`, `starts_with`, `ends_with` and `includes`
+  take the second span as keys**, of any layout, as `find_any_of` has since 3.2.0. Its
+  elems only ever arrive on the right of `eq` or `cmp`, so a span of users is searched
+  with a span of ids. A call with two equal layouts works as before.
+- **`tda_span_adjacent_difference` works in place**, as `tda_span_partial_sum` does: the
+  steps go from the back, so `dst` may be `src`. A partial overlap is still refused.
+- **`tda_pqueue_extend` heapifies once when it adds at least as many elems as the queue
+  holds**, O(n + k) where k sift-ups cost k log n: a million added to a queue of one took
+  8.7 times as long. Fewer new elems still sift up one by one. Elems of equal priority may come out
+  in another order, which a heap never promised.
+- **`tda_span_fill` doubles the filled prefix with `memcpy`** instead of copying each elem
+  on its own: a million `int32_t` take 0.13 ms where they took 2.1 under clang, and 0.15
+  where they took 0.9 under gcc. `val` is read once and may still be one of the elems.
+- **The slab no longer walks its chunks on every free in a debug build.** The assert that
+  a block was its own made a free O(chunks), so a list of 200k nodes took 690 ms to
+  deinit where it now takes 4. A foreign block was never looked for in release.
+
+### Deprecated
+
+- `tda_bitset_len` and `tda_bitset_init_len`, renamed `tda_bitset_nbits` and
+  `tda_bitset_init_nbits`; removed in 4.0.
+
+### Fixed
+
+- **A type name with a declarator goes into every typed macro as it is spelled.** The
+  macros that write through a pointer or copy a value in spelled a bare `T`, so
+  `int32_t (*)(int32_t)` or `int32_t[3]` did not compile there, though the read ones took
+  them since 3.1.1. They write `typeof(T)` too, and so do `K` and `V`. An array has no
+  value to copy in, so an array `T` goes only to the macros that take an address.
+
+### Tests and CI
+
+- `test_ds_typed_declarator` puts a function pointer through every family of typed
+  macros and an array through the ones that take an address.
+- `tda_pqueue_extend` is checked at every split of old and new elems, `tda_span_fill` at
+  every len up to 70 and from every elem of its own span, and the key-taking sub ops
+  against a span of ids.
+
 ## 3.2.1 — 2026-10-27
 
 Two regressions of 3.2.0 undone, and a hardened build stopping where a breach would be UB.

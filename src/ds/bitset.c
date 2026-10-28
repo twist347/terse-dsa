@@ -94,7 +94,7 @@ static bool find_prev_impl(const tda_BitSet *self, bool clear, size_t from, size
 
 /* ========== lifetime ========== */
 
-tda_Status tda_bitset_init_len(size_t nbits, tda_Al al, tda_BitSet *out) {
+tda_Status tda_bitset_init_nbits(size_t nbits, tda_Al al, tda_BitSet *out) {
     assert(al.vt);
     assert(out);
 
@@ -113,6 +113,10 @@ tda_Status tda_bitset_init_len(size_t nbits, tda_Al al, tda_BitSet *out) {
     return TDA_STATUS_OK;
 }
 
+tda_Status tda_bitset_init_len(size_t nbits, tda_Al al, tda_BitSet *out) {
+    return tda_bitset_init_nbits(nbits, al, out);
+}
+
 tda_Status tda_bitset_from_span(size_t nbits, tda_Span s, tda_Al al, tda_BitSet *out) {
     TDA_SPAN_ASSERT(s);
     assert(al.vt);
@@ -120,7 +124,7 @@ tda_Status tda_bitset_from_span(size_t nbits, tda_Span s, tda_Al al, tda_BitSet 
     TDA_EXPECT(tda_layout_eq(TDA_LAYOUT_OF(size_t), s.elem));
 
     tda_BitSet obj;
-    const tda_Status st = tda_bitset_init_len(nbits, al, &obj);
+    const tda_Status st = tda_bitset_init_nbits(nbits, al, &obj);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }
@@ -167,7 +171,7 @@ tda_Status tda_bitset_copy_with(const tda_BitSet *self, tda_Al al, tda_BitSet *o
     assert(out);
 
     tda_BitSet copy;
-    const tda_Status st = tda_bitset_init_len(self->nbits_, al, &copy);
+    const tda_Status st = tda_bitset_init_nbits(self->nbits_, al, &copy);
     if (TDA_STATUS_IS_ERR(st)) {
         return st;
     }

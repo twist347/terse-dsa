@@ -445,7 +445,7 @@ static inline tda_Stack *tda_stack_typed_mut_(tda_Stack *self, [[maybe_unused]] 
 /// tda_stack_top_mut as a T *
 /// @copydetails TDA_STACK_TOP_AS
 #define TDA_STACK_TOP_MUT_AS(T, self) \
-    ((T *) tda_stack_top_mut(TDA_STACK_TYPED_(T, self)))
+    ((typeof(T) *) tda_stack_top_mut(TDA_STACK_TYPED_(T, self)))
 
 /// tda_stack_push from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -453,7 +453,7 @@ static inline tda_Stack *tda_stack_typed_mut_(tda_Stack *self, [[maybe_unused]] 
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_STACK_PUSH(T, self, val) \
-    tda_stack_push(TDA_STACK_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_stack_push(TDA_STACK_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_stack_extend from the elems written out
 /// @param T the elem type
@@ -469,7 +469,7 @@ static inline tda_Stack *tda_stack_typed_mut_(tda_Stack *self, [[maybe_unused]] 
 /// @param[out] out where the elem goes
 /// @bigo{1}
 #define TDA_STACK_POP_TO(T, self, out) \
-    tda_stack_pop_to(TDA_STACK_TYPED_(T, self), (T *){ (out) })
+    tda_stack_pop_to(TDA_STACK_TYPED_(T, self), (typeof(T) *){ (out) })
 
 /// @}
 

@@ -93,7 +93,6 @@ bool tda_span_find_sub(tda_Span s, tda_Span sub, tda_Eq eq, void *ctx, size_t *o
     TDA_SPAN_ASSERT(sub);
     assert(eq);
     assert(out_idx);
-    TDA_EXPECT(tda_layout_eq(s.elem, sub.elem));
 
     if (sub.len == 0) {
         *out_idx = 0;
@@ -120,7 +119,6 @@ bool tda_span_find_last_sub(tda_Span s, tda_Span sub, tda_Eq eq, void *ctx, size
     TDA_SPAN_ASSERT(sub);
     assert(eq);
     assert(out_idx);
-    TDA_EXPECT(tda_layout_eq(s.elem, sub.elem));
 
     if (sub.len == 0) {
         *out_idx = s.len;
@@ -353,7 +351,6 @@ bool tda_span_starts_with(tda_Span s, tda_Span prefix, tda_Eq eq, void *ctx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(prefix);
     assert(eq);
-    TDA_EXPECT(tda_layout_eq(s.elem, prefix.elem));
 
     return prefix.len <= s.len && matches_at(s, prefix, 0, eq, ctx);
 }
@@ -362,7 +359,6 @@ bool tda_span_ends_with(tda_Span s, tda_Span suffix, tda_Eq eq, void *ctx) {
     TDA_SPAN_ASSERT(s);
     TDA_SPAN_ASSERT(suffix);
     assert(eq);
-    TDA_EXPECT(tda_layout_eq(s.elem, suffix.elem));
 
     return suffix.len <= s.len && matches_at(s, suffix, s.len - suffix.len, eq, ctx);
 }

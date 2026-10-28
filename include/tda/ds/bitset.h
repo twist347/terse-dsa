@@ -36,7 +36,7 @@
 /// @{
 
 /// A fixed set of indices, one bit each. A value the caller holds wherever it likes:
-/// tda_bitset_init_len fills it in, tda_bitset_deinit releases its words. `= {}` is the
+/// tda_bitset_init_nbits fills it in, tda_bitset_deinit releases its words. `= {}` is the
 /// inert state, which tda_bitset_deinit accepts, tda_bitset_move_assign takes as its
 /// target, and every other op asserts.
 ///
@@ -64,6 +64,12 @@ typedef struct tda_BitSet {
 /// @retval TDA_STATUS_ERR_NO_MEM when the words cannot be allocated
 /// @bigo{n/64}
 [[nodiscard]] TDA_API
+tda_Status tda_bitset_init_nbits(size_t nbits, tda_Al al, tda_BitSet *out);
+
+/// tda_bitset_init_nbits under its old name, as tda_bitset_len is tda_bitset_nbits
+/// @copydetails tda_bitset_init_nbits
+/// @deprecated renamed tda_bitset_init_nbits in 3.3.0; removed in 4.0
+[[deprecated("use tda_bitset_init_nbits")]] [[nodiscard]] TDA_API
 tda_Status tda_bitset_init_len(size_t nbits, tda_Al al, tda_BitSet *out);
 
 /// a new bitset over 0 .. nbits - 1 holding the indices 's' lists
@@ -252,11 +258,20 @@ bool tda_bitset_none(const tda_BitSet *self);
 /// @return nbits; changed only by copy_assign, move_assign and swap
 /// @bigo{1}
 [[nodiscard]]
-static inline size_t tda_bitset_len(const tda_BitSet *self) {
+static inline size_t tda_bitset_nbits(const tda_BitSet *self) {
     assert(self);
     assert(self->al_.vt);
 
     return self->nbits_;
+}
+
+/// tda_bitset_nbits under its old name. Every other container's len counts its elems,
+/// which for a bitset is tda_bitset_count, not the universe
+/// @copydetails tda_bitset_nbits
+/// @deprecated renamed tda_bitset_nbits in 3.3.0; removed in 4.0
+[[deprecated("use tda_bitset_nbits")]] [[nodiscard]]
+static inline size_t tda_bitset_len(const tda_BitSet *self) {
+    return tda_bitset_nbits(self);
 }
 
 /// the allocator the bitset was built with

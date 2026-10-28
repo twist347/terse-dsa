@@ -662,7 +662,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// tda_deque_front_mut as a T *
 /// @copydetails TDA_DEQUE_FRONT_AS
 #define TDA_DEQUE_FRONT_MUT_AS(T, self) \
-    ((T *) tda_deque_front_mut(TDA_DEQUE_TYPED_(T, self)))
+    ((typeof(T) *) tda_deque_front_mut(TDA_DEQUE_TYPED_(T, self)))
 
 /// tda_deque_back as a const T *
 /// @copydetails TDA_DEQUE_FRONT_AS
@@ -672,7 +672,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// tda_deque_back_mut as a T *
 /// @copydetails TDA_DEQUE_FRONT_AS
 #define TDA_DEQUE_BACK_MUT_AS(T, self) \
-    ((T *) tda_deque_back_mut(TDA_DEQUE_TYPED_(T, self)))
+    ((typeof(T) *) tda_deque_back_mut(TDA_DEQUE_TYPED_(T, self)))
 
 /// @cond
 // the body of both deque walks; the hidden names come in already unique, and 'self' is
@@ -682,7 +682,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 #define TDA_DEQUE_WALK_(DequeT, ElemT, elem, self, get, deque, once, idx, brk)   \
     for (DequeT *deque = (self), **once = &deque; once; once = nullptr)          \
         for (size_t idx = 0, brk = 0; !brk && idx < tda_deque_len(deque); ++idx) \
-            for (ElemT *elem = (brk = 1, get(deque, idx)); brk; brk = 0)
+            for (typeof(ElemT) *elem = (brk = 1, get(deque, idx)); brk; brk = 0)
 /// @endcond
 
 /// walks the deque front to back, binding 'elem' to each elem in turn. A ring has no
@@ -733,7 +733,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// tda_deque_get_mut as a T *
 /// @copydetails TDA_DEQUE_GET_AS
 #define TDA_DEQUE_GET_MUT_AS(T, self, idx) \
-    ((T *) tda_deque_get_mut(TDA_DEQUE_TYPED_(T, self), (idx)))
+    ((typeof(T) *) tda_deque_get_mut(TDA_DEQUE_TYPED_(T, self), (idx)))
 
 /// tda_deque_set from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -742,7 +742,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_DEQUE_SET(T, self, idx, val) \
-    tda_deque_set(TDA_DEQUE_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
+    tda_deque_set(TDA_DEQUE_TYPED_(T, self), (idx), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_deque_push_front from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -750,12 +750,12 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_DEQUE_PUSH_FRONT(T, self, val) \
-    tda_deque_push_front(TDA_DEQUE_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_deque_push_front(TDA_DEQUE_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_deque_push_back from a value rather than an address
 /// @copydetails TDA_DEQUE_PUSH_FRONT
 #define TDA_DEQUE_PUSH_BACK(T, self, val) \
-    tda_deque_push_back(TDA_DEQUE_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_deque_push_back(TDA_DEQUE_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_deque_insert from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -764,7 +764,7 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// @param val the value to copy in
 /// @bigo{n}
 #define TDA_DEQUE_INSERT(T, self, idx, val) \
-    tda_deque_insert(TDA_DEQUE_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
+    tda_deque_insert(TDA_DEQUE_TYPED_(T, self), (idx), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_deque_pop_front_to with 'out' typechecked as T *
 /// @param T the elem type
@@ -772,12 +772,12 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
 /// @param[out] out where the elem goes
 /// @bigo{1}
 #define TDA_DEQUE_POP_FRONT_TO(T, self, out) \
-    tda_deque_pop_front_to(TDA_DEQUE_TYPED_(T, self), (T *){ (out) })
+    tda_deque_pop_front_to(TDA_DEQUE_TYPED_(T, self), (typeof(T) *){ (out) })
 
 /// tda_deque_pop_back_to with 'out' typechecked as T *
 /// @copydetails TDA_DEQUE_POP_FRONT_TO
 #define TDA_DEQUE_POP_BACK_TO(T, self, out) \
-    tda_deque_pop_back_to(TDA_DEQUE_TYPED_(T, self), (T *){ (out) })
+    tda_deque_pop_back_to(TDA_DEQUE_TYPED_(T, self), (typeof(T) *){ (out) })
 
 /// tda_deque_extend from the elems written out
 /// @param T the elem type

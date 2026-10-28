@@ -719,7 +719,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// tda_vec_front_mut as a T *
 /// @copydetails TDA_VEC_FRONT_AS
 #define TDA_VEC_FRONT_MUT_AS(T, self) \
-    ((T *) tda_vec_front_mut(TDA_VEC_TYPED_(T, self)))
+    ((typeof(T) *) tda_vec_front_mut(TDA_VEC_TYPED_(T, self)))
 
 /// tda_vec_back as a const T *
 /// @copydetails TDA_VEC_FRONT_AS
@@ -729,7 +729,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// tda_vec_back_mut as a T *
 /// @copydetails TDA_VEC_FRONT_AS
 #define TDA_VEC_BACK_MUT_AS(T, self) \
-    ((T *) tda_vec_back_mut(TDA_VEC_TYPED_(T, self)))
+    ((typeof(T) *) tda_vec_back_mut(TDA_VEC_TYPED_(T, self)))
 
 /// tda_vec_get as a const T *
 /// @param T the elem type
@@ -742,7 +742,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// tda_vec_get_mut as a T *
 /// @copydetails TDA_VEC_GET_AS
 #define TDA_VEC_GET_MUT_AS(T, self, idx) \
-    ((T *) tda_vec_get_mut(TDA_VEC_TYPED_(T, self), (idx)))
+    ((typeof(T) *) tda_vec_get_mut(TDA_VEC_TYPED_(T, self), (idx)))
 
 /// tda_vec_set from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -751,7 +751,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_VEC_SET(T, self, idx, val) \
-    tda_vec_set(TDA_VEC_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
+    tda_vec_set(TDA_VEC_TYPED_(T, self), (idx), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_vec_push from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -759,7 +759,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_VEC_PUSH(T, self, val) \
-    tda_vec_push(TDA_VEC_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_vec_push(TDA_VEC_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_vec_push_assume_cap from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -767,14 +767,14 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// @param val the value to copy in
 /// @bigo{1}
 #define TDA_VEC_PUSH_ASSUME_CAP(T, self, val) \
-    tda_vec_push_assume_cap(TDA_VEC_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_vec_push_assume_cap(TDA_VEC_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_vec_add_one_assume_cap as a T *
 /// @param T the elem type
 /// @param self the vec
 /// @bigo{1}
 #define TDA_VEC_ADD_ONE_ASSUME_CAP_AS(T, self) \
-    ((T *) tda_vec_add_one_assume_cap(TDA_VEC_TYPED_(T, self)))
+    ((typeof(T) *) tda_vec_add_one_assume_cap(TDA_VEC_TYPED_(T, self)))
 
 /// tda_vec_pop_to with 'out' typechecked as T *
 /// @param T the elem type
@@ -782,7 +782,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// @param[out] out where the elem goes
 /// @bigo{1}
 #define TDA_VEC_POP_TO(T, self, out) \
-    tda_vec_pop_to(TDA_VEC_TYPED_(T, self), (T *){ (out) })
+    tda_vec_pop_to(TDA_VEC_TYPED_(T, self), (typeof(T) *){ (out) })
 
 /// tda_vec_insert from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -791,7 +791,7 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 /// @param val the value to copy in
 /// @bigo{n}
 #define TDA_VEC_INSERT(T, self, idx, val) \
-    tda_vec_insert(TDA_VEC_TYPED_(T, self), (idx), &(T[1]){ (val) }[0])
+    tda_vec_insert(TDA_VEC_TYPED_(T, self), (idx), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_vec_extend from the elems written out
 /// @param T the elem type

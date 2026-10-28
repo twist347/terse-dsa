@@ -449,7 +449,7 @@ static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] 
 /// tda_queue_front_mut as a T *
 /// @copydetails TDA_QUEUE_FRONT_AS
 #define TDA_QUEUE_FRONT_MUT_AS(T, self) \
-    ((T *) tda_queue_front_mut(TDA_QUEUE_TYPED_(T, self)))
+    ((typeof(T) *) tda_queue_front_mut(TDA_QUEUE_TYPED_(T, self)))
 
 /// tda_queue_back as a const T *
 /// @copydetails TDA_QUEUE_FRONT_AS
@@ -459,7 +459,7 @@ static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] 
 /// tda_queue_back_mut as a T *
 /// @copydetails TDA_QUEUE_FRONT_AS
 #define TDA_QUEUE_BACK_MUT_AS(T, self) \
-    ((T *) tda_queue_back_mut(TDA_QUEUE_TYPED_(T, self)))
+    ((typeof(T) *) tda_queue_back_mut(TDA_QUEUE_TYPED_(T, self)))
 
 /// tda_queue_push from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
@@ -467,7 +467,7 @@ static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] 
 /// @param val the value to copy in
 /// @bigo{1} amortized
 #define TDA_QUEUE_PUSH(T, self, val) \
-    tda_queue_push(TDA_QUEUE_TYPED_(T, self), &(T[1]){ (val) }[0])
+    tda_queue_push(TDA_QUEUE_TYPED_(T, self), &(typeof(T)[1]){ (val) }[0])
 
 /// tda_queue_extend from the elems written out
 /// @param T the elem type
@@ -483,7 +483,7 @@ static inline tda_Queue *tda_queue_typed_mut_(tda_Queue *self, [[maybe_unused]] 
 /// @param[out] out where the elem goes
 /// @bigo{1}
 #define TDA_QUEUE_POP_TO(T, self, out) \
-    tda_queue_pop_to(TDA_QUEUE_TYPED_(T, self), (T *){ (out) })
+    tda_queue_pop_to(TDA_QUEUE_TYPED_(T, self), (typeof(T) *){ (out) })
 
 /// @}
 

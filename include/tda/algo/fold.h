@@ -58,7 +58,9 @@ TDA_API
 void tda_span_partial_sum(tda_SpanMut dst, tda_Span src, tda_BinOp op, void *ctx);
 
 /// steps between neighbours: dst[0] = src[0], then dst[i] = op(src[i], src[i - 1])
-/// @param dst asserts the same len as 'src'; must not overlap it
+/// @param dst asserts the same len as 'src'; may be 'src', since the steps go from the
+///            back and step i reads src[i] and src[i - 1], neither written yet. 'op' then
+///            gets src[i] as both 'dst' and 'lhs'; see tda_BinOp
 /// @param src the source
 /// @param op combines an elem with the one before it; with the inverse of the op given
 ///           to tda_span_partial_sum, this undoes it

@@ -1203,6 +1203,25 @@ static void test_find_any_of_takes_keys_of_another_type() {
     TEST_ASSERT_EQUAL_size_t(3, idx);
 }
 
+// a run of keys is matched elem by elem as find_any_of matches one, the id on the right
+static void test_the_sub_ops_take_keys_of_another_type() {
+    static const User users[5] = {{1, 10}, {2, 20}, {3, 30}, {4, 20}, {5, 30}};
+    const tda_Span s = TDA_SPAN_FROM_DATA(User, users, 5);
+    static const int64_t mid[2] = {20, 30}, head[2] = {10, 20}, tail[2] = {20, 30}, miss[2] = {30, 10};
+
+    size_t idx = 99;
+    TEST_ASSERT_TRUE(tda_span_find_sub(s, TDA_SPAN_FROM_DATA(int64_t, mid, 2), eq_user_to_id, nullptr, &idx));
+    TEST_ASSERT_EQUAL_size_t(1, idx);
+    TEST_ASSERT_TRUE(tda_span_find_last_sub(s, TDA_SPAN_FROM_DATA(int64_t, mid, 2), eq_user_to_id, nullptr, &idx));
+    TEST_ASSERT_EQUAL_size_t(3, idx);
+    TEST_ASSERT_FALSE(tda_span_find_sub(s, TDA_SPAN_FROM_DATA(int64_t, miss, 2), eq_user_to_id, nullptr, &idx));
+
+    TEST_ASSERT_TRUE(tda_span_starts_with(s, TDA_SPAN_FROM_DATA(int64_t, head, 2), eq_user_to_id, nullptr));
+    TEST_ASSERT_FALSE(tda_span_starts_with(s, TDA_SPAN_FROM_DATA(int64_t, tail, 2), eq_user_to_id, nullptr));
+    TEST_ASSERT_TRUE(tda_span_ends_with(s, TDA_SPAN_FROM_DATA(int64_t, tail, 2), eq_user_to_id, nullptr));
+    TEST_ASSERT_FALSE(tda_span_ends_with(s, TDA_SPAN_FROM_DATA(int64_t, head, 2), eq_user_to_id, nullptr));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -1311,6 +1330,7 @@ int main() {
 
     RUN_TEST(test_find_run_and_contains_take_a_key_of_another_type);
     RUN_TEST(test_find_any_of_takes_keys_of_another_type);
+    RUN_TEST(test_the_sub_ops_take_keys_of_another_type);
 
     return UNITY_END();
 }

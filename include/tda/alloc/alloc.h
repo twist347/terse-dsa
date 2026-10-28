@@ -212,14 +212,14 @@ static inline void tda_dealloc_n_(tda_Al al, void *ptr, tda_Layout elem, size_t 
 /// @param count how many elems; 0 gives null, as tda_alloc does for 0 bytes, and so does
 ///              an overflowing count
 #define TDA_ALLOC(T, al, count) \
-    ((T *) tda_alloc_n_((al), TDA_LAYOUT_OF(T), (count), false))
+    ((typeof(T) *) tda_alloc_n_((al), TDA_LAYOUT_OF(T), (count), false))
 
 /// tda_alloc_zeroed for 'count' elems of T, with the multiplication checked
 /// @param T the elem type
 /// @param al the allocator
 /// @param count how many elems; 0 or an overflowing count gives null, as for TDA_ALLOC
 #define TDA_ALLOC_ZEROED(T, al, count) \
-    ((T *) tda_alloc_n_((al), TDA_LAYOUT_OF(T), (count), true))
+    ((typeof(T) *) tda_alloc_n_((al), TDA_LAYOUT_OF(T), (count), true))
 
 /// tda_realloc between two counts of T, with the multiplication checked
 /// @param T the elem type
@@ -230,7 +230,7 @@ static inline void tda_dealloc_n_(tda_Al al, void *ptr, tda_Layout elem, size_t 
 ///                  tda_realloc does, and one that would overflow gives null with the
 ///                  block untouched
 #define TDA_REALLOC(T, al, ptr, old_count, new_count) \
-    ((T *) tda_realloc_n_((al), (T *){ (ptr) }, TDA_LAYOUT_OF(T), (old_count), (new_count)))
+    ((typeof(T) *) tda_realloc_n_((al), (typeof(T) *){ (ptr) }, TDA_LAYOUT_OF(T), (old_count), (new_count)))
 
 /// tda_dealloc for 'count' elems of T
 /// @param T the elem type
@@ -238,7 +238,7 @@ static inline void tda_dealloc_n_(tda_Al al, void *ptr, tda_Layout elem, size_t 
 /// @param ptr the block, typechecked as T *
 /// @param count what it holds
 #define TDA_DEALLOC(T, al, ptr, count) \
-    tda_dealloc_n_((al), (T *){ (ptr) }, TDA_LAYOUT_OF(T), (count))
+    tda_dealloc_n_((al), (typeof(T) *){ (ptr) }, TDA_LAYOUT_OF(T), (count))
 
 /// @}
 
