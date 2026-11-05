@@ -67,10 +67,8 @@ static tda_Status alloc_node(const tda_HMap *self, const void *key, const void *
 
 static void dealloc_node(const tda_HMap *self, tda_HMapNode *node);
 
-/// which of 'count' buckets a hash belongs to: the top bits of the hash times 2^64/phi.
-/// The product's top bits depend on every bit of the hash, so a hasher that leaves its
-/// low bits alike, the identity on keys that are multiples of a power of two, still
-/// spreads; a mask would put all of them in one chain
+/// the top bits of hash * 2^64/phi depend on every input bit, unlike a low-bit mask,
+/// so even identity hashes of keys sharing their low bits spread over 'count' buckets
 [[nodiscard]]
 static size_t bucket_in(tda_Hash hash, size_t count);
 
@@ -268,7 +266,6 @@ tda_Status tda_hmap_init_raw_(
 void tda_hmap_deinit(tda_HMap *self) {
     assert(self);
 
-    // the inert state, never initialized or already released
     if (!self->al_.vt) {
         assert(!self->buckets_);
         return;
@@ -353,7 +350,6 @@ tda_Status tda_hmap_copy_assign(tda_HMap *self, const tda_HMap *other) {
 void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
     assert(self);
     ASSERT_HMAP(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->al_.vt) {
         ASSERT_HMAP(self);
         EXPECT_SAME_HMAP(self, other);
@@ -363,8 +359,6 @@ void tda_hmap_move_assign(tda_HMap *self, tda_HMap *other) {
         return;
     }
 
-    // the allocator, the hasher, the equality and the ctx go along with the entries;
-    // 'other' keeps all of them and is left with no buckets
     tda_hmap_deinit(self);
     *self = *other;
     forget_buckets(other);

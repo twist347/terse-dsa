@@ -149,7 +149,8 @@ void tda_queue_move_assign(tda_Queue *self, tda_Queue *other);
 
 /// copies every elem into 'dst' front to back; the only way to hand the elems to algo
 /// @param self the queue
-/// @param dst must have the same elem layout and be exactly as long as the queue
+/// @param dst must have the same elem layout and be exactly as long as the queue; must not
+///            overlap the ring buffer, free slots included
 /// @bigo{n}
 TDA_API
 void tda_queue_copy_to_span(const tda_Queue *self, tda_SpanMut dst);

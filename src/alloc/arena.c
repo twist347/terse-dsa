@@ -85,7 +85,6 @@ tda_Arena tda_arena_init_buf(void *buf, size_t cap) {
 void tda_arena_deinit(tda_Arena *self) {
     assert(self);
 
-    // the inert state, never made or already released
     if (!self->data_) {
         return;
     }
@@ -139,9 +138,7 @@ tda_ArenaMark tda_arena_mark(tda_Arena *self) {
 
 void tda_arena_rewind(tda_Arena *self, tda_ArenaMark mark) {
     ASSERT_ARENA(self);
-    // only a rewind or a reset moves the offset below a live mark: a block from under
-    // the floor never shrinks it, and one from above stays above. So a mark past the
-    // offset has already been rewound past
+    // a mark past the offset has already been rewound past: blocks never shrink the floor
     TDA_EXPECT(mark.offset_ <= self->offset_);
     assert(mark.floor_ <= mark.offset_);
 

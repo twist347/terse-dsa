@@ -45,7 +45,6 @@ tda_Status tda_queue_from_data(const void *data, size_t len, tda_Layout elem, td
     assert(al.vt);
     assert(out);
 
-    // the deque keeps the order, so data[0] is the front
     return tda_deque_from_data(data, len, elem, al, &out->deque_);
 }
 
@@ -94,7 +93,6 @@ tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
     ASSERT_QUEUE(other);
     EXPECT_SAME_QUEUE(self, other);
 
-    // no self-assignment guard: the deque already returns early on it
     const tda_Status st = tda_deque_copy_assign(&self->deque_, &other->deque_);
 
     ASSERT_QUEUE(self);
@@ -105,13 +103,11 @@ tda_Status tda_queue_copy_assign(tda_Queue *self, const tda_Queue *other) {
 void tda_queue_move_assign(tda_Queue *self, tda_Queue *other) {
     assert(self);
     ASSERT_QUEUE(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->deque_.al_.vt) {
         ASSERT_QUEUE(self);
         EXPECT_SAME_QUEUE(self, other);
     }
 
-    // self-move is handled by the deque, as in copy_assign
     tda_deque_move_assign(&self->deque_, &other->deque_);
 
     ASSERT_QUEUE(self);

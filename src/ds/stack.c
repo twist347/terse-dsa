@@ -41,7 +41,6 @@ tda_Status tda_stack_from_data(const void *data, size_t len, tda_Layout elem, td
     assert(al.vt);
     assert(out);
 
-    // the vec keeps the order, so the last elem is the top
     return tda_vec_from_data(data, len, elem, al, &out->vec_);
 }
 
@@ -90,7 +89,6 @@ tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
     ASSERT_STACK(other);
     EXPECT_SAME_STACK(self, other);
 
-    // no self-assignment guard: the vec already returns early on it
     const tda_Status st = tda_vec_copy_assign(&self->vec_, &other->vec_);
 
     ASSERT_STACK(self);
@@ -101,13 +99,11 @@ tda_Status tda_stack_copy_assign(tda_Stack *self, const tda_Stack *other) {
 void tda_stack_move_assign(tda_Stack *self, tda_Stack *other) {
     assert(self);
     ASSERT_STACK(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->vec_.al_.vt) {
         ASSERT_STACK(self);
         EXPECT_SAME_STACK(self, other);
     }
 
-    // self-move is handled by the vec, as in copy_assign
     tda_vec_move_assign(&self->vec_, &other->vec_);
 
     ASSERT_STACK(self);

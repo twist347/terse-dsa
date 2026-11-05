@@ -107,7 +107,6 @@ tda_Status tda_pool_init_buf(void *buf, size_t cap, tda_Layout block, tda_Pool *
 void tda_pool_deinit(tda_Pool *self) {
     assert(self);
 
-    // the inert state, never filled in or already released
     if (!self->data_) {
         return;
     }

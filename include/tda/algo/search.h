@@ -327,8 +327,7 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
 
 /// tda_span_find from a value rather than an address: TDA_SPAN_FIND(int32_t, s, 7, eq,
 /// nullptr, &idx)
-/// @param K the key's type, which need not be the elem's, so nothing checks it against
-///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param K the key type, possibly unlike the elem's; struct literals go in parentheses
 /// @param s the span
 /// @param key the value to look for
 /// @param eq the equality
@@ -344,8 +343,7 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
     tda_span_find_last((s), &(typeof(K)[1]){ (key) }[0], (eq), (ctx), (out_idx))
 
 /// tda_span_find_run from a value rather than an address
-/// @param K the key's type, which need not be the elem's, so nothing checks it against
-///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param K the key type, possibly unlike the elem's; struct literals go in parentheses
 /// @param s the span
 /// @param key the value to look for
 /// @param count the run length
@@ -357,8 +355,7 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
     tda_span_find_run((s), &(typeof(K)[1]){ (key) }[0], (count), (eq), (ctx), (out_idx))
 
 /// tda_span_contains from a value rather than an address
-/// @param K the key's type, which need not be the elem's, so nothing checks it against
-///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param K the key type, possibly unlike the elem's; struct literals go in parentheses
 /// @param s the span
 /// @param key the value to look for
 /// @param eq the equality
@@ -373,8 +370,7 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
     tda_span_count((s), &(typeof(K)[1]){ (key) }[0], (eq), (ctx))
 
 /// tda_span_lower_bound from a value rather than an address
-/// @param K the key's type, which need not be the elem's, so nothing checks it against
-///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param K the key type, possibly unlike the elem's; struct literals go in parentheses
 /// @param s the span, sorted by 'cmp'
 /// @param key the value to look for
 /// @param cmp the order
@@ -394,8 +390,7 @@ tda_MinMax tda_span_minmax_elem(tda_Span s, tda_Cmp cmp, void *ctx);
     tda_span_equal_range((s), &(typeof(K)[1]){ (key) }[0], (cmp), (ctx))
 
 /// tda_span_binary_search from a value rather than an address
-/// @param K the key's type, which need not be the elem's, so nothing checks it against
-///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param K the key type, possibly unlike the elem's; struct literals go in parentheses
 /// @param s the span, sorted by 'cmp'
 /// @param key the value to look for
 /// @param cmp the order

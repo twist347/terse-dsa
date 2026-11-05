@@ -49,7 +49,6 @@ tda_Log tda_log_init(FILE *stream, tda_Al parent) {
 void tda_log_deinit(tda_Log *self) {
     assert(self);
 
-    // the inert state, never made or already released
     if (!self->parent_.vt) {
         return;
     }

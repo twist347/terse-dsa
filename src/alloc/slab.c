@@ -101,7 +101,6 @@ tda_Slab tda_slab_init(tda_Al parent) {
 void tda_slab_deinit(tda_Slab *self) {
     assert(self);
 
-    // the inert state, never made or already released
     if (!self->parent_.vt) {
         return;
     }

@@ -193,8 +193,7 @@ static void test_swap_is_a_single_statement() {
     TEST_ASSERT_EQUAL_INT32(1, b);
 }
 
-// the macro's own temporary is declared after the typeof that reads the argument, so a
-// caller variable of the same name is still swapped correctly
+// the macro's hidden names must not shadow the caller's operands
 static void test_swap_survives_a_caller_variable_named_like_its_temporary() {
     int32_t tda_swap_tmp_ = 1;
     int32_t other = 2;
@@ -203,6 +202,31 @@ static void test_swap_survives_a_caller_variable_named_like_its_temporary() {
 
     TEST_ASSERT_EQUAL_INT32(2, tda_swap_tmp_);
     TEST_ASSERT_EQUAL_INT32(1, other);
+}
+
+static void test_swap_survives_caller_variables_named_like_its_pointer_helpers() {
+    int32_t a = 1, b = 2;
+    int32_t *tda_swap_pa_ = &a, *tda_swap_pb_ = &b;
+
+    TDA_SWAP(*tda_swap_pa_, *tda_swap_pb_);
+
+    TEST_ASSERT_EQUAL_INT32(2, a);
+    TEST_ASSERT_EQUAL_INT32(1, b);
+    TEST_ASSERT_EQUAL_PTR(&a, tda_swap_pa_);
+    TEST_ASSERT_EQUAL_PTR(&b, tda_swap_pb_);
+
+    // both operand orders, then the pointers themselves rather than their pointees
+    TDA_SWAP(*tda_swap_pb_, *tda_swap_pa_);
+
+    TEST_ASSERT_EQUAL_INT32(1, a);
+    TEST_ASSERT_EQUAL_INT32(2, b);
+
+    TDA_SWAP(tda_swap_pa_, tda_swap_pb_);
+
+    TEST_ASSERT_EQUAL_PTR(&b, tda_swap_pa_);
+    TEST_ASSERT_EQUAL_PTR(&a, tda_swap_pb_);
+    TEST_ASSERT_EQUAL_INT32(1, a);
+    TEST_ASSERT_EQUAL_INT32(2, b);
 }
 
 // twice in a row: the second call must not see anything left by the first
@@ -237,6 +261,7 @@ int main() {
     RUN_TEST(test_swap_with_itself_changes_nothing);
     RUN_TEST(test_swap_is_a_single_statement);
     RUN_TEST(test_swap_survives_a_caller_variable_named_like_its_temporary);
+    RUN_TEST(test_swap_survives_caller_variables_named_like_its_pointer_helpers);
     RUN_TEST(test_swap_is_repeatable);
 
     return UNITY_END();

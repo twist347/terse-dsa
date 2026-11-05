@@ -330,18 +330,15 @@ static void quicksort(tda_SpanMut s, size_t left, size_t right, size_t depth, td
         }
         --depth;
 
-        // sampled across the range, not just at its two ends and middle: partitioning
-        // leaves the smallest elem of the left side sitting at that side's last
-        // position, and median-of-3 would then keep picking a near-minimum pivot
+        // sampling across the range avoids the near-minimum pivots median-of-3 keeps
+        // finding after partitioning
         const size_t pivot_idx = ninther(tda_span_mut_to_span(s), left, right, cmp, ctx);
 
-        // three-way, so a run of equal keys is settled in one pass. A two-way split
-        // peels those off one elem at a time, which is quadratic on repeated keys.
+        // a three-way split settles equal keys in one pass instead of quadratic peeling
         const Split split = partition3(s, left, right, pivot_idx, cmp, ctx);
         const size_t lt = split.lt, gt = split.gt;
 
-        // recurse into the shorter side and loop on the longer one: the recursion then
-        // halves its range every time, so the stack stays O(log n) whatever the data
+        // recursing into the shorter side keeps the stack O(log n)
         if (lt - left < right - gt) {
             if (lt > left) {
                 quicksort(s, left, lt - 1, depth, cmp, ctx);

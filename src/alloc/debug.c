@@ -134,7 +134,6 @@ tda_Debug tda_debug_init(tda_Al parent) {
 void tda_debug_deinit(tda_Debug *self) {
     assert(self);
 
-    // the inert state, never made or already released
     if (!self->parent_.vt) {
         return;
     }

@@ -170,7 +170,6 @@ void tda_vec_into_raw(tda_Vec *self, tda_SpanMut *out_elems, size_t *out_cap) {
 void tda_vec_deinit(tda_Vec *self) {
     assert(self);
 
-    // the inert state, never initialized or already released
     if (!self->al_.vt) {
         assert(!self->data_);
         return;
@@ -227,7 +226,6 @@ tda_Status tda_vec_copy_assign(tda_Vec *self, const tda_Vec *other) {
 void tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
     assert(self);
     ASSERT_VEC(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->al_.vt) {
         ASSERT_VEC(self);
         EXPECT_SAME_VEC(self, other);
@@ -237,7 +235,6 @@ void tda_vec_move_assign(tda_Vec *self, tda_Vec *other) {
         return;
     }
 
-    // the allocator goes along with the block, and 'other' stays usable on it
     tda_vec_deinit(self);
     *self = *other;
     *other = tda_vec_init(self->elem_, self->al_);
@@ -612,12 +609,9 @@ static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem
         if (tda_layout_ckd_array(&block, elem, cap)) {
             return TDA_STATUS_ERR_NO_MEM;
         }
-        obj.data_ = tda_alloc(al, block);
+        obj.data_ = zeroed ? tda_alloc_zeroed(al, block) : tda_alloc(al, block);
         if (!obj.data_) {
             return TDA_STATUS_ERR_NO_MEM;
-        }
-        if (zeroed) {
-            memset(obj.data_, 0, len * elem.size);
         }
     }
     obj.len_ = len;

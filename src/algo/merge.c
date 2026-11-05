@@ -91,17 +91,10 @@ void tda_span_inplace_merge(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx, t
 /* ========== internals ========== */
 
 /*
- * The buffer-free merge, by the standard recursion. Take the middle elem of the longer
- * run and binary search for its place in the other one. The two cuts split the problem
- * into two smaller merges whose results do not interleave. One rotate swaps the two
- * inner pieces, and each half is merged the same way.
- *
- * The choice of search keeps it stable. Cutting the left run searches the right with
- * lower_bound, so equal elems on the right land after; cutting the right run searches
- * the left with upper_bound, so equal elems on the left stay before.
- *
- * Each call halves the longer run, so the depth is logarithmic and plain recursion is
- * fine without an explicit stack.
+ * Cut the longer run at its middle and bisect that elem in the other run, then rotate
+ * the inner pieces and merge both sides recursively. lower_bound after a left cut and
+ * upper_bound after a right cut keep equal elems stable. Halving the longer run each
+ * time bounds the recursion depth by O(log n).
  */
 static void merge_in_place(tda_SpanMut s, size_t mid, tda_Cmp cmp, void *ctx) {
     const size_t left_len = mid, right_len = s.len - mid;

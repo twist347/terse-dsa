@@ -190,7 +190,8 @@ void tda_deque_move_assign(tda_Deque *self, tda_Deque *other);
 /// writes every elem into 'dst' in ring order, in at most two memcpy since the contents
 /// are at most two runs; how a deque reaches an algo that needs one run, like sort
 /// @param self the deque
-/// @param dst must have the same elem layout and be exactly as long as the deque
+/// @param dst must have the same elem layout and be exactly as long as the deque; must not
+///            overlap the ring buffer, free slots included
 /// @bigo{n}
 TDA_API
 void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst);
@@ -198,8 +199,9 @@ void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst);
 /// overwrites every elem from 'src', in ring order; pairs with tda_deque_copy_to_span to
 /// put an algo result back
 /// @param self the deque
-/// @param src must have the same elem layout and be exactly as long as the deque; nothing
-///            is allocated, so this cannot fail
+/// @param src must have the same elem layout and be exactly as long as the deque; must not
+///            overlap the ring buffer, free slots included; nothing is allocated, so this
+///            cannot fail
 /// @bigo{n}
 TDA_API
 void tda_deque_copy_from_span(tda_Deque *self, tda_Span src);

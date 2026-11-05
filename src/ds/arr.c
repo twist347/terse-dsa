@@ -105,7 +105,6 @@ tda_SpanMut tda_arr_into_raw(tda_Arr *self) {
 void tda_arr_deinit(tda_Arr *self) {
     assert(self);
 
-    // the inert state, never initialized or already released
     if (!self->al_.vt) {
         assert(!self->data_);
         return;
@@ -167,7 +166,6 @@ tda_Status tda_arr_copy_assign(tda_Arr *self, const tda_Arr *other) {
 void tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
     assert(self);
     ASSERT_ARR(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->al_.vt) {
         ASSERT_ARR(self);
         EXPECT_SAME_ARR(self, other);
@@ -177,7 +175,6 @@ void tda_arr_move_assign(tda_Arr *self, tda_Arr *other) {
         return;
     }
 
-    // the allocator goes along with the block, and 'other' is left empty on it
     tda_arr_deinit(self);
     *self = *other;
     *other = (tda_Arr){.elem_ = self->elem_, .al_ = self->al_};

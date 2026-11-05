@@ -26,6 +26,9 @@
 - **The slab no longer walks its chunks on every free in a debug build.** The assert that
   a block was its own made a free O(chunks), so a list of 200k nodes took 690 ms to
   deinit where it now takes 4. A foreign block was never looked for in release.
+- **`tda_vec_init_len` and `tda_deque_init_len` use `alloc_zeroed`**, as
+  `tda_arr_init_len` does, so an allocator with a zeroed hook can skip the separate
+  `memset`.
 
 ### Deprecated
 
@@ -34,6 +37,9 @@
 
 ### Fixed
 
+- **`TDA_SWAP` uses unique hidden names**, so operands named `tda_swap_pa_` or
+  `tda_swap_pb_`, or reached through pointers with those names, no longer collide with
+  its local pointers.
 - **A type name with a declarator goes into every typed macro as it is spelled.** The
   macros that write through a pointer or copy a value in spelled a bare `T`, so
   `int32_t (*)(int32_t)` or `int32_t[3]` did not compile there, though the read ones took

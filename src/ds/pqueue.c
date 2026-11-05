@@ -153,7 +153,6 @@ tda_Status tda_pqueue_copy_assign(tda_PQueue *self, const tda_PQueue *other) {
 void tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other) {
     assert(self);
     ASSERT_PQUEUE(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->vec_.al_.vt) {
         ASSERT_PQUEUE(self);
         EXPECT_SAME_PQUEUE(self, other);
@@ -165,7 +164,6 @@ void tda_pqueue_move_assign(tda_PQueue *self, tda_PQueue *other) {
 
     tda_vec_move_assign(&self->vec_, &other->vec_);
 
-    // the comparator travels with the elems, as in copy_assign
     self->cmp_ = other->cmp_;
     self->ctx_ = other->ctx_;
 
@@ -238,7 +236,6 @@ void tda_pqueue_pop_to(tda_PQueue *self, void *out) {
     assert(out);
     TDA_EXPECT(tda_vec_len(&self->vec_) > 0);
 
-    // as in tda_pqueue_pop, but the elem moved last is copied out
     tda_span_pop_heap(tda_vec_to_span_mut(&self->vec_), self->cmp_, self->ctx_);
     tda_vec_pop_to(&self->vec_, out);
 

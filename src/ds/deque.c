@@ -192,7 +192,6 @@ tda_Status tda_deque_from_span(tda_Span s, tda_Al al, tda_Deque *out) {
 void tda_deque_deinit(tda_Deque *self) {
     assert(self);
 
-    // the inert state, never initialized or already released
     if (!self->al_.vt) {
         assert(!self->data_);
         return;
@@ -224,8 +223,7 @@ tda_Status tda_deque_copy_with(const tda_Deque *self, tda_Al al, tda_Deque *out)
         return st;
     }
 
-    // the copy is sized to the content, so it comes out unwrapped whatever
-    // self looks like
+    // the copy is sized to its contents and starts unwrapped
     copy_out(self, copy.data_);
 
     *out = copy;
@@ -267,7 +265,6 @@ tda_Status tda_deque_copy_assign(tda_Deque *self, const tda_Deque *other) {
 void tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
     assert(self);
     ASSERT_DEQUE(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->al_.vt) {
         ASSERT_DEQUE(self);
         EXPECT_SAME_DEQUE(self, other);
@@ -277,7 +274,6 @@ void tda_deque_move_assign(tda_Deque *self, tda_Deque *other) {
         return;
     }
 
-    // the allocator goes along with the block, and 'other' stays usable on it
     tda_deque_deinit(self);
     *self = *other;
     *other = tda_deque_init(self->elem_, self->al_);
@@ -291,6 +287,7 @@ void tda_deque_copy_to_span(const tda_Deque *self, tda_SpanMut dst) {
     TDA_SPAN_ASSERT(dst);
     TDA_EXPECT(tda_layout_eq(self->elem_, dst.elem));
     TDA_EXPECT(dst.len == self->len_);
+    TDA_EXPECT(!tda_span_overlap(block_span(self), tda_span_mut_to_span(dst)));
 
     copy_out(self, dst.data);
 }
@@ -300,6 +297,7 @@ void tda_deque_copy_from_span(tda_Deque *self, tda_Span src) {
     TDA_SPAN_ASSERT(src);
     TDA_EXPECT(tda_layout_eq(self->elem_, src.elem));
     TDA_EXPECT(src.len == self->len_);
+    TDA_EXPECT(!tda_span_overlap(block_span(self), src));
 
     copy_range_in(self, 0, src.data, self->len_);
 }
@@ -748,12 +746,9 @@ static tda_Status init_impl(bool zeroed, size_t len, size_t cap, tda_Layout elem
         if (tda_layout_ckd_array(&block, elem, cap)) {
             return TDA_STATUS_ERR_NO_MEM;
         }
-        obj.data_ = tda_alloc(al, block);
+        obj.data_ = zeroed ? tda_alloc_zeroed(al, block) : tda_alloc(al, block);
         if (!obj.data_) {
             return TDA_STATUS_ERR_NO_MEM;
-        }
-        if (zeroed) {
-            memset(obj.data_, 0, len * elem.size);
         }
     }
     obj.len_ = len;
@@ -809,10 +804,7 @@ static tda_Status relocate(tda_Deque *self, size_t new_cap) {
     assert(new_cap >= self->len_);
     assert(new_cap > 0);
 
-    // a fresh block rather than a realloc: growing in place would leave the wrapped part
-    // sitting before the seam, where the new capacity does not reach it. The contents are
-    // unrolled into the new block instead, which is the same two memcpy a realloc would
-    // have needed anyway
+    // realloc cannot grow a wrapped ring in place, so unroll it into a fresh block
     void *ptr = tda_alloc(self->al_, block_layout(self, new_cap));
     if (!ptr) {
         return TDA_STATUS_ERR_NO_MEM;

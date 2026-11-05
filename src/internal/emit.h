@@ -5,13 +5,7 @@
 
 #include <string.h>
 
-/*
- * Appending into a span that is filled left to right: the algorithms that walk two sorted
- * spans at once (algo/merge, algo/set), those that pick elems out of one (copy_if,
- * sample) and those that compact one in place (unique, remove_if, partition_stable). Each
- * helper takes the current write position and reports the next one, so the caller
- * carries one cursor instead of two.
- */
+/* Left-to-right output and in-place compaction; each helper returns the next write cursor. */
 
 /// appends one elem to 'dst' at 'write' and reports the next write position
 [[nodiscard]]

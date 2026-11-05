@@ -123,9 +123,7 @@ static tda_Status push_copies(tda_List *dst, const tda_List *owner, const tda_Li
 [[nodiscard]] [[maybe_unused]]
 static bool owns_node(const tda_List *self, const tda_ListNode *node);
 
-/// merges two chains linked through 'next' alone and returns the head of the result.
-/// Equal elems keep 'a' before 'b', which makes the sort stable. 'prev' is left stale on
-/// purpose: relink_prev repairs it once at the end, not on every step
+/// merges two 'next'-only chains stably; 'prev' stays stale until relink_prev repairs it once
 [[nodiscard]]
 static tda_ListNode *merge_chains(const tda_List *self, tda_ListNode *a, tda_ListNode *b, tda_Cmp cmp, void *ctx);
 
@@ -186,7 +184,6 @@ tda_Status tda_list_from_span(tda_Span s, tda_Al al, tda_List *out) {
 void tda_list_deinit(tda_List *self) {
     assert(self);
 
-    // the inert state, never initialized or already released
     if (!self->al_.vt) {
         assert(!self->head_);
         return;
@@ -264,7 +261,6 @@ tda_Status tda_list_copy_assign(tda_List *self, const tda_List *other) {
 void tda_list_move_assign(tda_List *self, tda_List *other) {
     assert(self);
     ASSERT_LIST(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->al_.vt) {
         ASSERT_LIST(self);
         EXPECT_SAME_LIST(self, other);
@@ -274,7 +270,6 @@ void tda_list_move_assign(tda_List *self, tda_List *other) {
         return;
     }
 
-    // the allocator goes along with the nodes, and 'other' stays usable on it
     tda_list_deinit(self);
     *self = *other;
     *other = tda_list_init(self->elem_, self->al_);
@@ -551,7 +546,6 @@ void tda_list_swap(tda_List *self, tda_List *other) {
         return;
     }
 
-    // every node goes along with the allocator it came from
     TDA_SWAP(*self, *other);
 
     ASSERT_LIST(self);

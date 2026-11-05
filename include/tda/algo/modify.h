@@ -99,8 +99,7 @@ void tda_span_replace_if(tda_SpanMut s, const void *val, tda_Pred pred, void *ct
 /// @{
 
 /// tda_span_remove from a value rather than an address
-/// @param K the key's type, which need not be the elem's, so nothing checks it against
-///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param K the key type, possibly unlike the elem's; struct literals go in parentheses
 /// @param s the span
 /// @param key the value to drop
 /// @param eq the equality
@@ -110,8 +109,7 @@ void tda_span_replace_if(tda_SpanMut s, const void *val, tda_Pred pred, void *ct
     tda_span_remove((s), &(typeof(K)[1]){ (key) }[0], (eq), (ctx))
 
 /// tda_span_replace from values rather than addresses
-/// @param K the key's type, which need not be the elem's, so nothing checks it against
-///          the span; 'key' may be any K, a struct literal in parentheses too
+/// @param K the key type, possibly unlike the elem's; struct literals go in parentheses
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param s the span
 /// @param key the value to look for

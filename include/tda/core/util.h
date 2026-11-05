@@ -37,7 +37,7 @@
 /// @param b the right tokens
 #define TDA_CAT_(a, b)       TDA_PASTE_(a, b)
 
-/// 'name' with the line number appended, for the hidden variables of the walk macros: a
+/// 'name' with the line number appended, for the hidden variables of the macros: a
 /// walk nested in another on a line of its own gets names of its own, so -Wshadow stays
 /// quiet
 /// @param name the stem
@@ -47,25 +47,37 @@
 /// @param val what to evaluate and discard
 #define TDA_UNUSED(val)    ((void) (val))
 
-/// exchanges two lvalues of one type
-/// @param a one lvalue; both are typed from it, so a mismatch is a compile error, not a
-///          silent truncation, and so is a const on either
-/// @param b the other lvalue
-/// @warning TDA_SWAP(self, other) and TDA_SWAP(*self, *other) both typecheck; the first
-///          swaps the local pointers and leaves the objects alone
-#define TDA_SWAP(a, b)                                                \
+/// @cond
+// the hidden names come in already unique, so a caller's tda_swap_pa_ and kin keep
+// naming its operands inside the initializers too
+#define TDA_SWAP_(a, b, pa, pb, tmp)                                  \
     do {                                                              \
         static_assert(                                                \
             _Generic(&(a), typeof_unqual(a) *: 1, default: 0)         \
                 && _Generic(&(b), typeof_unqual(a) *: 1, default: 0), \
             "TDA_SWAP needs two modifiable lvalues of one type"       \
         );                                                            \
-        typeof_unqual(a) *tda_swap_pa_ = &(a);                        \
-        typeof_unqual(a) *tda_swap_pb_ = &(b);                        \
-        const typeof_unqual(a) tda_swap_tmp_ = *tda_swap_pa_;         \
-        *tda_swap_pa_ = *tda_swap_pb_;                                \
-        *tda_swap_pb_ = tda_swap_tmp_;                                \
+        typeof_unqual(a) *pa = &(a);                                 \
+        typeof_unqual(a) *pb = &(b);                                 \
+        const typeof_unqual(a) tmp = *pa;                            \
+        *pa = *pb;                                                    \
+        *pb = tmp;                                                    \
     } while (0)
+/// @endcond
+
+/// exchanges two lvalues of one type
+/// @param a one lvalue; both are typed from it, so a mismatch is a compile error, not a
+///          silent truncation, and so is a const on either
+/// @param b the other lvalue
+/// @warning TDA_SWAP(self, other) and TDA_SWAP(*self, *other) both typecheck; the first
+///          swaps the local pointers and leaves the objects alone
+#define TDA_SWAP(a, b)                \
+    TDA_SWAP_(                        \
+        (a), (b),                     \
+        TDA_LINE_NAME_(tda_swap_pa_), \
+        TDA_LINE_NAME_(tda_swap_pb_), \
+        TDA_LINE_NAME_(tda_swap_tmp_) \
+    )
 
 /// @}
 

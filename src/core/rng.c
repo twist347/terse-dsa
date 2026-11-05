@@ -78,15 +78,8 @@ uint32_t tda_rng_u32_max(tda_Rng *self, uint32_t max) {
         return next_u32(self); // range would overflow, and need not
     }
 
-    // Lemire's nearly divisionless method. One multiply carries the draw into
-    // [0, range) in the top half of the product; the bottom half says whether the draw
-    // fell in the slot the range does not divide evenly, the one that would be handed
-    // out once too often. Only that slot costs a division, and it comes up range/2^32 of
-    // the time.
-    //
-    // A plain modulo skips the multiply but keeps the bias. Masking down to a power of
-    // two takes no division but throws away up to half the draws, and an unpredictable
-    // branch costs more than the multiply saves.
+    // Lemire's nearly divisionless method: the product's top half maps into [0, range),
+    // and its bottom half detects the overrepresented slot. Only rejection needs division.
     const uint32_t range = max + 1;
     uint64_t wide = (uint64_t) next_u32(self) * range;
     uint32_t low = (uint32_t) wide;

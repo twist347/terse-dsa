@@ -4,12 +4,7 @@
 
 #include <string.h>
 
-/*
- * The tie rule of everything that keeps equal elems in their order: the merges in
- * algo/merge and ds/list, insertion sort, and the check for sortedness that their output
- * must pass. A right elem goes before a left one only when it is strictly less, so equal
- * elems stay as they were.
- */
+/* Stable order: right precedes left only when strictly less, so equals keep their order. */
 
 /// whether 'right' goes before 'left', the elem that came first
 [[nodiscard]]

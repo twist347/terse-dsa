@@ -145,7 +145,7 @@ void tda_bitset_swap(tda_BitSet *self, tda_BitSet *other);
 
 /// whether 'idx' is in the set
 /// @param self the bitset
-/// @param idx asserts idx < len
+/// @param idx asserts idx < nbits
 /// @return whether the bit is set
 /// @bigo{1}
 [[nodiscard]]
@@ -159,7 +159,7 @@ static inline bool tda_bitset_test(const tda_BitSet *self, size_t idx) {
 
 /// puts 'idx' in the set
 /// @param self the bitset
-/// @param idx asserts idx < len
+/// @param idx asserts idx < nbits
 /// @bigo{1}
 static inline void tda_bitset_set(tda_BitSet *self, size_t idx) {
     assert(self);
@@ -191,7 +191,7 @@ static inline void tda_bitset_flip(tda_BitSet *self, size_t idx) {
 
 /// sets the bit at 'idx' to 'val'
 /// @param self the bitset
-/// @param idx asserts idx < len
+/// @param idx asserts idx < nbits
 /// @param val unlike tda_bitset_flip, asking twice changes nothing
 /// @bigo{1}
 TDA_API
@@ -336,7 +336,7 @@ bool tda_bitset_find_prev_clear(const tda_BitSet *self, size_t from, size_t *out
 
 /// whether the two name the same universe and hold the same members
 /// @param a one bitset
-/// @param b a different len gives false, not an assert
+/// @param b a different nbits gives false, not an assert
 /// @return whether they are equal
 /// @bigo{n/64}
 [[nodiscard]] TDA_API
@@ -344,21 +344,21 @@ bool tda_bitset_eq(const tda_BitSet *a, const tda_BitSet *b);
 
 /// adds every member of 'other' to 'self'
 /// @param[in,out] self the bitset written into
-/// @param other asserts the same len, as these ops need one universe; may be 'self'
+/// @param other asserts the same nbits, as these ops need one universe; may be 'self'
 /// @bigo{n/64}
 TDA_API
 void tda_bitset_union(tda_BitSet *self, const tda_BitSet *other);
 
 /// drops from 'self' everything that is not in 'other'
 /// @param[in,out] self the bitset written into
-/// @param other asserts the same len
+/// @param other asserts the same nbits
 /// @bigo{n/64}
 TDA_API
 void tda_bitset_intersection(tda_BitSet *self, const tda_BitSet *other);
 
 /// drops from 'self' everything that is in 'other'
 /// @param[in,out] self the bitset written into
-/// @param other asserts the same len; 'self' == 'other' empties the set
+/// @param other asserts the same nbits; 'self' == 'other' empties the set
 /// @bigo{n/64}
 TDA_API
 void tda_bitset_difference(tda_BitSet *self, const tda_BitSet *other);
@@ -370,7 +370,7 @@ void tda_bitset_symmetric_difference(tda_BitSet *self, const tda_BitSet *other);
 
 /// whether every member of 'self' is a member of 'other'
 /// @param self the bitset that may be contained
-/// @param other asserts the same len
+/// @param other asserts the same nbits
 /// @return true when 'self' is empty
 /// @bigo{n/64}
 [[nodiscard]] TDA_API
@@ -378,7 +378,7 @@ bool tda_bitset_is_subset(const tda_BitSet *self, const tda_BitSet *other);
 
 /// whether the two share a member
 /// @param self one bitset
-/// @param other asserts the same len
+/// @param other asserts the same nbits
 /// @return whether the intersection is non-empty
 /// @bigo{n/64}
 [[nodiscard]] TDA_API

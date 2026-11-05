@@ -2,11 +2,7 @@
 
 #include "tda/core/span.h"
 
-/*
- * The overlap rule of algo/transform, the one op whose output may take another layout
- * than its input. tda_span_overlap and tda_span_apart_or_same, which the rest of algo
- * asserts with, are public in core/span.
- */
+/* Transform's overlap rule for differing layouts; the general helpers live in core/span. */
 
 /// whether a destination may take a source of another layout: apart, or the very same
 /// elems with the destination's no wider, so each position is read before it is written

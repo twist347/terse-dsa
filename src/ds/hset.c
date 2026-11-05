@@ -152,7 +152,6 @@ tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other) {
     ASSERT_HSET(other);
     EXPECT_SAME_HSET(self, other);
 
-    // the map handles self assignment; a guard here would be untestable
     const tda_Status st = tda_hmap_copy_assign(&self->map_, &other->map_);
 
     ASSERT_HSET(self);
@@ -163,13 +162,11 @@ tda_Status tda_hset_copy_assign(tda_HSet *self, const tda_HSet *other) {
 void tda_hset_move_assign(tda_HSet *self, tda_HSet *other) {
     assert(self);
     ASSERT_HSET(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->map_.al_.vt) {
         ASSERT_HSET(self);
         EXPECT_SAME_HSET(self, other);
     }
 
-    // the map handles self assignment; a guard here would be untestable
     tda_hmap_move_assign(&self->map_, &other->map_);
 
     ASSERT_HSET(self);
@@ -260,7 +257,6 @@ tda_Status tda_hset_insert(tda_HSet *self, const void *key, bool *out_is_new) {
     ASSERT_HSET(self);
     assert(key);
 
-    // no value: the map's value has size 0
     const tda_Status st = tda_hmap_insert(&self->map_, key, nullptr, out_is_new);
 
     ASSERT_HSET(self);
@@ -478,7 +474,6 @@ bool tda_hset_is_subset(const tda_HSet *self, const tda_HSet *other) {
         return true;
     }
 
-    // a larger set cannot be contained in a smaller one
     if (tda_hmap_len(&self->map_) > tda_hmap_len(&other->map_)) {
         return false;
     }

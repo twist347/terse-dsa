@@ -144,7 +144,6 @@ tda_Status tda_bitset_from_span(size_t nbits, tda_Span s, tda_Al al, tda_BitSet 
 void tda_bitset_deinit(tda_BitSet *self) {
     assert(self);
 
-    // the inert state, never initialized or already released
     if (!self->al_.vt) {
         assert(!self->words_);
         return;
@@ -214,7 +213,6 @@ tda_Status tda_bitset_copy_assign(tda_BitSet *self, const tda_BitSet *other) {
 void tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other) {
     assert(self);
     ASSERT_BITSET(other);
-    // an inert 'self', `= {}`, is a target too: it takes on everything 'other' has
     if (self->al_.vt) {
         ASSERT_BITSET(self);
     }
@@ -223,7 +221,6 @@ void tda_bitset_move_assign(tda_BitSet *self, tda_BitSet *other) {
         return;
     }
 
-    // the allocator goes along with the words, and 'other' is left empty on it
     tda_bitset_deinit(self);
     *self = *other;
     *other = (tda_BitSet){.al_ = self->al_};
@@ -264,7 +261,6 @@ void tda_bitset_set_to(tda_BitSet *self, size_t idx, bool val) {
 void tda_bitset_set_all(tda_BitSet *self) {
     ASSERT_BITSET(self);
 
-    // a byte of ones is a word of ones
     fill_words(self, 0xFF);
 
     clear_tail(self);

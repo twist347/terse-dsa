@@ -33,9 +33,8 @@
 /// An arr knows the layout of its elem, size and alignment, and asks the allocator for a
 /// block aligned to it. The typed macros pass TDA_LAYOUT_OF(T).
 ///
-/// The typed macros write typeof(T), so T may be any type name: a pointer such as
-/// 'const char *', a function pointer, an array, one already const. An array has no value
-/// to copy in, so the macros that take one do not take an array T.
+/// Typed macros accept any type name through typeof(T), including pointers, arrays and
+/// const types; macros that copy a value exclude arrays.
 ///
 /// @par Example
 /// @snippet ds/example_arr.c build
