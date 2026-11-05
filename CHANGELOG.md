@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Indexed walks for spans, arrays, vectors, deques and lists.**
+  `TDA_SPAN_FOR_EACH_INDEXED_AS`, `TDA_ARR_FOR_EACH_INDEXED_AS`,
+  `TDA_VEC_FOR_EACH_INDEXED_AS`, `TDA_DEQUE_FOR_EACH_INDEXED_AS` and
+  `TDA_LIST_FOR_EACH_INDEXED` bind a zero-based `size_t` index beside the elem or node.
+  Mutable forms are included, and `TDA_LIST_FOR_EACH_INDEXED_SAFE` may remove the node it
+  is on.
+
 ## 3.3.0 — 2026-11-05
 
 ### Added

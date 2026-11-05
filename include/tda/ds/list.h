@@ -676,6 +676,63 @@ static inline tda_List *tda_list_typed_mut_(tda_List *self, [[maybe_unused]] tda
         TDA_LINE_NAME_(after_)             \
     )
 
+/// @cond
+// the outer loop owns the index and ends after a break from the inner one
+#define TDA_LIST_WALK_INDEXED_(NodeT, idx, node, self, front, next, once) \
+    for (size_t idx = 0, *once = &idx; once; once = nullptr)               \
+        for (NodeT *node = front(self); node; node = next(node), ++idx)
+
+#define TDA_LIST_WALK_INDEXED_SAFE_(NodeT, idx, node, self, front, next, once, after) \
+    for (size_t idx = 0, *once = &idx; once; once = nullptr)                           \
+        for (NodeT *node = front(self), *after = node ? next(node) : nullptr;          \
+             node;                                                                     \
+             node = after, after = node ? next(node) : nullptr, ++idx)
+/// @endcond
+
+/// walks the list front to back, binding 'idx' and 'node' to each position in turn
+/// @param idx the name of the zero-based visit index, a size_t
+/// @param node the name of the loop variable, a const tda_ListNode *
+/// @param self the list
+/// @copydetails TDA_LIST_FOR_EACH
+#define TDA_LIST_FOR_EACH_INDEXED(idx, node, self) \
+    TDA_LIST_WALK_INDEXED_(                        \
+        const tda_ListNode,                        \
+        idx,                                       \
+        node,                                      \
+        self,                                      \
+        tda_list_front_node,                       \
+        tda_list_node_next,                        \
+        TDA_LINE_NAME_(once_)                      \
+    )
+
+/// the same walk over positions that may be written through
+/// @copydetails TDA_LIST_FOR_EACH_INDEXED
+#define TDA_LIST_FOR_EACH_INDEXED_MUT(idx, node, self) \
+    TDA_LIST_WALK_INDEXED_(                            \
+        tda_ListNode,                                  \
+        idx,                                           \
+        node,                                          \
+        self,                                          \
+        tda_list_front_node_mut,                       \
+        tda_list_node_next_mut,                        \
+        TDA_LINE_NAME_(once_)                          \
+    )
+
+/// the indexed walk that takes the next position before the body runs
+/// @copydetails TDA_LIST_FOR_EACH_SAFE
+/// @param idx the name of the zero-based visit index, a size_t
+#define TDA_LIST_FOR_EACH_INDEXED_SAFE(idx, node, self) \
+    TDA_LIST_WALK_INDEXED_SAFE_(                        \
+        tda_ListNode,                                   \
+        idx,                                            \
+        node,                                           \
+        self,                                           \
+        tda_list_front_node_mut,                        \
+        tda_list_node_next_mut,                         \
+        TDA_LINE_NAME_(once_),                          \
+        TDA_LINE_NAME_(after_)                          \
+    )
+
 /// tda_list_find from a value rather than an address
 /// @param T the elem type; 'key' may be any T, a struct literal in parentheses too
 /// @param self the list

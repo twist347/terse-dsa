@@ -66,6 +66,14 @@ static void test_the_walks_bind_a_const_elem() {
     }
     TEST_ASSERT_EQUAL_size_t(2, seen);
 
+    seen = 0;
+    TDA_SPAN_FOR_EACH_INDEXED_AS(const char *, idx, word, TDA_SPAN_OF(const char *, "a", "b")) {
+        READS_CONST(word);
+        TEST_ASSERT_EQUAL_size_t(seen, idx);
+        ++seen;
+    }
+    TEST_ASSERT_EQUAL_size_t(2, seen);
+
     tda_Deque d = {};
     TDA_TEST_OK(TDA_DEQUE_OF(const char *, tda_al_default(), &d, "a", "b"));
 
@@ -76,7 +84,41 @@ static void test_the_walks_bind_a_const_elem() {
     }
     TEST_ASSERT_EQUAL_size_t(2, seen);
 
+    seen = 0;
+    TDA_DEQUE_FOR_EACH_INDEXED_AS(const char *, idx, word, &d) {
+        READS_CONST(word);
+        TEST_ASSERT_EQUAL_size_t(seen, idx);
+        ++seen;
+    }
+    TEST_ASSERT_EQUAL_size_t(2, seen);
+
     tda_deque_deinit(&d);
+
+    tda_Arr a = {};
+    TDA_TEST_OK(TDA_ARR_OF(const char *, tda_al_default(), &a, "a", "b"));
+
+    seen = 0;
+    TDA_ARR_FOR_EACH_INDEXED_AS(const char *, idx, word, &a) {
+        READS_CONST(word);
+        TEST_ASSERT_EQUAL_size_t(seen, idx);
+        ++seen;
+    }
+    TEST_ASSERT_EQUAL_size_t(2, seen);
+
+    tda_arr_deinit(&a);
+
+    tda_Vec v = {};
+    TDA_TEST_OK(TDA_VEC_OF(const char *, tda_al_default(), &v, "a", "b"));
+
+    seen = 0;
+    TDA_VEC_FOR_EACH_INDEXED_AS(const char *, idx, word, &v) {
+        READS_CONST(word);
+        TEST_ASSERT_EQUAL_size_t(seen, idx);
+        ++seen;
+    }
+    TEST_ASSERT_EQUAL_size_t(2, seen);
+
+    tda_vec_deinit(&v);
 }
 
 int main() {

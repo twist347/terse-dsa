@@ -73,8 +73,8 @@ int main() {
     tda_deque_print(&d, tda_fprint_i32, nullptr); // [3, 9, 5]
 
     // the walk goes by index, so the seam never shows; a to_span would have had to copy
-    TDA_DEQUE_FOR_EACH_AS (int32_t, elem, &d) {
-        printf("%" PRId32 " ", *elem); // 3 9 5
+    TDA_DEQUE_FOR_EACH_INDEXED_AS (int32_t, idx, elem, &d) {
+        printf("%zu:%" PRId32 " ", idx, *elem); // 0:3 1:9 2:5
     }
     putchar('\n');
     /// [index]

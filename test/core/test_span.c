@@ -120,6 +120,58 @@ static void test_for_each_mut_writes_through_the_view() {
     TEST_ASSERT_EQUAL_INT32_ARRAY(((int32_t[]){10, 20, 30}), buf, 3);
 }
 
+static void test_for_each_indexed_starts_each_view_at_zero() {
+    constexpr int32_t buf[4] = {10, 20, 30, 40};
+
+    size_t n = 0;
+    TDA_SPAN_FOR_EACH_INDEXED_AS(
+        int32_t, idx, elem, tda_span_sub(TDA_SPAN_FROM_DATA(int32_t, buf, 4), 1, 3)
+    ) {
+        TEST_ASSERT_EQUAL_size_t(n, idx);
+        TEST_ASSERT_EQUAL_INT32(buf[n + 1], *elem);
+        ++n;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(3, n);
+}
+
+static void test_for_each_indexed_over_an_empty_view_runs_no_body() {
+    const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, nullptr, 0);
+
+    size_t n = 0;
+    TDA_SPAN_FOR_EACH_INDEXED_AS(int32_t, idx, elem, s) {
+        TDA_UNUSED(idx);
+        TDA_UNUSED(elem);
+        ++n;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(0, n);
+}
+
+static void test_for_each_indexed_mut_writes_and_controls_the_walk() {
+    int32_t buf[4] = {};
+    const tda_SpanMut s = TDA_SPAN_FROM_DATA_MUT(int32_t, buf, 4);
+
+    TDA_SPAN_FOR_EACH_INDEXED_MUT_AS(int32_t, idx, elem, s) {
+        if (idx == 1) {
+            continue;
+        }
+        *elem = (int32_t) (idx + 1) * 10;
+    }
+    TEST_ASSERT_EQUAL_INT32_ARRAY(((int32_t[]){10, 0, 30, 40}), buf, 4);
+
+    size_t n = 0;
+    TDA_SPAN_FOR_EACH_INDEXED_AS(int32_t, idx, elem, tda_span_mut_to_span(s)) {
+        TDA_UNUSED(elem);
+        TEST_ASSERT_EQUAL_size_t(n, idx);
+        ++n;
+        if (idx == 1) {
+            break;
+        }
+    }
+    TEST_ASSERT_EQUAL_size_t(2, n);
+}
+
 static void test_from_data_keeps_fields() {
     constexpr int32_t buf[3] = {10, 20, 30};
     const tda_Span s = TDA_SPAN_FROM_DATA(int32_t, buf, 3);
@@ -499,6 +551,9 @@ int main() {
     RUN_TEST(test_for_each_reads_its_view_once);
     RUN_TEST(test_for_each_nests);
     RUN_TEST(test_for_each_mut_writes_through_the_view);
+    RUN_TEST(test_for_each_indexed_starts_each_view_at_zero);
+    RUN_TEST(test_for_each_indexed_over_an_empty_view_runs_no_body);
+    RUN_TEST(test_for_each_indexed_mut_writes_and_controls_the_walk);
 
     RUN_TEST(test_from_data_keeps_fields);
     RUN_TEST(test_from_data_empty_over_null);

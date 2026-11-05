@@ -1908,6 +1908,25 @@ static void test_to_span_of_empty_keeps_the_elem_layout() {
     tda_vec_deinit(&v);
 }
 
+static void test_for_each_indexed_reads_and_writes_the_vec() {
+    tda_Vec v = make_vec(4);
+
+    size_t n = 0;
+    TDA_VEC_FOR_EACH_INDEXED_AS(int32_t, idx, elem, &v) {
+        TEST_ASSERT_EQUAL_size_t(n, idx);
+        TEST_ASSERT_EQUAL_INT32((int32_t) n, *elem);
+        ++n;
+    }
+    TEST_ASSERT_EQUAL_size_t(4, n);
+
+    TDA_VEC_FOR_EACH_INDEXED_MUT_AS(int32_t, idx, elem, &v) {
+        *elem += (int32_t) idx * 10;
+    }
+    TEST_ASSERT_EQUAL_INT32_ARRAY(((int32_t[]){0, 11, 22, 33}), tda_vec_data(&v), 4);
+
+    tda_vec_deinit(&v);
+}
+
 /* ========== allocation failure ========== */
 
 // a 2-byte elem: SIZE_MAX of them is too many for any address space
@@ -2529,6 +2548,7 @@ int main() {
     RUN_TEST(test_to_span_follows_the_len_not_the_capacity);
     RUN_TEST(test_to_span_mut_writes_reach_the_vec);
     RUN_TEST(test_to_span_of_empty_keeps_the_elem_layout);
+    RUN_TEST(test_for_each_indexed_reads_and_writes_the_vec);
 
     RUN_TEST(test_init_len_reports_size_overflow);
     RUN_TEST(test_init_cap_reports_size_overflow);

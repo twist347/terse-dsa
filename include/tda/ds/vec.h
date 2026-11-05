@@ -744,6 +744,21 @@ static inline tda_Vec *tda_vec_typed_mut_(tda_Vec *self, [[maybe_unused]] tda_La
 #define TDA_VEC_GET_MUT_AS(T, self, idx) \
     ((typeof(T) *) tda_vec_get_mut(TDA_VEC_TYPED_(T, self), (idx)))
 
+/// walks the vec front to back, binding 'idx' and 'elem' to each position in turn
+/// @param T the elem type
+/// @param idx the name of the zero-based index, a size_t
+/// @param elem the name of the loop variable, a const T *
+/// @param self the vec, evaluated once
+/// @note break and continue act on the walk as they would on a plain loop
+/// @bigo{n} for the whole walk
+#define TDA_VEC_FOR_EACH_INDEXED_AS(T, idx, elem, self) \
+    TDA_SPAN_FOR_EACH_INDEXED_AS(T, idx, elem, tda_vec_to_span(self))
+
+/// the same walk over elems that may be written through
+/// @copydetails TDA_VEC_FOR_EACH_INDEXED_AS
+#define TDA_VEC_FOR_EACH_INDEXED_MUT_AS(T, idx, elem, self) \
+    TDA_SPAN_FOR_EACH_INDEXED_MUT_AS(T, idx, elem, tda_vec_to_span_mut(self))
+
 /// tda_vec_set from a value rather than an address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the vec

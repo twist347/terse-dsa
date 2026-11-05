@@ -502,6 +502,34 @@ static void test_for_each_mut_writes_through_every_slot() {
     tda_deque_deinit(&d);
 }
 
+static void test_for_each_indexed_walks_a_split_ring_in_order() {
+    tda_Deque d = make_wrapped();
+    TEST_ASSERT_TRUE(wraps(&d));
+
+    size_t n = 0;
+    TDA_DEQUE_FOR_EACH_INDEXED_AS(int32_t, idx, elem, &d) {
+        TEST_ASSERT_EQUAL_size_t(n, idx);
+        TEST_ASSERT_EQUAL_INT32((int32_t) ((n + 1) * 10), *elem);
+        ++n;
+    }
+
+    TEST_ASSERT_EQUAL_size_t(4, n);
+
+    tda_deque_deinit(&d);
+}
+
+static void test_for_each_indexed_mut_writes_through_every_slot() {
+    tda_Deque d = make_wrapped();
+
+    TDA_DEQUE_FOR_EACH_INDEXED_MUT_AS(int32_t, idx, elem, &d) {
+        *elem += (int32_t) idx;
+    }
+
+    assert_elems(&d, (int32_t[]){10, 21, 32, 43}, 4);
+
+    tda_deque_deinit(&d);
+}
+
 static void test_for_each_stops_at_a_break() {
     // the walk is two nested loops, and a bare break would leave only the inner one
     tda_Deque d = make_wrapped();
@@ -1986,6 +2014,8 @@ int main() {
     RUN_TEST(test_for_each_walks_a_split_ring_in_order);
     RUN_TEST(test_for_each_over_an_empty_deque_runs_no_body);
     RUN_TEST(test_for_each_mut_writes_through_every_slot);
+    RUN_TEST(test_for_each_indexed_walks_a_split_ring_in_order);
+    RUN_TEST(test_for_each_indexed_mut_writes_through_every_slot);
     RUN_TEST(test_for_each_stops_at_a_break);
     RUN_TEST(test_for_each_goes_on_past_a_continue);
     RUN_TEST(test_for_each_reads_its_deque_once);

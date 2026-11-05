@@ -512,6 +512,25 @@ static void test_to_span_of_empty_keeps_the_elem_layout() {
     tda_arr_deinit(&a);
 }
 
+static void test_for_each_indexed_reads_and_writes_the_arr() {
+    tda_Arr a = make_arr(4);
+
+    size_t n = 0;
+    TDA_ARR_FOR_EACH_INDEXED_AS(int32_t, idx, elem, &a) {
+        TEST_ASSERT_EQUAL_size_t(n, idx);
+        TEST_ASSERT_EQUAL_INT32((int32_t) n, *elem);
+        ++n;
+    }
+    TEST_ASSERT_EQUAL_size_t(4, n);
+
+    TDA_ARR_FOR_EACH_INDEXED_MUT_AS(int32_t, idx, elem, &a) {
+        *elem += (int32_t) idx * 10;
+    }
+    TEST_ASSERT_EQUAL_INT32_ARRAY(((int32_t[]){0, 11, 22, 33}), tda_arr_data(&a), 4);
+
+    tda_arr_deinit(&a);
+}
+
 /* ========== allocators ========== */
 
 static void test_copy_inherits_the_source_allocator() {
@@ -1206,6 +1225,7 @@ int main() {
 
     RUN_TEST(test_to_span_matches_the_arr_shape);
     RUN_TEST(test_to_span_of_empty_keeps_the_elem_layout);
+    RUN_TEST(test_for_each_indexed_reads_and_writes_the_arr);
 
     RUN_TEST(test_copy_inherits_the_source_allocator);
     RUN_TEST(test_copy_with_builds_on_the_given_allocator);

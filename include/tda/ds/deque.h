@@ -724,6 +724,40 @@ static inline tda_Deque *tda_deque_typed_mut_(tda_Deque *self, [[maybe_unused]] 
         TDA_LINE_NAME_(brk_)                     \
     )
 
+/// walks the deque front to back, binding 'idx' and 'elem' to each position in turn
+/// @param T the elem type
+/// @param idx the name of the zero-based index, a size_t
+/// @param elem the name of the loop variable, a const T *
+/// @param self the deque
+/// @copydetails TDA_DEQUE_FOR_EACH_AS
+#define TDA_DEQUE_FOR_EACH_INDEXED_AS(T, idx, elem, self) \
+    TDA_DEQUE_WALK_(                                      \
+        const tda_Deque,                                  \
+        const typeof(T),                                  \
+        elem,                                             \
+        TDA_DEQUE_TYPED_(T, self),                        \
+        tda_deque_get,                                    \
+        TDA_LINE_NAME_(deque_),                           \
+        TDA_LINE_NAME_(once_),                            \
+        idx,                                              \
+        TDA_LINE_NAME_(brk_)                              \
+    )
+
+/// the same walk over elems that may be written through
+/// @copydetails TDA_DEQUE_FOR_EACH_INDEXED_AS
+#define TDA_DEQUE_FOR_EACH_INDEXED_MUT_AS(T, idx, elem, self) \
+    TDA_DEQUE_WALK_(                                          \
+        tda_Deque,                                            \
+        T,                                                    \
+        elem,                                                 \
+        TDA_DEQUE_TYPED_(T, self),                            \
+        tda_deque_get_mut,                                    \
+        TDA_LINE_NAME_(deque_),                               \
+        TDA_LINE_NAME_(once_),                                \
+        idx,                                                  \
+        TDA_LINE_NAME_(brk_)                                  \
+    )
+
 /// tda_deque_get as a const T *
 /// @param T the elem type
 /// @param self the deque

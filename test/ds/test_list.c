@@ -1230,6 +1230,60 @@ static void test_for_each_mut_writes_through_every_position() {
     tda_list_deinit(&l);
 }
 
+static void test_for_each_indexed_counts_positions_and_stops_at_a_break() {
+    tda_List l = make_list(4);
+
+    size_t n = 0;
+    TDA_LIST_FOR_EACH_INDEXED(idx, node, &l) {
+        TEST_ASSERT_EQUAL_size_t(n, idx);
+        TEST_ASSERT_EQUAL_INT32((int32_t) n, *TDA_LIST_NODE_ELEM_AS(int32_t, &l, node));
+        ++n;
+    }
+    TEST_ASSERT_EQUAL_size_t(4, n);
+
+    n = 0;
+    TDA_LIST_FOR_EACH_INDEXED(idx, node, &l) {
+        TDA_UNUSED(node);
+        ++n;
+        if (idx == 1) {
+            break;
+        }
+    }
+    TEST_ASSERT_EQUAL_size_t(2, n);
+
+    tda_list_deinit(&l);
+}
+
+static void test_for_each_indexed_mut_writes_through_every_position() {
+    tda_List l = make_list(4);
+
+    TDA_LIST_FOR_EACH_INDEXED_MUT(idx, node, &l) {
+        *TDA_LIST_NODE_ELEM_MUT_AS(int32_t, &l, node) += (int32_t) idx;
+    }
+
+    assert_elems(&l, (int32_t[]){0, 2, 4, 6}, 4);
+
+    tda_list_deinit(&l);
+}
+
+static void test_for_each_indexed_safe_may_remove_the_node_it_is_on() {
+    tda_List l = make_list(6);
+
+    size_t n = 0;
+    TDA_LIST_FOR_EACH_INDEXED_SAFE(idx, node, &l) {
+        TEST_ASSERT_EQUAL_size_t(n, idx);
+        ++n;
+        if (*TDA_LIST_NODE_ELEM_AS(int32_t, &l, node) % 2 != 0) {
+            tda_list_remove_node(&l, node);
+        }
+    }
+
+    TEST_ASSERT_EQUAL_size_t(6, n);
+    assert_elems(&l, (int32_t[]){0, 2, 4}, 3);
+
+    tda_list_deinit(&l);
+}
+
 // the walk steps from the node after the body, so the body may drop the one after it:
 // dropping each node's equal neighbour leaves one of every run
 static void test_for_each_mut_may_remove_another_node() {
@@ -2435,6 +2489,9 @@ int main() {
     RUN_TEST(test_for_each_walks_front_to_back);
     RUN_TEST(test_for_each_over_an_empty_list_runs_no_body);
     RUN_TEST(test_for_each_mut_writes_through_every_position);
+    RUN_TEST(test_for_each_indexed_counts_positions_and_stops_at_a_break);
+    RUN_TEST(test_for_each_indexed_mut_writes_through_every_position);
+    RUN_TEST(test_for_each_indexed_safe_may_remove_the_node_it_is_on);
     RUN_TEST(test_for_each_mut_may_remove_another_node);
     RUN_TEST(test_for_each_safe_may_remove_the_node_it_is_on);
 

@@ -33,11 +33,11 @@ int main() {
     /// [build]
 
     /// [walk]
-    // there is no index: elems are reached by walking, and null ends the walk
-    TDA_LIST_FOR_EACH (node, &list) {
-        printf("%" PRId32 " ", *TDA_LIST_NODE_ELEM_AS(int32_t, &list, node));
+    // there is no indexed access, but a walk can number the positions it visits
+    TDA_LIST_FOR_EACH_INDEXED (idx, node, &list) {
+        printf("%zu:%" PRId32 " ", idx, *TDA_LIST_NODE_ELEM_AS(int32_t, &list, node));
     }
-    putchar('\n'); // 4 3 1 2 5
+    putchar('\n'); // 0:4 1:3 2:1 3:2 4:5
 
     // and backwards, using the node's second pointer
     for (const tda_ListNode *node = tda_list_back_node(&list); node; node = tda_list_node_prev(node)) {

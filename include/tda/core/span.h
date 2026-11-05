@@ -456,6 +456,48 @@ static inline tda_SpanMut tda_span_mut_typed_(tda_SpanMut s, [[maybe_unused]] td
         TDA_LINE_NAME_(end_)                           \
     )
 
+/// @cond
+// the inner loop only binds 'elem', so 'brk' makes a break leave the index loop too
+#define TDA_SPAN_WALK_INDEXED_(SpanT, ElemT, idx, elem, view, span, once, brk)            \
+    for (SpanT span = (view), *once = &span; once; once = nullptr)                        \
+        for (size_t idx = 0, brk = 0; !brk && idx < span.len; ++idx)                      \
+            for (typeof(ElemT) *elem = (brk = 1, (typeof(ElemT) *) span.data + idx); brk; \
+                 brk = 0)
+/// @endcond
+
+/// walks the span front to back, binding 'idx' and 'elem' to each position in turn
+/// @param T the elem type; a span carries layouts, not types
+/// @param idx the name of the zero-based index, a size_t
+/// @param elem the name of the loop variable, a const T *
+/// @param self the view, evaluated once, so tda_vec_to_span(v) and the like are fine here
+/// @note break and continue act on the walk as they would on a plain loop
+/// @bigo{n} for the whole walk
+#define TDA_SPAN_FOR_EACH_INDEXED_AS(T, idx, elem, self) \
+    TDA_SPAN_WALK_INDEXED_(                              \
+        tda_Span,                                        \
+        const typeof(T),                                 \
+        idx,                                             \
+        elem,                                            \
+        tda_span_typed_((self), TDA_LAYOUT_OF(T)),       \
+        TDA_LINE_NAME_(span_),                           \
+        TDA_LINE_NAME_(once_),                           \
+        TDA_LINE_NAME_(brk_)                             \
+    )
+
+/// the same walk over elems that may be written through
+/// @copydetails TDA_SPAN_FOR_EACH_INDEXED_AS
+#define TDA_SPAN_FOR_EACH_INDEXED_MUT_AS(T, idx, elem, self) \
+    TDA_SPAN_WALK_INDEXED_(                                  \
+        tda_SpanMut,                                         \
+        T,                                                   \
+        idx,                                                 \
+        elem,                                                \
+        tda_span_mut_typed_((self), TDA_LAYOUT_OF(T)),       \
+        TDA_LINE_NAME_(span_),                               \
+        TDA_LINE_NAME_(once_),                               \
+        TDA_LINE_NAME_(brk_)                                 \
+    )
+
 /// tda_span_set from a value rather than its address
 /// @param T the elem type; 'val' may be any T, a struct literal in parentheses too
 /// @param self the view
