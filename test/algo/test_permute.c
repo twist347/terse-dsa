@@ -746,9 +746,7 @@ static void test_shuffle_of_a_short_span_is_a_no_op() {
     TEST_ASSERT_EQUAL_INT32(42, one[0]);
 }
 
-// catches a Fisher-Yates written wrong: drawing from the whole span each
-// step gives n^n equally likely paths over n! orders, which cannot come out flat. Over
-// three elems the six permutations have to land within a couple of percent of each other.
+// Drawing from the whole span instead of the shrinking suffix is not uniform.
 static void test_shuffle_reaches_every_order_equally_often() {
     static constexpr size_t TRIALS = 120000;
 

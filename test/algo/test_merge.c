@@ -384,9 +384,7 @@ static void test_inplace_merge_without_an_allocator_agrees_on_every_pair_of_runs
 
 /* ========== inplace merge: the buffer ========== */
 
-// the buffered path parks the shorter run, so the buffer is never more than half the
-// span. A version that always copied the left run would pass every test above and still
-// ask for twice the memory on a lopsided split
+// The buffer must fit the shorter run, not always the left one.
 static void test_inplace_merge_asks_only_for_the_shorter_run() {
     tda_TestProbe probe;
     tda_test_probe_reset(&probe);

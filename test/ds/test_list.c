@@ -42,8 +42,7 @@ static tda_List make_list(size_t len) {
     return l;
 }
 
-// checks the contents in BOTH directions: a broken next/prev pair leaves one of the
-// two walks intact, so a one-way check misses half the bugs
+// Checks both directions so inconsistent next/prev links cannot hide.
 static void assert_elems(const tda_List *l, const int32_t *want, size_t n) {
     TEST_ASSERT_EQUAL_size_t(n, tda_list_len(l));
 

@@ -470,7 +470,6 @@ static void test_move_assign_across_allocators_hands_the_allocator_over() {
     tda_arena_deinit(&arena);
 }
 
-// nothing is allocated, so an exhausted allocator on either side cannot stop it
 static void test_move_assign_needs_no_memory() {
     tda_Arena arena;
     TDA_TEST_OK(tda_arena_init_cap(1024, tda_al_default(), &arena));

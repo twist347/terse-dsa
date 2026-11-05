@@ -31,9 +31,8 @@ int main() {
     /// [build]
 
     /// [fifo]
-    // two ends, one job each: elems join at the back and leave from the front, both O(1)
-    // amortized. There is no indexed get, insert, remove, push_front or pop_back, though
-    // the deque underneath has them all
+    // Push at the back and pop at the front in amortized O(1); other deque operations
+    // stay outside the queue interface
     int rc = 1;
     tda_Deque d = {}; // taken from the queue below; declared here for the exit
 

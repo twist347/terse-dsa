@@ -47,9 +47,8 @@ int main() {
     }
     printf("%d %zu\n", is_new, tda_hset_len(&s)); // 0 4
 
-    // remove says whether the key was there and cannot fail, since nothing is allocated.
-    // The two calls are separate statements because argument evaluation order is
-    // unspecified and each changes what the other sees
+    // Removal cannot fail. Keep the calls in separate statements because their
+    // relative evaluation order would otherwise be unspecified
     const bool was_there = TDA_HSET_REMOVE(int32_t, &s, 20);
     const bool again = TDA_HSET_REMOVE(int32_t, &s, 20);
     printf("%d %d\n", was_there, again); // 1 0

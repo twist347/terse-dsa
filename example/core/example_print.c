@@ -40,9 +40,8 @@ int main() {
     const tda_Span nums = TDA_SPAN_OF(int32_t, 5, 3, 1);
     tda_span_print(nums, tda_fprint_i32, nullptr); // [5, 3, 1]
 
-    // cstr reads a pointer to a pointer, quotes the string and prints a null one as null.
-    // It also needs its own type name: the macro writes 'const T', and
-    // 'const const char *' is not a type
+    // The Cstr alias avoids the invalid 'const const char *' produced by const T.
+    // cstr quotes strings and prints a null pointer as null
     typedef const char *Cstr;
 
     const tda_Span names = TDA_SPAN_OF(Cstr, "ann", nullptr, "bo, jr");

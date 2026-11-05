@@ -4,11 +4,32 @@
 [![macos](https://github.com/twist347/terse-dsa/actions/workflows/macos.yml/badge.svg)](https://github.com/twist347/terse-dsa/actions/workflows/macos.yml)
 [![windows](https://github.com/twist347/terse-dsa/actions/workflows/windows.yml/badge.svg)](https://github.com/twist347/terse-dsa/actions/workflows/windows.yml)
 
-Classic containers and algorithms, written plainly. No dependencies.
+Containers and span-based algorithms for C23, with explicit memory control and no external
+runtime dependencies.
 
-The reference lives at [twist347.github.io/terse-dsa](https://twist347.github.io/terse-dsa/).
+[API reference](https://twist347.github.io/terse-dsa/) · [Examples](https://github.com/twist347/terse-dsa/tree/main/example) · [Conventions](docs/conventions.md)
+
+## Highlights
+
+- **Composable allocation.** Containers accept a `tda_Al` allocator view. Use the default
+  allocator, an arena, pool or slab, or wrap one with logging and debugging.
+- **Alignment is preserved.** Every allocation carries a `tda_Layout` with size and
+  alignment, including alignments beyond malloc's guarantee.
+- **Generic without code generation.** Type-erased containers store arbitrary element
+  layouts; typed macros provide checked, convenient call sites.
+- **One algorithm layer.** Algorithms operate on `tda_Span` and `tda_SpanMut`, so the same
+  search, sort, transform and set operations work with arrays and contiguous containers.
+- **Explicit ownership.** Containers and allocators are caller-held values. Copy, move,
+  swap and conversion operations make ownership and allocation costs visible.
+- **Failures are visible.** Fallible operations return `[[nodiscard]]` statuses. Debug,
+  release and hardened builds offer distinct precondition-checking policies.
+- **Diagnostics included.** The debug allocator detects leaks, invalid deallocation and
+  out-of-bounds writes, and supports deterministic allocation failure injection.
 
 ## Example
+
+A vector allocated entirely in a caller-provided buffer, then searched through the same
+span API used for plain arrays:
 
 ```c
 #include "tda/tda.h"
@@ -17,16 +38,13 @@ The reference lives at [twist347.github.io/terse-dsa](https://twist347.github.io
 
 int main() {
     unsigned char mem[1024];
-
-    // the arena and the vec are values on the stack; the vec's elems live in 'mem'
     tda_Arena arena = tda_arena_init_buf(mem, sizeof(mem));
 
     tda_Vec vec;
     if (TDA_STATUS_IS_ERR(TDA_VEC_OF(int32_t, tda_arena_to_al(&arena), &vec, 5, 3, 1, 4, 2))) {
-        return 1; // 'vec' is written only on success, and the arena holds no heap
+        return 1;
     }
 
-    // every comparator takes a ctx beside it; the ready-made ones need none
     tda_span_sort(tda_vec_to_span_mut(&vec), tda_cmp_i32, nullptr);
 
     size_t idx;
@@ -41,65 +59,108 @@ int main() {
 }
 ```
 
-Most modules have a program of their own in [example/](https://github.com/twist347/terse-dsa/tree/main/example): each is built and run
-with the tests, and the reference quotes it on that module's page.
+Most modules have a complete program in [example/](https://github.com/twist347/terse-dsa/tree/main/example).
+Every example is built and run with the tests and quoted in the API reference.
 
-## Design
+## Build and test
 
-Three rules shape the whole API:
+Requires CMake 3.22 and a C23 toolchain.
 
-- **Memory is explicit and swappable.** Nothing allocates on its own — every container is
-  handed a `tda_Al`, a view of an allocator, and uses only that, so swapping in an arena, a slab or a logging
-  allocator is a one-line change at the call site. Every request carries a size and an
-  alignment, so an elem aligned past malloc's own lands aligned in any container, on any
-  allocator.
-- **Containers and allocators are values.** A `tda_Vec` or a `tda_Arena` is a struct
-  the caller holds wherever it likes — on the stack, in a struct of its own — made by
-  an `init` that returns it and released by `deinit`. Nothing is allocated for the object
-  itself, so an empty container costs nothing and cannot fail to be made. A copy of the
-  struct would be a second owner, so a value changes hands through `move_assign`.
-- **Errors cannot be dropped.** A function returns its result; a fallible one returns
-  `tda_Status` and writes its result through a trailing `out`; `[[nodiscard]]` makes ignoring it a warning every
-  compiler raises unasked, and a compile error under `-Werror`. Broken preconditions are
-  `assert`, not status — those are bugs, not runtime states.
+```sh
+cmake -S . -B build && cmake --build build
+ctest --test-dir build --output-on-failure
+```
 
-Out of bounds is never silent in a build that asks: `-DTDA_HARDENED=ON` keeps every
-bounds, emptiness and range check in release, so an index past the end aborts with its
-place instead of reading past it. [example_check.c](https://github.com/twist347/terse-dsa/blob/main/example/core/example_check.c) shows
-the same mistake in a debug, a release and a hardened build.
+With AddressSanitizer and UndefinedBehaviorSanitizer:
 
-The rest of them — how a name is built, where the `mut` marker sits, what is an `assert`
-and what a status — are written down in [conventions](docs/conventions.md), each with the
-reason it is what it is.
+```sh
+cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \
+      -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all"
+cmake --build build-asan && ctest --test-dir build-asan --output-on-failure
+```
 
-## Allocators
+With precondition checks retained in release builds:
 
-An allocator is a value too — `tda_Arena`, `tda_Pool`, `tda_Slab`, `tda_Debug`, `tda_Log`
-— built over a parent allocator or a buffer of your own, and `tda_arena_to_al(&arena)`
-hands out a `tda_Al`, a view of it: a pointer to the arena and to a static table of its
-hooks, passed by value. The arena can move like any value until a view is out, and must
-stay where it is while one is, since the view and every container built on it point at
-it. Nothing checks this, as nothing checks a span.
+```sh
+cmake -S . -B build-hardened -DCMAKE_BUILD_TYPE=Release -DTDA_HARDENED=ON
+cmake --build build-hardened && ctest --test-dir build-hardened --output-on-failure
+```
 
-A pool hands out blocks of one layout, so of the containers only a list runs on it, with
-blocks of `tda_list_node_layout`; a slab keeps a pool per size class, and any container
-runs on it.
+Benchmarks are optional:
 
-A container keeps the `tda_Al` it was built on, and the allocator is part of its value:
+```sh
+cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release -DTDA_BUILD_BENCH=ON
+cmake --build build-bench && ./build-bench/bin/bench_algo_sort
+```
 
-- **A copy is born on its source's allocator** — `tda_vec_copy_with` names another one.
-- **A move carries the allocator along**, as Rust's `Vec<T, A>` does: the target takes
-  the block and the allocator it came from, the source is left empty on that allocator,
-  and nothing is copied, so it cannot fail on any two allocators. It is O(1), except
-  into a list, hmap or hset that still holds nodes: those are freed one by one first.
-  `copy_assign` keeps the target's allocator.
-- **`swap` exchanges allocators too**, so each block still goes back to the one that made
-  it, whatever the two sides were built on.
+CI tests Linux with GCC 15 and Clang 22, macOS with Apple Clang, and Windows with Clang
+from MSYS2 against UCRT, including shared-library builds. MSVC is unsupported because it
+lacks required C23 features, including `constexpr`, `_BitInt` and `<stdckdint.h>`.
 
-## Layout
+To build the API reference locally:
 
-`tda/tda.h` includes every header below at once; naming the modules a file actually
-uses stays the better habit.
+```sh
+doxygen docs/Doxyfile   # -> build-docs/html/index.html
+```
+
+## Use it in a project
+
+tda is consumed as a source dependency; there is no install step. Both methods below
+provide the `tda::tda` target, which carries the include path and C23 requirement.
+
+With `FetchContent`:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(terse-dsa
+    GIT_REPOSITORY https://github.com/twist347/terse-dsa.git
+    GIT_TAG v3.3.0
+)
+FetchContent_MakeAvailable(terse-dsa)
+
+target_link_libraries(app PRIVATE tda::tda)
+```
+
+As a submodule:
+
+```sh
+git submodule add https://github.com/twist347/terse-dsa.git \
+    thirdparty/terse-dsa
+git -C thirdparty/terse-dsa checkout v3.3.0
+```
+
+```cmake
+add_subdirectory(thirdparty/terse-dsa)
+
+target_link_libraries(app PRIVATE tda::tda)
+```
+
+Set options before adding tda:
+
+| Option | Default | What it does |
+|---|---|---|
+| `TDA_BUILD_SHARED` | on at top level, off as a dependency | a shared library rather than a static one |
+| `TDA_BUILD_TEST` | on at top level, off as a dependency | the unit tests, run by `ctest` |
+| `TDA_BUILD_EXAMPLE` | on at top level, off as a dependency | the examples the reference quotes |
+| `TDA_BUILD_BENCH` | off | the benchmarks |
+| `TDA_HARDENED` | off | keeps the bounds, emptiness and range checks in release |
+
+## Diagnostics
+
+`TDA_HARDENED=ON` retains bounds, emptiness and range checks in release builds: an invalid
+index aborts instead of reading out of bounds. [example_check.c](https://github.com/twist347/terse-dsa/blob/main/example/core/example_check.c)
+compares debug, release and hardened behavior.
+
+The debug allocator wraps another allocator and checks block layouts, double frees and
+writes outside live blocks. It can also report leaks, stop at a chosen allocation and
+refuse allocations deterministically to exercise failure paths.
+
+The test suite covers boundary conditions, overlapping memory, alignment, ownership,
+allocation failures and algorithm complexity. Examples double as executable documentation.
+
+## Modules
+
+`tda/tda.h` includes every header below; including only the modules used is preferable.
 
 **`core`** — the vocabulary the rest is written in.
 
@@ -122,7 +183,7 @@ uses stays the better habit.
 
 | | |
 |---|---|
-| `alloc.h` | the `tda_Al` view and its `tda_AlVtable` (Zig's four hooks and Rust's `alloc_zeroed`), `tda_al_eq`, the `tda_alloc` / `tda_alloc_zeroed` / `tda_resize` / `tda_remap` / `tda_realloc` / `tda_dealloc` wrappers, and their typed forms `TDA_ALLOC(T, al, count)` and kin |
+| `alloc.h` | the `tda_Al` view, `tda_AlVtable`, allocation wrappers and typed forms |
 | `default.h` | malloc and friends, and `aligned_alloc` past malloc's own alignment |
 | `arena.h` | bump allocation, freed all at once or back to a mark; over a parent or a buffer of your own |
 | `pool.h` | blocks of one layout off a free list; over a parent or a buffer of your own |
@@ -163,130 +224,51 @@ uses stays the better habit.
 | `queue.h` | `tda_Queue` — a deque through a narrower keyhole |
 | `pqueue.h` | `tda_PQueue` — a buffer kept under a heap discipline |
 
-## Build
+## Ownership
 
-```sh
-cmake -S . -B build && cmake --build build
-ctest --test-dir build
-```
+An allocator view contains the state's address and a static hook table. Once a view exists,
+the state must stay at its address; containers retain the view, and this borrowing rule is
+unchecked.
 
-```sh
-cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \
-      -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all"
-cmake --build build-asan && ctest --test-dir build-asan
-```
+The allocator is part of a container's value:
 
-```sh
-cmake -S . -B build-hardened -DCMAKE_BUILD_TYPE=Release -DTDA_HARDENED=ON
-cmake --build build-hardened && ctest --test-dir build-hardened
-```
+- **Copying uses the source's allocator**; `copy_with` selects another.
+- **Moving transfers the block and allocator** without copying elements. The source stays
+  empty and reusable. Only releasing nodes already in a list, hmap or hset target is not
+  O(1). `copy_assign` keeps the target's allocator.
+- **Swapping exchanges allocators too**, so every block returns to its original allocator.
 
-The benchmarks are off by default:
-
-```sh
-cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release -DTDA_BUILD_BENCH=ON
-cmake --build build-bench && ./build-bench/bin/bench_algo_sort
-```
-
-Requires CMake 3.22 and a C23 toolchain. CI builds and runs the tests on Linux with gcc 15 and clang 22,
-on macOS with Apple clang, and on Windows with clang from MSYS2 against the UCRT, the
-shared library included. MSVC's `cl` does not build it: it lacks too much of C23
-(`constexpr`, `_BitInt`, `<stdckdint.h>`).
-
-The reference is generated from the same headers and published with each release; to
-build it locally:
-
-```sh
-doxygen docs/Doxyfile   # -> build-docs/html/index.html
-```
-
-## Use it in a project
-
-tda is consumed as a source dependency; there is no `install` step and none is planned.
-Either way the target to link is the alias `tda::tda`, which carries
-the include path and the C23 requirement with it.
-
-With `FetchContent`:
-
-```cmake
-include(FetchContent)
-FetchContent_Declare(terse-dsa
-    GIT_REPOSITORY https://github.com/twist347/terse-dsa.git
-    GIT_TAG v3.3.0
-)
-FetchContent_MakeAvailable(terse-dsa)
-
-target_link_libraries(app PRIVATE tda::tda)
-```
-
-As a submodule:
-
-```sh
-git submodule add https://github.com/twist347/terse-dsa.git \
-    thirdparty/terse-dsa
-git -C thirdparty/terse-dsa checkout v3.3.0
-```
-
-```cmake
-add_subdirectory(thirdparty/terse-dsa)
-
-target_link_libraries(app PRIVATE tda::tda)
-```
-
-The options, set before tda is added:
-
-| Option | Default | What it does |
-|---|---|---|
-| `TDA_BUILD_SHARED` | on at top level, off as a dependency | a shared library rather than a static one |
-| `TDA_BUILD_TEST` | on at top level, off as a dependency | the unit tests, run by `ctest` |
-| `TDA_BUILD_EXAMPLE` | on at top level, off as a dependency | the examples the reference quotes |
-| `TDA_BUILD_BENCH` | off | the benchmarks |
-| `TDA_HARDENED` | off | keeps the bounds, emptiness and range checks in release |
+[conventions](docs/conventions.md) defines naming, ownership and API contracts in detail.
 
 ## Compatibility
 
-A major keeps the names, the signatures and what the docs say they do; only the next one
-changes them, and a rename inside a major keeps the old name, deprecated. That is the
-API: tda is built from source together with what uses it, so a minor may add fields to
-a struct or hooks to the end of `tda_AlVtable`, and you rebuild against the new headers.
-A shared build of tda carries `MAJOR.MINOR` in its soname for that reason.
+Within a major, names, signatures and documented behavior stay stable; renamed APIs keep
+a deprecated alias. The promise covers source compatibility, not ABI: a minor may add
+struct fields or optional trailing `tda_AlVtable` hooks. Rebuild consumers against the
+matching headers. A shared library carries `MAJOR.MINOR` in its soname.
 
 Not promised, even within a major:
 
-- **The exact capacities.** Growth is geometric; how much a vec or a map reserves when
-  it grows may change.
-- **Hash values and walk order.** What `tda_hash_*` returns, and the order an hmap or an
-  hset is walked in. Do not store a hash, and do not rely on an order the docs call
-  unspecified.
-- **The stream behind a seed.** `tda_rng_u64` gives the same numbers for a seed within a
-  major; the draws built on it, `shuffle` and `sample` within a minor.
-- **Text meant for people.** The output of the printers, of `alloc/log` and of
-  `alloc/debug`'s reports.
-- **What a header pulls in.** Include what you use, or `tda/tda.h` for everything.
-- **The toolchain floor.** CMake 3.22, and C23 with `nullptr`, `constexpr`, `typeof`,
-  `<stdckdint.h>` and a `_BitInt` 128 bits wide: the CI runs clang 22 and gcc 15, and a
-  minor may need a newer one.
-  It is C only; nothing is wrapped in `extern "C"`.
+- **Exact capacities.** Growth is geometric, but reserve amounts may change.
+- **Hash values and walk order.** Do not persist hashes or rely on unspecified order.
+- **Derived random streams.** `tda_rng_u64` is stable within a major; `shuffle` and
+  `sample` only within a minor.
+- **Human-readable output.** Printers and allocator diagnostics may change.
+- **Transitive includes.** Include what you use, or `tda/tda.h` for everything.
+- **The toolchain floor.** A minor may require a newer C23 toolchain. C++ is unsupported.
 
-A status is tested with `TDA_STATUS_IS_ERR`, not against one cause: a minor may add one.
+Test statuses with `TDA_STATUS_IS_ERR`, not a specific enumerator: a minor may add causes.
 
 ## What it does not do
 
-- **Elems are bytes.** A container copies `elem.size` bytes in and out, and drops them by
-  releasing the block — it never calls anything of yours. A `tda_Vec` of `strdup`ed
-  `char *` leaks unless the caller frees them first.
-- **No elem has size 0.** Every layout a container or a span takes is a type's, with a
-  size above zero; Rust's zero-sized types have no C counterpart, and a set of nothing
-  is a counter.
-- **The hashers are not seeded.** The ready-made ones are fixed functions, fine for keys
-  you control. For keys from outside, write a hasher that takes a seed through its `ctx`,
-  so no one can aim their keys at a single bucket.
-- **Printing goes to a `FILE *`.** The printers are for looking at data while debugging,
-  through stdio; there is no sink of your own to print into a string.
-- **Nothing is thread-safe.** No container takes a lock; sharing one across threads is the
-  caller's problem. So is an allocator under containers on several threads: each growth
-  reaches it, even when the containers themselves are never shared. `tda_al_default` is
-  the exception: it has no state, and libc guards its own.
+- **Elements are bytes.** Containers copy and release storage but run no destructors.
+  A `tda_Vec` of `strdup`ed `char *` leaks unless the caller frees the strings first.
+- **No zero-sized elements.** Every element has a valid type layout with nonzero size.
+- **Ready-made hashers are unseeded.** For untrusted keys, supply a seeded hasher and
+  its state through `ctx`.
+- **Printing requires `FILE *`.** There is no custom sink or string output.
+- **Nothing is thread-safe.** Callers synchronize containers and stateful allocators;
+  only the stateless `tda_al_default` may be shared directly.
 
 ## License
 

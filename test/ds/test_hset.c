@@ -90,9 +90,7 @@ static void assert_walk_sees_everything(const tda_HSet *s) {
 
 /* ========== the node layout ========== */
 
-// why ds/hset uses internal/hmap_impl.h instead of storing a dummy byte: with no value
-// after the key, a set node is the header and the key and not a byte more. Both nodes
-// are laid out as C would lay out the same members
+// A set node must have no dummy value byte; both node layouts match their C structs.
 static void test_a_set_node_is_a_map_node_without_the_value() {
     typedef struct {
         void *next;

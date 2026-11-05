@@ -38,8 +38,7 @@ int main() {
     /// [bits]
 
     /// [scan]
-    // find_next takes a start, and a start past the universe is a miss, not an assert, so
-    // a walk needs no bound of its own. TDA_BITSET_FOR_EACH hides this loop
+    // A start past the universe is a miss, so the walk needs no separate bound check
     TDA_BITSET_FOR_EACH (idx, &a) {
         printf("%zu ", idx); // 0 7
     }

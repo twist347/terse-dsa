@@ -1,7 +1,5 @@
-// The typed macros over algo: each takes its key or value as &(K[1]){ (key) }[0], so a
-// scalar, a struct variable and a struct literal in parentheses all go in, and a key of
-// another type than the elem's goes in as well. Each case checks the macro against the
-// function it wraps.
+// Typed algo macros accept scalars, struct variables and parenthesized literals;
+// keys may have a different type from the elements.
 
 #include "tda/algo/fill.h"
 #include "tda/algo/modify.h"

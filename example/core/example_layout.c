@@ -33,8 +33,7 @@ int main() {
     /// [type]
 
     /// [build]
-    // a header and a payload in one block, laid out field by field as a C struct would
-    // be: each field at the first offset its alignment allows, the whole padded at the end
+    // Lay out a header and payload like C struct fields, including final padding
     tda_Layout block = TDA_LAYOUT_OF(uint32_t);
     size_t payload_offset;
     if (tda_layout_ckd_extend(&block, TDA_LAYOUT_OF(Vec8), &payload_offset) || tda_layout_ckd_pad(&block)) {

@@ -106,9 +106,7 @@ int main() {
     tda_arr_move_assign(&shorter, &in_arena);
     printf("%zu <- %zu\n", tda_arr_len(&shorter), tda_arr_len(&in_arena)); // 5 <- 0
 
-    // swap exchanges the two arrs whole, lengths and allocators included: before it
-    // 'shorter' holds the arena's block, after it 'a' does. Each block goes along with its
-    // allocator, nothing is copied, and there is nothing to report
+    // swap exchanges lengths and allocators along with the blocks, without copying
     tda_arr_swap(&a, &shorter);
     tda_arr_print(&a, tda_fprint_i32, nullptr);       // [0, 2, 3, 4, 5], in the arena
     tda_arr_print(&shorter, tda_fprint_i32, nullptr); // [0, 2, 3, 4, 5], on the default allocator

@@ -60,8 +60,7 @@ int main() {
     /// [lookup]
 
     /// [count]
-    // the counter idiom: get_or_insert hashes and walks the bucket once whether or not
-    // the key is there; a get then an insert would do both twice for each new key
+    // get_or_insert performs one lookup, unlike get followed by insert
     constexpr int32_t data[] = {3, 1, 3, 3, 1};
 
     for (size_t i = 0; i < sizeof(data) / sizeof(data[0]); ++i) {

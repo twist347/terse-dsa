@@ -28,8 +28,7 @@ int main() {
     TDA_DEALLOC(int32_t, al, kept, 4);
 
     /// [oom]
-    // let n requests through and refuse the next, for n = 0, 1, 2, ... until the
-    // operation needs no more: each run checks one refusal path of the push
+    // Refuse each successive allocation until every push succeeds
     for (size_t n = 0;; ++n) {
         tda_Vec v = tda_vec_init(TDA_LAYOUT_OF(int32_t), al);
 

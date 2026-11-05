@@ -1,6 +1,4 @@
-// Every typed macro that takes one value takes it as &(T[1]){ (val) }[0], so a struct goes
-// in as a scalar does: a variable of its type, or a literal in parentheses. Each case runs
-// both forms through one macro family and reads the result back.
+// Typed value macros accept both struct variables and parenthesized struct literals.
 
 #include "tda/alloc/default.h"
 #include "tda/core/hash.h"

@@ -269,15 +269,8 @@ static void test_includes_rejects_a_sub_that_runs_past_the_end() {
 
 /* ========== exhaustive ========== */
 
-/*
- * Each op against a reference that shares no code with it: multisets are counted per
- * value, and the answer is built from the counts by the rule in set.h. The sweep visits
- * every pair of sorted multisets over a four-symbol alphabet up to length four, on both
- * sides: 24500 checks in all.
- *
- * Small on purpose: a two-pointer walk fails on long inputs only where it already fails
- * on short ones, and every arrangement of a short one is reachable.
- */
+// Compares every pair of short sorted multisets with an independent
+// count-based reference: 24500 checks in all.
 
 #define ALPHA 4
 #define MAXLEN 4

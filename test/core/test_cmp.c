@@ -14,9 +14,7 @@ void setUp() {
 void tearDown() {
 }
 
-// The by-value form the public API dropped, kept here because these cases want readable
-// operands. It is what tda_cmp_<T> used to be: the comparator called with the addresses
-// of two values. Instantiated only where a case calls it, so an unused one warns.
+// By-value adapters keep the comparator test cases readable.
 #define DEFINE_CMP_FORM(name, T)      \
     static int cmp_##name(T a, T b) { \
         return tda_cmp_##name(&a, &b, nullptr); \
@@ -121,10 +119,8 @@ static void test_cmp_ptrdiff_orders_and_survives_the_extremes() {
 
 /* ========== char ========== */
 
-// char is neither signed char nor unsigned char, and which one it behaves like depends on
-// the target: (char) 200 is negative on x86 and 200 on ARM. The comparator orders it as
-// unsigned char on both, as strcmp orders the same byte inside a string, so a byte past
-// 0x7f sorts after ASCII everywhere; the platform's own operators would not.
+// Plain char varies by target; this comparator orders it as unsigned char,
+// matching strcmp even for bytes above 0x7f.
 static void test_cmp_char_orders_as_unsigned_char_on_every_target() {
     constexpr char high = (char) 200;
     constexpr char low = 100;

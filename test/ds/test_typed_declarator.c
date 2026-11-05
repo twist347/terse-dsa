@@ -1,7 +1,5 @@
-// The typed macros write typeof(T), so a type name with a declarator goes in as it is
-// spelled. A bare T would make 'int32_t (*)(int32_t) *' or 'int32_t[3] *' out of these,
-// which do not parse. A function pointer goes through every family; an array has no value
-// to copy in, so it goes through the macros that take an address only.
+// Typed macros must preserve declarators such as function pointers and arrays.
+// Arrays only go through macros that take an address, since they cannot be copied by value.
 
 #include "tda/alloc/alloc.h"
 #include "tda/alloc/default.h"

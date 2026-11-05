@@ -18,7 +18,6 @@ int main() {
     tda_span_make_heap(s, tda_cmp_i32, nullptr);
     printf("largest is %" PRId32 "\n", *TDA_SPAN_GET_MUT_AS(int32_t, s, 0)); // 5
 
-    // a min-heap is the same call with a descending comparator
     /// [build]
 
     /// [push]

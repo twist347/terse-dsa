@@ -10,8 +10,7 @@
 
 int main() {
     /// [modify]
-    // a span cannot resize, so ops that drop elems pack the kept ones to the front and
-    // return the new length; the tail is left unspecified
+    // Removing operations pack kept elements and return the new length; the tail is unspecified
     const tda_SpanMut s = TDA_SPAN_OF_MUT(int32_t, 1, 1, 2, 2, 2, 3);
 
     // unique compares only adjacent elems, so the result is a set only on a sorted span

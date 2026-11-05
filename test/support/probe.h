@@ -8,9 +8,7 @@
 
 /* ========== type ========== */
 
-/// counting allocator over tda_al_default that can be told to fail on demand.
-/// Each instance carries its own state, and tda_test_probe_bare and tda_test_probe_full
-/// make a view of one, so two probes in one test never share counters.
+/// Counting allocator over tda_al_default with independent state and failure injection.
 typedef struct {
     size_t alloc_calls;
     size_t zeroed_calls;

@@ -66,9 +66,7 @@ int main() {
     /// [order]
 
     /// [into]
-    // the vec was under the queue all along, so taking it is free and leaves the queue
-    // inert. The elems come out in heap order, and sort_heap finishes the heapsort in
-    // place, with no allocation and no draining loop
+    // Take the underlying vec without copying, then finish the heapsort in place
     v = tda_pqueue_into_vec(&least);
 
     // the comparator does not travel with the elems, so name it again. The heap was built

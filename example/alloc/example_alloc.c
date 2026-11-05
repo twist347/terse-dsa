@@ -8,9 +8,8 @@
 #include <stdio.h>
 
 /// [custom]
-// a table must fill in alloc and dealloc; alloc_zeroed, resize and remap may be null, and
-// the wrappers then make do with the other two. ctx is the allocator's state, passed to
-// every hook, and every hook gets the layout the block was made with
+// Only alloc and dealloc are required; wrappers supply the other operations.
+// ctx carries allocator state, and each hook receives the block's original layout
 typedef struct {
     tda_Al parent;
     size_t live;

@@ -37,8 +37,7 @@ int main() {
     /// [copy]
 
     /// [sample]
-    // picks as many as 'dst' holds, none twice, in source order; the same seed replays
-    // the same pick
+    // Samples without repetition in source order; the same seed replays the result
     tda_Rng rng = tda_rng_from_seed(7);
 
     int32_t pick[3];

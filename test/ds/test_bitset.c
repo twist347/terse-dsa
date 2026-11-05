@@ -46,10 +46,8 @@ static tda_BitSet make_full(size_t nbits) {
     return b;
 }
 
-// Checks the set every way the type offers: bit by bit, as a count, through the
-// summaries and as a walk. A bit leaked above nbits is invisible to test, which never
-// looks there; it shows up only in count, all or the scan, so all of them are asked.
-// 'want' is in ascending order.
+// Checks bits, count, summaries and both scans; bits leaked above nbits
+// are invisible to bit tests alone. 'want' is ascending.
 static void assert_members(const tda_BitSet *b, size_t nbits, const size_t *want, size_t n) {
     TEST_ASSERT_EQUAL_size_t(nbits, tda_bitset_nbits(b));
     TEST_ASSERT_EQUAL_size_t(n, tda_bitset_count(b));

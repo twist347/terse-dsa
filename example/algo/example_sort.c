@@ -36,8 +36,7 @@ int main() {
     /// [sort]
 
     /// [argsort]
-    // the order may come from outside the span: here the span holds indices and the
-    // comparator reads the keys they point at through its ctx, with no global
+    // Sort indices by external keys supplied through the comparator's ctx
     int32_t keys[4] = {40, 10, 30, 20};
     size_t order[4] = {0, 1, 2, 3};
     tda_span_sort(TDA_SPAN_FROM_DATA_MUT(size_t, order, 4), cmp_by_key, keys);

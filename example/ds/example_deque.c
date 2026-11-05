@@ -51,8 +51,7 @@ int main() {
     /// [ends]
 
     /// [index]
-    // an index counts from the front, so 0 is the front elem wherever the ring starts.
-    // The seam stays hidden: the capacity says how much room there is, not where it wraps
+    // Indices count from the front; the ring seam stays hidden
     printf(
         "%" PRId32 " of %zu in room for %zu\n",
         *TDA_DEQUE_GET_AS(int32_t, &d, 0),

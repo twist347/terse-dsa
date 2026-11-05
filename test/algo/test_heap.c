@@ -40,9 +40,7 @@ static bool same_elems(const int32_t *a, const int32_t *b, size_t n) {
     return memcmp(sorted_a, sorted_b, n * sizeof(int32_t)) == 0;
 }
 
-// walks every permutation of {1..n} and hands each to 'check'. next_permutation only
-// generates data here: if it were broken the sweep would visit fewer inputs, which
-// cannot make a failing case pass
+// Calls 'check' for every permutation of {1..n}.
 static void for_every_permutation(size_t n, void (*check)(const int32_t *, size_t)) {
     int32_t buf[8];
     TEST_ASSERT_TRUE(n <= 8);
@@ -354,14 +352,8 @@ static int cmp_counting_i32(const void *a, const void *b, void *) {
     return tda_cmp_i32(a, b, nullptr);
 }
 
-// make_heap is the linear one, which is why it exists next to a loop of push_heap that
-// costs n log n for the same result.
-//
-// The input has to be ascending for this to mean anything. Measured at this size,
-// scattered input costs 1.76n by Floyd and 3.36n by a push_heap loop, so a 4n bound
-// would pass both and prove nothing. Ascending costs 2.00n against 14.00n, because
-// every newcomer is the new largest and climbs the whole tree. Descending is a worse
-// witness still: 1.00n either way.
+// Ascending input separates linear heap construction from repeated push_heap;
+// scattered or descending input would leave the comparison bound too loose.
 static void test_make_heap_stays_linear() {
     static int32_t buf[SCALE_N];
     for (size_t i = 0; i < SCALE_N; ++i) {

@@ -6,9 +6,7 @@
 
 /* ========== type ========== */
 
-/// an elem wider than a word, to keep the elem layout honest. It has no tda_test_ prefix
-/// because tests write it as a type argument (TDA_SPAN_FROM_DATA_MUT(Pair, buf, 2)),
-/// where a prefix is noise.
+/// An element wider than a word. The short name keeps typed macro calls readable.
 typedef struct {
     int64_t a;
     int64_t b;

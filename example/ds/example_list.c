@@ -68,8 +68,7 @@ int main() {
     /// [positions]
 
     /// [relink]
-    // sort relinks the nodes and leaves the elems where they are, so 'at' still names the
-    // same 3. A copy sorted by algo/sort could not keep that, so a list sorts itself
+    // Sorting relinks nodes in place, so 'at' still names the same element
     tda_list_sort(&list, tda_cmp_i32, nullptr);
     tda_list_print(&list, tda_fprint_i32, nullptr); // [1, 2, 3, 5, 8]
     printf("%" PRId32 "\n", *TDA_LIST_NODE_ELEM_AS(int32_t, &list, at)); // 3

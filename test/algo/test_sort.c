@@ -540,15 +540,9 @@ static void test_nth_elem_stays_within_the_subspan() {
 }
 
 /* ========== scaling ==========
- *
- * A bad pivot choice still produces the right answer, just after far too many
- * comparisons, so no assertion about the output can see it. These count the comparisons
- * instead. 65536 is 2^16, so n * log2(n) is exact and needs no math.h.
- *
- * The size is not arbitrary. Sampling the pivot only at the ends degrades to about
- * n^1.5, which at n = 4096 is still within 4x of n*log n and hides. Measured against
- * this implementation it is 4.0x at 4096, 6.6x at 16384 and 11.3x at 65536, against
- * 1.0x here. The counts are fully deterministic, so the margin is real, not statistical.
+ * Comparison counts expose bad pivot choices that still produce sorted output.
+ * At 65536 elements, degraded pivot sampling exceeds these deterministic limits;
+ * smaller inputs can hide it.
  */
 
 static constexpr size_t SCALE_N = 65536;

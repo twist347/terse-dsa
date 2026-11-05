@@ -88,9 +88,8 @@ int main() {
     /// [build]
 
     /// [grow]
-    // the block doubles when full, so pushes cost O(1) amortized. Every op that may
-    // reallocate returns a status, and C has no defer: once the vec is held, failures
-    // jump to a common exit instead of returning early
+    // Growth is amortized O(1). Operations that may reallocate return a status;
+    // failures go to one cleanup path.
     int rc = 1;
 
     if (TDA_STATUS_IS_ERR(TDA_VEC_PUSH(int32_t, &v, 4))) {

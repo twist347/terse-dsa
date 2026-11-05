@@ -40,8 +40,7 @@ int main() {
         bound
     ); // 2 of them are over 3
 
-    // a miss is not an error: find returns false and leaves 'idx' unchanged, and contains
-    // asks the same question without the index
+    // A miss returns false and leaves 'idx' unchanged; contains omits the index
     printf("%s\n", TDA_SPAN_CONTAINS(int32_t, nums, 7, tda_eq_i32, nullptr) ? "7 is in" : "no 7"); // no 7
 
     // starts_with and ends_with take the same equality as a find

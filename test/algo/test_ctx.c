@@ -1,6 +1,5 @@
-// Every callback gets the ctx passed beside it, unchanged, on every call: through the
-// algos, through the containers that store a callback, and through the copies, moves
-// and swaps that carry one along. Each test uses a ctx a comparator cannot do without.
+// Checks that callbacks receive their ctx unchanged, including through containers
+// and copy, move and swap operations.
 
 #include "tda/algo/compare.h"
 #include "tda/algo/copy.h"

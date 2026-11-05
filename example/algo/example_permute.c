@@ -35,8 +35,7 @@ int main() {
     tda_span_shuffle(deck, &rng);
     tda_span_mut_print(deck, tda_fprint_i32, nullptr); // [8, 2, 3, 1, 6, 7, 5, 4]
 
-    // dealing a hand: only the first three positions are settled, a uniform sample of
-    // the whole span, not just its front
+    // Settle a uniform three-element sample drawn from the whole span
     tda_span_shuffle_prefix(deck, 3, &rng);
     tda_span_mut_print(tda_span_sub_mut(deck, 0, 3), tda_fprint_i32, nullptr); // [4, 5, 6]
     /// [shuffle]

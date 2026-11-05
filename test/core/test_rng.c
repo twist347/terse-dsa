@@ -176,14 +176,8 @@ static void test_rng_u32_max_retries_on_a_range_past_half() {
     TEST_ASSERT_TRUE(upper_half);
 }
 
-// three does not divide 2^64, so one of the three slots gets one draw more than the
-// others; Lemire's rejection holds it back. A product taken from the wrong half, or a
-// threshold off by one, shows up here as a lopsided bucket.
-//
-// What this cannot see is the modulo bias itself: over a 64-bit draw and a bound this
-// small it is one part in 2^62, far under what any bucket count could resolve. The
-// rejection matters at bounds near the top of the range, where the same skew is the
-// difference between uniform and twice as likely.
+// A wrong product half or rejection threshold makes these buckets lopsided.
+// The raw modulo bias is too small to measure at this bound.
 static void test_rng_u64_max_is_flat_over_a_bound_that_does_not_divide_the_width() {
     tda_Rng rng = tda_rng_from_seed(4);
 
@@ -198,11 +192,8 @@ static void test_rng_u64_max_is_flat_over_a_bound_that_does_not_divide_the_width
     }
 }
 
-// the rejection only shows itself at a bound near the top of the range, where a draw
-// covers each value once or twice rather than billions of times. Two thirds of 2^64 is
-// the worst of them: without the rejection every other value would come up twice as
-// often as its neighbour, and the parity of the result gives that away at once. Every
-// small bound hides the same flaw under a bias of one part in 2^62.
+// Near the top of the range, missing rejection makes every other value
+// twice as likely, which the parity counts expose.
 static void test_rng_u64_max_rejects_where_the_range_does_not_fit() {
     static constexpr uint64_t max = (UINT64_MAX / 3) * 2;
 

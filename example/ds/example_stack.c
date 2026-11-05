@@ -74,8 +74,7 @@ int main() {
     /// [read]
 
     /// [into]
-    // the vec was under the stack all along, so taking it is free: same block, capacity
-    // and allocator, nothing copied, and the stack is left inert
+    // Taking the underlying vec moves the block without copying and leaves the stack inert
     v = tda_stack_into_vec(&s);
 
     // the narrow interface is gone too: the vec allows the indexing the stack refused
